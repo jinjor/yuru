@@ -1,0 +1,32 @@
+{
+  "name": "yuru",
+  "version": "0.1.0",
+  "description": "Vibe Coding editor for Claude Code",
+  "main": "dist/main/index.js",
+  "scripts": {
+    "dev": "tsc && vite build && electron .",
+    "build": "tsc && vite build",
+    "lint": "oxlint src/",
+    "format": "oxfmt src/"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "electron": "^41.1.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.0.3",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "node-pty": "^1.2.0-beta.12",
+    "oxlint": "^1.58.0",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.3"
+  }
+}
