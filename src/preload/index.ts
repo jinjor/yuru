@@ -3,6 +3,8 @@ import { contextBridge, ipcRenderer } from "electron";
 contextBridge.exposeInMainWorld("electronAPI", {
   getSessions: () => ipcRenderer.invoke("sessions:list"),
   selectSession: (session: unknown) => ipcRenderer.send("session:select", session),
+  createSession: (repoPath: string) => ipcRenderer.invoke("session:create", repoPath),
+  selectFolder: () => ipcRenderer.invoke("dialog:selectFolder"),
   onSessionEnded: (callback: (sessionId: string) => void) =>
     ipcRenderer.on("session:ended", (_event, sessionId) => callback(sessionId)),
   ptyWrite: (sessionId: string, data: string) => ipcRenderer.send("pty:write", sessionId, data),

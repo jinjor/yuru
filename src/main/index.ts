@@ -1,5 +1,6 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import path from "path";
+import crypto from "crypto";
 import * as pty from "node-pty";
 import { loadSessions, Session } from "./sessions.js";
 
@@ -20,32 +21,30 @@ function createWindow(): void {
   mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
 }
 
-function spawnClaude(session: Session): void {
-  // Already running — just switch to it
-  if (ptyProcesses.has(session.id)) {
+function spawnClaude(sessionId: string, cwd: string, args: string[]): void {
+  if (ptyProcesses.has(sessionId)) {
     return;
   }
 
-  const cwd = session.project;
-  const proc = pty.spawn("claude", ["--resume", session.id], {
+  const proc = pty.spawn("claude", args, {
     name: "xterm-256color",
     cols: 80,
     rows: 24,
     cwd,
     env: process.env as Record<string, string>,
   });
-  ptyProcesses.set(session.id, proc);
+  ptyProcesses.set(sessionId, proc);
 
   proc.onData((data: string) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("pty:data", session.id, data);
+      mainWindow.webContents.send("pty:data", sessionId, data);
     }
   });
 
   proc.onExit(() => {
-    ptyProcesses.delete(session.id);
+    ptyProcesses.delete(sessionId);
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("session:ended", session.id);
+      mainWindow.webContents.send("session:ended", sessionId);
     }
   });
 }
@@ -68,7 +67,35 @@ app.whenReady().then(() => {
     if (session.state === "archived") {
       return;
     }
-    spawnClaude(session);
+    spawnClaude(session.id, session.project, ["--resume", session.id]);
+  });
+
+  ipcMain.handle("session:create", async (_event, repoPath: string) => {
+    const tempId = `new-${crypto.randomUUID()}`;
+    spawnClaude(tempId, repoPath, []);
+    const session: Session = {
+      id: tempId,
+      project: repoPath,
+      projectName: path.basename(repoPath),
+      lastMessage: "",
+      timestamp: Date.now(),
+      state: "active",
+    };
+    return session;
+  });
+
+  ipcMain.handle("dialog:selectFolder", async () => {
+    if (!mainWindow) {
+      return null;
+    }
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ["openDirectory"],
+      title: "Select Repository",
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      return null;
+    }
+    return result.filePaths[0];
   });
 
   ipcMain.on("pty:write", (_event, sessionId: string, data: string) => {

@@ -17,6 +17,8 @@ declare global {
     electronAPI: {
       getSessions: () => Promise<Session[]>;
       selectSession: (session: Session) => void;
+      createSession: (repoPath: string) => Promise<Session>;
+      selectFolder: () => Promise<string | null>;
       onSessionEnded: (callback: (sessionId: string) => void) => void;
       ptyWrite: (sessionId: string, data: string) => void;
       ptyResize: (sessionId: string, cols: number, rows: number) => void;
@@ -99,11 +101,48 @@ function SessionList({
   );
 }
 
+function RepoPicker({
+  repos,
+  onSelect,
+  onCancel,
+}: {
+  repos: string[];
+  onSelect: (repoPath: string) => void;
+  onCancel: () => void;
+}): JSX.Element {
+  const handleBrowse = async (): Promise<void> => {
+    const folderPath = await window.electronAPI.selectFolder();
+    if (folderPath) {
+      onSelect(folderPath);
+    }
+  };
+
+  return (
+    <div className="repo-picker-overlay" onClick={onCancel}>
+      <div className="repo-picker" onClick={(e) => e.stopPropagation()}>
+        <div className="repo-picker-header">New Session</div>
+        {repos.map((repo) => (
+          <div key={repo} className="repo-picker-item" onClick={() => onSelect(repo)}>
+            {repo.split("/").pop()}
+            <span className="repo-picker-path">{repo}</span>
+          </div>
+        ))}
+        <div className="repo-picker-item browse" onClick={handleBrowse}>
+          Browse...
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function App(): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalsRef = useRef<Map<string, TerminalInstance>>(new Map());
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showRepoPicker, setShowRepoPicker] = useState(false);
+
+  const knownRepos = [...new Set(sessions.map((s) => s.project))];
 
   const getOrCreateTerminal = useCallback((sessionId: string): TerminalInstance => {
     const existing = terminalsRef.current.get(sessionId);
@@ -179,11 +218,7 @@ export function App(): JSX.Element {
     return () => window.removeEventListener("resize", handleResize);
   }, [selectedId]);
 
-  const handleSelectSession = (session: Session): void => {
-    if (session.state === "archived") {
-      return;
-    }
-
+  const showTerminal = (sessionId: string): void => {
     // Hide current terminal
     if (selectedId) {
       const current = terminalsRef.current.get(selectedId);
@@ -192,22 +227,34 @@ export function App(): JSX.Element {
       }
     }
 
-    setSelectedId(session.id);
-    setSessions((prev) =>
-      prev.map((s) => (s.id === session.id ? { ...s, state: "active" as const } : s)),
-    );
+    setSelectedId(sessionId);
 
-    // Only send select if not already running (main will check too)
-    window.electronAPI.selectSession(session);
-
-    // Show and fit terminal
-    const instance = getOrCreateTerminal(session.id);
+    const instance = getOrCreateTerminal(sessionId);
     instance.container.style.display = "block";
     requestAnimationFrame(() => {
       instance.fitAddon.fit();
       instance.term.focus();
-      window.electronAPI.ptyResize(session.id, instance.term.cols, instance.term.rows);
+      window.electronAPI.ptyResize(sessionId, instance.term.cols, instance.term.rows);
     });
+  };
+
+  const handleSelectSession = (session: Session): void => {
+    if (session.state === "archived") {
+      return;
+    }
+
+    setSessions((prev) =>
+      prev.map((s) => (s.id === session.id ? { ...s, state: "active" as const } : s)),
+    );
+    window.electronAPI.selectSession(session);
+    showTerminal(session.id);
+  };
+
+  const handleCreateSession = async (repoPath: string): Promise<void> => {
+    setShowRepoPicker(false);
+    const session = await window.electronAPI.createSession(repoPath);
+    setSessions((prev) => [session, ...prev]);
+    showTerminal(session.id);
   };
 
   return (
@@ -215,6 +262,9 @@ export function App(): JSX.Element {
       <aside className="sidebar">
         <div className="sidebar-header">
           <h2>Sessions</h2>
+          <button className="new-session-btn" onClick={() => setShowRepoPicker(true)}>
+            +
+          </button>
         </div>
         <SessionList sessions={sessions} selectedId={selectedId} onSelect={handleSelectSession} />
       </aside>
@@ -226,6 +276,13 @@ export function App(): JSX.Element {
           </div>
         )}
       </main>
+      {showRepoPicker && (
+        <RepoPicker
+          repos={knownRepos}
+          onSelect={handleCreateSession}
+          onCancel={() => setShowRepoPicker(false)}
+        />
+      )}
     </div>
   );
 }
