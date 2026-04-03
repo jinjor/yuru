@@ -3,9 +3,11 @@ import path from "path";
 import crypto from "crypto";
 import * as pty from "node-pty";
 import { loadSessions, Session } from "./sessions.js";
+import { getGitStatus, getGitDiff } from "./git.js";
 
 let mainWindow: BrowserWindow | null = null;
 const ptyProcesses = new Map<string, pty.IPty>();
+const sessionCwdMap = new Map<string, string>();
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -26,6 +28,8 @@ function spawnClaude(sessionId: string, cwd: string, args: string[]): void {
     return;
   }
 
+  sessionCwdMap.set(sessionId, cwd);
+
   const proc = pty.spawn("claude", args, {
     name: "xterm-256color",
     cols: 80,
@@ -43,6 +47,7 @@ function spawnClaude(sessionId: string, cwd: string, args: string[]): void {
 
   proc.onExit(() => {
     ptyProcesses.delete(sessionId);
+    sessionCwdMap.delete(sessionId);
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send("session:ended", sessionId);
     }
@@ -67,6 +72,7 @@ app.whenReady().then(() => {
     if (session.state === "archived") {
       return;
     }
+    sessionCwdMap.set(session.id, session.project);
     spawnClaude(session.id, session.project, ["--resume", session.id]);
   });
 
@@ -96,6 +102,30 @@ app.whenReady().then(() => {
       return null;
     }
     return result.filePaths[0];
+  });
+
+  ipcMain.handle("git:status", async (_event, sessionId: string) => {
+    const cwd = sessionCwdMap.get(sessionId);
+    if (!cwd) {
+      return [];
+    }
+    try {
+      return await getGitStatus(cwd);
+    } catch {
+      return [];
+    }
+  });
+
+  ipcMain.handle("git:diff", async (_event, sessionId: string, filePath: string) => {
+    const cwd = sessionCwdMap.get(sessionId);
+    if (!cwd) {
+      return "";
+    }
+    try {
+      return await getGitDiff(cwd, filePath);
+    } catch {
+      return "";
+    }
   });
 
   ipcMain.on("pty:write", (_event, sessionId: string, data: string) => {

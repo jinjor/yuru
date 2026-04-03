@@ -5,6 +5,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   selectSession: (session: unknown) => ipcRenderer.send("session:select", session),
   createSession: (repoPath: string) => ipcRenderer.invoke("session:create", repoPath),
   selectFolder: () => ipcRenderer.invoke("dialog:selectFolder"),
+  getGitStatus: (sessionId: string) => ipcRenderer.invoke("git:status", sessionId),
+  getGitDiff: (sessionId: string, filePath: string) =>
+    ipcRenderer.invoke("git:diff", sessionId, filePath),
   onSessionEnded: (callback: (sessionId: string) => void) =>
     ipcRenderer.on("session:ended", (_event, sessionId) => callback(sessionId)),
   ptyWrite: (sessionId: string, data: string) => ipcRenderer.send("pty:write", sessionId, data),

@@ -12,6 +12,11 @@ interface Session {
   state: "active" | "inactive" | "archived";
 }
 
+interface GitFileStatus {
+  path: string;
+  status: string;
+}
+
 declare global {
   interface Window {
     electronAPI: {
@@ -19,6 +24,8 @@ declare global {
       selectSession: (session: Session) => void;
       createSession: (repoPath: string) => Promise<Session>;
       selectFolder: () => Promise<string | null>;
+      getGitStatus: (sessionId: string) => Promise<GitFileStatus[]>;
+      getGitDiff: (sessionId: string, filePath: string) => Promise<string>;
       onSessionEnded: (callback: (sessionId: string) => void) => void;
       ptyWrite: (sessionId: string, data: string) => void;
       ptyResize: (sessionId: string, cols: number, rows: number) => void;
@@ -48,6 +55,32 @@ function formatTime(timestamp: number): string {
     return `${days}d ago`;
   }
   return date.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+function statusColor(status: string): string {
+  switch (status) {
+    case "M":
+      return "#e2c08d";
+    case "A":
+      return "#73c991";
+    case "D":
+      return "#c74e39";
+    case "R":
+      return "#73c991";
+    case "??":
+      return "#73c991";
+    default:
+      return "#888";
+  }
+}
+
+function statusLabel(status: string): string {
+  switch (status) {
+    case "??":
+      return "U";
+    default:
+      return status;
+  }
 }
 
 function SessionList({
@@ -101,6 +134,80 @@ function SessionList({
   );
 }
 
+function ChangesPanel({
+  files,
+  selectedFile,
+  onSelectFile,
+}: {
+  files: GitFileStatus[];
+  selectedFile: string | null;
+  onSelectFile: (filePath: string) => void;
+}): JSX.Element {
+  return (
+    <aside className="changes-panel">
+      <div className="panel-header">
+        <h2>Changes</h2>
+        <span className="change-count">{files.length}</span>
+      </div>
+      <div className="changes-list">
+        {files.length === 0 && <div className="empty-changes">No changes</div>}
+        {files.map((file) => (
+          <div
+            key={file.path}
+            className={`change-item ${selectedFile === file.path ? "selected" : ""}`}
+            onClick={() => onSelectFile(file.path)}
+          >
+            <span className="change-status" style={{ color: statusColor(file.status) }}>
+              {statusLabel(file.status)}
+            </span>
+            <span className="change-path" title={file.path}>
+              {file.path.split("/").pop()}
+            </span>
+            <span className="change-dir" title={file.path}>
+              {file.path.includes("/") ? file.path.substring(0, file.path.lastIndexOf("/")) : ""}
+            </span>
+          </div>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
+function DiffPanel({ diff }: { diff: string | null }): JSX.Element {
+  if (!diff) {
+    return (
+      <div className="diff-panel">
+        <div className="empty-state">
+          <p>Select a file to view diff</p>
+        </div>
+      </div>
+    );
+  }
+
+  const lines = diff.split("\n");
+  return (
+    <div className="diff-panel">
+      <pre className="diff-content">
+        {lines.map((line, i) => {
+          let className = "diff-line";
+          if (line.startsWith("+") && !line.startsWith("+++")) {
+            className += " diff-add";
+          } else if (line.startsWith("-") && !line.startsWith("---")) {
+            className += " diff-remove";
+          } else if (line.startsWith("@@")) {
+            className += " diff-hunk";
+          }
+          return (
+            <div key={i} className={className}>
+              {line}
+            </div>
+          );
+        })}
+      </pre>
+    </div>
+  );
+}
+
 function RepoPicker({
   repos,
   onSelect,
@@ -141,6 +248,9 @@ export function App(): JSX.Element {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showRepoPicker, setShowRepoPicker] = useState(false);
+  const [changedFiles, setChangedFiles] = useState<GitFileStatus[]>([]);
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [diffContent, setDiffContent] = useState<string | null>(null);
 
   const knownRepos = [...new Set(sessions.map((s) => s.project))];
 
@@ -185,7 +295,7 @@ export function App(): JSX.Element {
     return instance;
   }, []);
 
-  // Load sessions and setup pty data listener
+  // Load sessions and setup listeners
   useEffect(() => {
     window.electronAPI.getSessions().then(setSessions);
 
@@ -203,6 +313,70 @@ export function App(): JSX.Element {
       setSelectedId((prev) => (prev === sessionId ? null : prev));
     });
   }, []);
+
+  // Polling: git status every 3 seconds for selected session
+  useEffect(() => {
+    if (!selectedId) {
+      setChangedFiles([]);
+      setSelectedFile(null);
+      setDiffContent(null);
+      return;
+    }
+
+    let cancelled = false;
+    const sessionId = selectedId;
+
+    const fetchStatus = async (): Promise<void> => {
+      const files = await window.electronAPI.getGitStatus(sessionId);
+      if (cancelled) {
+        return;
+      }
+      setChangedFiles((prev) => {
+        if (JSON.stringify(prev) === JSON.stringify(files)) {
+          return prev;
+        }
+        return files;
+      });
+      // Clear selected file if it's no longer in the list
+      setSelectedFile((prev) => {
+        if (prev && !files.some((f) => f.path === prev)) {
+          return null;
+        }
+        return prev;
+      });
+    };
+
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [selectedId]);
+
+  // Fetch diff when selected file changes
+  useEffect(() => {
+    if (!selectedId || !selectedFile) {
+      setDiffContent(null);
+      return;
+    }
+
+    let cancelled = false;
+    const fetchDiff = async (): Promise<void> => {
+      const diff = await window.electronAPI.getGitDiff(selectedId, selectedFile);
+      if (!cancelled) {
+        setDiffContent(diff);
+      }
+    };
+    fetchDiff();
+
+    // Also refresh diff on polling interval
+    const interval = setInterval(fetchDiff, 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [selectedId, selectedFile]);
 
   // Handle window resize — refit the active terminal
   useEffect(() => {
@@ -247,6 +421,8 @@ export function App(): JSX.Element {
       prev.map((s) => (s.id === session.id ? { ...s, state: "active" as const } : s)),
     );
     window.electronAPI.selectSession(session);
+    setSelectedFile(null);
+    setDiffContent(null);
     showTerminal(session.id);
   };
 
@@ -254,6 +430,8 @@ export function App(): JSX.Element {
     setShowRepoPicker(false);
     const session = await window.electronAPI.createSession(repoPath);
     setSessions((prev) => [session, ...prev]);
+    setSelectedFile(null);
+    setDiffContent(null);
     showTerminal(session.id);
   };
 
@@ -276,6 +454,16 @@ export function App(): JSX.Element {
           </div>
         )}
       </main>
+      {selectedId && (
+        <>
+          <ChangesPanel
+            files={changedFiles}
+            selectedFile={selectedFile}
+            onSelectFile={setSelectedFile}
+          />
+          <DiffPanel diff={diffContent} />
+        </>
+      )}
       {showRepoPicker && (
         <RepoPicker
           repos={knownRepos}

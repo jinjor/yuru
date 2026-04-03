@@ -180,6 +180,133 @@ body,
   font-size: 14px;
 }
 
+/* Changes Panel (Column 3) */
+.changes-panel {
+  width: 250px;
+  min-width: 250px;
+  background: #252526;
+  border-left: 1px solid #333;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #333;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel-header h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #888;
+}
+
+.change-count {
+  font-size: 11px;
+  color: #888;
+  background: #333;
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+
+.changes-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.empty-changes {
+  padding: 16px;
+  font-size: 12px;
+  color: #555;
+  font-style: italic;
+}
+
+.change-item {
+  padding: 4px 16px;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.change-item:hover {
+  background: #2a2d2e;
+}
+
+.change-item.selected {
+  background: #37373d;
+}
+
+.change-status {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: monospace;
+  min-width: 14px;
+  text-align: center;
+}
+
+.change-path {
+  color: #ccc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.change-dir {
+  color: #555;
+  font-size: 11px;
+  margin-left: auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100px;
+  direction: rtl;
+  text-align: right;
+}
+
+/* Diff Panel (Column 4) */
+.diff-panel {
+  flex: 1;
+  min-width: 0;
+  background: #1e1e1e;
+  border-left: 1px solid #333;
+  overflow: auto;
+}
+
+.diff-content {
+  font-family: Menlo, Monaco, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+  padding: 8px 0;
+}
+
+.diff-line {
+  padding: 0 16px;
+  white-space: pre;
+}
+
+.diff-add {
+  background: rgba(35, 134, 54, 0.2);
+  color: #73c991;
+}
+
+.diff-remove {
+  background: rgba(199, 78, 57, 0.2);
+  color: #c74e39;
+}
+
+.diff-hunk {
+  color: #569cd6;
+  padding-top: 8px;
+}
+
 /* Repo Picker */
 .repo-picker-overlay {
   position: fixed;
