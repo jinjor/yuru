@@ -19,40 +19,96 @@ body,
   height: 100%;
 }
 
+/* Sidebar */
 .sidebar {
-  width: 220px;
-  min-width: 220px;
+  width: 260px;
+  min-width: 260px;
   background: #252526;
   border-right: 1px solid #333;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
-.sidebar.right {
-  border-right: none;
-  border-left: 1px solid #333;
-}
-
-.panel {
-  padding: 12px;
+.sidebar-header {
+  padding: 12px 16px;
   border-bottom: 1px solid #333;
 }
 
-.panel h3 {
-  font-size: 11px;
+.sidebar-header h2 {
+  font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: #888;
-  margin-bottom: 8px;
 }
 
-.placeholder {
+/* Session List */
+.session-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.session-card {
+  padding: 10px 16px;
+  border-bottom: 1px solid #2a2a2a;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.session-card:hover {
+  background: #2a2d2e;
+}
+
+.session-card.selected {
+  background: #37373d;
+  border-left: 2px solid #007acc;
+  padding-left: 14px;
+}
+
+.session-card.archived {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.session-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.session-project {
   font-size: 12px;
-  color: #555;
-  font-style: italic;
+  font-weight: 600;
+  color: #ccc;
 }
 
+.session-time {
+  font-size: 11px;
+  color: #666;
+}
+
+.session-preview {
+  font-size: 12px;
+  color: #888;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.archived-toggle {
+  padding: 8px 16px;
+  font-size: 11px;
+  color: #666;
+  cursor: pointer;
+  user-select: none;
+}
+
+.archived-toggle:hover {
+  color: #888;
+}
+
+/* Terminal */
 .terminal-container {
   flex: 1;
   padding: 4px;
@@ -61,4 +117,13 @@ body,
 
 .terminal {
   height: 100%;
+}
+
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #555;
+  font-size: 14px;
 }
