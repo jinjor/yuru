@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
@@ -18,11 +18,17 @@ declare global {
       getSessions: () => Promise<Session[]>;
       selectSession: (session: Session) => void;
       onSessionEnded: (callback: (sessionId: string) => void) => void;
-      ptyWrite: (data: string) => void;
-      ptyResize: (cols: number, rows: number) => void;
-      onPtyData: (callback: (data: string) => void) => void;
+      ptyWrite: (sessionId: string, data: string) => void;
+      ptyResize: (sessionId: string, cols: number, rows: number) => void;
+      onPtyData: (callback: (sessionId: string, data: string) => void) => void;
     };
   }
+}
+
+interface TerminalInstance {
+  term: Terminal;
+  fitAddon: FitAddon;
+  container: HTMLDivElement;
 }
 
 function formatTime(timestamp: number): string {
@@ -94,28 +100,20 @@ function SessionList({
 }
 
 export function App(): JSX.Element {
-  const terminalRef = useRef<HTMLDivElement>(null);
-  const termRef = useRef<Terminal | null>(null);
-  const fitAddonRef = useRef<FitAddon | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const terminalsRef = useRef<Map<string, TerminalInstance>>(new Map());
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // Load sessions on mount
-  useEffect(() => {
-    window.electronAPI.getSessions().then(setSessions);
-    window.electronAPI.onSessionEnded((sessionId) => {
-      setSessions((prev) =>
-        prev.map((s) => (s.id === sessionId ? { ...s, state: "inactive" as const } : s)),
-      );
-      setSelectedId((prev) => (prev === sessionId ? null : prev));
-    });
-  }, []);
-
-  // Setup terminal
-  useEffect(() => {
-    if (!terminalRef.current) {
-      return;
+  const getOrCreateTerminal = useCallback((sessionId: string): TerminalInstance => {
+    const existing = terminalsRef.current.get(sessionId);
+    if (existing) {
+      return existing;
     }
+
+    const container = document.createElement("div");
+    container.className = "terminal";
+    container.style.display = "none";
 
     const term = new Terminal({
       cursorBlink: true,
@@ -129,53 +127,86 @@ export function App(): JSX.Element {
 
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
-    term.open(terminalRef.current);
-    fitAddon.fit();
 
-    termRef.current = term;
-    fitAddonRef.current = fitAddon;
+    if (containerRef.current) {
+      containerRef.current.appendChild(container);
+    }
+    term.open(container);
 
     term.onData((data) => {
-      window.electronAPI.ptyWrite(data);
-    });
-
-    window.electronAPI.onPtyData((data) => {
-      term.write(data);
+      window.electronAPI.ptyWrite(sessionId, data);
     });
 
     term.onResize(({ cols, rows }) => {
-      window.electronAPI.ptyResize(cols, rows);
+      window.electronAPI.ptyResize(sessionId, cols, rows);
     });
 
+    const instance: TerminalInstance = { term, fitAddon, container };
+    terminalsRef.current.set(sessionId, instance);
+    return instance;
+  }, []);
+
+  // Load sessions and setup pty data listener
+  useEffect(() => {
+    window.electronAPI.getSessions().then(setSessions);
+
+    window.electronAPI.onPtyData((sessionId, data) => {
+      const instance = terminalsRef.current.get(sessionId);
+      if (instance) {
+        instance.term.write(data);
+      }
+    });
+
+    window.electronAPI.onSessionEnded((sessionId) => {
+      setSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? { ...s, state: "inactive" as const } : s)),
+      );
+      setSelectedId((prev) => (prev === sessionId ? null : prev));
+    });
+  }, []);
+
+  // Handle window resize — refit the active terminal
+  useEffect(() => {
     const handleResize = (): void => {
-      fitAddon.fit();
+      if (selectedId) {
+        const instance = terminalsRef.current.get(selectedId);
+        if (instance) {
+          instance.fitAddon.fit();
+        }
+      }
     };
     window.addEventListener("resize", handleResize);
-
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      term.dispose();
-    };
-  }, []);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [selectedId]);
 
   const handleSelectSession = (session: Session): void => {
     if (session.state === "archived") {
       return;
     }
+
+    // Hide current terminal
+    if (selectedId) {
+      const current = terminalsRef.current.get(selectedId);
+      if (current) {
+        current.container.style.display = "none";
+      }
+    }
+
     setSelectedId(session.id);
-    // Mark selected session as active in local state
     setSessions((prev) =>
       prev.map((s) => (s.id === session.id ? { ...s, state: "active" as const } : s)),
     );
+
+    // Only send select if not already running (main will check too)
     window.electronAPI.selectSession(session);
-    // Clear and refit terminal after DOM updates
+
+    // Show and fit terminal
+    const instance = getOrCreateTerminal(session.id);
+    instance.container.style.display = "block";
     requestAnimationFrame(() => {
-      if (termRef.current && fitAddonRef.current) {
-        termRef.current.clear();
-        fitAddonRef.current.fit();
-        termRef.current.focus();
-        window.electronAPI.ptyResize(termRef.current.cols, termRef.current.rows);
-      }
+      instance.fitAddon.fit();
+      instance.term.focus();
+      window.electronAPI.ptyResize(session.id, instance.term.cols, instance.term.rows);
     });
   };
 
@@ -188,11 +219,7 @@ export function App(): JSX.Element {
         <SessionList sessions={sessions} selectedId={selectedId} onSelect={handleSelectSession} />
       </aside>
       <main className="terminal-container">
-        <div
-          ref={terminalRef}
-          className="terminal"
-          style={{ display: selectedId ? "block" : "none" }}
-        />
+        <div ref={containerRef} className="terminal-host" />
         {!selectedId && (
           <div className="empty-state">
             <p>Select a session to resume</p>

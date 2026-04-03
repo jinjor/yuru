@@ -136,6 +136,12 @@ body,
   flex: 1;
   padding: 4px;
   overflow: hidden;
+  position: relative;
+}
+
+.terminal-host {
+  height: 100%;
+  position: relative;
 }
 
 .terminal {

@@ -4,8 +4,7 @@ import * as pty from "node-pty";
 import { loadSessions, Session } from "./sessions.js";
 
 let mainWindow: BrowserWindow | null = null;
-let ptyProcess: pty.IPty | null = null;
-let currentSessionId: string | null = null;
+const ptyProcesses = new Map<string, pty.IPty>();
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -21,42 +20,41 @@ function createWindow(): void {
   mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
 }
 
-function killPty(): void {
-  if (ptyProcess) {
-    ptyProcess.kill();
-    ptyProcess = null;
-  }
-  currentSessionId = null;
-}
-
 function spawnClaude(session: Session): void {
-  killPty();
+  // Already running — just switch to it
+  if (ptyProcesses.has(session.id)) {
+    return;
+  }
 
   const cwd = session.project;
-  ptyProcess = pty.spawn("claude", ["--resume", session.id], {
+  const proc = pty.spawn("claude", ["--resume", session.id], {
     name: "xterm-256color",
     cols: 80,
     rows: 24,
     cwd,
     env: process.env as Record<string, string>,
   });
-  currentSessionId = session.id;
+  ptyProcesses.set(session.id, proc);
 
-  ptyProcess.onData((data: string) => {
+  proc.onData((data: string) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("pty:data", data);
+      mainWindow.webContents.send("pty:data", session.id, data);
     }
   });
 
-  ptyProcess.onExit(() => {
-    if (currentSessionId === session.id) {
-      ptyProcess = null;
-      currentSessionId = null;
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("session:ended", session.id);
-      }
+  proc.onExit(() => {
+    ptyProcesses.delete(session.id);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("session:ended", session.id);
     }
   });
+}
+
+function killAllPty(): void {
+  for (const proc of ptyProcesses.values()) {
+    proc.kill();
+  }
+  ptyProcesses.clear();
 }
 
 app.whenReady().then(() => {
@@ -73,20 +71,22 @@ app.whenReady().then(() => {
     spawnClaude(session);
   });
 
-  ipcMain.on("pty:write", (_event, data: string) => {
-    if (ptyProcess) {
-      ptyProcess.write(data);
+  ipcMain.on("pty:write", (_event, sessionId: string, data: string) => {
+    const proc = ptyProcesses.get(sessionId);
+    if (proc) {
+      proc.write(data);
     }
   });
 
-  ipcMain.on("pty:resize", (_event, cols: number, rows: number) => {
-    if (ptyProcess) {
-      ptyProcess.resize(cols, rows);
+  ipcMain.on("pty:resize", (_event, sessionId: string, cols: number, rows: number) => {
+    const proc = ptyProcesses.get(sessionId);
+    if (proc) {
+      proc.resize(cols, rows);
     }
   });
 });
 
 app.on("window-all-closed", () => {
-  killPty();
+  killAllPty();
   app.quit();
 });
