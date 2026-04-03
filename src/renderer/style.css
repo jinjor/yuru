@@ -72,8 +72,8 @@ body,
 
 .session-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 6px;
   margin-bottom: 4px;
 }
 
@@ -83,7 +83,30 @@ body,
   color: #ccc;
 }
 
+.session-state {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+.session-state.active {
+  color: #4ec9b0;
+  background: rgba(78, 201, 176, 0.15);
+}
+
+.session-state.inactive {
+  color: #888;
+  background: rgba(136, 136, 136, 0.15);
+}
+
+.session-state.archived {
+  color: #666;
+  background: rgba(102, 102, 102, 0.15);
+}
+
 .session-time {
+  margin-left: auto;
   font-size: 11px;
   color: #666;
 }

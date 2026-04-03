@@ -65,6 +65,7 @@ function SessionList({
         >
           <div className="session-header">
             <span className="session-project">{session.projectName}</span>
+            <span className={`session-state ${session.state}`}>{session.state}</span>
             <span className="session-time">{formatTime(session.timestamp)}</span>
           </div>
           <div className="session-preview">{session.lastMessage || "(no messages)"}</div>
@@ -80,6 +81,7 @@ function SessionList({
               <div key={session.id} className="session-card archived">
                 <div className="session-header">
                   <span className="session-project">{session.projectName}</span>
+                  <span className={`session-state ${session.state}`}>{session.state}</span>
                   <span className="session-time">{formatTime(session.timestamp)}</span>
                 </div>
                 <div className="session-preview">{session.lastMessage || "(no messages)"}</div>
@@ -101,6 +103,12 @@ export function App(): JSX.Element {
   // Load sessions on mount
   useEffect(() => {
     window.electronAPI.getSessions().then(setSessions);
+    window.electronAPI.onSessionEnded((sessionId) => {
+      setSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? { ...s, state: "inactive" as const } : s)),
+      );
+      setSelectedId((prev) => (prev === sessionId ? null : prev));
+    });
   }, []);
 
   // Setup terminal
@@ -155,6 +163,10 @@ export function App(): JSX.Element {
       return;
     }
     setSelectedId(session.id);
+    // Mark selected session as active in local state
+    setSessions((prev) =>
+      prev.map((s) => (s.id === session.id ? { ...s, state: "active" as const } : s)),
+    );
     window.electronAPI.selectSession(session);
     // Clear and refit terminal after DOM updates
     requestAnimationFrame(() => {
