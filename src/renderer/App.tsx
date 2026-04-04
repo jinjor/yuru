@@ -106,15 +106,24 @@ function SessionList({
         >
           <div className="session-header">
             <span className="session-project">{session.projectName}</span>
-            <span className={`session-state ${session.state}`}>{session.state}</span>
-            <span className="session-time">{formatTime(session.timestamp)}</span>
+            <span className={`session-state ${session.state}`}>
+              {session.state}
+            </span>
+            <span className="session-time">
+              {formatTime(session.timestamp)}
+            </span>
           </div>
-          <div className="session-preview">{session.lastMessage || "(no messages)"}</div>
+          <div className="session-preview">
+            {session.lastMessage || "(no messages)"}
+          </div>
         </div>
       ))}
       {archivedSessions.length > 0 && (
         <>
-          <div className="archived-toggle" onClick={() => setShowArchived(!showArchived)}>
+          <div
+            className="archived-toggle"
+            onClick={() => setShowArchived(!showArchived)}
+          >
             {showArchived ? "▼" : "▶"} Archived ({archivedSessions.length})
           </div>
           {showArchived &&
@@ -122,10 +131,16 @@ function SessionList({
               <div key={session.id} className="session-card archived">
                 <div className="session-header">
                   <span className="session-project">{session.projectName}</span>
-                  <span className={`session-state ${session.state}`}>{session.state}</span>
-                  <span className="session-time">{formatTime(session.timestamp)}</span>
+                  <span className={`session-state ${session.state}`}>
+                    {session.state}
+                  </span>
+                  <span className="session-time">
+                    {formatTime(session.timestamp)}
+                  </span>
                 </div>
-                <div className="session-preview">{session.lastMessage || "(no messages)"}</div>
+                <div className="session-preview">
+                  {session.lastMessage || "(no messages)"}
+                </div>
               </div>
             ))}
         </>
@@ -157,14 +172,19 @@ function ChangesPanel({
             className={`change-item ${selectedFile === file.path ? "selected" : ""}`}
             onClick={() => onSelectFile(file.path)}
           >
-            <span className="change-status" style={{ color: statusColor(file.status) }}>
+            <span
+              className="change-status"
+              style={{ color: statusColor(file.status) }}
+            >
               {statusLabel(file.status)}
             </span>
             <span className="change-path" title={file.path}>
               {file.path.split("/").pop()}
             </span>
             <span className="change-dir" title={file.path}>
-              {file.path.includes("/") ? file.path.substring(0, file.path.lastIndexOf("/")) : ""}
+              {file.path.includes("/")
+                ? file.path.substring(0, file.path.lastIndexOf("/"))
+                : ""}
             </span>
           </div>
         ))}
@@ -229,7 +249,11 @@ function RepoPicker({
       <div className="repo-picker" onClick={(e) => e.stopPropagation()}>
         <div className="repo-picker-header">New Session</div>
         {repos.map((repo) => (
-          <div key={repo} className="repo-picker-item" onClick={() => onSelect(repo)}>
+          <div
+            key={repo}
+            className="repo-picker-item"
+            onClick={() => onSelect(repo)}
+          >
             {repo.split("/").pop()}
             <span className="repo-picker-path">{repo}</span>
           </div>
@@ -254,46 +278,61 @@ export function App(): JSX.Element {
 
   const knownRepos = [...new Set(sessions.map((s) => s.project))];
 
-  const getOrCreateTerminal = useCallback((sessionId: string): TerminalInstance => {
-    const existing = terminalsRef.current.get(sessionId);
-    if (existing) {
-      return existing;
-    }
+  const getOrCreateTerminal = useCallback(
+    (sessionId: string): TerminalInstance => {
+      const existing = terminalsRef.current.get(sessionId);
+      if (existing) {
+        return existing;
+      }
 
-    const container = document.createElement("div");
-    container.className = "terminal";
-    container.style.display = "none";
+      const container = document.createElement("div");
+      container.className = "terminal";
+      container.style.display = "none";
 
-    const term = new Terminal({
-      cursorBlink: true,
-      fontSize: 14,
-      fontFamily: "Menlo, Monaco, monospace",
-      theme: {
-        background: "#1e1e1e",
-        foreground: "#d4d4d4",
-      },
-    });
+      const term = new Terminal({
+        cursorBlink: true,
+        fontSize: 13,
+        fontFamily: "Menlo, Monaco, monospace",
+        theme: {
+          background: "#1e1e1e",
+          foreground: "#d4d4d4",
+        },
+      });
 
-    const fitAddon = new FitAddon();
-    term.loadAddon(fitAddon);
+      const fitAddon = new FitAddon();
+      term.loadAddon(fitAddon);
 
-    if (containerRef.current) {
-      containerRef.current.appendChild(container);
-    }
-    term.open(container);
+      if (containerRef.current) {
+        containerRef.current.appendChild(container);
+      }
+      term.open(container);
 
-    term.onData((data) => {
-      window.electronAPI.ptyWrite(sessionId, data);
-    });
+      term.attachCustomKeyEventHandler((event) => {
+        if (event.key === "Enter" && event.shiftKey) {
+          if (event.type === "keydown") {
+            event.preventDefault();
+            event.stopPropagation();
+            window.electronAPI.ptyWrite(sessionId, "\x1b[13;2u");
+          }
+          return false;
+        }
+        return true;
+      });
 
-    term.onResize(({ cols, rows }) => {
-      window.electronAPI.ptyResize(sessionId, cols, rows);
-    });
+      term.onData((data) => {
+        window.electronAPI.ptyWrite(sessionId, data);
+      });
 
-    const instance: TerminalInstance = { term, fitAddon, container };
-    terminalsRef.current.set(sessionId, instance);
-    return instance;
-  }, []);
+      term.onResize(({ cols, rows }) => {
+        window.electronAPI.ptyResize(sessionId, cols, rows);
+      });
+
+      const instance: TerminalInstance = { term, fitAddon, container };
+      terminalsRef.current.set(sessionId, instance);
+      return instance;
+    },
+    [],
+  );
 
   // Load sessions and setup listeners
   useEffect(() => {
@@ -308,7 +347,9 @@ export function App(): JSX.Element {
 
     window.electronAPI.onSessionEnded((sessionId) => {
       setSessions((prev) =>
-        prev.map((s) => (s.id === sessionId ? { ...s, state: "inactive" as const } : s)),
+        prev.map((s) =>
+          s.id === sessionId ? { ...s, state: "inactive" as const } : s,
+        ),
       );
       setSelectedId((prev) => (prev === sessionId ? null : prev));
     });
@@ -363,7 +404,10 @@ export function App(): JSX.Element {
 
     let cancelled = false;
     const fetchDiff = async (): Promise<void> => {
-      const diff = await window.electronAPI.getGitDiff(selectedId, selectedFile);
+      const diff = await window.electronAPI.getGitDiff(
+        selectedId,
+        selectedFile,
+      );
       if (!cancelled) {
         setDiffContent(diff);
       }
@@ -408,7 +452,11 @@ export function App(): JSX.Element {
     requestAnimationFrame(() => {
       instance.fitAddon.fit();
       instance.term.focus();
-      window.electronAPI.ptyResize(sessionId, instance.term.cols, instance.term.rows);
+      window.electronAPI.ptyResize(
+        sessionId,
+        instance.term.cols,
+        instance.term.rows,
+      );
     });
   };
 
@@ -418,7 +466,9 @@ export function App(): JSX.Element {
     }
 
     setSessions((prev) =>
-      prev.map((s) => (s.id === session.id ? { ...s, state: "active" as const } : s)),
+      prev.map((s) =>
+        s.id === session.id ? { ...s, state: "active" as const } : s,
+      ),
     );
     window.electronAPI.selectSession(session);
     setSelectedFile(null);
@@ -440,11 +490,18 @@ export function App(): JSX.Element {
       <aside className="sidebar">
         <div className="sidebar-header">
           <h2>Sessions</h2>
-          <button className="new-session-btn" onClick={() => setShowRepoPicker(true)}>
+          <button
+            className="new-session-btn"
+            onClick={() => setShowRepoPicker(true)}
+          >
             +
           </button>
         </div>
-        <SessionList sessions={sessions} selectedId={selectedId} onSelect={handleSelectSession} />
+        <SessionList
+          sessions={sessions}
+          selectedId={selectedId}
+          onSelect={handleSelectSession}
+        />
       </aside>
       <main className="terminal-container">
         <div ref={containerRef} className="terminal-host" />
