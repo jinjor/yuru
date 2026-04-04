@@ -4,8 +4,8 @@
   "description": "Vibe Coding editor for Claude Code",
   "main": "dist/main/index.js",
   "scripts": {
-    "dev": "tsc && vite build && electron .",
     "build": "tsc && vite build",
+    "run": "electron .",
     "lint": "oxlint src/",
     "format": "oxfmt src/"
   },
