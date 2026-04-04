@@ -12,8 +12,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getGitStatus: (sessionId: string) => ipcRenderer.invoke("git:status", sessionId),
   getGitDiff: (sessionId: string, filePath: string) =>
     ipcRenderer.invoke("git:diff", sessionId, filePath),
-  onSessionEnded: (callback: (sessionId: string) => void) =>
-    ipcRenderer.on("session:ended", (_event, sessionId) => callback(sessionId)),
+  onSessionsStateChanged: (callback: (active: { sessionId: string; cwd: string }[]) => void) =>
+    ipcRenderer.on("sessions:stateChanged", (_event, active) => callback(active)),
   ptyWrite: (sessionId: string, data: string) => ipcRenderer.send("pty:write", sessionId, data),
   ptyResize: (sessionId: string, cols: number, rows: number) =>
     ipcRenderer.send("pty:resize", sessionId, cols, rows),

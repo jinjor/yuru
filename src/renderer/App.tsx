@@ -32,7 +32,9 @@ declare global {
       selectFolder: () => Promise<string | null>;
       getGitStatus: (sessionId: string) => Promise<GitFileStatus[]>;
       getGitDiff: (sessionId: string, filePath: string) => Promise<string>;
-      onSessionEnded: (callback: (sessionId: string) => void) => void;
+      onSessionsStateChanged: (
+        callback: (active: { sessionId: string; cwd: string }[]) => void,
+      ) => void;
       ptyWrite: (sessionId: string, data: string) => void;
       ptyResize: (sessionId: string, cols: number, rows: number) => void;
       onPtyData: (callback: (sessionId: string, data: string) => void) => void;
@@ -343,6 +345,7 @@ export function App(): JSX.Element {
   const [showRepoPicker, setShowRepoPicker] = useState(false);
   const [worktreeRepo, setWorktreeRepo] = useState<string | null>(null);
   const [worktreeError, setWorktreeError] = useState<string | null>(null);
+  const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [changedFiles, setChangedFiles] = useState<GitFileStatus[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [diffContent, setDiffContent] = useState<string | null>(null);
@@ -422,7 +425,16 @@ export function App(): JSX.Element {
 
   // Load sessions and setup listeners
   useEffect(() => {
-    window.electronAPI.getSessions().then(setSessions);
+    const refreshSessions = (): void => {
+      window.electronAPI.getSessions().then((nextSessions) => {
+        setSessions(nextSessions);
+        setSelectedId((prev) =>
+          prev && nextSessions.some((session) => session.id === prev) ? prev : null,
+        );
+      });
+    };
+
+    refreshSessions();
 
     window.electronAPI.onPtyData((sessionId, data) => {
       const instance = terminalsRef.current.get(sessionId);
@@ -431,11 +443,8 @@ export function App(): JSX.Element {
       }
     });
 
-    window.electronAPI.onSessionEnded((sessionId) => {
-      setSessions((prev) =>
-        prev.map((s) => (s.id === sessionId ? { ...s, state: "inactive" as const } : s)),
-      );
-      setSelectedId((prev) => (prev === sessionId ? null : prev));
+    window.electronAPI.onSessionsStateChanged(() => {
+      refreshSessions();
     });
   }, []);
 
@@ -542,9 +551,6 @@ export function App(): JSX.Element {
       return;
     }
 
-    setSessions((prev) =>
-      prev.map((s) => (s.id === session.id ? { ...s, state: "active" as const } : s)),
-    );
     window.electronAPI.selectSession(session);
     setSelectedFile(null);
     setDiffContent(null);
@@ -553,11 +559,16 @@ export function App(): JSX.Element {
 
   const handleCreateSession = async (repoPath: string): Promise<void> => {
     setShowRepoPicker(false);
-    const session = await window.electronAPI.createSession(repoPath);
-    setSessions((prev) => [session, ...prev]);
-    setSelectedFile(null);
-    setDiffContent(null);
-    showTerminal(session.id);
+    setIsCreatingSession(true);
+    try {
+      const session = await window.electronAPI.createSession(repoPath);
+      setSessions((prev) => [session, ...prev]);
+      setSelectedFile(null);
+      setDiffContent(null);
+      showTerminal(session.id);
+    } finally {
+      setIsCreatingSession(false);
+    }
   };
 
   const handleCreateWorktreeSession = async (branchName: string): Promise<void> => {
@@ -566,6 +577,7 @@ export function App(): JSX.Element {
     }
     const repoPath = worktreeRepo;
     setWorktreeError(null);
+    setIsCreatingSession(true);
     try {
       const session = await window.electronAPI.createWorktreeSession(repoPath, branchName);
       setWorktreeRepo(null);
@@ -575,6 +587,8 @@ export function App(): JSX.Element {
       showTerminal(session.id);
     } catch (e) {
       setWorktreeError(e instanceof Error ? e.message : "Failed to create worktree");
+    } finally {
+      setIsCreatingSession(false);
     }
   };
 
@@ -591,8 +605,13 @@ export function App(): JSX.Element {
       </aside>
       <main className="terminal-container">
         <div ref={containerRef} className="terminal-host" />
-        {!selectedId && (
-          <div className="empty-state">
+        {isCreatingSession && !selectedId && (
+          <div className="empty-state terminal-empty-state">
+            <p>Starting session...</p>
+          </div>
+        )}
+        {!isCreatingSession && !selectedId && (
+          <div className="empty-state terminal-empty-state">
             <p>Select a session to resume</p>
           </div>
         )}

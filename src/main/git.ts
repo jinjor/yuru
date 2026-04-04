@@ -30,8 +30,8 @@ export async function getGitStatus(cwd: string): Promise<GitFileStatus[]> {
     return [];
   }
   return output
-    .trim()
     .split("\n")
+    .filter((line) => line.length > 0)
     .map((line) => {
       const status = line.substring(0, 2).trim();
       const filePath = line.substring(3);

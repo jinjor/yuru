@@ -16,11 +16,11 @@ export interface Session {
   };
 }
 
-const claudeDir = path.join(os.homedir(), ".claude");
+export const claudeDir = path.join(os.homedir(), ".claude");
 
-function getActiveSessions(): Map<string, string> {
+function getActiveSessions(): Map<string, { cwd: string; startedAt: number }> {
   const sessionsDir = path.join(claudeDir, "sessions");
-  const active = new Map<string, string>();
+  const active = new Map<string, { cwd: string; startedAt: number }>();
   if (!fs.existsSync(sessionsDir)) {
     return active;
   }
@@ -30,8 +30,11 @@ function getActiveSessions(): Map<string, string> {
     }
     try {
       const data = JSON.parse(fs.readFileSync(path.join(sessionsDir, file), "utf-8"));
-      if (data.sessionId) {
-        active.set(data.sessionId, data.cwd);
+      if (data.sessionId && data.cwd) {
+        active.set(data.sessionId, {
+          cwd: data.cwd,
+          startedAt: typeof data.startedAt === "number" ? data.startedAt : Date.now(),
+        });
       }
     } catch {
       // skip malformed files
@@ -95,6 +98,16 @@ export async function loadSessions(): Promise<Session[]> {
           });
         }
       }
+    }
+  }
+
+  for (const [sid, active] of activeSessions) {
+    if (!sessionMap.has(sid)) {
+      sessionMap.set(sid, {
+        project: active.cwd,
+        display: "",
+        timestamp: active.startedAt,
+      });
     }
   }
 

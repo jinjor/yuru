@@ -1,14 +1,25 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import path from "path";
-import crypto from "crypto";
 import * as pty from "node-pty";
-import { loadSessions, Session } from "./sessions.js";
+import { loadSessions, Session, claudeDir } from "./sessions.js";
 import { getGitStatus, getGitDiff, removeWorktree, renameBranch, branchExists } from "./git.js";
+import { SessionWatcher, ActiveSessionInfo } from "./session-watcher.js";
 import fs from "fs";
+import os from "os";
 
 let mainWindow: BrowserWindow | null = null;
 const ptyProcesses = new Map<string, pty.IPty>();
+const pendingProcesses = new Set<pty.IPty>();
 const sessionCwdMap = new Map<string, string>();
+const claudeSessionsDir = path.join(os.homedir(), ".claude", "sessions");
+let sessionWatcher: SessionWatcher | null = null;
+
+interface PendingSession {
+  proc: pty.IPty;
+  sessionCwd: string;
+  sessionId: string | null;
+  exited: boolean;
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -24,51 +35,97 @@ function createWindow(): void {
   mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
 }
 
-function spawnClaude(sessionId: string, cwd: string, args: string[], worktreeName?: string): void {
-  if (ptyProcesses.has(sessionId)) {
-    return;
-  }
-
+function launchClaude(cwd: string, args: string[], worktreeName?: string): PendingSession {
+  const sessionCwd = worktreeName ? path.join(cwd, ".claude", "worktrees", worktreeName) : cwd;
+  const spawnArgs = [...args];
   if (worktreeName) {
-    args.push("--worktree", worktreeName);
-    sessionCwdMap.set(sessionId, path.join(cwd, ".claude", "worktrees", worktreeName));
-  } else {
-    sessionCwdMap.set(sessionId, cwd);
+    spawnArgs.push("--worktree", worktreeName);
   }
-
-  const proc = pty.spawn("claude", args, {
+  const proc = pty.spawn("claude", spawnArgs, {
     name: "xterm-256color",
     cols: 80,
     rows: 24,
     cwd,
     env: process.env as Record<string, string>,
   });
-  ptyProcesses.set(sessionId, proc);
+  pendingProcesses.add(proc);
+  const pending: PendingSession = {
+    proc,
+    sessionCwd,
+    sessionId: null,
+    exited: false,
+  };
 
   proc.onData((data: string) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("pty:data", sessionId, data);
+    if (!pending.sessionId || !mainWindow || mainWindow.isDestroyed()) {
+      return;
     }
+    mainWindow.webContents.send("pty:data", pending.sessionId, data);
   });
 
   proc.onExit(() => {
-    ptyProcesses.delete(sessionId);
-    sessionCwdMap.delete(sessionId);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("session:ended", sessionId);
+    pending.exited = true;
+    pendingProcesses.delete(proc);
+    if (!pending.sessionId) {
+      return;
     }
+    ptyProcesses.delete(pending.sessionId);
+    sessionCwdMap.delete(pending.sessionId);
   });
+
+  return pending;
+}
+
+function registerSession(sessionId: string, pending: PendingSession): void {
+  pending.sessionId = sessionId;
+  pendingProcesses.delete(pending.proc);
+  ptyProcesses.set(sessionId, pending.proc);
+  sessionCwdMap.set(sessionId, pending.sessionCwd);
+}
+
+async function waitForSessionId(pending: PendingSession): Promise<string> {
+  const sessionFile = path.join(claudeSessionsDir, `${pending.proc.pid}.json`);
+  for (let attempt = 0; attempt < 150; attempt++) {
+    if (fs.existsSync(sessionFile)) {
+      try {
+        const data = JSON.parse(fs.readFileSync(sessionFile, "utf-8"));
+        if (typeof data.sessionId === "string" && data.sessionId) {
+          return data.sessionId;
+        }
+      } catch {
+        // Ignore partial writes while Claude is still initializing the session file.
+      }
+    }
+    if (pending.exited) {
+      throw new Error("Claude exited before creating a session");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  throw new Error("Timeout waiting for Claude session initialization");
 }
 
 function killAllPty(): void {
   for (const proc of ptyProcesses.values()) {
     proc.kill();
   }
+  for (const proc of pendingProcesses.values()) {
+    proc.kill();
+  }
   ptyProcesses.clear();
+  pendingProcesses.clear();
 }
 
 app.whenReady().then(() => {
   createWindow();
+
+  sessionWatcher = new SessionWatcher(claudeDir);
+  sessionWatcher.onStateChange((activeSessions: ActiveSessionInfo[]) => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return;
+    }
+    mainWindow.webContents.send("sessions:stateChanged", activeSessions);
+  });
+  sessionWatcher.start();
 
   ipcMain.handle("sessions:list", () => {
     return loadSessions();
@@ -78,22 +135,34 @@ app.whenReady().then(() => {
     if (session.state === "archived") {
       return;
     }
+    if (ptyProcesses.has(session.id)) {
+      return;
+    }
     sessionCwdMap.set(session.id, session.project);
-    spawnClaude(session.id, session.project, ["--resume", session.id]);
+    const pending = launchClaude(session.project, ["--resume", session.id]);
+    registerSession(session.id, pending);
   });
 
   ipcMain.handle("session:create", async (_event, repoPath: string) => {
-    const tempId = `new-${crypto.randomUUID()}`;
-    spawnClaude(tempId, repoPath, []);
-    const session: Session = {
-      id: tempId,
-      project: repoPath,
-      projectName: path.basename(repoPath),
-      lastMessage: "",
-      timestamp: Date.now(),
-      state: "active",
-    };
-    return session;
+    const pending = launchClaude(repoPath, []);
+    try {
+      const sessionId = await waitForSessionId(pending);
+      registerSession(sessionId, pending);
+      const session: Session = {
+        id: sessionId,
+        project: repoPath,
+        projectName: path.basename(repoPath),
+        lastMessage: "",
+        timestamp: Date.now(),
+        state: "active",
+      };
+      return session;
+    } catch (error) {
+      if (!pending.exited) {
+        pending.proc.kill();
+      }
+      throw error;
+    }
   });
 
   ipcMain.handle("session:createWorktree", async (_event, repoPath: string, branchName: string) => {
@@ -108,44 +177,52 @@ app.whenReady().then(() => {
       throw new Error(`Branch "${branchName}" already exists`);
     }
 
-    const tempId = `new-${crypto.randomUUID()}`;
-    spawnClaude(tempId, repoPath, [], worktreeName);
+    const pending = launchClaude(repoPath, [], worktreeName);
+    try {
+      const sessionId = await waitForSessionId(pending);
+      registerSession(sessionId, pending);
 
-    // Wait for CC to create the worktree, then rename the branch
-    const ccBranch = `worktree-${worktreeName}`;
-    if (branchName !== ccBranch) {
-      const waitForBranch = (): Promise<void> => {
-        return new Promise((resolve, reject) => {
-          let attempts = 0;
-          const check = async (): Promise<void> => {
-            if (await branchExists(repoPath, ccBranch)) {
-              resolve();
-            } else if (attempts++ > 150) {
-              reject(new Error("Timeout waiting for branch creation"));
-            } else {
-              setTimeout(check, 200);
-            }
-          };
-          check();
-        });
+      // Wait for CC to create the worktree, then rename the branch
+      const ccBranch = `worktree-${worktreeName}`;
+      if (branchName !== ccBranch) {
+        const waitForBranch = (): Promise<void> => {
+          return new Promise((resolve, reject) => {
+            let attempts = 0;
+            const check = async (): Promise<void> => {
+              if (await branchExists(repoPath, ccBranch)) {
+                resolve();
+              } else if (attempts++ > 150) {
+                reject(new Error("Timeout waiting for branch creation"));
+              } else {
+                setTimeout(check, 200);
+              }
+            };
+            check();
+          });
+        };
+        await waitForBranch();
+        await renameBranch(worktreePath, ccBranch, branchName);
+      }
+
+      const session: Session = {
+        id: sessionId,
+        project: worktreePath,
+        projectName: worktreeName,
+        lastMessage: "",
+        timestamp: Date.now(),
+        state: "active",
+        worktree: {
+          name: worktreeName,
+          branch: branchName,
+        },
       };
-      await waitForBranch();
-      await renameBranch(worktreePath, ccBranch, branchName);
+      return session;
+    } catch (error) {
+      if (!pending.exited) {
+        pending.proc.kill();
+      }
+      throw error;
     }
-
-    const session: Session = {
-      id: tempId,
-      project: worktreePath,
-      projectName: worktreeName,
-      lastMessage: "",
-      timestamp: Date.now(),
-      state: "active",
-      worktree: {
-        name: worktreeName,
-        branch: branchName,
-      },
-    };
-    return session;
   });
 
   ipcMain.handle("worktree:remove", async (_event, repoPath: string, worktreePath: string) => {
@@ -206,6 +283,9 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
+  if (sessionWatcher) {
+    sessionWatcher.stop();
+  }
   killAllPty();
   app.quit();
 });
