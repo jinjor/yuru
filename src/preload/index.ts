@@ -4,6 +4,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getSessions: () => ipcRenderer.invoke("sessions:list"),
   selectSession: (session: unknown) => ipcRenderer.send("session:select", session),
   createSession: (repoPath: string) => ipcRenderer.invoke("session:create", repoPath),
+  createWorktreeSession: (repoPath: string, branchName: string) =>
+    ipcRenderer.invoke("session:createWorktree", repoPath, branchName),
+  removeWorktree: (repoPath: string, worktreePath: string) =>
+    ipcRenderer.invoke("worktree:remove", repoPath, worktreePath),
   selectFolder: () => ipcRenderer.invoke("dialog:selectFolder"),
   getGitStatus: (sessionId: string) => ipcRenderer.invoke("git:status", sessionId),
   getGitDiff: (sessionId: string, filePath: string) =>

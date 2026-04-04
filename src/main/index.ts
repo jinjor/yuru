@@ -3,7 +3,8 @@ import path from "path";
 import crypto from "crypto";
 import * as pty from "node-pty";
 import { loadSessions, Session } from "./sessions.js";
-import { getGitStatus, getGitDiff } from "./git.js";
+import { getGitStatus, getGitDiff, removeWorktree, renameBranch, branchExists } from "./git.js";
+import fs from "fs";
 
 let mainWindow: BrowserWindow | null = null;
 const ptyProcesses = new Map<string, pty.IPty>();
@@ -23,12 +24,17 @@ function createWindow(): void {
   mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
 }
 
-function spawnClaude(sessionId: string, cwd: string, args: string[]): void {
+function spawnClaude(sessionId: string, cwd: string, args: string[], worktreeName?: string): void {
   if (ptyProcesses.has(sessionId)) {
     return;
   }
 
-  sessionCwdMap.set(sessionId, cwd);
+  if (worktreeName) {
+    args.push("--worktree", worktreeName);
+    sessionCwdMap.set(sessionId, path.join(cwd, ".claude", "worktrees", worktreeName));
+  } else {
+    sessionCwdMap.set(sessionId, cwd);
+  }
 
   const proc = pty.spawn("claude", args, {
     name: "xterm-256color",
@@ -88,6 +94,62 @@ app.whenReady().then(() => {
       state: "active",
     };
     return session;
+  });
+
+  ipcMain.handle("session:createWorktree", async (_event, repoPath: string, branchName: string) => {
+    const worktreeName = branchName.replace(/\//g, "-");
+    const worktreePath = path.join(repoPath, ".claude", "worktrees", worktreeName);
+
+    // Pre-check: worktree directory and branch name must not already exist
+    if (fs.existsSync(worktreePath)) {
+      throw new Error(`Worktree "${worktreeName}" already exists`);
+    }
+    if (await branchExists(repoPath, branchName)) {
+      throw new Error(`Branch "${branchName}" already exists`);
+    }
+
+    const tempId = `new-${crypto.randomUUID()}`;
+    spawnClaude(tempId, repoPath, [], worktreeName);
+
+    // Wait for CC to create the worktree, then rename the branch
+    const ccBranch = `worktree-${worktreeName}`;
+    if (branchName !== ccBranch) {
+      const waitForBranch = (): Promise<void> => {
+        return new Promise((resolve, reject) => {
+          let attempts = 0;
+          const check = async (): Promise<void> => {
+            if (await branchExists(repoPath, ccBranch)) {
+              resolve();
+            } else if (attempts++ > 150) {
+              reject(new Error("Timeout waiting for branch creation"));
+            } else {
+              setTimeout(check, 200);
+            }
+          };
+          check();
+        });
+      };
+      await waitForBranch();
+      await renameBranch(worktreePath, ccBranch, branchName);
+    }
+
+    const session: Session = {
+      id: tempId,
+      project: worktreePath,
+      projectName: worktreeName,
+      lastMessage: "",
+      timestamp: Date.now(),
+      state: "active",
+      worktree: {
+        name: worktreeName,
+        branch: branchName,
+      },
+    };
+    return session;
+  });
+
+  ipcMain.handle("worktree:remove", async (_event, repoPath: string, worktreePath: string) => {
+    await removeWorktree(repoPath, worktreePath);
   });
 
   ipcMain.handle("dialog:selectFolder", async () => {

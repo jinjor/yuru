@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import os from "os";
+import { listWorktrees } from "./git.js";
 
 export interface Session {
   id: string;
@@ -9,6 +10,10 @@ export interface Session {
   lastMessage: string;
   timestamp: number;
   state: "active" | "inactive" | "archived";
+  worktree?: {
+    name: string;
+    branch: string;
+  };
 }
 
 const claudeDir = path.join(os.homedir(), ".claude");
@@ -39,7 +44,7 @@ function decodeProjectPath(encoded: string): string {
   return encoded.replace(/^-/, "/").replace(/-/g, "/");
 }
 
-export function loadSessions(): Session[] {
+export async function loadSessions(): Promise<Session[]> {
   const historyPath = path.join(claudeDir, "history.jsonl");
   if (!fs.existsSync(historyPath)) {
     return [];
@@ -93,6 +98,27 @@ export function loadSessions(): Session[] {
     }
   }
 
+  // Collect unique repo paths and fetch worktree info
+  const repoPaths = new Set<string>();
+  for (const info of sessionMap.values()) {
+    repoPaths.add(info.project);
+  }
+  // Map from worktree path to worktree info
+  const worktreeMap = new Map<string, { name: string; branch: string }>();
+  for (const repoPath of repoPaths) {
+    try {
+      const worktrees = await listWorktrees(repoPath);
+      for (const wt of worktrees) {
+        worktreeMap.set(wt.path, {
+          name: path.basename(wt.path),
+          branch: wt.branch,
+        });
+      }
+    } catch {
+      // Not a git repo or git not available — skip
+    }
+  }
+
   // Build session list
   const sessions: Session[] = [];
   for (const [id, info] of sessionMap) {
@@ -105,6 +131,7 @@ export function loadSessions(): Session[] {
       state = "archived";
     }
 
+    const wt = worktreeMap.get(info.project);
     sessions.push({
       id,
       project: info.project,
@@ -112,6 +139,7 @@ export function loadSessions(): Session[] {
       lastMessage: info.display,
       timestamp: info.timestamp,
       state,
+      worktree: wt,
     });
   }
 

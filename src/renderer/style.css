@@ -100,6 +100,10 @@ body,
   margin-bottom: 4px;
 }
 
+.session-header .session-state {
+  order: -1;
+}
+
 .session-project {
   font-size: 12px;
   font-weight: 600;
@@ -107,31 +111,35 @@ body,
 }
 
 .session-state {
-  font-size: 10px;
-  padding: 1px 5px;
-  border-radius: 3px;
-  font-weight: 600;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .session-state.active {
-  color: #4ec9b0;
-  background: rgba(78, 201, 176, 0.15);
+  background: #3ddc84;
+  box-shadow: 0 0 4px rgba(61, 220, 132, 0.5);
 }
 
 .session-state.inactive {
-  color: #888;
-  background: rgba(136, 136, 136, 0.15);
+  background: #444;
 }
 
 .session-state.archived {
-  color: #666;
-  background: rgba(102, 102, 102, 0.15);
+  background: #333;
 }
 
 .session-time {
   margin-left: auto;
   font-size: 11px;
   color: #666;
+}
+
+.session-branch {
+  font-size: 11px;
+  color: #569cd6;
+  margin-bottom: 2px;
 }
 
 .session-preview {
@@ -266,7 +274,6 @@ body,
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100px;
-  direction: rtl;
   text-align: right;
 }
 
@@ -347,6 +354,7 @@ body,
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .repo-picker-item:hover {
@@ -362,4 +370,83 @@ body,
   font-size: 11px;
   color: #666;
   margin-left: auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 250px;
+}
+
+.repo-picker-repo {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.repo-picker-repo .repo-picker-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.repo-picker-worktree-btn {
+  padding: 4px 8px;
+  margin-right: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #569cd6;
+  background: transparent;
+  border: 1px solid #569cd6;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.repo-picker-worktree-btn:hover {
+  background: rgba(86, 156, 214, 0.15);
+}
+
+.worktree-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+}
+
+.worktree-name-input {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: #ddd;
+  background: #1e1e1e;
+  border: 1px solid #555;
+  border-radius: 4px;
+  outline: none;
+}
+
+.worktree-name-input:focus {
+  border-color: #007acc;
+}
+
+.worktree-create-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: #007acc;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.worktree-create-btn:hover {
+  background: #0098ff;
+}
+
+.worktree-create-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.worktree-error {
+  padding: 0 16px 12px;
+  font-size: 11px;
+  color: #c74e39;
 }

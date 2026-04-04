@@ -2,6 +2,11 @@ import { execFile } from "child_process";
 import fs from "fs";
 import path from "path";
 
+export interface WorktreeInfo {
+  path: string;
+  branch: string;
+}
+
 export interface GitFileStatus {
   path: string;
   status: string;
@@ -57,4 +62,44 @@ export async function getGitDiff(cwd: string, filePath: string): Promise<string>
     diff = await exec("git", ["diff", "--staged", "--", filePath], cwd);
   }
   return diff;
+}
+
+export async function listWorktrees(cwd: string): Promise<WorktreeInfo[]> {
+  const output = await exec("git", ["worktree", "list", "--porcelain"], cwd);
+  const worktrees: WorktreeInfo[] = [];
+  const blocks = output.trim().split("\n\n");
+  // Skip the first block — it's always the main worktree (the repo itself)
+  for (let i = 1; i < blocks.length; i++) {
+    const lines = blocks[i].split("\n");
+    let wtPath = "";
+    let branch = "";
+    for (const line of lines) {
+      if (line.startsWith("worktree ")) {
+        wtPath = line.substring("worktree ".length);
+      } else if (line.startsWith("branch ")) {
+        branch = line.substring("branch ".length).replace("refs/heads/", "");
+      }
+    }
+    if (wtPath && branch) {
+      worktrees.push({ path: wtPath, branch });
+    }
+  }
+  return worktrees;
+}
+
+export async function branchExists(cwd: string, branchName: string): Promise<boolean> {
+  try {
+    await exec("git", ["rev-parse", "--verify", branchName], cwd);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function renameBranch(cwd: string, oldName: string, newName: string): Promise<void> {
+  await exec("git", ["branch", "-m", oldName, newName], cwd);
+}
+
+export async function removeWorktree(repoPath: string, worktreePath: string): Promise<void> {
+  await exec("git", ["worktree", "remove", worktreePath], repoPath);
 }
