@@ -1,7 +1,6 @@
 {
   "name": "yuru",
   "version": "0.1.0",
-  "type": "module",
   "description": "Vibe Coding editor for Claude Code",
   "main": "dist/main/index.js",
   "scripts": {

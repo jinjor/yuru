@@ -21,18 +21,17 @@ interface PendingSession {
 }
 
 function createWindow(): void {
-  const appDir = import.meta.dirname;
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     webPreferences: {
-      preload: path.join(appDir, "../preload/index.js"),
+      preload: path.join(__dirname, "../preload/index.js"),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
 
-  mainWindow.loadFile(path.join(appDir, "../renderer/index.html"));
+  mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
 }
 
 function launchClaude(cwd: string, args: string[], worktreeName?: string): PendingSession {
