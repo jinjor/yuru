@@ -1,17 +1,16 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import path from "path";
 import * as pty from "node-pty";
-import { loadSessions, Session, claudeDir } from "./sessions.js";
+import { loadSessions, Session } from "./sessions.js";
 import { getGitStatus, getGitDiff, removeWorktree, renameBranch, branchExists } from "./git.js";
 import { SessionWatcher, ActiveSessionInfo } from "./session-watcher.js";
+import { worktreeCwd, ccBranchName, pidFilePath } from "./claude-paths.js";
 import fs from "fs";
-import os from "os";
 
 let mainWindow: BrowserWindow | null = null;
 const ptyProcesses = new Map<string, pty.IPty>();
 const pendingProcesses = new Set<pty.IPty>();
 const sessionCwdMap = new Map<string, string>();
-const claudeSessionsDir = path.join(os.homedir(), ".claude", "sessions");
 let sessionWatcher: SessionWatcher | null = null;
 
 interface PendingSession {
@@ -36,7 +35,7 @@ function createWindow(): void {
 }
 
 function launchClaude(cwd: string, args: string[], worktreeName?: string): PendingSession {
-  const sessionCwd = worktreeName ? path.join(cwd, ".claude", "worktrees", worktreeName) : cwd;
+  const sessionCwd = worktreeName ? worktreeCwd(cwd, worktreeName) : cwd;
   const spawnArgs = [...args];
   if (worktreeName) {
     spawnArgs.push("--worktree", worktreeName);
@@ -84,7 +83,7 @@ function registerSession(sessionId: string, pending: PendingSession): void {
 }
 
 async function waitForSessionId(pending: PendingSession): Promise<string> {
-  const sessionFile = path.join(claudeSessionsDir, `${pending.proc.pid}.json`);
+  const sessionFile = pidFilePath(pending.proc.pid);
   for (let attempt = 0; attempt < 150; attempt++) {
     if (fs.existsSync(sessionFile)) {
       try {
@@ -118,7 +117,7 @@ function killAllPty(): void {
 app.whenReady().then(() => {
   createWindow();
 
-  sessionWatcher = new SessionWatcher(claudeDir);
+  sessionWatcher = new SessionWatcher();
   sessionWatcher.onStateChange((activeSessions: ActiveSessionInfo[]) => {
     if (!mainWindow || mainWindow.isDestroyed()) {
       return;
@@ -152,6 +151,7 @@ app.whenReady().then(() => {
         id: sessionId,
         project: repoPath,
         projectName: path.basename(repoPath),
+        repoPath,
         lastMessage: "",
         timestamp: Date.now(),
         state: "active",
@@ -167,7 +167,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle("session:createWorktree", async (_event, repoPath: string, branchName: string) => {
     const worktreeName = branchName.replace(/\//g, "-");
-    const worktreePath = path.join(repoPath, ".claude", "worktrees", worktreeName);
+    const worktreePath = worktreeCwd(repoPath, worktreeName);
 
     // Pre-check: worktree directory and branch name must not already exist
     if (fs.existsSync(worktreePath)) {
@@ -183,7 +183,7 @@ app.whenReady().then(() => {
       registerSession(sessionId, pending);
 
       // Wait for CC to create the worktree, then rename the branch
-      const ccBranch = `worktree-${worktreeName}`;
+      const ccBranch = ccBranchName(worktreeName);
       if (branchName !== ccBranch) {
         const waitForBranch = (): Promise<void> => {
           return new Promise((resolve, reject) => {
@@ -208,6 +208,7 @@ app.whenReady().then(() => {
         id: sessionId,
         project: worktreePath,
         projectName: worktreeName,
+        repoPath,
         lastMessage: "",
         timestamp: Date.now(),
         state: "active",

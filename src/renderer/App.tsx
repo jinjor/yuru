@@ -7,6 +7,7 @@ interface Session {
   id: string;
   project: string;
   projectName: string;
+  repoPath: string;
   lastMessage: string;
   timestamp: number;
   state: "active" | "inactive" | "archived";
@@ -113,11 +114,7 @@ function SessionList({
           onClick={() => onSelect(session)}
         >
           <div className="session-header">
-            <span className="session-project">
-              {session.worktree
-                ? session.project.split("/.claude/worktrees/")[0].split("/").pop()
-                : session.projectName}
-            </span>
+            <span className="session-project">{session.repoPath.split("/").pop()}</span>
             <span className={`session-state ${session.state}`} title={session.state} />
             <span className="session-time">{formatTime(session.timestamp)}</span>
           </div>
@@ -350,25 +347,7 @@ export function App(): JSX.Element {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [diffContent, setDiffContent] = useState<string | null>(null);
 
-  const knownRepos = [
-    ...new Set(
-      sessions
-        .map((s) => {
-          // For worktree sessions, show the main repo path, not the worktree path
-          const wtIndex = s.project.indexOf("/.claude/worktrees/");
-          if (wtIndex !== -1) {
-            return s.project.substring(0, wtIndex);
-          }
-          // Also handle paths from decodeProjectPath that may have double slashes
-          const wtIndex2 = s.project.indexOf("/worktrees/");
-          if (wtIndex2 !== -1 && s.project.substring(0, wtIndex2).endsWith("/.claude")) {
-            return s.project.substring(0, wtIndex2 - "/.claude".length);
-          }
-          return s.project;
-        })
-        .filter((p) => !p.includes("/worktrees/")),
-    ),
-  ];
+  const knownRepos = [...new Set(sessions.map((s) => s.repoPath))];
 
   const getOrCreateTerminal = useCallback((sessionId: string): TerminalInstance => {
     const existing = terminalsRef.current.get(sessionId);
