@@ -3,15 +3,15 @@ import path from "path";
 import * as pty from "node-pty";
 import { loadSessions, Session } from "./sessions.js";
 import { getGitStatus, getGitDiff, removeWorktree, renameBranch, branchExists } from "./git.js";
-import { SessionWatcher, ActiveSessionInfo } from "./session-watcher.js";
 import { worktreeCwd, ccBranchName, pidFilePath } from "./claude-paths.js";
+import { WorktreeWatcher } from "./worktree-watcher.js";
 import fs from "fs";
 
 let mainWindow: BrowserWindow | null = null;
 const ptyProcesses = new Map<string, pty.IPty>();
 const pendingProcesses = new Set<pty.IPty>();
 const sessionCwdMap = new Map<string, string>();
-let sessionWatcher: SessionWatcher | null = null;
+let worktreeWatcher: WorktreeWatcher | null = null;
 
 interface PendingSession {
   proc: pty.IPty;
@@ -70,6 +70,8 @@ function launchClaude(cwd: string, args: string[], worktreeName?: string): Pendi
     }
     ptyProcesses.delete(pending.sessionId);
     sessionCwdMap.delete(pending.sessionId);
+    void refreshWorktreeWatcher();
+    emitSessionsStateChanged();
   });
 
   return pending;
@@ -114,20 +116,50 @@ function killAllPty(): void {
   pendingProcesses.clear();
 }
 
+function emitSessionsStateChanged(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  const activeSessions = Array.from(sessionCwdMap, ([sessionId, cwd]) => ({ sessionId, cwd }));
+  mainWindow.webContents.send("sessions:stateChanged", activeSessions);
+}
+
+async function refreshWorktreeWatcher(): Promise<void> {
+  if (!worktreeWatcher) {
+    return;
+  }
+  const sessions = await loadSessions(sessionCwdMap);
+  const repos = Array.from(
+    new Set(
+      sessions
+        .filter((session) => session.worktree && session.state !== "archived")
+        .map((session) => session.repoPath),
+    ),
+  );
+  worktreeWatcher.setRepos(repos);
+}
+
 app.whenReady().then(() => {
   createWindow();
 
-  sessionWatcher = new SessionWatcher();
-  sessionWatcher.onStateChange((activeSessions: ActiveSessionInfo[]) => {
-    if (!mainWindow || mainWindow.isDestroyed()) {
-      return;
+  worktreeWatcher = new WorktreeWatcher();
+  worktreeWatcher.onChange(() => {
+    for (const [sessionId, cwd] of sessionCwdMap) {
+      if (fs.existsSync(cwd)) {
+        continue;
+      }
+      const proc = ptyProcesses.get(sessionId);
+      if (proc) {
+        proc.kill();
+      }
     }
-    mainWindow.webContents.send("sessions:stateChanged", activeSessions);
+    void refreshWorktreeWatcher();
+    emitSessionsStateChanged();
   });
-  sessionWatcher.start();
+  void refreshWorktreeWatcher();
 
   ipcMain.handle("sessions:list", () => {
-    return loadSessions();
+    return loadSessions(sessionCwdMap);
   });
 
   ipcMain.on("session:select", (_event, session: Session) => {
@@ -140,6 +172,7 @@ app.whenReady().then(() => {
     sessionCwdMap.set(session.id, session.project);
     const pending = launchClaude(session.project, ["--resume", session.id]);
     registerSession(session.id, pending);
+    emitSessionsStateChanged();
   });
 
   ipcMain.handle("session:create", async (_event, repoPath: string) => {
@@ -147,6 +180,7 @@ app.whenReady().then(() => {
     try {
       const sessionId = await waitForSessionId(pending);
       registerSession(sessionId, pending);
+      await refreshWorktreeWatcher();
       const session: Session = {
         id: sessionId,
         project: repoPath,
@@ -203,6 +237,8 @@ app.whenReady().then(() => {
         await waitForBranch();
         await renameBranch(worktreePath, ccBranch, branchName);
       }
+
+      await refreshWorktreeWatcher();
 
       const session: Session = {
         id: sessionId,
@@ -284,8 +320,8 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
-  if (sessionWatcher) {
-    sessionWatcher.stop();
+  if (worktreeWatcher) {
+    worktreeWatcher.stop();
   }
   killAllPty();
   app.quit();

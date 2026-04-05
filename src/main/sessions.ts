@@ -1,12 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { listWorktrees } from "./git.js";
-import {
-  claudeDir,
-  sessionsDir,
-  historyPath,
-  repoPathFromCwd,
-} from "./claude-paths.js";
+import { claudeDir, historyPath, repoPathFromCwd } from "./claude-paths.js";
 
 export { claudeDir };
 
@@ -24,36 +19,12 @@ export interface Session {
   };
 }
 
-function getActiveSessions(): Map<string, { cwd: string; startedAt: number }> {
-  const active = new Map<string, { cwd: string; startedAt: number }>();
-  if (!fs.existsSync(sessionsDir)) {
-    return active;
-  }
-  for (const file of fs.readdirSync(sessionsDir)) {
-    if (!file.endsWith(".json")) {
-      continue;
-    }
-    try {
-      const data = JSON.parse(fs.readFileSync(path.join(sessionsDir, file), "utf-8"));
-      if (data.sessionId && data.cwd) {
-        active.set(data.sessionId, {
-          cwd: data.cwd,
-          startedAt: typeof data.startedAt === "number" ? data.startedAt : Date.now(),
-        });
-      }
-    } catch {
-      // skip malformed files
-    }
-  }
-  return active;
-}
-
-export async function loadSessions(): Promise<Session[]> {
+export async function loadSessions(runtimeActiveSessions?: ReadonlyMap<string, string>): Promise<Session[]> {
   if (!fs.existsSync(historyPath)) {
     return [];
   }
 
-  const activeSessions = getActiveSessions();
+  const activeSessions = runtimeActiveSessions ?? new Map<string, string>();
 
   // Build session info from history.jsonl (latest message per session)
   const sessionMap = new Map<string, { project: string; display: string; timestamp: number }>();
@@ -76,16 +47,6 @@ export async function loadSessions(): Promise<Session[]> {
       }
     } catch {
       // skip malformed lines
-    }
-  }
-
-  for (const [sid, active] of activeSessions) {
-    if (!sessionMap.has(sid)) {
-      sessionMap.set(sid, {
-        project: active.cwd,
-        display: "",
-        timestamp: active.startedAt,
-      });
     }
   }
 
@@ -114,12 +75,12 @@ export async function loadSessions(): Promise<Session[]> {
   const sessions: Session[] = [];
   for (const [id, info] of sessionMap) {
     let state: Session["state"];
-    if (activeSessions.has(id)) {
-      state = "active";
-    } else if (fs.existsSync(info.project)) {
-      state = "inactive";
-    } else {
+    if (!fs.existsSync(info.project)) {
       state = "archived";
+    } else if (activeSessions.has(id)) {
+      state = "active";
+    } else {
+      state = "inactive";
     }
 
     const wt = worktreeMap.get(info.project);

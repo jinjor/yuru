@@ -96,10 +96,14 @@ function SessionList({
   sessions,
   selectedId,
   onSelect,
+  deletingSessionId,
+  onDeleteWorktree,
 }: {
   sessions: Session[];
   selectedId: string | null;
   onSelect: (session: Session) => void;
+  deletingSessionId: string | null;
+  onDeleteWorktree: (session: Session) => void;
 }): JSX.Element {
   const activeSessions = sessions.filter((s) => s.state !== "archived");
   const archivedSessions = sessions.filter((s) => s.state === "archived");
@@ -119,6 +123,18 @@ function SessionList({
             <span className="session-time">{formatTime(session.timestamp)}</span>
           </div>
           {session.worktree && <div className="session-branch">{session.worktree.branch}</div>}
+          {session.worktree && session.state === "inactive" && (
+            <button
+              className="session-delete-btn"
+              onClick={(event) => {
+                event.stopPropagation();
+                onDeleteWorktree(session);
+              }}
+              disabled={deletingSessionId === session.id}
+            >
+              {deletingSessionId === session.id ? "Removing..." : "Remove worktree"}
+            </button>
+          )}
           <div className="session-preview">{session.lastMessage || "(no messages)"}</div>
         </div>
       ))}
@@ -346,8 +362,22 @@ export function App(): JSX.Element {
   const [changedFiles, setChangedFiles] = useState<GitFileStatus[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [diffContent, setDiffContent] = useState<string | null>(null);
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
 
   const knownRepos = [...new Set(sessions.map((s) => s.repoPath))];
+
+  const hideAllTerminals = useCallback((): void => {
+    for (const instance of terminalsRef.current.values()) {
+      instance.container.style.display = "none";
+    }
+  }, []);
+
+  const resetTerminal = useCallback((sessionId: string): void => {
+    const instance = terminalsRef.current.get(sessionId);
+    if (instance) {
+      instance.term.reset();
+    }
+  }, []);
 
   const getOrCreateTerminal = useCallback((sessionId: string): TerminalInstance => {
     const existing = terminalsRef.current.get(sessionId);
@@ -402,17 +432,34 @@ export function App(): JSX.Element {
     return instance;
   }, []);
 
+  const refreshSessions = useCallback((): void => {
+    window.electronAPI.getSessions().then((nextSessions) => {
+      setSessions(nextSessions);
+      setDeletingSessionId((prev) => {
+        if (!prev) {
+          return null;
+        }
+        const deletingSession = nextSessions.find((session) => session.id === prev);
+        if (!deletingSession || deletingSession.state !== "inactive" || !deletingSession.worktree) {
+          return null;
+        }
+        return prev;
+      });
+      setSelectedId((prev) => {
+        if (!prev) {
+          return null;
+        }
+        const selectedSession = nextSessions.find((session) => session.id === prev);
+        if (!selectedSession || selectedSession.state !== "active") {
+          return null;
+        }
+        return prev;
+      });
+    });
+  }, []);
+
   // Load sessions and setup listeners
   useEffect(() => {
-    const refreshSessions = (): void => {
-      window.electronAPI.getSessions().then((nextSessions) => {
-        setSessions(nextSessions);
-        setSelectedId((prev) =>
-          prev && nextSessions.some((session) => session.id === prev) ? prev : null,
-        );
-      });
-    };
-
     refreshSessions();
 
     window.electronAPI.onPtyData((sessionId, data) => {
@@ -425,7 +472,13 @@ export function App(): JSX.Element {
     window.electronAPI.onSessionsStateChanged(() => {
       refreshSessions();
     });
-  }, []);
+  }, [refreshSessions]);
+
+  useEffect(() => {
+    if (!selectedId) {
+      hideAllTerminals();
+    }
+  }, [hideAllTerminals, selectedId]);
 
   // Polling: git status every 3 seconds for selected session
   useEffect(() => {
@@ -529,6 +582,9 @@ export function App(): JSX.Element {
     if (session.state === "archived") {
       return;
     }
+    if (session.state === "inactive") {
+      resetTerminal(session.id);
+    }
 
     window.electronAPI.selectSession(session);
     setSelectedFile(null);
@@ -571,6 +627,25 @@ export function App(): JSX.Element {
     }
   };
 
+  const handleDeleteWorktree = async (session: Session): Promise<void> => {
+    if (!session.worktree || session.state !== "inactive") {
+      return;
+    }
+    const confirmed = window.confirm(
+      `Remove worktree "${session.worktree.name}" for ${session.repoPath.split("/").pop()}?`,
+    );
+    if (!confirmed) {
+      return;
+    }
+    setDeletingSessionId(session.id);
+    try {
+      await window.electronAPI.removeWorktree(session.repoPath, session.project);
+    } catch (error) {
+      setDeletingSessionId(null);
+      window.alert(error instanceof Error ? error.message : "Failed to remove worktree");
+    }
+  };
+
   return (
     <div className="app">
       <aside className="sidebar">
@@ -580,7 +655,13 @@ export function App(): JSX.Element {
             +
           </button>
         </div>
-        <SessionList sessions={sessions} selectedId={selectedId} onSelect={handleSelectSession} />
+        <SessionList
+          sessions={sessions}
+          selectedId={selectedId}
+          onSelect={handleSelectSession}
+          deletingSessionId={deletingSessionId}
+          onDeleteWorktree={handleDeleteWorktree}
+        />
       </aside>
       <main className="terminal-container">
         <div ref={containerRef} className="terminal-host" />

@@ -150,6 +150,26 @@ body,
   text-overflow: ellipsis;
 }
 
+.session-delete-btn {
+  margin-bottom: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: #c74e39;
+  background: transparent;
+  border: 1px solid rgba(199, 78, 57, 0.5);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.session-delete-btn:hover {
+  background: rgba(199, 78, 57, 0.14);
+}
+
+.session-delete-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .archived-toggle {
   padding: 8px 16px;
   font-size: 11px;
@@ -186,6 +206,12 @@ body,
   height: 100%;
   color: #555;
   font-size: 14px;
+}
+
+.terminal-empty-state {
+  position: absolute;
+  inset: 4px;
+  background: #1e1e1e;
 }
 
 /* Changes Panel (Column 3) */
