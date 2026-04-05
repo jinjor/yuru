@@ -245,7 +245,7 @@ function BranchNameInput({
     }
   }, []);
 
-  const isValid = /^[a-zA-Z0-9._\/-]+$/.test(name.trim()) && !name.trim().endsWith("/");
+  const isValid = /^[a-zA-Z0-9._/-]+$/.test(name.trim()) && !name.trim().endsWith("/");
 
   const handleSubmit = (): void => {
     const trimmed = name.trim();
