@@ -41,6 +41,14 @@ interface FileContent {
   size: number;
 }
 
+interface DiffDocument {
+  path: string;
+  originalContent: string;
+  currentContent: string;
+  isBinary: boolean;
+  size: number;
+}
+
 interface PreviewSelection {
   kind: "diff" | "file";
   path: string;
@@ -56,7 +64,7 @@ declare global {
       removeWorktree: (repoPath: string, worktreePath: string) => Promise<void>;
       selectFolder: () => Promise<string | null>;
       getGitStatus: (sessionId: string) => Promise<GitFileStatus[]>;
-      getGitDiff: (sessionId: string, filePath: string) => Promise<string>;
+      getGitDiffDocument: (sessionId: string, filePath: string) => Promise<DiffDocument | null>;
       listFiles: (sessionId: string, relativePath?: string) => Promise<FileTreeNode[]>;
       readFile: (sessionId: string, filePath: string) => Promise<FileContent | null>;
       onSessionsStateChanged: (
@@ -76,6 +84,7 @@ interface TerminalInstance {
 }
 
 const CodeViewer = lazy(async () => import("./CodeViewer").then((module) => ({ default: module.CodeViewer })));
+const DiffViewer = lazy(async () => import("./DiffViewer").then((module) => ({ default: module.DiffViewer })));
 
 function useElementSize<T extends HTMLElement>(): [React.RefObject<T | null>, { width: number; height: number }] {
   const ref = useRef<T>(null);
@@ -384,41 +393,6 @@ function ExplorerPanel({
   );
 }
 
-function DiffPanel({ diff }: { diff: string | null }): JSX.Element {
-  if (!diff) {
-    return (
-      <div className="diff-panel">
-        <div className="empty-state">
-          <p>Select a file to view diff</p>
-        </div>
-      </div>
-    );
-  }
-
-  const lines = diff.split("\n");
-  return (
-    <div className="diff-panel">
-      <pre className="diff-content">
-        {lines.map((line, i) => {
-          let className = "diff-line";
-          if (line.startsWith("+") && !line.startsWith("+++")) {
-            className += " diff-add";
-          } else if (line.startsWith("-") && !line.startsWith("---")) {
-            className += " diff-remove";
-          } else if (line.startsWith("@@")) {
-            className += " diff-hunk";
-          }
-          return (
-            <div key={i} className={className}>
-              {line}
-            </div>
-          );
-        })}
-      </pre>
-    </div>
-  );
-}
-
 function generateDefaultBranch(): string {
   const now = new Date();
   const mm = String(now.getMonth() + 1).padStart(2, "0");
@@ -547,7 +521,8 @@ export function App(): JSX.Element {
   const [changedFiles, setChangedFiles] = useState<GitFileStatus[]>([]);
   const [activeExplorerTab, setActiveExplorerTab] = useState<"changes" | "files">("changes");
   const [previewSelection, setPreviewSelection] = useState<PreviewSelection | null>(null);
-  const [diffContent, setDiffContent] = useState<string | null>(null);
+  const [diffDocument, setDiffDocument] = useState<DiffDocument | null>(null);
+  const [isLoadingDiff, setIsLoadingDiff] = useState(false);
   const [treeData, setTreeData] = useState<FileTreeNode[]>([]);
   const [loadingDirectories, setLoadingDirectories] = useState<Set<string>>(new Set());
   const [fileContent, setFileContent] = useState<FileContent | null>(null);
@@ -714,7 +689,8 @@ export function App(): JSX.Element {
     if (!selectedId) {
       setChangedFiles([]);
       setPreviewSelection(null);
-      setDiffContent(null);
+      setDiffDocument(null);
+      setIsLoadingDiff(false);
       resetFileExplorerState();
       return;
     }
@@ -762,21 +738,28 @@ export function App(): JSX.Element {
   // Fetch diff when selected file changes
   useEffect(() => {
     if (!selectedId || previewSelection?.kind !== "diff") {
-      setDiffContent(null);
+      setDiffDocument(null);
+      setIsLoadingDiff(false);
       return;
     }
 
     let cancelled = false;
-    const fetchDiff = async (): Promise<void> => {
-      const diff = await window.electronAPI.getGitDiff(selectedId, previewSelection.path);
+    setIsLoadingDiff(true);
+
+    const fetchDiff = async (showLoader: boolean): Promise<void> => {
+      const diff = await window.electronAPI.getGitDiffDocument(selectedId, previewSelection.path);
       if (!cancelled) {
-        setDiffContent(diff);
+        setDiffDocument(diff);
+        if (showLoader) {
+          setIsLoadingDiff(false);
+        }
       }
     };
-    fetchDiff();
+    void fetchDiff(true);
 
-    // Also refresh diff on polling interval
-    const interval = setInterval(fetchDiff, 3000);
+    const interval = setInterval(() => {
+      void fetchDiff(false);
+    }, 3000);
     return () => {
       cancelled = true;
       clearInterval(interval);
@@ -849,7 +832,8 @@ export function App(): JSX.Element {
 
     window.electronAPI.selectSession(session);
     setPreviewSelection(null);
-    setDiffContent(null);
+    setDiffDocument(null);
+    setIsLoadingDiff(false);
     showTerminal(session.id);
   };
 
@@ -860,7 +844,8 @@ export function App(): JSX.Element {
       const session = await window.electronAPI.createSession(repoPath);
       setSessions((prev) => [session, ...prev]);
       setPreviewSelection(null);
-      setDiffContent(null);
+      setDiffDocument(null);
+      setIsLoadingDiff(false);
       showTerminal(session.id);
     } finally {
       setIsCreatingSession(false);
@@ -879,7 +864,8 @@ export function App(): JSX.Element {
       setWorktreeRepo(null);
       setSessions((prev) => [session, ...prev]);
       setPreviewSelection(null);
-      setDiffContent(null);
+      setDiffDocument(null);
+      setIsLoadingDiff(false);
       showTerminal(session.id);
     } catch (e) {
       setWorktreeError(e instanceof Error ? e.message : "Failed to create worktree");
@@ -984,7 +970,22 @@ export function App(): JSX.Element {
                   />
                 </Suspense>
               ) : (
-                <DiffPanel diff={diffContent} />
+                <Suspense
+                  fallback={
+                    <div className="code-panel-empty">
+                      <p>Loading editor...</p>
+                    </div>
+                  }
+                >
+                  <DiffViewer
+                    originalContent={diffDocument?.originalContent ?? null}
+                    currentContent={diffDocument?.currentContent ?? null}
+                    filePath={previewSelection?.path ?? null}
+                    fileSize={diffDocument?.size ?? null}
+                    isBinary={diffDocument?.isBinary ?? false}
+                    isLoading={isLoadingDiff}
+                  />
+                </Suspense>
               )}
             </div>
           </div>

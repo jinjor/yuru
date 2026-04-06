@@ -18,6 +18,14 @@ export interface GitPathState {
   ignored: boolean;
 }
 
+export interface GitDiffDocument {
+  path: string;
+  originalContent: string;
+  currentContent: string;
+  isBinary: boolean;
+  size: number;
+}
+
 function exec(cmd: string, args: string[], cwd: string): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(cmd, args, { cwd, maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
@@ -27,6 +35,23 @@ function exec(cmd: string, args: string[], cwd: string): Promise<string> {
       }
       resolve(stdout);
     });
+  });
+}
+
+function execBuffer(cmd: string, args: string[], cwd: string): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      cmd,
+      args,
+      { cwd, maxBuffer: 10 * 1024 * 1024, encoding: "buffer" },
+      (err, stdout) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve(stdout);
+      },
+    );
   });
 }
 
@@ -79,29 +104,63 @@ export async function getGitStatus(cwd: string): Promise<GitFileStatus[]> {
     }));
 }
 
-export async function getGitDiff(cwd: string, filePath: string): Promise<string> {
-  // Check if the file is untracked
-  const statusOutput = await exec("git", ["status", "--porcelain", "--", filePath], cwd);
-  const status = statusOutput.substring(0, 2).trim();
+async function hasHead(cwd: string): Promise<boolean> {
+  try {
+    await exec("git", ["rev-parse", "--verify", "HEAD"], cwd);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
-  if (status === "??") {
-    // Untracked file — show full content as "added"
-    const fullPath = path.join(cwd, filePath);
-    if (fs.existsSync(fullPath)) {
-      const content = fs.readFileSync(fullPath, "utf-8");
-      const lines = content.split("\n");
-      const diffLines = lines.map((line) => `+${line}`);
-      return `--- /dev/null\n+++ b/${filePath}\n@@ -0,0 +1,${lines.length} @@\n${diffLines.join("\n")}`;
+async function resolveOriginalPath(cwd: string, filePath: string): Promise<string | null> {
+  if (!(await hasHead(cwd))) {
+    return null;
+  }
+
+  try {
+    const output = await exec("git", ["diff", "--name-status", "--find-renames", "HEAD", "--", filePath], cwd);
+    const firstLine = output.trim().split("\n")[0];
+    if (firstLine?.startsWith("R")) {
+      const parts = firstLine.split("\t");
+      if (parts.length >= 3) {
+        return parts[1];
+      }
     }
-    return "";
+  } catch {
+    return filePath;
   }
 
-  // Try unstaged diff first, then staged
-  let diff = await exec("git", ["diff", "--", filePath], cwd);
-  if (!diff) {
-    diff = await exec("git", ["diff", "--staged", "--", filePath], cwd);
+  return filePath;
+}
+
+async function readGitBlob(cwd: string, filePath: string): Promise<Buffer | null> {
+  try {
+    return await execBuffer("git", ["show", `HEAD:${filePath}`], cwd);
+  } catch {
+    return null;
   }
-  return diff;
+}
+
+function bufferToContent(buffer: Buffer | null): string {
+  return buffer ? buffer.toString("utf-8") : "";
+}
+
+export async function getGitDiffDocument(cwd: string, filePath: string): Promise<GitDiffDocument> {
+  const currentPath = path.join(cwd, filePath);
+  const currentBuffer = fs.existsSync(currentPath) ? await fs.promises.readFile(currentPath) : null;
+  const originalPath = await resolveOriginalPath(cwd, filePath);
+  const originalBuffer = originalPath ? await readGitBlob(cwd, originalPath) : null;
+  const isBinary = [originalBuffer, currentBuffer].some((buffer) => buffer?.includes(0));
+  const size = Math.max(originalBuffer?.byteLength ?? 0, currentBuffer?.byteLength ?? 0);
+
+  return {
+    path: filePath,
+    originalContent: isBinary ? "" : bufferToContent(originalBuffer),
+    currentContent: isBinary ? "" : bufferToContent(currentBuffer),
+    isBinary,
+    size,
+  };
 }
 
 export async function listWorktrees(cwd: string): Promise<WorktreeInfo[]> {
