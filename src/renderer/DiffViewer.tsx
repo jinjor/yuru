@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { basicSetup, EditorView } from "codemirror";
+import { EditorView, minimalSetup } from "codemirror";
+import { lineNumbers } from "@codemirror/view";
 import { EditorState, Extension } from "@codemirror/state";
 import { unifiedMergeView } from "@codemirror/merge";
 import { editorHighlighting, editorTheme, loadLanguageExtension } from "./codeMirrorShared";
@@ -21,9 +22,9 @@ function createDiffState(
   return EditorState.create({
     doc: currentContent,
     extensions: [
-      basicSetup,
+      minimalSetup,
+      lineNumbers(),
       EditorState.readOnly.of(true),
-      EditorView.editable.of(false),
       EditorView.lineWrapping,
       editorTheme,
       editorHighlighting,

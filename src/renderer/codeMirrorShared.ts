@@ -50,12 +50,18 @@ export const editorTheme = EditorView.theme(
       textAlign: "right",
     },
     ".cm-activeLineGutter": {
-      backgroundColor: "#252526",
+      backgroundColor: "transparent",
     },
     ".cm-activeLine": {
-      backgroundColor: "#23252a",
+      backgroundColor: "transparent",
     },
-    ".cm-selectionBackground, ::selection": {
+    ".cm-selectionBackground": {
+      backgroundColor: "#264f78 !important",
+    },
+    "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground": {
+      backgroundColor: "#264f78",
+    },
+    ".cm-line::selection, .cm-line *::selection, .cm-content ::selection": {
       backgroundColor: "#264f78",
     },
     ".cm-gutters": {
@@ -71,6 +77,9 @@ export const editorTheme = EditorView.theme(
       backgroundColor: "transparent",
       color: "inherit",
       textDecoration: "none",
+    },
+    ".cm-selectionMatch, .cm-selectionMatch-main": {
+      backgroundColor: "transparent !important",
     },
     ".cm-deletedChunk": {
       backgroundColor: "rgba(255, 96, 88, 0.2)",
