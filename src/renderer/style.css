@@ -375,6 +375,18 @@ body,
   color: #bbb;
 }
 
+.file-tree-name.modified {
+  color: #e2c08d;
+}
+
+.file-tree-name.added {
+  color: #73c991;
+}
+
+.file-tree-name.ignored {
+  color: #5e5e5e;
+}
+
 /* Diff Panel (Column 4) */
 .diff-panel {
   flex: 1;

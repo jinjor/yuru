@@ -12,6 +12,12 @@ export interface GitFileStatus {
   status: string;
 }
 
+export interface GitPathState {
+  path: string;
+  status: string;
+  ignored: boolean;
+}
+
 function exec(cmd: string, args: string[], cwd: string): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(cmd, args, { cwd, maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
@@ -24,19 +30,53 @@ function exec(cmd: string, args: string[], cwd: string): Promise<string> {
   });
 }
 
-export async function getGitStatus(cwd: string): Promise<GitFileStatus[]> {
-  const output = await exec("git", ["status", "--porcelain", "-uall"], cwd);
+function parsePorcelainLine(line: string): GitPathState | null {
+  if (!line) {
+    return null;
+  }
+
+  const rawStatus = line.substring(0, 2);
+  const trimmedStatus = rawStatus.trim();
+  let filePath = line.substring(3).trim();
+
+  if (!filePath) {
+    return null;
+  }
+
+  if (filePath.includes(" -> ")) {
+    const parts = filePath.split(" -> ");
+    filePath = parts[parts.length - 1] ?? filePath;
+  }
+
+  filePath = filePath.replace(/\/$/, "");
+
+  return {
+    path: filePath,
+    status: trimmedStatus === "!!" ? "" : trimmedStatus,
+    ignored: trimmedStatus === "!!",
+  };
+}
+
+export async function getGitPathStates(cwd: string): Promise<GitPathState[]> {
+  const output = await exec("git", ["status", "--porcelain", "-uall", "--ignored=matching"], cwd);
   if (!output.trim()) {
     return [];
   }
+
   return output
     .split("\n")
-    .filter((line) => line.length > 0)
-    .map((line) => {
-      const status = line.substring(0, 2).trim();
-      const filePath = line.substring(3);
-      return { path: filePath, status };
-    });
+    .map(parsePorcelainLine)
+    .filter((entry): entry is GitPathState => entry !== null);
+}
+
+export async function getGitStatus(cwd: string): Promise<GitFileStatus[]> {
+  const entries = await getGitPathStates(cwd);
+  return entries
+    .filter((entry) => !entry.ignored && entry.status)
+    .map((entry) => ({
+      path: entry.path,
+      status: entry.status,
+    }));
 }
 
 export async function getGitDiff(cwd: string, filePath: string): Promise<string> {

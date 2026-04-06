@@ -30,6 +30,8 @@ interface FileTreeNode {
   name: string;
   kind: "file" | "directory";
   children: FileTreeNode[] | null;
+  gitStatus?: string;
+  isIgnored: boolean;
 }
 
 interface FileContent {
@@ -144,6 +146,19 @@ function statusLabel(status: string): string {
   }
 }
 
+function treeStatusClass(status?: string): string {
+  switch (status) {
+    case "M":
+      return "modified";
+    case "A":
+    case "R":
+    case "??":
+      return "added";
+    default:
+      return "";
+  }
+}
+
 function SessionList({
   sessions,
   selectedId,
@@ -214,6 +229,7 @@ function SessionList({
 
 function FileTreeRow({ node, style, dragHandle }: NodeRendererProps<FileTreeNode>): JSX.Element {
   const isDirectory = node.data.kind === "directory";
+  const statusClass = treeStatusClass(node.data.gitStatus);
 
   return (
     <div
@@ -238,7 +254,11 @@ function FileTreeRow({ node, style, dragHandle }: NodeRendererProps<FileTreeNode
           )
         ) : null}
       </span>
-      <span className={`file-tree-name ${node.data.kind}`}>{node.data.name}</span>
+      <span
+        className={`file-tree-name ${node.data.kind} ${statusClass} ${node.data.isIgnored ? "ignored" : ""}`}
+      >
+        {node.data.name}
+      </span>
     </div>
   );
 }
