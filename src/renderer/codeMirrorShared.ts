@@ -1,7 +1,9 @@
 import { EditorView } from "codemirror";
 import { Extension } from "@codemirror/state";
 import { HighlightStyle, LanguageDescription, syntaxHighlighting } from "@codemirror/language";
+import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { languages } from "@codemirror/language-data";
+import { highlightSpecialChars, keymap, lineNumbers } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 
 const customHighlightStyle = HighlightStyle.define([
@@ -18,6 +20,13 @@ const customHighlightStyle = HighlightStyle.define([
 ]);
 
 export const editorHighlighting = syntaxHighlighting(customHighlightStyle);
+
+export const viewerSetup: Extension = [
+  lineNumbers(),
+  highlightSpecialChars(),
+  history(),
+  keymap.of([...defaultKeymap, ...historyKeymap]),
+];
 
 export const editorTheme = EditorView.theme(
   {
@@ -56,12 +65,15 @@ export const editorTheme = EditorView.theme(
       backgroundColor: "transparent",
     },
     ".cm-selectionBackground": {
-      backgroundColor: "#264f78 !important",
+      backgroundColor: "transparent !important",
     },
     "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground": {
-      backgroundColor: "#264f78",
+      backgroundColor: "transparent",
     },
     ".cm-line::selection, .cm-line *::selection, .cm-content ::selection": {
+      backgroundColor: "#264f78",
+    },
+    ".cm-deletedChunk ::selection, .cm-deletedChunk *::selection": {
       backgroundColor: "#264f78",
     },
     ".cm-gutters": {

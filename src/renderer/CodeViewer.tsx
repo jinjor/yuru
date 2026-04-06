@@ -1,8 +1,12 @@
 import { useEffect, useRef } from "react";
-import { EditorView, minimalSetup } from "codemirror";
-import { lineNumbers } from "@codemirror/view";
+import { EditorView } from "codemirror";
 import { Compartment, EditorState } from "@codemirror/state";
-import { editorHighlighting, editorTheme, loadLanguageExtension } from "./codeMirrorShared";
+import {
+  editorHighlighting,
+  editorTheme,
+  loadLanguageExtension,
+  viewerSetup,
+} from "./codeMirrorShared";
 
 interface CodeViewerProps {
   content: string | null;
@@ -32,8 +36,7 @@ export function CodeViewer({
     const state = EditorState.create({
       doc: "",
       extensions: [
-        minimalSetup,
-        lineNumbers(),
+        viewerSetup,
         EditorState.readOnly.of(true),
         EditorView.lineWrapping,
         editorTheme,
