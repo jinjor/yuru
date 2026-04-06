@@ -6,6 +6,7 @@ import { getGitStatus, getGitDiff, removeWorktree, renameBranch, branchExists } 
 import { worktreeCwd, ccBranchName, pidFilePath } from "./claude-paths.js";
 import { WorktreeWatcher } from "./worktree-watcher.js";
 import fs from "fs";
+import { listFiles, readFileContent } from "./files.js";
 
 let mainWindow: BrowserWindow | null = null;
 const ptyProcesses = new Map<string, pty.IPty>();
@@ -301,6 +302,30 @@ app.whenReady().then(() => {
       return await getGitDiff(cwd, filePath);
     } catch {
       return "";
+    }
+  });
+
+  ipcMain.handle("files:list", async (_event, sessionId: string, relativePath?: string) => {
+    const cwd = sessionCwdMap.get(sessionId);
+    if (!cwd) {
+      return [];
+    }
+    try {
+      return await listFiles(cwd, relativePath ?? "");
+    } catch {
+      return [];
+    }
+  });
+
+  ipcMain.handle("files:read", async (_event, sessionId: string, filePath: string) => {
+    const cwd = sessionCwdMap.get(sessionId);
+    if (!cwd) {
+      return null;
+    }
+    try {
+      return await readFileContent(cwd, filePath);
+    } catch {
+      return null;
     }
   });
 

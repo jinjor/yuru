@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { Tree, NodeRendererProps } from "react-arborist";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import "@xterm/xterm/css/xterm.css";
 
 interface Session {
@@ -22,6 +24,26 @@ interface GitFileStatus {
   status: string;
 }
 
+interface FileTreeNode {
+  id: string;
+  path: string;
+  name: string;
+  kind: "file" | "directory";
+  children: FileTreeNode[] | null;
+}
+
+interface FileContent {
+  path: string;
+  content: string;
+  isBinary: boolean;
+  size: number;
+}
+
+interface PreviewSelection {
+  kind: "diff" | "file";
+  path: string;
+}
+
 declare global {
   interface Window {
     electronAPI: {
@@ -33,6 +55,8 @@ declare global {
       selectFolder: () => Promise<string | null>;
       getGitStatus: (sessionId: string) => Promise<GitFileStatus[]>;
       getGitDiff: (sessionId: string, filePath: string) => Promise<string>;
+      listFiles: (sessionId: string, relativePath?: string) => Promise<FileTreeNode[]>;
+      readFile: (sessionId: string, filePath: string) => Promise<FileContent | null>;
       onSessionsStateChanged: (
         callback: (active: { sessionId: string; cwd: string }[]) => void,
       ) => void;
@@ -47,6 +71,34 @@ interface TerminalInstance {
   term: Terminal;
   fitAddon: FitAddon;
   container: HTMLDivElement;
+}
+
+const CodeViewer = lazy(async () => import("./CodeViewer").then((module) => ({ default: module.CodeViewer })));
+
+function useElementSize<T extends HTMLElement>(): [React.RefObject<T | null>, { width: number; height: number }] {
+  const ref = useRef<T>(null);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) {
+      return;
+    }
+
+    const updateSize = (): void => {
+      setSize({
+        width: element.clientWidth,
+        height: element.clientHeight,
+      });
+    };
+
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  return [ref, size];
 }
 
 function formatTime(timestamp: number): string {
@@ -160,41 +212,154 @@ function SessionList({
   );
 }
 
-function ChangesPanel({
-  files,
-  selectedFile,
-  onSelectFile,
-}: {
-  files: GitFileStatus[];
-  selectedFile: string | null;
-  onSelectFile: (filePath: string) => void;
-}): JSX.Element {
+function FileTreeRow({ node, style, dragHandle }: NodeRendererProps<FileTreeNode>): JSX.Element {
+  const isDirectory = node.data.kind === "directory";
+
   return (
-    <aside className="changes-panel">
-      <div className="panel-header">
-        <h2>Changes</h2>
-        <span className="change-count">{files.length}</span>
-      </div>
-      <div className="changes-list">
-        {files.length === 0 && <div className="empty-changes">No changes</div>}
-        {files.map((file) => (
-          <div
-            key={file.path}
-            className={`change-item ${selectedFile === file.path ? "selected" : ""}`}
-            onClick={() => onSelectFile(file.path)}
+    <div
+      ref={dragHandle}
+      style={style}
+      className={`file-tree-row ${node.isSelected ? "selected" : ""}`}
+      onClick={() => {
+        if (isDirectory) {
+          node.toggle();
+        } else {
+          node.select();
+          node.activate();
+        }
+      }}
+    >
+      <span className={`file-tree-caret ${isDirectory ? "directory" : "file"}`}>
+        {isDirectory ? (
+          node.isOpen ? (
+            <ChevronDown size={15} strokeWidth={2.4} />
+          ) : (
+            <ChevronRight size={15} strokeWidth={2.4} />
+          )
+        ) : null}
+      </span>
+      <span className={`file-tree-name ${node.data.kind}`}>{node.data.name}</span>
+    </div>
+  );
+}
+
+function replaceNodeChildren(
+  nodes: FileTreeNode[],
+  targetPath: string,
+  nextChildren: FileTreeNode[],
+): FileTreeNode[] {
+  return nodes.map((node) => {
+    if (node.path === targetPath) {
+      return {
+        ...node,
+        children: nextChildren,
+      };
+    }
+    if (!node.children || node.children.length === 0) {
+      return node;
+    }
+    return {
+      ...node,
+      children: replaceNodeChildren(node.children, targetPath, nextChildren),
+    };
+  });
+}
+
+function ExplorerPanel({
+  activeTab,
+  onChangeTab,
+  files,
+  selectedDiffFile,
+  onSelectDiffFile,
+  treeData,
+  selectedTreeFile,
+  onSelectTreeFile,
+  onToggleDirectory,
+  treeLoading,
+}: {
+  activeTab: "changes" | "files";
+  onChangeTab: (tab: "changes" | "files") => void;
+  files: GitFileStatus[];
+  selectedDiffFile: string | null;
+  onSelectDiffFile: (filePath: string) => void;
+  treeData: FileTreeNode[];
+  selectedTreeFile: string | null;
+  onSelectTreeFile: (filePath: string) => void;
+  onToggleDirectory: (path: string) => void;
+  treeLoading: boolean;
+}): JSX.Element {
+  const [panelRef, panelSize] = useElementSize<HTMLDivElement>();
+  const [headerRef, headerSize] = useElementSize<HTMLDivElement>();
+  const treeHeight = Math.max(panelSize.height - headerSize.height, 0);
+
+  return (
+    <aside ref={panelRef} className="changes-panel">
+      <div ref={headerRef} className="panel-header">
+        <div className="panel-tabs">
+          <button
+            className={`panel-tab ${activeTab === "changes" ? "active" : ""}`}
+            onClick={() => onChangeTab("changes")}
           >
-            <span className="change-status" style={{ color: statusColor(file.status) }}>
-              {statusLabel(file.status)}
-            </span>
-            <span className="change-path" title={file.path}>
-              {file.path.split("/").pop()}
-            </span>
-            <span className="change-dir" title={file.path}>
-              {file.path.includes("/") ? file.path.substring(0, file.path.lastIndexOf("/")) : ""}
-            </span>
-          </div>
-        ))}
+            Changes
+          </button>
+          <button
+            className={`panel-tab ${activeTab === "files" ? "active" : ""}`}
+            onClick={() => onChangeTab("files")}
+          >
+            Files
+          </button>
+        </div>
       </div>
+      {activeTab === "changes" ? (
+        <div className="changes-list">
+          {files.length === 0 && <div className="empty-changes">No changes</div>}
+          {files.map((file) => (
+            <div
+              key={file.path}
+              className={`change-item ${selectedDiffFile === file.path ? "selected" : ""}`}
+              onClick={() => onSelectDiffFile(file.path)}
+            >
+              <span className="change-status" style={{ color: statusColor(file.status) }}>
+                {statusLabel(file.status)}
+              </span>
+              <span className="change-path" title={file.path}>
+                {file.path.split("/").pop()}
+              </span>
+              <span className="change-dir" title={file.path}>
+                {file.path.includes("/") ? file.path.substring(0, file.path.lastIndexOf("/")) : ""}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="file-tree">
+          {treeLoading && treeData.length === 0 ? (
+            <div className="empty-changes">Loading files...</div>
+          ) : treeData.length === 0 ? (
+            <div className="empty-changes">No files</div>
+          ) : (
+            <Tree<FileTreeNode>
+              data={treeData}
+              width="100%"
+              height={treeHeight || 400}
+              rowHeight={28}
+              indent={12}
+              openByDefault={false}
+              selection={selectedTreeFile ?? undefined}
+              disableDrag
+              disableEdit
+              onActivate={(node) => {
+                if (node.data.kind === "file") {
+                  onSelectTreeFile(node.data.path);
+                }
+              }}
+              onToggle={onToggleDirectory}
+            >
+              {FileTreeRow}
+            </Tree>
+          )}
+        </div>
+      )}
     </aside>
   );
 }
@@ -360,9 +525,16 @@ export function App(): JSX.Element {
   const [worktreeError, setWorktreeError] = useState<string | null>(null);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [changedFiles, setChangedFiles] = useState<GitFileStatus[]>([]);
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [activeExplorerTab, setActiveExplorerTab] = useState<"changes" | "files">("changes");
+  const [previewSelection, setPreviewSelection] = useState<PreviewSelection | null>(null);
   const [diffContent, setDiffContent] = useState<string | null>(null);
+  const [treeData, setTreeData] = useState<FileTreeNode[]>([]);
+  const [loadingDirectories, setLoadingDirectories] = useState<Set<string>>(new Set());
+  const [fileContent, setFileContent] = useState<FileContent | null>(null);
+  const [isLoadingFile, setIsLoadingFile] = useState(false);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
+  const loadedDirectoriesRef = useRef<Set<string>>(new Set());
+  const loadingDirectoriesRef = useRef<Set<string>>(new Set());
 
   const knownRepos = [...new Set(sessions.map((s) => s.repoPath))];
 
@@ -458,6 +630,43 @@ export function App(): JSX.Element {
     });
   }, []);
 
+  const resetFileExplorerState = useCallback((): void => {
+    setTreeData([]);
+    loadedDirectoriesRef.current = new Set();
+    loadingDirectoriesRef.current = new Set();
+    setLoadingDirectories(loadingDirectoriesRef.current);
+    setFileContent(null);
+    setIsLoadingFile(false);
+  }, []);
+
+  const loadDirectory = useCallback(
+    async (relativePath = ""): Promise<void> => {
+      if (!selectedId) {
+        return;
+      }
+      if (
+        loadedDirectoriesRef.current.has(relativePath) ||
+        loadingDirectoriesRef.current.has(relativePath)
+      ) {
+        return;
+      }
+
+      loadingDirectoriesRef.current = new Set(loadingDirectoriesRef.current).add(relativePath);
+      setLoadingDirectories(loadingDirectoriesRef.current);
+      try {
+        const nextNodes = await window.electronAPI.listFiles(selectedId, relativePath);
+        setTreeData((prev) => (relativePath ? replaceNodeChildren(prev, relativePath, nextNodes) : nextNodes));
+        loadedDirectoriesRef.current = new Set(loadedDirectoriesRef.current).add(relativePath);
+      } finally {
+        const nextLoadingDirectories = new Set(loadingDirectoriesRef.current);
+        nextLoadingDirectories.delete(relativePath);
+        loadingDirectoriesRef.current = nextLoadingDirectories;
+        setLoadingDirectories(nextLoadingDirectories);
+      }
+    },
+    [selectedId],
+  );
+
   // Load sessions and setup listeners
   useEffect(() => {
     refreshSessions();
@@ -484,8 +693,9 @@ export function App(): JSX.Element {
   useEffect(() => {
     if (!selectedId) {
       setChangedFiles([]);
-      setSelectedFile(null);
+      setPreviewSelection(null);
       setDiffContent(null);
+      resetFileExplorerState();
       return;
     }
 
@@ -504,8 +714,8 @@ export function App(): JSX.Element {
         return files;
       });
       // Clear selected file if it's no longer in the list
-      setSelectedFile((prev) => {
-        if (prev && !files.some((f) => f.path === prev)) {
+      setPreviewSelection((prev) => {
+        if (prev?.kind === "diff" && !files.some((f) => f.path === prev.path)) {
           return null;
         }
         return prev;
@@ -518,18 +728,27 @@ export function App(): JSX.Element {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [selectedId]);
+  }, [resetFileExplorerState, selectedId]);
+
+  useEffect(() => {
+    if (!selectedId) {
+      return;
+    }
+
+    resetFileExplorerState();
+    void loadDirectory("");
+  }, [selectedId, loadDirectory, resetFileExplorerState]);
 
   // Fetch diff when selected file changes
   useEffect(() => {
-    if (!selectedId || !selectedFile) {
+    if (!selectedId || previewSelection?.kind !== "diff") {
       setDiffContent(null);
       return;
     }
 
     let cancelled = false;
     const fetchDiff = async (): Promise<void> => {
-      const diff = await window.electronAPI.getGitDiff(selectedId, selectedFile);
+      const diff = await window.electronAPI.getGitDiff(selectedId, previewSelection.path);
       if (!cancelled) {
         setDiffContent(diff);
       }
@@ -542,7 +761,29 @@ export function App(): JSX.Element {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [selectedId, selectedFile]);
+  }, [previewSelection, selectedId]);
+
+  useEffect(() => {
+    if (!selectedId || previewSelection?.kind !== "file") {
+      setFileContent(null);
+      setIsLoadingFile(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingFile(true);
+    window.electronAPI.readFile(selectedId, previewSelection.path).then((nextContent) => {
+      if (cancelled) {
+        return;
+      }
+      setFileContent(nextContent);
+      setIsLoadingFile(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [previewSelection, selectedId]);
 
   // Handle window resize — refit the active terminal
   useEffect(() => {
@@ -587,7 +828,7 @@ export function App(): JSX.Element {
     }
 
     window.electronAPI.selectSession(session);
-    setSelectedFile(null);
+    setPreviewSelection(null);
     setDiffContent(null);
     showTerminal(session.id);
   };
@@ -598,7 +839,7 @@ export function App(): JSX.Element {
     try {
       const session = await window.electronAPI.createSession(repoPath);
       setSessions((prev) => [session, ...prev]);
-      setSelectedFile(null);
+      setPreviewSelection(null);
       setDiffContent(null);
       showTerminal(session.id);
     } finally {
@@ -617,7 +858,7 @@ export function App(): JSX.Element {
       const session = await window.electronAPI.createWorktreeSession(repoPath, branchName);
       setWorktreeRepo(null);
       setSessions((prev) => [session, ...prev]);
-      setSelectedFile(null);
+      setPreviewSelection(null);
       setDiffContent(null);
       showTerminal(session.id);
     } catch (e) {
@@ -644,6 +885,14 @@ export function App(): JSX.Element {
       setDeletingSessionId(null);
       window.alert(error instanceof Error ? error.message : "Failed to remove worktree");
     }
+  };
+
+  const handleSelectDiffFile = (filePath: string): void => {
+    setPreviewSelection({ kind: "diff", path: filePath });
+  };
+
+  const handleSelectTreeFile = (filePath: string): void => {
+    setPreviewSelection({ kind: "file", path: filePath });
   };
 
   return (
@@ -678,12 +927,47 @@ export function App(): JSX.Element {
       </main>
       {selectedId && (
         <>
-          <ChangesPanel
+          <ExplorerPanel
+            activeTab={activeExplorerTab}
+            onChangeTab={setActiveExplorerTab}
             files={changedFiles}
-            selectedFile={selectedFile}
-            onSelectFile={setSelectedFile}
+            selectedDiffFile={previewSelection?.kind === "diff" ? previewSelection.path : null}
+            onSelectDiffFile={handleSelectDiffFile}
+            treeData={treeData}
+            selectedTreeFile={previewSelection?.kind === "file" ? previewSelection.path : null}
+            onSelectTreeFile={handleSelectTreeFile}
+            onToggleDirectory={(path) => {
+              void loadDirectory(path);
+            }}
+            treeLoading={loadingDirectories.has("")}
           />
-          <DiffPanel diff={diffContent} />
+          <div className="preview-panel">
+            <div className="panel-header preview-header">
+              <h2>{previewSelection?.kind === "file" ? "Code" : "Diff"}</h2>
+              {previewSelection && <span className="preview-path">{previewSelection.path}</span>}
+            </div>
+            <div className="preview-body">
+              {previewSelection?.kind === "file" ? (
+                <Suspense
+                  fallback={
+                    <div className="code-panel-empty">
+                      <p>Loading editor...</p>
+                    </div>
+                  }
+                >
+                  <CodeViewer
+                    content={fileContent?.content ?? null}
+                    filePath={fileContent?.path ?? previewSelection.path}
+                    fileSize={fileContent?.size ?? null}
+                    isBinary={fileContent?.isBinary ?? false}
+                    isLoading={isLoadingFile}
+                  />
+                </Suspense>
+              ) : (
+                <DiffPanel diff={diffContent} />
+              )}
+            </div>
+          </div>
         </>
       )}
       {showRepoPicker && (

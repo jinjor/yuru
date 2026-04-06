@@ -240,12 +240,31 @@ body,
   color: #888;
 }
 
-.change-count {
-  font-size: 11px;
+.panel-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.panel-tab {
+  padding: 4px 8px;
+  font-size: 12px;
   color: #888;
-  background: #333;
-  padding: 1px 6px;
-  border-radius: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.panel-tab:hover {
+  background: #2a2d2e;
+  color: #ccc;
+}
+
+.panel-tab.active {
+  color: #ddd;
+  background: #2f3137;
+  border-color: #3c3c3c;
 }
 
 .changes-list {
@@ -303,6 +322,59 @@ body,
   text-align: right;
 }
 
+.file-tree {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+.file-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+  padding: 0 12px;
+  font-size: 12px;
+  color: #ccc;
+  cursor: pointer;
+}
+
+.file-tree-row:hover {
+  background: #2a2d2e;
+}
+
+.file-tree-row.selected {
+  background: #37373d;
+}
+
+.file-tree-caret {
+  width: 14px;
+  flex-shrink: 0;
+  color: #9aa0aa;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-tree-caret.directory {
+  color: #a9afba;
+}
+
+.file-tree-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+}
+
+.file-tree-name.directory {
+  color: #ddd;
+}
+
+.file-tree-name.file {
+  color: #bbb;
+}
+
 /* Diff Panel (Column 4) */
 .diff-panel {
   flex: 1;
@@ -338,6 +410,54 @@ body,
 .diff-hunk {
   color: #569cd6;
   padding-top: 8px;
+}
+
+.preview-panel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid #333;
+  background: #1e1e1e;
+}
+
+.preview-header {
+  gap: 12px;
+}
+
+.preview-path {
+  min-width: 0;
+  font-size: 11px;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preview-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.preview-body .diff-panel {
+  border-left: none;
+}
+
+.code-editor {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.code-panel-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: #555;
+  font-size: 14px;
 }
 
 /* Repo Picker */
