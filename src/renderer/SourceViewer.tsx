@@ -10,9 +10,10 @@ export interface SourceLine {
 interface SourceViewerProps {
   lines: SourceLine[];
   className?: string;
+  scrollToLine?: number;
 }
 
-export function SourceViewer({ lines, className }: SourceViewerProps): JSX.Element {
+export function SourceViewer({ lines, className, scrollToLine }: SourceViewerProps): JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -22,11 +23,23 @@ export function SourceViewer({ lines, className }: SourceViewerProps): JSX.Eleme
     }
   }, [lines]);
 
+  useEffect(() => {
+    if (!scrollToLine || !scrollRef.current) {
+      return;
+    }
+    const lineElement = scrollRef.current.querySelector(
+      `[data-line="${scrollToLine}"]`,
+    );
+    if (lineElement) {
+      lineElement.scrollIntoView({ block: "center" });
+    }
+  }, [lines, scrollToLine]);
+
   return (
     <div ref={scrollRef} className={`source-viewer ${className ?? ""}`}>
       <div className="source-viewer-content">
         {lines.map((line, index) => (
-          <div key={index} className={`source-line ${line.className ?? ""}`}>
+          <div key={index} className={`source-line ${line.className ?? ""} ${line.lineNumber === scrollToLine ? "highlight" : ""}`} data-line={line.lineNumber}>
             <span className="source-gutter">
               {line.lineNumber ?? ""}
             </span>

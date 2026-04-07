@@ -9,7 +9,7 @@ import {
   renameBranch,
   branchExists,
 } from "./git.js";
-import { listFiles, readFileContent } from "./files.js";
+import { listFiles, readFileContent, fileExists } from "./files.js";
 import { worktreeCwd, ccBranchName, pidFilePath } from "./claude-paths.js";
 import { WorktreeWatcher } from "./worktree-watcher.js";
 import fs from "fs";
@@ -333,6 +333,14 @@ app.whenReady().then(() => {
     } catch {
       return null;
     }
+  });
+
+  ipcMain.handle("files:exists", (_event, sessionId: string, filePath: string) => {
+    const cwd = sessionCwdMap.get(sessionId);
+    if (!cwd) {
+      return false;
+    }
+    return fileExists(cwd, filePath);
   });
 
   ipcMain.on("pty:write", (_event, sessionId: string, data: string) => {

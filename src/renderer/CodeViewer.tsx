@@ -8,6 +8,7 @@ interface CodeViewerProps {
   fileSize: number | null;
   isLoading: boolean;
   isBinary: boolean;
+  scrollToLine?: number;
 }
 
 export function CodeViewer({
@@ -16,6 +17,7 @@ export function CodeViewer({
   fileSize,
   isLoading,
   isBinary,
+  scrollToLine,
 }: CodeViewerProps): JSX.Element {
   const [lines, setLines] = useState<SourceLine[]>([]);
 
@@ -68,5 +70,5 @@ export function CodeViewer({
     );
   }
 
-  return <SourceViewer lines={lines} />;
+  return <SourceViewer lines={lines} scrollToLine={scrollToLine} />;
 }

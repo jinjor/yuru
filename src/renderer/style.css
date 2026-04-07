@@ -491,6 +491,14 @@ body,
 }
 
 /* Diff line backgrounds */
+.source-line.highlight {
+  background: var(--bg-selected);
+}
+
+.source-line.highlight .source-gutter {
+  background: color-mix(in srgb, var(--bg-selected) 55%, var(--viewer-gutter));
+}
+
 .source-line.diff-added {
   background: var(--viewer-add);
 }

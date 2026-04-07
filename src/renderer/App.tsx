@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Terminal } from "@xterm/xterm";
+import { Terminal, type ILinkProvider, type ILink, type IBufferRange } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { Tree, NodeRendererProps } from "react-arborist";
 import { ChevronDown, ChevronRight } from "lucide-react";
@@ -59,6 +59,7 @@ interface DiffDocument {
 interface PreviewSelection {
   kind: "diff" | "file";
   path: string;
+  line?: number;
 }
 
 declare global {
@@ -74,6 +75,7 @@ declare global {
       getGitDiffDocument: (sessionId: string, filePath: string) => Promise<DiffDocument | null>;
       listFiles: (sessionId: string, relativePath?: string) => Promise<FileTreeNode[]>;
       readFile: (sessionId: string, filePath: string) => Promise<FileContent | null>;
+      fileExists: (sessionId: string, filePath: string) => Promise<boolean>;
       onSessionsStateChanged: (
         callback: (active: { sessionId: string; cwd: string }[]) => void,
       ) => void;
@@ -537,6 +539,12 @@ export function App(): JSX.Element {
 
   const knownRepos = [...new Set(sessions.map((s) => s.repoPath))];
 
+  const onFileLinkActivateRef = useRef<(filePath: string, line?: number) => void>(() => {});
+  onFileLinkActivateRef.current = (filePath: string, line?: number) => {
+    setPreviewSelection({ kind: "file", path: filePath, line });
+    setActiveExplorerTab("files");
+  };
+
   const hideAllTerminals = useCallback((): void => {
     for (const instance of terminalsRef.current.values()) {
       instance.container.style.display = "none";
@@ -577,6 +585,73 @@ export function App(): JSX.Element {
       containerRef.current.appendChild(container);
     }
     term.open(container);
+
+    const filePathPattern = /[\w./\-][\w./\-]*\.\w+(?::(\d+)(?::(\d+))?)?/g;
+
+    function stringIndexToCellIndex(line: ReturnType<typeof term.buffer.active.getLine>, strIndex: number): number {
+      let cellIndex = 0;
+      for (let i = 0; i < strIndex; i++) {
+        const cell = line!.getCell(cellIndex);
+        if (!cell) {
+          break;
+        }
+        const width = cell.getWidth();
+        cellIndex += width > 0 ? width : 1;
+      }
+      return cellIndex;
+    }
+
+    term.registerLinkProvider({
+      provideLinks(bufferLineNumber: number, callback: (links: ILink[] | undefined) => void): void {
+        const line = term.buffer.active.getLine(bufferLineNumber - 1);
+        if (!line) {
+          callback(undefined);
+          return;
+        }
+        const lineText = line.translateToString();
+        const matches: { text: string; filePath: string; startIndex: number; fileLine?: number }[] = [];
+        let match: RegExpExecArray | null;
+        filePathPattern.lastIndex = 0;
+        while ((match = filePathPattern.exec(lineText)) !== null) {
+          const text = match[0];
+          const filePath = text.replace(/:\d+(?::\d+)?$/, "");
+          const lineMatch = text.match(/:(\d+)(?::\d+)?$/);
+          const fileLine = lineMatch ? parseInt(lineMatch[1], 10) : undefined;
+          if (filePath.includes("/") || filePath.includes(".")) {
+            matches.push({ text, filePath, startIndex: match.index, fileLine });
+          }
+        }
+        if (matches.length === 0) {
+          callback(undefined);
+          return;
+        }
+        Promise.all(
+          matches.map(async (m) => {
+            const exists = await window.electronAPI.fileExists(sessionId, m.filePath);
+            if (!exists) {
+              return null;
+            }
+            const cellStart = stringIndexToCellIndex(line, m.startIndex);
+            const cellEnd = stringIndexToCellIndex(line, m.startIndex + m.text.length);
+            const range: IBufferRange = {
+              start: { x: cellStart + 1, y: bufferLineNumber },
+              end: { x: cellEnd, y: bufferLineNumber },
+            };
+            return {
+              range,
+              text: m.text,
+              decorations: { pointerCursor: true, underline: true },
+              activate(): void {
+                onFileLinkActivateRef.current(m.filePath, m.fileLine);
+              },
+            } satisfies ILink;
+          }),
+        ).then((results) => {
+          const links = results.filter((r): r is ILink => r !== null);
+          callback(links.length > 0 ? links : undefined);
+        });
+      },
+    } satisfies ILinkProvider);
 
     term.attachCustomKeyEventHandler((event) => {
       if (event.key === "Enter" && event.shiftKey) {
@@ -973,6 +1048,7 @@ export function App(): JSX.Element {
                     fileSize={fileContent?.size ?? null}
                     isBinary={fileContent?.isBinary ?? false}
                     isLoading={isLoadingFile}
+                    scrollToLine={previewSelection.line}
                   />
                 </Suspense>
               ) : (

@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("files:list", sessionId, relativePath),
   readFile: (sessionId: string, filePath: string) =>
     ipcRenderer.invoke("files:read", sessionId, filePath),
+  fileExists: (sessionId: string, filePath: string) =>
+    ipcRenderer.invoke("files:exists", sessionId, filePath) as Promise<boolean>,
   onSessionsStateChanged: (callback: (active: { sessionId: string; cwd: string }[]) => void) =>
     ipcRenderer.on("sessions:stateChanged", (_event, active) => callback(active)),
   ptyWrite: (sessionId: string, data: string) => ipcRenderer.send("pty:write", sessionId, data),

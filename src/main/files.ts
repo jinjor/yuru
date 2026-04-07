@@ -61,6 +61,15 @@ function getStatusPriority(status: string): number {
   }
 }
 
+export function fileExists(cwd: string, relativePath: string): boolean {
+  try {
+    const targetPath = resolveSessionPath(cwd, relativePath);
+    return fs.statSync(targetPath).isFile();
+  } catch {
+    return false;
+  }
+}
+
 export async function listFiles(cwd: string, relativePath = ""): Promise<FileTreeNode[]> {
   const targetPath = resolveSessionPath(cwd, relativePath);
   const entries = await fs.promises.readdir(targetPath, { withFileTypes: true });
