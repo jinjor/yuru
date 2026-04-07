@@ -565,8 +565,8 @@ export function App(): JSX.Element {
       fontSize: 12,
       fontFamily: "Menlo, Monaco, monospace",
       theme: {
-        background: "#1e1e1e",
-        foreground: "#d4d4d4",
+        background: "#0f141c",
+        foreground: "#d8e1ef",
       },
     });
 
