@@ -2,7 +2,14 @@ import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import path from "path";
 import * as pty from "node-pty";
 import { loadSessions, Session } from "./sessions.js";
-import { getGitStatus, getGitDiff, removeWorktree, renameBranch, branchExists } from "./git.js";
+import {
+  getGitStatus,
+  getGitDiffDocument,
+  removeWorktree,
+  renameBranch,
+  branchExists,
+} from "./git.js";
+import { listFiles, readFileContent } from "./files.js";
 import { worktreeCwd, ccBranchName, pidFilePath } from "./claude-paths.js";
 import { WorktreeWatcher } from "./worktree-watcher.js";
 import fs from "fs";
@@ -292,15 +299,39 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle("git:diff", async (_event, sessionId: string, filePath: string) => {
+  ipcMain.handle("git:diffDocument", async (_event, sessionId: string, filePath: string) => {
     const cwd = sessionCwdMap.get(sessionId);
     if (!cwd) {
-      return "";
+      return null;
     }
     try {
-      return await getGitDiff(cwd, filePath);
+      return await getGitDiffDocument(cwd, filePath);
     } catch {
-      return "";
+      return null;
+    }
+  });
+
+  ipcMain.handle("files:list", async (_event, sessionId: string, relativePath?: string) => {
+    const cwd = sessionCwdMap.get(sessionId);
+    if (!cwd) {
+      return [];
+    }
+    try {
+      return await listFiles(cwd, relativePath ?? "");
+    } catch {
+      return [];
+    }
+  });
+
+  ipcMain.handle("files:read", async (_event, sessionId: string, filePath: string) => {
+    const cwd = sessionCwdMap.get(sessionId);
+    if (!cwd) {
+      return null;
+    }
+    try {
+      return await readFileContent(cwd, filePath);
+    } catch {
+      return null;
     }
   });
 

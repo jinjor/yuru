@@ -303,41 +303,205 @@ body,
   text-align: right;
 }
 
-/* Diff Panel (Column 4) */
-.diff-panel {
-  flex: 1;
-  min-width: 0;
-  background: #1e1e1e;
-  border-left: 1px solid #333;
-  overflow: auto;
+/* Panel tabs */
+.panel-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.diff-content {
-  font-family: Menlo, Monaco, monospace;
+.panel-tab {
+  padding: 4px 8px;
   font-size: 12px;
-  line-height: 1.5;
-  margin: 0;
-  padding: 8px 0;
+  color: #888;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
 }
 
-.diff-line {
-  padding: 0 16px;
-  white-space: pre;
+.panel-tab:hover {
+  background: #2a2d2e;
+  color: #ccc;
 }
 
-.diff-add {
-  background: rgba(35, 134, 54, 0.2);
+.panel-tab.active {
+  color: #ddd;
+  background: #2f3137;
+  border-color: #3c3c3c;
+}
+
+/* File tree */
+.file-tree {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+.file-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+  padding: 0 12px;
+  font-size: 12px;
+  color: #ccc;
+  cursor: pointer;
+}
+
+.file-tree-row:hover {
+  background: #2a2d2e;
+}
+
+.file-tree-row.selected {
+  background: #37373d;
+}
+
+.file-tree-caret {
+  width: 14px;
+  flex-shrink: 0;
+  color: #9aa0aa;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-tree-caret.directory {
+  color: #a9afba;
+}
+
+.file-tree-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+}
+
+.file-tree-name.directory {
+  color: #ddd;
+}
+
+.file-tree-name.file {
+  color: #bbb;
+}
+
+.file-tree-name.modified {
+  color: #e2c08d;
+}
+
+.file-tree-name.added {
   color: #73c991;
 }
 
-.diff-remove {
-  background: rgba(199, 78, 57, 0.2);
-  color: #c74e39;
+.file-tree-name.ignored {
+  color: #5e5e5e;
 }
 
-.diff-hunk {
-  color: #569cd6;
-  padding-top: 8px;
+/* Preview panel */
+.preview-panel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid #333;
+  background: #1e1e1e;
+}
+
+.preview-header {
+  gap: 12px;
+}
+
+.preview-path {
+  min-width: 0;
+  font-size: 11px;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preview-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.code-panel-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: #555;
+  font-size: 14px;
+}
+
+/* Source Viewer (shared base for code + diff) */
+.source-viewer {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: #1e1e1e;
+  color: #d4d4d4;
+}
+
+.source-viewer-content {
+  display: table;
+  min-width: 100%;
+  border-collapse: collapse;
+}
+
+.source-line {
+  display: table-row;
+  line-height: 1.5;
+  font-family: Menlo, Monaco, monospace;
+  font-size: 12px;
+}
+
+.source-gutter {
+  display: table-cell;
+  text-align: right;
+  width: 7ch;
+  min-width: 7ch;
+  max-width: 7ch;
+  padding: 0 8px 0 0;
+  color: #666;
+  background: #1a1a1a;
+  border-right: 1px solid #333;
+  user-select: none;
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+.source-code {
+  display: table-cell;
+  padding: 0 0 0 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* Diff line backgrounds */
+.source-line.diff-added {
+  background: rgba(46, 160, 67, 0.34);
+}
+
+.source-line.diff-added .source-gutter {
+  background: rgba(46, 160, 67, 0.22);
+}
+
+.source-line.diff-deleted {
+  background: rgba(255, 96, 88, 0.2);
+}
+
+.source-line.diff-deleted .source-gutter {
+  background: rgba(255, 96, 88, 0.14);
+}
+
+/* Text selection */
+.source-code::selection,
+.source-code *::selection {
+  background: #264f78;
 }
 
 /* Repo Picker */
