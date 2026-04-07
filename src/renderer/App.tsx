@@ -901,6 +901,7 @@ export function App(): JSX.Element {
     }
 
     setCurrentBranch(null);
+    setActiveExplorerTab("changes");
     setSelectedId(sessionId);
 
     const instance = getOrCreateTerminal(sessionId);
