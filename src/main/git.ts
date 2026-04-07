@@ -82,6 +82,15 @@ function parsePorcelainLine(line: string): GitPathState | null {
   };
 }
 
+export async function getCurrentBranch(cwd: string): Promise<string | null> {
+  try {
+    const output = await exec("git", ["rev-parse", "--abbrev-ref", "HEAD"], cwd);
+    return output.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getGitPathStates(cwd: string): Promise<GitPathState[]> {
   const output = await exec("git", ["status", "--porcelain", "-uall", "--ignored=matching"], cwd);
   if (!output.trim()) {

@@ -227,14 +227,33 @@ body,
 /* Terminal */
 .terminal-container {
   flex: 1;
-  padding: 4px;
   overflow: hidden;
   position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.terminal-bar {
+  flex-shrink: 0;
+}
+
+.terminal-bar-branch {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .terminal-host {
-  height: 100%;
+  flex: 1;
   position: relative;
+  min-height: 0;
+  padding: 4px;
 }
 
 .terminal {

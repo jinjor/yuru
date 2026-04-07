@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("worktree:remove", repoPath, worktreePath),
   selectFolder: () => ipcRenderer.invoke("dialog:selectFolder"),
   getGitStatus: (sessionId: string) => ipcRenderer.invoke("git:status", sessionId),
+  getGitBranch: (sessionId: string) =>
+    ipcRenderer.invoke("git:branch", sessionId) as Promise<string | null>,
   getGitDiffDocument: (sessionId: string, filePath: string) =>
     ipcRenderer.invoke("git:diffDocument", sessionId, filePath),
   listFiles: (sessionId: string, relativePath?: string) =>

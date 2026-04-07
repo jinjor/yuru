@@ -5,6 +5,7 @@ import { loadSessions, Session } from "./sessions.js";
 import {
   getGitStatus,
   getGitDiffDocument,
+  getCurrentBranch,
   removeWorktree,
   renameBranch,
   branchExists,
@@ -297,6 +298,14 @@ app.whenReady().then(() => {
     } catch {
       return [];
     }
+  });
+
+  ipcMain.handle("git:branch", async (_event, sessionId: string) => {
+    const cwd = sessionCwdMap.get(sessionId);
+    if (!cwd) {
+      return null;
+    }
+    return getCurrentBranch(cwd);
   });
 
   ipcMain.handle("git:diffDocument", async (_event, sessionId: string, filePath: string) => {

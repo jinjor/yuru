@@ -2,7 +2,7 @@ import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useRef, useSta
 import { Terminal, type ILinkProvider, type ILink, type IBufferRange } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { Tree, NodeRendererProps } from "react-arborist";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, GitBranch } from "lucide-react";
 import "@xterm/xterm/css/xterm.css";
 
 const CodeViewer = lazy(async () =>
@@ -72,6 +72,7 @@ declare global {
       removeWorktree: (repoPath: string, worktreePath: string) => Promise<void>;
       selectFolder: () => Promise<string | null>;
       getGitStatus: (sessionId: string) => Promise<GitFileStatus[]>;
+      getGitBranch: (sessionId: string) => Promise<string | null>;
       getGitDiffDocument: (sessionId: string, filePath: string) => Promise<DiffDocument | null>;
       listFiles: (sessionId: string, relativePath?: string) => Promise<FileTreeNode[]>;
       readFile: (sessionId: string, filePath: string) => Promise<FileContent | null>;
@@ -534,6 +535,7 @@ export function App(): JSX.Element {
   const [fileContent, setFileContent] = useState<FileContent | null>(null);
   const [isLoadingFile, setIsLoadingFile] = useState(false);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
+  const [currentBranch, setCurrentBranch] = useState<string | null>(null);
   const loadedDirectoriesRef = useRef<Set<string>>(new Set());
   const loadingDirectoriesRef = useRef<Set<string>>(new Set());
 
@@ -772,18 +774,24 @@ export function App(): JSX.Element {
       setPreviewSelection(null);
       setDiffDocument(null);
       setIsLoadingDiff(false);
+      setCurrentBranch(null);
       resetFileExplorerState();
       return;
     }
 
     let cancelled = false;
     const sessionId = selectedId;
+    setCurrentBranch(null);
 
     const fetchStatus = async (): Promise<void> => {
-      const files = await window.electronAPI.getGitStatus(sessionId);
+      const [files, branch] = await Promise.all([
+        window.electronAPI.getGitStatus(sessionId),
+        window.electronAPI.getGitBranch(sessionId),
+      ]);
       if (cancelled) {
         return;
       }
+      setCurrentBranch(branch);
       setChangedFiles((prev) => {
         if (JSON.stringify(prev) === JSON.stringify(files)) {
           return prev;
@@ -892,6 +900,7 @@ export function App(): JSX.Element {
       }
     }
 
+    setCurrentBranch(null);
     setSelectedId(sessionId);
 
     const instance = getOrCreateTerminal(sessionId);
@@ -1000,6 +1009,17 @@ export function App(): JSX.Element {
         />
       </aside>
       <main className="terminal-container">
+        {selectedId && (
+          <div className="panel-header terminal-bar">
+            <h2>Terminal</h2>
+            {currentBranch && (
+              <span className="terminal-bar-branch">
+                <GitBranch size={11} strokeWidth={2} />
+                {currentBranch}
+              </span>
+            )}
+          </div>
+        )}
         <div ref={containerRef} className="terminal-host" />
         {isCreatingSession && !selectedId && (
           <div className="empty-state terminal-empty-state">
