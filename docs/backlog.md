@@ -25,15 +25,10 @@ UI 改善も機能追加も同じ土俵で扱う。
 
 | ID | Type | Area | Item | Why now |
 |---|---|---|---|---|
-| P4 | polish | Sessions | Claude / Codex のアイコンを出す | provider の識別が早くなり、見た目の印象も上がる |
-| P3 | polish | Sessions | worktree セッションを `repo / worktree / branch` として把握しやすくする | 仕事で頻繁に見る情報が今わかりにくい |
-| P1 | polish | Sessions | `Remove worktree` の導線を見直す。常設の赤ボタンをやめる | 使うたびに怖さとノイズがある |
-| P6 | polish | Sessions | branch に git 系のアイコンを付ける | worktree 情報の読み取りが速くなる |
 | F21 | feature | App | メニュー整理。タイトルが `Electron` になっている問題を直す | アプリ全体の完成度に直結する |
 | F20 | feature | App | アプリのアイコンを付ける | テンションとプロダクト感を上げたい |
 | F2 | feature | Changes | 変更ファイル数を出す | 仕事で頻繁に見る情報で、判断が早くなる |
 | F22 | feature | CLI | `yuru` コマンドで起動できるようにする | 使い始めるまでの摩擦を下げたい |
-| P2 | polish | Sessions | active にすると `Remove worktree` が消える不自然さをなくす | 導線見直しと一緒に直したい |
 | I1 | investigate | Sessions | `Remove worktree` 失敗時に未コミット・未追跡ファイルをどう扱うか決める | 削除 UX の設計に必要 |
 | B1 | bug | Archived | Archived セクションの表示崩れを直す | 明確な UI バグ |
 | B3 | bug | Sessions | 古いセッション選択時の `No conversation found with ID: ...` のちらつきを消す | 誤解を生む |
@@ -47,8 +42,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 |---|---|---|---|---|
 | F16 | feature | GitHub | セッションカードに PR の有無と状態を表示する | GitHub 連携として早めに価値が出そう |
 | F17 | feature | GitHub | PR へのリンクを出す | そこそこ早めに欲しくなりそう |
-| P5 | polish | Sessions | `CODEX` / `CLAUDE` 表示を小さくする。badge より icon 寄りにしたい | icon 導入と合わせて整えたい |
-| P10 | polish | Sessions | inactive セッションをもっと薄くする | active とのコントラスト改善 |
 | F1 | feature | Notifications | 並列実行セッションの完了通知を出す | 完了に気づけない |
 | P7 | polish | New Session | `WT` 表示を置き換える | 文言かアイコンかを再検討 |
 | P8 | polish | New Session | Claude / Codex のアイコンを出す | Sessions 側とトーンを揃えたい |
@@ -76,6 +69,5 @@ UI 改善も機能追加も同じ土俵で扱う。
 
 ## Open decisions
 
-- Claude / Codex の公式ロゴやアイコンをそのまま使ってよいか
 - `Remove worktree` 失敗時は `--force` を提案するだけにするか、明示的な force 削除フローを持つか
 - 変更ファイル数・変更行数の集計は都度計算かキャッシュか
