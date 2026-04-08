@@ -217,24 +217,26 @@ function SessionList({
                 title={`${providerLabel(session.provider)} · ${session.state}`}
               />
               <div className="session-title-group">
-                <div className="session-title-row">
-                  <span className="session-project" title={repoNameForSession(session)}>
-                    {repoNameForSession(session)}
-                  </span>
-                  {session.worktree && (
-                    <button
-                      type="button"
-                      className="session-worktree-indicator"
-                      title={`Worktree: ${session.worktree.name}`}
-                      aria-label={`Worktree ${session.worktree.name}`}
-                      tabIndex={-1}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                      }}
-                    >
-                      <FolderTree size={11} strokeWidth={2} />
-                    </button>
-                  )}
+                <div className="session-top-row">
+                  <div className="session-title-row">
+                    <span className="session-project" title={repoNameForSession(session)}>
+                      {repoNameForSession(session)}
+                    </span>
+                    {session.worktree && (
+                      <button
+                        type="button"
+                        className="session-worktree-indicator"
+                        title={`Worktree: ${session.worktree.name}`}
+                        aria-label={`Worktree ${session.worktree.name}`}
+                        tabIndex={-1}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                        }}
+                      >
+                        <FolderTree size={11} strokeWidth={2} />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {session.worktree && (
                   <div className="session-branch">
@@ -250,17 +252,10 @@ function SessionList({
                   className="session-action-btn"
                   onClick={(event) => {
                     event.stopPropagation();
-                    if (session.state !== "inactive") {
-                      return;
-                    }
                     onDeleteWorktree(session);
                   }}
-                  disabled={deletingSessionId === session.id || session.state !== "inactive"}
-                  title={
-                    session.state === "inactive"
-                      ? "Remove worktree"
-                      : "Stop the session before removing this worktree"
-                  }
+                  disabled={deletingSessionId === session.id}
+                  title="Remove worktree"
                   aria-label="Remove worktree"
                 >
                   <Trash2 size={13} strokeWidth={2} />
@@ -1081,7 +1076,11 @@ export function App(): JSX.Element {
   };
 
   const handleDeleteWorktree = async (session: Session): Promise<void> => {
-    if (!session.worktree || session.state !== "inactive") {
+    if (!session.worktree) {
+      return;
+    }
+    if (session.state === "active") {
+      window.alert("Stop the session before removing this worktree.");
       return;
     }
     const confirmed = window.confirm(

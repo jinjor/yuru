@@ -160,6 +160,12 @@ body,
   flex: 1;
 }
 
+.session-top-row {
+  display: flex;
+  align-items: center;
+  min-height: 22px;
+}
+
 .session-title-row {
   display: flex;
   align-items: center;
