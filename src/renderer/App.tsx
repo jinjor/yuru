@@ -2,7 +2,7 @@ import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useRef, useSta
 import { Terminal, type ILinkProvider, type ILink, type IBufferRange } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { Tree, NodeRendererProps } from "react-arborist";
-import { ChevronDown, ChevronRight, GitBranch } from "lucide-react";
+import { ChevronDown, ChevronRight, FolderTree, GitBranch, Trash2 } from "lucide-react";
 import "@xterm/xterm/css/xterm.css";
 import { AgentDefinition } from "../shared/agent";
 import { Session, SessionProvider } from "../shared/session";
@@ -172,6 +172,19 @@ function treeStatusClass(status?: string): string {
   }
 }
 
+function providerLabel(provider: SessionProvider): string {
+  switch (provider) {
+    case "claude":
+      return "Claude";
+    case "codex":
+      return "Codex";
+  }
+}
+
+function repoNameForSession(session: Session): string {
+  return session.repoPath.split("/").pop() || session.projectName;
+}
+
 function SessionList({
   sessions,
   selectedId,
@@ -194,28 +207,68 @@ function SessionList({
       {activeSessions.map((session) => (
         <div
           key={session.id}
-          className={`session-card ${selectedId === session.id ? "selected" : ""}`}
+          className={`session-card ${session.state} ${selectedId === session.id ? "selected" : ""}`}
           onClick={() => onSelect(session)}
         >
           <div className="session-header">
-            <span className="session-project">{session.repoPath.split("/").pop()}</span>
-            <span className={`session-provider provider-${session.provider}`}>{session.provider}</span>
-            <span className={`session-state ${session.state}`} title={session.state} />
-            <span className="session-time">{formatTime(session.timestamp)}</span>
+            <div className="session-heading">
+              <span
+                className={`session-provider-dot provider-${session.provider} ${session.state}`}
+                title={`${providerLabel(session.provider)} · ${session.state}`}
+              />
+              <div className="session-title-group">
+                <div className="session-title-row">
+                  <span className="session-project" title={repoNameForSession(session)}>
+                    {repoNameForSession(session)}
+                  </span>
+                  {session.worktree && (
+                    <button
+                      type="button"
+                      className="session-worktree-indicator"
+                      title={`Worktree: ${session.worktree.name}`}
+                      aria-label={`Worktree ${session.worktree.name}`}
+                      tabIndex={-1}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                      }}
+                    >
+                      <FolderTree size={11} strokeWidth={2} />
+                    </button>
+                  )}
+                </div>
+                {session.worktree && (
+                  <div className="session-branch">
+                    <GitBranch size={11} strokeWidth={2} />
+                    <span>{session.worktree.branch}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="session-meta">
+              {session.worktree && (
+                <button
+                  className="session-action-btn"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (session.state !== "inactive") {
+                      return;
+                    }
+                    onDeleteWorktree(session);
+                  }}
+                  disabled={deletingSessionId === session.id || session.state !== "inactive"}
+                  title={
+                    session.state === "inactive"
+                      ? "Remove worktree"
+                      : "Stop the session before removing this worktree"
+                  }
+                  aria-label="Remove worktree"
+                >
+                  <Trash2 size={13} strokeWidth={2} />
+                </button>
+              )}
+              <span className="session-time">{formatTime(session.timestamp)}</span>
+            </div>
           </div>
-          {session.worktree && <div className="session-branch">{session.worktree.branch}</div>}
-          {session.worktree && session.state === "inactive" && (
-            <button
-              className="session-delete-btn"
-              onClick={(event) => {
-                event.stopPropagation();
-                onDeleteWorktree(session);
-              }}
-              disabled={deletingSessionId === session.id}
-            >
-              {deletingSessionId === session.id ? "Removing..." : "Remove worktree"}
-            </button>
-          )}
           <div className="session-preview">{session.lastMessage || "(no messages)"}</div>
         </div>
       ))}
@@ -228,8 +281,17 @@ function SessionList({
             archivedSessions.map((session) => (
               <div key={session.id} className="session-card archived">
                 <div className="session-header">
-                  <span className="session-project">{session.projectName}</span>
-                  <span className={`session-state ${session.state}`}>{session.state}</span>
+                  <div className="session-heading">
+                    <span
+                      className={`session-provider-dot provider-${session.provider} archived`}
+                      title={`${providerLabel(session.provider)} · archived`}
+                    />
+                    <div className="session-title-group">
+                      <div className="session-title-row">
+                        <span className="session-project">{session.projectName}</span>
+                      </div>
+                    </div>
+                  </div>
                   <span className="session-time">{formatTime(session.timestamp)}</span>
                 </div>
                 <div className="session-preview">{session.lastMessage || "(no messages)"}</div>
