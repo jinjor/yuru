@@ -5,41 +5,54 @@ Last updated: 2026-04-09
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
 ここでは「次に何をやるか」を管理し、実装の細部や現状の正しさはコードを読む前提にする。
+優先順位は、分類よりも「自分が早く仕事に使えるか」で決める。
 
 ## How to read this
 
 - `Type`: `bug`, `polish`, `feature`, `investigate`
-- `Now`: 先に片付けたいもの
-- `Next`: 使用感を押し上げるもの
-- `Later`: 後でまとめて設計したいもの
+- `Now`: 今のテンションや作業効率に直結するもの
+- `Next`: その次に効きそうなもの
+- `Later`: 欲しいが、今すぐでなくてよいもの
+
+## Priority lens
+
+- バグでも、普段ほぼ触らない機能なら優先度は高くない
+- 見た目でも、テンションや使いやすさに効くなら優先して直す
+- 機能は、仕事で使う頻度が高いものほど優先する
+- 「壊れているか」よりも「早く仕事に使いたいか」を優先軸にする
 
 ## Now
 
 | ID | Type | Area | Item | Why now |
 |---|---|---|---|---|
+| P4 | polish | Sessions | Claude / Codex のアイコンを出す | provider の識別が早くなり、見た目の印象も上がる |
+| P3 | polish | Sessions | worktree セッションを `repo / worktree / branch` として把握しやすくする | 仕事で頻繁に見る情報が今わかりにくい |
+| P1 | polish | Sessions | `Remove worktree` の導線を見直す。常設の赤ボタンをやめる | 使うたびに怖さとノイズがある |
+| P6 | polish | Sessions | branch に git 系のアイコンを付ける | worktree 情報の読み取りが速くなる |
+| F21 | feature | App | メニュー整理。タイトルが `Electron` になっている問題を直す | アプリ全体の完成度に直結する |
+| F20 | feature | App | アプリのアイコンを付ける | テンションとプロダクト感を上げたい |
+| F2 | feature | Changes | 変更ファイル数を出す | 仕事で頻繁に見る情報で、判断が早くなる |
+| F22 | feature | CLI | `yuru` コマンドで起動できるようにする | 使い始めるまでの摩擦を下げたい |
+| P2 | polish | Sessions | active にすると `Remove worktree` が消える不自然さをなくす | 導線見直しと一緒に直したい |
+| I1 | investigate | Sessions | `Remove worktree` 失敗時に未コミット・未追跡ファイルをどう扱うか決める | 削除 UX の設計に必要 |
 | B1 | bug | Archived | Archived セクションの表示崩れを直す | 明確な UI バグ |
-| B2 | bug | Empty state | 空画面から新規セッションを始められるようにする | 次の行動が取れない |
 | B3 | bug | Sessions | 古いセッション選択時の `No conversation found with ID: ...` のちらつきを消す | 誤解を生む |
-| B4 | bug | Sessions | 最新会話プレビューが一覧に同期されない問題を直す | 一覧の情報鮮度が低い |
+| P11 | polish | Sessions | 最新会話プレビューが一覧に同期されない問題を直す | 一覧の情報鮮度が低い |
 | B5 | bug | New Session | hover ハイライトが `WT` の手前で不自然に切れる問題を直す | 明確な UI バグ |
-| P1 | polish | Sessions | `Remove worktree` の導線を見直す。常設の赤ボタンをやめる | 誤操作リスクが高い |
-| P2 | polish | Sessions | active にすると `Remove worktree` が消える不自然さをなくす | 状態遷移が読みにくい |
-| P3 | polish | Sessions | worktree セッションを `repo / worktree / branch` として把握しやすくする | 今の情報設計が弱い |
-| I1 | investigate | Sessions | `Remove worktree` 失敗時に未コミット・未追跡ファイルをどう扱うか決める | force 削除の UX 判断が必要 |
 | I2 | investigate | Sessions | Claude と Codex のセッション一覧 merge ロジックに無理がないか確認する | 表示改善前に土台確認したい |
 
 ## Next
 
 | ID | Type | Area | Item | Notes |
 |---|---|---|---|---|
-| P4 | polish | Sessions | `CODEX` / `CLAUDE` 表示を小さくする。badge より icon 寄りにしたい | provider の主張が強すぎる |
-| P5 | polish | Sessions | inactive セッションをもっと薄くする | active とのコントラスト改善 |
-| P6 | polish | Sessions | worktree / branch / git のアイコン整理 | 情報の読み取りを速くしたい |
+| F16 | feature | GitHub | セッションカードに PR の有無と状態を表示する | GitHub 連携として早めに価値が出そう |
+| F17 | feature | GitHub | PR へのリンクを出す | そこそこ早めに欲しくなりそう |
+| P5 | polish | Sessions | `CODEX` / `CLAUDE` 表示を小さくする。badge より icon 寄りにしたい | icon 導入と合わせて整えたい |
+| P10 | polish | Sessions | inactive セッションをもっと薄くする | active とのコントラスト改善 |
 | F1 | feature | Notifications | 並列実行セッションの完了通知を出す | 完了に気づけない |
 | P7 | polish | New Session | `WT` 表示を置き換える | 文言かアイコンかを再検討 |
-| P8 | polish | New Session | Claude / Codex のアイコンを出す | provider の識別改善 |
+| P8 | polish | New Session | Claude / Codex のアイコンを出す | Sessions 側とトーンを揃えたい |
 | P9 | polish | New Session | 長い repo path の省略ルールを見直す | 折りたたみが不自然 |
-| F2 | feature | Changes | 変更ファイル数を出す | タブラベル候補 |
 | F3 | feature | Changes | 変更行数も出す | diff 集計で対応したい |
 | F4 | feature | Diff | 各ファイルの変更行数表示 | Changes と整合させたい |
 | F5 | feature | Diff | 右端スクロール領域に差分位置マーカーを出す | minimap 的な把握用 |
@@ -58,23 +71,8 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F13 | feature | Files / Code | 選択範囲をターミナルに貼り付ける | editor と terminal の連携が必要 |
 | F14 | feature | Files | ファイル名検索 | ツリー設計と一緒に考えたい |
 | F15 | feature | Search | ファイル横断検索 | 別機能として扱いたい |
-| F16 | feature | GitHub | セッションカードに PR の有無と状態を表示する | open / merged / closed を出したい |
-| F17 | feature | GitHub | PR へのリンクを出す | session と branch の紐づき活用 |
 | F18 | feature | GitHub | PR マージ時に worktree を自動整理する | 自動 archived までつなげたい |
-| F19 | feature | GitHub | branch から PR を作るショートカットを出す | worktree workflow を短くしたい |
-| F20 | feature | App | アプリのアイコンを付ける | branding |
-| F21 | feature | App | メニュー整理。タイトルが `Electron` になっている問題を直す | 仕上げ |
-| F22 | feature | CLI | `yuru` コマンドで起動できるようにする | 配布導線 |
-| F23 | feature | State | Yuru 独自の UI 状態保存を導入する | 列幅、最後の選択など |
-
-## Current focus
-
-最初の 1 セットはこれでよさそう。
-
-1. Archived 崩れ修正
-2. empty state から新規セッション開始
-3. `Remove worktree` の導線見直し
-4. セッションカードの `repo / worktree / branch` 表示整理
+| F24 | feature | Empty state | 空画面から新規セッションを始められるようにする | あると親切だが、今すぐではない |
 
 ## Open decisions
 
