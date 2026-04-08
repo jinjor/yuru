@@ -4,6 +4,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Tree, NodeRendererProps } from "react-arborist";
 import { ChevronDown, ChevronRight, GitBranch } from "lucide-react";
 import "@xterm/xterm/css/xterm.css";
+import { Session, SessionProvider } from "../shared/session";
 
 const CodeViewer = lazy(async () =>
   import("./CodeViewer").then((module) => ({ default: module.CodeViewer })),
@@ -11,20 +12,6 @@ const CodeViewer = lazy(async () =>
 const DiffViewer = lazy(async () =>
   import("./DiffViewer").then((module) => ({ default: module.DiffViewer })),
 );
-
-interface Session {
-  id: string;
-  project: string;
-  projectName: string;
-  repoPath: string;
-  lastMessage: string;
-  timestamp: number;
-  state: "active" | "inactive" | "archived";
-  worktree?: {
-    name: string;
-    branch: string;
-  };
-}
 
 interface GitFileStatus {
   path: string;
@@ -67,9 +54,17 @@ declare global {
     electronAPI: {
       getSessions: () => Promise<Session[]>;
       selectSession: (session: Session) => void;
-      createSession: (repoPath: string) => Promise<Session>;
-      createWorktreeSession: (repoPath: string, branchName: string) => Promise<Session>;
-      removeWorktree: (repoPath: string, worktreePath: string) => Promise<void>;
+      createSession: (provider: SessionProvider, repoPath: string) => Promise<Session>;
+      createWorktreeSession: (
+        provider: SessionProvider,
+        repoPath: string,
+        branchName: string,
+      ) => Promise<Session>;
+      removeWorktree: (
+        provider: SessionProvider,
+        repoPath: string,
+        worktreePath: string,
+      ) => Promise<void>;
       selectFolder: () => Promise<string | null>;
       getGitStatus: (sessionId: string) => Promise<GitFileStatus[]>;
       getGitBranch: (sessionId: string) => Promise<string | null>;
@@ -202,6 +197,7 @@ function SessionList({
         >
           <div className="session-header">
             <span className="session-project">{session.repoPath.split("/").pop()}</span>
+            <span className={`session-provider provider-${session.provider}`}>{session.provider}</span>
             <span className={`session-state ${session.state}`} title={session.state} />
             <span className="session-time">{formatTime(session.timestamp)}</span>
           </div>
@@ -413,10 +409,12 @@ function BranchNameInput({
   onSubmit,
   onCancel,
   error,
+  provider,
 }: {
   onSubmit: (branchName: string) => void;
   onCancel: () => void;
   error: string | null;
+  provider: SessionProvider;
 }): JSX.Element {
   const [name, setName] = useState(generateDefaultBranch);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -439,7 +437,7 @@ function BranchNameInput({
   return (
     <div className="repo-picker-overlay" onClick={onCancel}>
       <div className="repo-picker" onClick={(e) => e.stopPropagation()}>
-        <div className="repo-picker-header">Branch Name</div>
+        <div className="repo-picker-header">{provider === "claude" ? "Claude Worktree" : "Codex Worktree"}</div>
         <div className="worktree-input-row">
           <input
             ref={inputRef}
@@ -473,19 +471,23 @@ function BranchNameInput({
 
 function RepoPicker({
   repos,
+  provider,
+  onChangeProvider,
   onSelect,
   onSelectWorktree,
   onCancel,
 }: {
   repos: string[];
-  onSelect: (repoPath: string) => void;
-  onSelectWorktree: (repoPath: string) => void;
+  provider: SessionProvider;
+  onChangeProvider: (provider: SessionProvider) => void;
+  onSelect: (repoPath: string, provider: SessionProvider) => void;
+  onSelectWorktree: (repoPath: string, provider: SessionProvider) => void;
   onCancel: () => void;
 }): JSX.Element {
   const handleBrowse = async (): Promise<void> => {
     const folderPath = await window.electronAPI.selectFolder();
     if (folderPath) {
-      onSelect(folderPath);
+      onSelect(folderPath, provider);
     }
   };
 
@@ -493,16 +495,27 @@ function RepoPicker({
     <div className="repo-picker-overlay" onClick={onCancel}>
       <div className="repo-picker" onClick={(e) => e.stopPropagation()}>
         <div className="repo-picker-header">New Session</div>
+        <div className="provider-picker">
+          {(["claude", "codex"] as const).map((value) => (
+            <button
+              key={value}
+              className={`provider-picker-btn ${provider === value ? "active" : ""}`}
+              onClick={() => onChangeProvider(value)}
+            >
+              {value === "claude" ? "Claude" : "Codex"}
+            </button>
+          ))}
+        </div>
         {repos.map((repo) => (
           <div key={repo} className="repo-picker-repo">
-            <div className="repo-picker-item" onClick={() => onSelect(repo)}>
+            <div className="repo-picker-item" onClick={() => onSelect(repo, provider)}>
               {repo.split("/").pop()}
               <span className="repo-picker-path">{repo}</span>
             </div>
             <button
               className="repo-picker-worktree-btn"
-              onClick={() => onSelectWorktree(repo)}
-              title="New session in worktree"
+              onClick={() => onSelectWorktree(repo, provider)}
+              title={`New ${provider} session in worktree`}
             >
               WT
             </button>
@@ -522,7 +535,11 @@ export function App(): JSX.Element {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showRepoPicker, setShowRepoPicker] = useState(false);
-  const [worktreeRepo, setWorktreeRepo] = useState<string | null>(null);
+  const [newSessionProvider, setNewSessionProvider] = useState<SessionProvider>("claude");
+  const [worktreeTarget, setWorktreeTarget] = useState<{
+    repoPath: string;
+    provider: SessionProvider;
+  } | null>(null);
   const [worktreeError, setWorktreeError] = useState<string | null>(null);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [changedFiles, setChangedFiles] = useState<GitFileStatus[]>([]);
@@ -928,11 +945,15 @@ export function App(): JSX.Element {
     showTerminal(session.id);
   };
 
-  const handleCreateSession = async (repoPath: string): Promise<void> => {
+  const handleCreateSession = async (
+    repoPath: string,
+    provider: SessionProvider,
+  ): Promise<void> => {
     setShowRepoPicker(false);
+    setNewSessionProvider(provider);
     setIsCreatingSession(true);
     try {
-      const session = await window.electronAPI.createSession(repoPath);
+      const session = await window.electronAPI.createSession(provider, repoPath);
       setSessions((prev) => [session, ...prev]);
       setPreviewSelection(null);
       setDiffDocument(null);
@@ -944,15 +965,16 @@ export function App(): JSX.Element {
   };
 
   const handleCreateWorktreeSession = async (branchName: string): Promise<void> => {
-    if (!worktreeRepo) {
+    if (!worktreeTarget) {
       return;
     }
-    const repoPath = worktreeRepo;
+    const { repoPath, provider } = worktreeTarget;
     setWorktreeError(null);
+    setNewSessionProvider(provider);
     setIsCreatingSession(true);
     try {
-      const session = await window.electronAPI.createWorktreeSession(repoPath, branchName);
-      setWorktreeRepo(null);
+      const session = await window.electronAPI.createWorktreeSession(provider, repoPath, branchName);
+      setWorktreeTarget(null);
       setSessions((prev) => [session, ...prev]);
       setPreviewSelection(null);
       setDiffDocument(null);
@@ -977,7 +999,7 @@ export function App(): JSX.Element {
     }
     setDeletingSessionId(session.id);
     try {
-      await window.electronAPI.removeWorktree(session.repoPath, session.project);
+      await window.electronAPI.removeWorktree(session.provider, session.repoPath, session.project);
     } catch (error) {
       setDeletingSessionId(null);
       window.alert(error instanceof Error ? error.message : "Failed to remove worktree");
@@ -1097,20 +1119,24 @@ export function App(): JSX.Element {
       {showRepoPicker && (
         <RepoPicker
           repos={knownRepos}
+          provider={newSessionProvider}
+          onChangeProvider={setNewSessionProvider}
           onSelect={handleCreateSession}
-          onSelectWorktree={(repo) => {
+          onSelectWorktree={(repo, provider) => {
             setShowRepoPicker(false);
-            setWorktreeRepo(repo);
+            setNewSessionProvider(provider);
+            setWorktreeTarget({ repoPath: repo, provider });
             setWorktreeError(null);
           }}
           onCancel={() => setShowRepoPicker(false)}
         />
       )}
-      {worktreeRepo && (
+      {worktreeTarget && (
         <BranchNameInput
           onSubmit={handleCreateWorktreeSession}
-          onCancel={() => setWorktreeRepo(null)}
+          onCancel={() => setWorktreeTarget(null)}
           error={worktreeError}
+          provider={worktreeTarget.provider}
         />
       )}
     </div>

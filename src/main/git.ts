@@ -214,6 +214,15 @@ export async function renameBranch(cwd: string, oldName: string, newName: string
   await exec("git", ["branch", "-m", oldName, newName], cwd);
 }
 
+export async function createWorktree(
+  repoPath: string,
+  worktreePath: string,
+  branchName: string,
+): Promise<void> {
+  await fs.promises.mkdir(path.dirname(worktreePath), { recursive: true });
+  await exec("git", ["worktree", "add", "-b", branchName, worktreePath], repoPath);
+}
+
 export async function removeWorktree(repoPath: string, worktreePath: string): Promise<void> {
   await exec("git", ["worktree", "remove", worktreePath], repoPath);
 }

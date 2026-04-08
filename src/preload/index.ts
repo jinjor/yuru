@@ -1,13 +1,15 @@
 import { contextBridge, ipcRenderer } from "electron";
+import { Session, SessionProvider } from "../shared/session.js";
 
 contextBridge.exposeInMainWorld("electronAPI", {
   getSessions: () => ipcRenderer.invoke("sessions:list"),
-  selectSession: (session: unknown) => ipcRenderer.send("session:select", session),
-  createSession: (repoPath: string) => ipcRenderer.invoke("session:create", repoPath),
-  createWorktreeSession: (repoPath: string, branchName: string) =>
-    ipcRenderer.invoke("session:createWorktree", repoPath, branchName),
-  removeWorktree: (repoPath: string, worktreePath: string) =>
-    ipcRenderer.invoke("worktree:remove", repoPath, worktreePath),
+  selectSession: (session: Session) => ipcRenderer.send("session:select", session),
+  createSession: (provider: SessionProvider, repoPath: string) =>
+    ipcRenderer.invoke("session:create", provider, repoPath),
+  createWorktreeSession: (provider: SessionProvider, repoPath: string, branchName: string) =>
+    ipcRenderer.invoke("session:createWorktree", provider, repoPath, branchName),
+  removeWorktree: (provider: SessionProvider, repoPath: string, worktreePath: string) =>
+    ipcRenderer.invoke("worktree:remove", provider, repoPath, worktreePath),
   selectFolder: () => ipcRenderer.invoke("dialog:selectFolder"),
   getGitStatus: (sessionId: string) => ipcRenderer.invoke("git:status", sessionId),
   getGitBranch: (sessionId: string) =>
