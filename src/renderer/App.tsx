@@ -4,6 +4,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Tree, NodeRendererProps } from "react-arborist";
 import { ChevronDown, ChevronRight, GitBranch } from "lucide-react";
 import "@xterm/xterm/css/xterm.css";
+import { AgentDefinition } from "../shared/agent";
 import { Session, SessionProvider } from "../shared/session";
 
 const CodeViewer = lazy(async () =>
@@ -53,6 +54,7 @@ declare global {
   interface Window {
     electronAPI: {
       getSessions: () => Promise<Session[]>;
+      getSessionProviders: () => Promise<AgentDefinition[]>;
       selectSession: (session: Session) => void;
       createSession: (provider: SessionProvider, repoPath: string) => Promise<Session>;
       createWorktreeSession: (
@@ -409,12 +411,12 @@ function BranchNameInput({
   onSubmit,
   onCancel,
   error,
-  provider,
+  providerLabel,
 }: {
   onSubmit: (branchName: string) => void;
   onCancel: () => void;
   error: string | null;
-  provider: SessionProvider;
+  providerLabel: string;
 }): JSX.Element {
   const [name, setName] = useState(generateDefaultBranch);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -437,7 +439,7 @@ function BranchNameInput({
   return (
     <div className="repo-picker-overlay" onClick={onCancel}>
       <div className="repo-picker" onClick={(e) => e.stopPropagation()}>
-        <div className="repo-picker-header">{provider === "claude" ? "Claude Worktree" : "Codex Worktree"}</div>
+        <div className="repo-picker-header">{providerLabel} Worktree</div>
         <div className="worktree-input-row">
           <input
             ref={inputRef}
@@ -471,6 +473,7 @@ function BranchNameInput({
 
 function RepoPicker({
   repos,
+  providers,
   provider,
   onChangeProvider,
   onSelect,
@@ -478,7 +481,8 @@ function RepoPicker({
   onCancel,
 }: {
   repos: string[];
-  provider: SessionProvider;
+  providers: AgentDefinition[];
+  provider: SessionProvider | null;
   onChangeProvider: (provider: SessionProvider) => void;
   onSelect: (repoPath: string, provider: SessionProvider) => void;
   onSelectWorktree: (repoPath: string, provider: SessionProvider) => void;
@@ -486,7 +490,7 @@ function RepoPicker({
 }): JSX.Element {
   const handleBrowse = async (): Promise<void> => {
     const folderPath = await window.electronAPI.selectFolder();
-    if (folderPath) {
+    if (folderPath && provider) {
       onSelect(folderPath, provider);
     }
   };
@@ -496,26 +500,40 @@ function RepoPicker({
       <div className="repo-picker" onClick={(e) => e.stopPropagation()}>
         <div className="repo-picker-header">New Session</div>
         <div className="provider-picker">
-          {(["claude", "codex"] as const).map((value) => (
+          {providers.map((value) => (
             <button
-              key={value}
-              className={`provider-picker-btn ${provider === value ? "active" : ""}`}
-              onClick={() => onChangeProvider(value)}
+              key={value.id}
+              className={`provider-picker-btn ${provider === value.id ? "active" : ""}`}
+              onClick={() => onChangeProvider(value.id)}
             >
-              {value === "claude" ? "Claude" : "Codex"}
+              {value.label}
             </button>
           ))}
         </div>
         {repos.map((repo) => (
           <div key={repo} className="repo-picker-repo">
-            <div className="repo-picker-item" onClick={() => onSelect(repo, provider)}>
+            <div
+              className={`repo-picker-item ${provider ? "" : "disabled"}`}
+              onClick={() => {
+                if (!provider) {
+                  return;
+                }
+                onSelect(repo, provider);
+              }}
+            >
               {repo.split("/").pop()}
               <span className="repo-picker-path">{repo}</span>
             </div>
             <button
               className="repo-picker-worktree-btn"
-              onClick={() => onSelectWorktree(repo, provider)}
-              title={`New ${provider} session in worktree`}
+              onClick={() => {
+                if (!provider) {
+                  return;
+                }
+                onSelectWorktree(repo, provider);
+              }}
+              title={provider ? `New ${provider} session in worktree` : "Choose an agent first"}
+              disabled={!provider}
             >
               WT
             </button>
@@ -533,9 +551,10 @@ export function App(): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalsRef = useRef<Map<string, TerminalInstance>>(new Map());
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [availableProviders, setAvailableProviders] = useState<AgentDefinition[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showRepoPicker, setShowRepoPicker] = useState(false);
-  const [newSessionProvider, setNewSessionProvider] = useState<SessionProvider>("claude");
+  const [newSessionProvider, setNewSessionProvider] = useState<SessionProvider | null>(null);
   const [worktreeTarget, setWorktreeTarget] = useState<{
     repoPath: string;
     provider: SessionProvider;
@@ -557,6 +576,7 @@ export function App(): JSX.Element {
   const loadingDirectoriesRef = useRef<Set<string>>(new Set());
 
   const knownRepos = [...new Set(sessions.map((s) => s.repoPath))];
+  const providerLabelById = new Map(availableProviders.map((provider) => [provider.id, provider.label]));
 
   const onFileLinkActivateRef = useRef<(filePath: string, line?: number) => void>(() => {});
   onFileLinkActivateRef.current = (filePath: string, line?: number) => {
@@ -764,6 +784,11 @@ export function App(): JSX.Element {
 
   // Load sessions and setup listeners
   useEffect(() => {
+    window.electronAPI.getSessionProviders().then((providers) => {
+      setAvailableProviders(providers);
+      setNewSessionProvider((prev) => prev ?? providers[0]?.id ?? null);
+    });
+
     refreshSessions();
 
     window.electronAPI.onPtyData((sessionId, data) => {
@@ -777,6 +802,12 @@ export function App(): JSX.Element {
       refreshSessions();
     });
   }, [refreshSessions]);
+
+  useEffect(() => {
+    if (!availableProviders.some((provider) => provider.id === newSessionProvider)) {
+      setNewSessionProvider(availableProviders[0]?.id ?? null);
+    }
+  }, [availableProviders, newSessionProvider]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -1119,6 +1150,7 @@ export function App(): JSX.Element {
       {showRepoPicker && (
         <RepoPicker
           repos={knownRepos}
+          providers={availableProviders}
           provider={newSessionProvider}
           onChangeProvider={setNewSessionProvider}
           onSelect={handleCreateSession}
@@ -1136,7 +1168,7 @@ export function App(): JSX.Element {
           onSubmit={handleCreateWorktreeSession}
           onCancel={() => setWorktreeTarget(null)}
           error={worktreeError}
-          provider={worktreeTarget.provider}
+          providerLabel={providerLabelById.get(worktreeTarget.provider) ?? worktreeTarget.provider}
         />
       )}
     </div>

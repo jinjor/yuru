@@ -3,7 +3,7 @@ export type SessionProvider = "claude" | "codex";
 export interface Session {
   id: string;
   provider: SessionProvider;
-  providerSessionId: string;
+  providerSessionId: string | null;
   project: string;
   projectName: string;
   repoPath: string;
@@ -18,4 +18,16 @@ export interface Session {
 
 export function toSessionKey(provider: SessionProvider, providerSessionId: string): string {
   return `${provider}:${providerSessionId}`;
+}
+
+export function toRuntimeSessionKey(provider: SessionProvider, startedAt: number): string {
+  return `${provider}:runtime:${startedAt}`;
+}
+
+export interface ResumableSession extends Session {
+  providerSessionId: string;
+}
+
+export function isResumableSession(session: Session): session is ResumableSession {
+  return session.providerSessionId !== null;
 }

@@ -1,8 +1,10 @@
 import { contextBridge, ipcRenderer } from "electron";
+import { AgentDefinition } from "../shared/agent.js";
 import { Session, SessionProvider } from "../shared/session.js";
 
 contextBridge.exposeInMainWorld("electronAPI", {
   getSessions: () => ipcRenderer.invoke("sessions:list"),
+  getSessionProviders: () => ipcRenderer.invoke("providers:list") as Promise<AgentDefinition[]>,
   selectSession: (session: Session) => ipcRenderer.send("session:select", session),
   createSession: (provider: SessionProvider, repoPath: string) =>
     ipcRenderer.invoke("session:create", provider, repoPath),

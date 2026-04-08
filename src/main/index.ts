@@ -1,39 +1,35 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import path from "path";
 import * as pty from "node-pty";
-import { findCodexSessionForLaunch, listCodexSessionIds, loadSessions } from "./sessions.js";
-import {
-  createWorktree,
-  getGitStatus,
-  getGitDiffDocument,
-  getCurrentBranch,
-  removeWorktree,
-  renameBranch,
-  branchExists,
-} from "./git.js";
+import { loadSessions } from "./sessions.js";
+import { getGitStatus, getGitDiffDocument, getCurrentBranch, removeWorktree, branchExists } from "./git.js";
 import { listFiles, readFileContent, fileExists } from "./files.js";
-import { worktreeCwd as claudeWorktreeCwd, ccBranchName, pidFilePath } from "./claude-paths.js";
-import { yuruWorktreeCwd } from "./worktree-paths.js";
+import {
+  getSessionProvider,
+  listSessionProviderDefinitions,
+} from "./agent-registry.js";
+import {
+  LaunchRequest,
+  PendingSession,
+  RuntimeSessionInfo,
+  SessionProviderAdapter,
+  WorktreeContext,
+} from "./agent.js";
 import { WorktreeWatcher } from "./worktree-watcher.js";
 import fs from "fs";
-import { Session, SessionProvider, toSessionKey } from "../shared/session.js";
+import {
+  isResumableSession,
+  Session,
+  SessionProvider,
+  toRuntimeSessionKey,
+  toSessionKey,
+} from "../shared/session.js";
 
 let mainWindow: BrowserWindow | null = null;
 const ptyProcesses = new Map<string, pty.IPty>();
 const pendingProcesses = new Set<pty.IPty>();
-const sessionRuntimeMap = new Map<string, { cwd: string; provider: SessionProvider }>();
+const sessionRuntimeMap = new Map<string, RuntimeSessionInfo>();
 let worktreeWatcher: WorktreeWatcher | null = null;
-
-interface PendingSession {
-  proc: pty.IPty;
-  provider: SessionProvider;
-  sessionCwd: string;
-  providerSessionId: string | null;
-  appSessionId: string | null;
-  startedAt: number;
-  existingProviderSessionIds: ReadonlySet<string>;
-  exited: boolean;
-}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -49,26 +45,23 @@ function createWindow(): void {
   mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
 }
 
-function launchSession(
-  provider: SessionProvider,
-  cwd: string,
-  args: string[],
-  sessionCwd: string,
-  existingProviderSessionIds: ReadonlySet<string> = new Set(),
+function launchPendingSession(
+  providerAdapter: SessionProviderAdapter,
+  request: LaunchRequest,
 ): PendingSession {
-  const command = provider === "claude" ? "claude" : "codex";
-  const proc = pty.spawn(command, args, {
+  const existingProviderSessionIds = request.existingProviderSessionIds ?? new Set<string>();
+  const proc = pty.spawn(providerAdapter.command, request.args, {
     name: "xterm-256color",
     cols: 80,
     rows: 24,
-    cwd,
+    cwd: request.cwd,
     env: process.env as Record<string, string>,
   });
   pendingProcesses.add(proc);
   const pending: PendingSession = {
     proc,
-    provider,
-    sessionCwd,
+    provider: providerAdapter.definition.id,
+    sessionCwd: request.sessionCwd,
     providerSessionId: null,
     appSessionId: null,
     startedAt: Date.now(),
@@ -98,74 +91,50 @@ function launchSession(
   return pending;
 }
 
-function launchClaude(cwd: string, args: string[], worktreeName?: string): PendingSession {
-  const sessionCwd = worktreeName ? claudeWorktreeCwd(cwd, worktreeName) : cwd;
-  const spawnArgs = [...args];
-  if (worktreeName) {
-    spawnArgs.push("--worktree", worktreeName);
-  }
-  return launchSession("claude", cwd, spawnArgs, sessionCwd);
-}
-
-function launchCodex(
-  cwd: string,
-  args: string[],
-  existingProviderSessionIds: ReadonlySet<string> = new Set(),
-): PendingSession {
-  return launchSession("codex", cwd, args, cwd, existingProviderSessionIds);
-}
-
-function registerSession(appSessionId: string, providerSessionId: string, pending: PendingSession): void {
+function registerSession(
+  appSessionId: string,
+  pending: PendingSession,
+  providerSessionId: string | null,
+): void {
   pending.providerSessionId = providerSessionId;
   pending.appSessionId = appSessionId;
   pendingProcesses.delete(pending.proc);
   ptyProcesses.set(appSessionId, pending.proc);
-  sessionRuntimeMap.set(appSessionId, { cwd: pending.sessionCwd, provider: pending.provider });
+  sessionRuntimeMap.set(appSessionId, {
+    cwd: pending.sessionCwd,
+    provider: pending.provider,
+    providerSessionId,
+    startedAt: pending.startedAt,
+  });
 }
 
-async function waitForClaudeSessionId(pending: PendingSession): Promise<string> {
-  const sessionFile = pidFilePath(pending.proc.pid);
-  for (let attempt = 0; attempt < 150; attempt++) {
-    if (fs.existsSync(sessionFile)) {
-      try {
-        const data = JSON.parse(fs.readFileSync(sessionFile, "utf-8"));
-        if (typeof data.sessionId === "string" && data.sessionId) {
-          return data.sessionId;
-        }
-      } catch {
-        // Ignore partial writes while Claude is still initializing the session file.
-      }
-    }
-    if (pending.exited) {
-      throw new Error("Claude exited before creating a session");
-    }
-    await new Promise((resolve) => setTimeout(resolve, 200));
+function updateRuntimeSessionProviderSessionId(appSessionId: string, providerSessionId: string): void {
+  const runtime = sessionRuntimeMap.get(appSessionId);
+  if (runtime) {
+    sessionRuntimeMap.set(appSessionId, {
+      ...runtime,
+      providerSessionId,
+    });
   }
-  throw new Error("Timeout waiting for Claude session initialization");
 }
 
-async function waitForCodexSessionId(pending: PendingSession): Promise<string> {
-  for (let attempt = 0; attempt < 150; attempt++) {
-    const launched = await findCodexSessionForLaunch(
-      pending.sessionCwd,
-      pending.startedAt,
-      pending.existingProviderSessionIds,
-    );
-    if (launched) {
-      return launched.providerSessionId;
-    }
+async function resolveLazySessionId(
+  providerAdapter: SessionProviderAdapter,
+  pending: PendingSession,
+  appSessionId: string,
+): Promise<void> {
+  try {
+    const providerSessionId = await providerAdapter.waitForSessionId(pending);
     if (pending.exited) {
-      throw new Error("Codex exited before creating a session");
+      return;
     }
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    pending.providerSessionId = providerSessionId;
+    updateRuntimeSessionProviderSessionId(appSessionId, providerSessionId);
+    await refreshWorktreeWatcher();
+    emitSessionsStateChanged();
+  } catch {
+    // Codex can stay active before it persists a resumable session; ignore resolution failures here.
   }
-  throw new Error("Timeout waiting for Codex session initialization");
-}
-
-async function waitForSessionId(pending: PendingSession): Promise<string> {
-  return pending.provider === "claude"
-    ? waitForClaudeSessionId(pending)
-    : waitForCodexSessionId(pending);
 }
 
 function killAllPty(): void {
@@ -228,30 +197,50 @@ app.whenReady().then(() => {
     return loadSessions(sessionRuntimeMap);
   });
 
-  ipcMain.on("session:select", (_event, session: Session) => {
+  ipcMain.handle("providers:list", () => {
+    return listSessionProviderDefinitions();
+  });
+
+  ipcMain.on("session:select", async (_event, session: Session) => {
     if (session.state === "archived") {
+      return;
+    }
+    if (!isResumableSession(session)) {
       return;
     }
     if (ptyProcesses.has(session.id)) {
       return;
     }
-    const pending =
-      session.provider === "claude"
-        ? launchClaude(session.project, ["--resume", session.providerSessionId])
-        : launchCodex(session.project, ["resume", session.providerSessionId]);
-    registerSession(session.id, session.providerSessionId, pending);
+    const providerAdapter = getSessionProvider(session.provider);
+    const pending = launchPendingSession(providerAdapter, await providerAdapter.createResumeLaunch(session));
+    registerSession(session.id, pending, session.providerSessionId);
     emitSessionsStateChanged();
   });
 
   ipcMain.handle("session:create", async (_event, provider: SessionProvider, repoPath: string) => {
-    const pending =
-      provider === "claude"
-        ? launchClaude(repoPath, [])
-        : launchCodex(repoPath, [], await listCodexSessionIds());
+    const providerAdapter = getSessionProvider(provider);
+    const pending = launchPendingSession(providerAdapter, await providerAdapter.createNewLaunch(repoPath));
     try {
-      const providerSessionId = await waitForSessionId(pending);
+      if (providerAdapter.resolvesSessionIdLazily) {
+        const appSessionId = toRuntimeSessionKey(provider, pending.startedAt);
+        registerSession(appSessionId, pending, null);
+        void resolveLazySessionId(providerAdapter, pending, appSessionId);
+        return {
+          id: appSessionId,
+          provider,
+          providerSessionId: null,
+          project: repoPath,
+          projectName: path.basename(repoPath),
+          repoPath,
+          lastMessage: "",
+          timestamp: Date.now(),
+          state: "active",
+        } satisfies Session;
+      }
+
+      const providerSessionId = await providerAdapter.waitForSessionId(pending);
       const sessionId = toSessionKey(provider, providerSessionId);
-      registerSession(sessionId, providerSessionId, pending);
+      registerSession(sessionId, pending, providerSessionId);
       await refreshWorktreeWatcher();
       const session: Session = {
         id: sessionId,
@@ -276,82 +265,89 @@ app.whenReady().then(() => {
   ipcMain.handle(
     "session:createWorktree",
     async (_event, provider: SessionProvider, repoPath: string, branchName: string) => {
-    const worktreeName = branchName.replace(/\//g, "-");
-    const worktreePath =
-      provider === "claude" ? claudeWorktreeCwd(repoPath, worktreeName) : yuruWorktreeCwd(repoPath, worktreeName);
-
-    // Pre-check: worktree directory and branch name must not already exist
-    if (fs.existsSync(worktreePath)) {
-      throw new Error(`Worktree "${worktreeName}" already exists`);
-    }
-    if (await branchExists(repoPath, branchName)) {
-      throw new Error(`Branch "${branchName}" already exists`);
-    }
-
-    if (provider === "codex") {
-      await createWorktree(repoPath, worktreePath, branchName);
-    }
-
-    const pending =
-      provider === "claude"
-        ? launchClaude(repoPath, [], worktreeName)
-        : launchCodex(worktreePath, [], await listCodexSessionIds());
-    try {
-      const providerSessionId = await waitForSessionId(pending);
-      const sessionId = toSessionKey(provider, providerSessionId);
-      registerSession(sessionId, providerSessionId, pending);
-
-      if (provider === "claude") {
-        // Wait for CC to create the worktree, then rename the branch
-        const ccBranch = ccBranchName(worktreeName);
-        if (branchName !== ccBranch) {
-          const waitForBranch = (): Promise<void> => {
-            return new Promise((resolve, reject) => {
-              let attempts = 0;
-              const check = async (): Promise<void> => {
-                if (await branchExists(repoPath, ccBranch)) {
-                  resolve();
-                } else if (attempts++ > 150) {
-                  reject(new Error("Timeout waiting for branch creation"));
-                } else {
-                  setTimeout(check, 200);
-                }
-              };
-              check();
-            });
-          };
-          await waitForBranch();
-          await renameBranch(worktreePath, ccBranch, branchName);
-        }
-      }
-
-      await refreshWorktreeWatcher();
-
-      const session: Session = {
-        id: sessionId,
-        provider,
-        providerSessionId,
-        project: worktreePath,
-        projectName: worktreeName,
+      const providerAdapter = getSessionProvider(provider);
+      const worktreeName = branchName.replace(/\//g, "-");
+      const worktreePath = providerAdapter.resolveWorktreePath(repoPath, worktreeName);
+      const worktreeContext: WorktreeContext = {
         repoPath,
-        lastMessage: "",
-        timestamp: Date.now(),
-        state: "active",
-        worktree: {
-          name: worktreeName,
-          branch: branchName,
-        },
+        worktreePath,
+        worktreeName,
+        branchName,
       };
-      return session;
-    } catch (error) {
-      if (!pending.exited) {
-        pending.proc.kill();
+
+      // Pre-check: worktree directory and branch name must not already exist
+      if (fs.existsSync(worktreePath)) {
+        throw new Error(`Worktree "${worktreeName}" already exists`);
       }
-      if (provider === "codex" && fs.existsSync(worktreePath)) {
-        await removeWorktree(repoPath, worktreePath).catch(() => undefined);
+      if (await branchExists(repoPath, branchName)) {
+        throw new Error(`Branch "${branchName}" already exists`);
       }
-      throw error;
-    }
+
+      await providerAdapter.prepareWorktree(worktreeContext);
+
+      const pending = launchPendingSession(
+        providerAdapter,
+        await providerAdapter.createWorktreeLaunch(worktreeContext),
+      );
+      try {
+        if (providerAdapter.resolvesSessionIdLazily) {
+          const appSessionId = toRuntimeSessionKey(provider, pending.startedAt);
+          registerSession(appSessionId, pending, null);
+          void resolveLazySessionId(providerAdapter, pending, appSessionId);
+
+          await providerAdapter.finalizeWorktree(worktreeContext);
+          await refreshWorktreeWatcher();
+
+          return {
+            id: appSessionId,
+            provider,
+            providerSessionId: null,
+            project: worktreePath,
+            projectName: worktreeName,
+            repoPath,
+            lastMessage: "",
+            timestamp: Date.now(),
+            state: "active",
+            worktree: {
+              name: worktreeName,
+              branch: branchName,
+            },
+          } satisfies Session;
+        }
+
+        const providerSessionId = await providerAdapter.waitForSessionId(pending);
+        const sessionId = toSessionKey(provider, providerSessionId);
+        registerSession(sessionId, pending, providerSessionId);
+
+        await providerAdapter.finalizeWorktree(worktreeContext);
+
+        await refreshWorktreeWatcher();
+
+        const session: Session = {
+          id: sessionId,
+          provider,
+          providerSessionId,
+          project: worktreePath,
+          projectName: worktreeName,
+          repoPath,
+          lastMessage: "",
+          timestamp: Date.now(),
+          state: "active",
+          worktree: {
+            name: worktreeName,
+            branch: branchName,
+          },
+        };
+        return session;
+      } catch (error) {
+        if (!pending.exited) {
+          pending.proc.kill();
+        }
+        if (fs.existsSync(worktreePath)) {
+          await removeWorktree(repoPath, worktreePath).catch(() => undefined);
+        }
+        throw error;
+      }
     },
   );
 

@@ -3,3 +3,4 @@ dist/
 out/
 .claude/settings.local.json
 .claude/worktrees/
+.yuru/
