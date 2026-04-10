@@ -22,6 +22,10 @@
   --warning: #e2c08d;
   --danger: #f08f86;
 
+  /* Controls */
+  --tab-pill-height: 30px;
+  --tab-pill-badge-height: 18px;
+
   /* Viewer */
   --viewer-bg: #0f141c;
   --viewer-gutter: #131a24;
@@ -558,13 +562,18 @@ button.github-badge {
 }
 
 .panel-tab {
-  padding: 5px 10px;
+  height: var(--tab-pill-height);
+  padding: 0 10px;
   font-size: 12px;
+  line-height: 1;
   color: var(--text-muted);
   background: transparent;
   border: 1px solid transparent;
   border-radius: 999px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   transition: background 120ms ease, color 120ms ease;
 }
 
@@ -577,6 +586,24 @@ button.github-badge {
   color: var(--text);
   background: rgba(123, 193, 255, 0.14);
   border-color: rgba(123, 193, 255, 0.3);
+}
+
+.panel-tab-count {
+  min-width: 18px;
+  height: var(--tab-pill-badge-height);
+  padding: 0 5px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.panel-tab.active .panel-tab-count {
+  background: rgba(123, 193, 255, 0.22);
 }
 
 /* File tree */

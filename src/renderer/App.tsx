@@ -451,6 +451,9 @@ function ExplorerPanel({
             onClick={() => onChangeTab("changes")}
           >
             Changes
+            <span className="panel-tab-count" aria-label={`${files.length} changed files`}>
+              {files.length}
+            </span>
           </button>
           <button
             className={`panel-tab ${activeTab === "files" ? "active" : ""}`}
