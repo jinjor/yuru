@@ -2,14 +2,12 @@
 
 ## Development
 
-After editing files, rebuild and restart the app:
+After editing files on macOS, rebuild and restart the app:
 
 ```sh
 npm run build
-pkill -f "electron \." 2>/dev/null; sleep 0.5; npm run run
+npm run app:restart
 ```
-
-`npm run run` should be run in the background.
 
 ## Docs
 

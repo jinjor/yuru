@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc && vite build",
     "run": "electron .",
+    "app:restart": "./scripts/restart-app-macos.sh",
     "lint": "oxlint src/",
     "format": "oxfmt src/"
   },
