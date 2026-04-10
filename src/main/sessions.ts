@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
-import { listWorktrees } from "./git.js";
+import { getRepoRootForProject, listWorktrees } from "./git.js";
+import { getGitHubPullRequestForBranch } from "./github.js";
 import { getSessionProvider, sessionProviders } from "./agent-registry.js";
 import { RuntimeSessionInfo } from "./agent.js";
 import { Session, toSessionKey } from "../shared/session.js";
@@ -23,6 +24,19 @@ async function buildWorktreeMap(projectPaths: string[]): Promise<Map<string, { n
   return worktreeMap;
 }
 
+async function buildRepoPathMap(projectPaths: string[]): Promise<Map<string, string>> {
+  const repoPathMap = new Map<string, string>();
+  await Promise.all(
+    projectPaths.map(async (projectPath) => {
+      const repoPath = await getRepoRootForProject(projectPath);
+      if (repoPath) {
+        repoPathMap.set(projectPath, repoPath);
+      }
+    }),
+  );
+  return repoPathMap;
+}
+
 export async function loadSessions(
   runtimeActiveSessions?: ReadonlyMap<string, RuntimeSessionInfo>,
 ): Promise<Session[]> {
@@ -35,6 +49,14 @@ export async function loadSessions(
     ...info,
   }));
   const worktreeMap = await buildWorktreeMap(
+    Array.from(
+      new Set([
+        ...snapshots.map((snapshot) => snapshot.project),
+        ...runtimeSessions.map((runtime) => runtime.cwd),
+      ]),
+    ),
+  );
+  const repoPathMap = await buildRepoPathMap(
     Array.from(
       new Set([
         ...snapshots.map((snapshot) => snapshot.project),
@@ -69,7 +91,9 @@ export async function loadSessions(
       providerSessionId: snapshot.providerSessionId,
       project: snapshot.project,
       projectName: path.basename(snapshot.project),
-      repoPath: getSessionProvider(snapshot.provider).repoPathFromProject(snapshot.project),
+      repoPath:
+        repoPathMap.get(snapshot.project) ??
+        getSessionProvider(snapshot.provider).repoPathFromProject(snapshot.project),
       lastMessage: snapshot.lastMessage,
       timestamp: snapshot.timestamp,
       state,
@@ -91,13 +115,40 @@ export async function loadSessions(
       providerSessionId: info.providerSessionId,
       project: info.cwd,
       projectName: path.basename(info.cwd),
-      repoPath: getSessionProvider(info.provider).repoPathFromProject(info.cwd),
+      repoPath:
+        repoPathMap.get(info.cwd) ?? getSessionProvider(info.provider).repoPathFromProject(info.cwd),
       lastMessage: "",
       timestamp: info.startedAt,
       state: "active",
       worktree: worktreeMap.get(info.cwd),
     } satisfies Session);
   }
+
+  const worktreeQueries = new Map<string, Promise<Session["github"]>>();
+  for (const session of sessions) {
+    if (!session.worktree || session.state === "archived") {
+      continue;
+    }
+    const cacheKey = `${session.repoPath}:${session.worktree.branch}`;
+    if (!worktreeQueries.has(cacheKey)) {
+      worktreeQueries.set(
+        cacheKey,
+        getGitHubPullRequestForBranch(session.repoPath, session.worktree.branch),
+      );
+    }
+  }
+
+  await Promise.all(
+    sessions.map(async (session) => {
+      if (!session.worktree || session.state === "archived") {
+        session.github = null;
+        return;
+      }
+
+      const cacheKey = `${session.repoPath}:${session.worktree.branch}`;
+      session.github = (await worktreeQueries.get(cacheKey)) ?? null;
+    }),
+  );
 
   sessions.sort((a, b) => b.timestamp - a.timestamp);
   return sessions;

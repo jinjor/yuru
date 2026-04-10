@@ -91,6 +91,16 @@ export async function getCurrentBranch(cwd: string): Promise<string | null> {
   }
 }
 
+export async function getRepoRootForProject(cwd: string): Promise<string | null> {
+  try {
+    const commonDir = await exec("git", ["rev-parse", "--git-common-dir"], cwd);
+    const resolvedCommonDir = path.resolve(cwd, commonDir.trim());
+    return path.dirname(resolvedCommonDir);
+  } catch {
+    return null;
+  }
+}
+
 export async function getGitPathStates(cwd: string): Promise<GitPathState[]> {
   const output = await exec("git", ["status", "--porcelain", "-uall", "--ignored=matching"], cwd);
   if (!output.trim()) {

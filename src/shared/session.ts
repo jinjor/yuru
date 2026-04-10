@@ -1,5 +1,11 @@
 export type SessionProvider = "claude" | "codex";
 
+export interface GitHubPullRequest {
+  prNumber: number;
+  state: "open" | "merged" | "closed";
+  url?: string;
+}
+
 export interface Session {
   id: string;
   provider: SessionProvider;
@@ -14,6 +20,7 @@ export interface Session {
     name: string;
     branch: string;
   };
+  github?: GitHubPullRequest | null;
 }
 
 export function toSessionKey(provider: SessionProvider, providerSessionId: string): string {

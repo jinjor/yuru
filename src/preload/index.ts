@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { AgentDefinition } from "../shared/agent.js";
-import { Session, SessionProvider } from "../shared/session.js";
+import { GitHubPullRequest, Session, SessionProvider } from "../shared/session.js";
 
 contextBridge.exposeInMainWorld("electronAPI", {
   getSessions: () => ipcRenderer.invoke("sessions:list"),
@@ -13,9 +13,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   removeWorktree: (provider: SessionProvider, repoPath: string, worktreePath: string) =>
     ipcRenderer.invoke("worktree:remove", provider, repoPath, worktreePath),
   selectFolder: () => ipcRenderer.invoke("dialog:selectFolder"),
+  openExternal: (url: string) => ipcRenderer.invoke("shell:openExternal", url),
   getGitStatus: (sessionId: string) => ipcRenderer.invoke("git:status", sessionId),
-  getGitBranch: (sessionId: string) =>
-    ipcRenderer.invoke("git:branch", sessionId) as Promise<string | null>,
+  getGitBranchContext: (sessionId: string) =>
+    ipcRenderer.invoke("git:branchContext", sessionId) as Promise<{
+      branch: string | null;
+      github: GitHubPullRequest | null;
+    }>,
   getGitDiffDocument: (sessionId: string, filePath: string) =>
     ipcRenderer.invoke("git:diffDocument", sessionId, filePath),
   listFiles: (sessionId: string, relativePath?: string) =>

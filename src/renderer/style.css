@@ -115,6 +115,7 @@ body,
 }
 
 .session-card {
+  position: relative;
   padding: 11px 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   cursor: pointer;
@@ -144,7 +145,6 @@ body,
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 6px;
 }
 
 .session-heading {
@@ -158,60 +158,6 @@ body,
 .session-title-group {
   min-width: 0;
   flex: 1;
-}
-
-.session-top-row {
-  display: flex;
-  align-items: center;
-  min-height: 22px;
-}
-
-.session-title-row {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-}
-
-.session-project,
-.session-worktree {
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.session-project {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.session-worktree-indicator {
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border-radius: 6px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  font: inherit;
-  color: var(--text-subtle);
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  appearance: none;
-  -webkit-appearance: none;
-}
-
-.session-card.inactive .session-worktree-indicator {
-  color: #9eb0ca;
-  background: rgba(142, 171, 214, 0.12);
-  border-color: rgba(142, 171, 214, 0.22);
-}
-
-.session-worktree-indicator svg {
-  pointer-events: none;
 }
 
 .session-provider-dot {
@@ -258,25 +204,84 @@ body,
   filter: saturate(0.72);
 }
 
-.session-meta {
+.session-preview-row,
+.session-worktree-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
+  min-width: 0;
 }
 
-.session-time {
+.session-preview-row {
+  margin-bottom: 5px;
+}
+
+.session-card.has-worktree .session-preview-row {
+  padding-right: 28px;
+}
+
+.session-subtitle-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 8px;
+  width: 100%;
+}
+
+.session-worktree-row {
+  gap: 6px;
+  margin-top: 5px;
+  min-height: 18px;
+}
+
+.session-project,
+.session-worktree-branch {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-project {
   font-size: 11px;
+  line-height: 1.2;
   color: var(--text-subtle);
 }
 
-.session-branch {
-  display: flex;
+.session-worktree-indicator {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-subtle);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.session-card.inactive .session-worktree-indicator {
+  color: #9eb0ca;
+  background: rgba(142, 171, 214, 0.12);
+  border-color: rgba(142, 171, 214, 0.22);
+}
+
+.session-worktree-indicator svg {
+  pointer-events: none;
+}
+
+.session-time {
+  justify-self: end;
+  align-self: start;
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--text-subtle);
+  flex-shrink: 0;
+}
+
+.session-worktree-branch {
   font-size: 11px;
   color: var(--accent);
-  margin-top: 3px;
 }
 
 .session-preview {
@@ -292,11 +297,16 @@ body,
   background: rgba(255, 255, 255, 0.03);
 }
 
-.session-card.inactive .session-project {
-  color: #c7d0df;
+.session-preview.primary {
+  font-size: 12px;
+  color: var(--text);
 }
 
-.session-card.inactive .session-branch {
+.session-card.inactive .session-project {
+  color: #8090aa;
+}
+
+.session-card.inactive .session-worktree-branch {
   color: #84bfff;
 }
 
@@ -309,6 +319,9 @@ body,
 }
 
 .session-action-btn {
+  position: absolute;
+  top: 11px;
+  right: 16px;
   width: 22px;
   height: 22px;
   border-radius: 7px;
@@ -345,6 +358,60 @@ body,
   cursor: default;
 }
 
+.github-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+button.github-badge {
+  font-family: inherit;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.github-badge.interactive {
+  cursor: pointer;
+  transition:
+    filter 120ms ease,
+    transform 120ms ease,
+    border-color 120ms ease;
+}
+
+.github-badge.interactive:hover {
+  filter: brightness(1.08);
+}
+
+.github-badge.interactive:focus-visible {
+  outline: 1px solid rgba(255, 255, 255, 0.28);
+  outline-offset: 1px;
+}
+
+.github-badge.open {
+  color: #aee9c2;
+  background: rgba(59, 122, 81, 0.22);
+  border-color: rgba(122, 215, 161, 0.28);
+}
+
+.github-badge.merged {
+  color: #bfc5ff;
+  background: rgba(70, 78, 150, 0.22);
+  border-color: rgba(144, 155, 255, 0.24);
+}
+
+.github-badge.closed {
+  color: #f1b3aa;
+  background: rgba(128, 58, 49, 0.22);
+  border-color: rgba(240, 143, 134, 0.22);
+}
+
 .archived-toggle {
   padding: 8px 16px;
   font-size: 11px;
@@ -368,6 +435,13 @@ body,
 
 .terminal-bar {
   flex-shrink: 0;
+}
+
+.terminal-bar-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .terminal-bar-branch {

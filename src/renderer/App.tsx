@@ -1,11 +1,11 @@
-import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type MouseEvent, Suspense, lazy, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Terminal, type ILinkProvider, type ILink, type IBufferRange } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { Tree, NodeRendererProps } from "react-arborist";
-import { ChevronDown, ChevronRight, FolderTree, GitBranch, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, FolderTree, GitBranch, GitPullRequest, Trash2 } from "lucide-react";
 import "@xterm/xterm/css/xterm.css";
 import { AgentDefinition } from "../shared/agent";
-import { Session, SessionProvider } from "../shared/session";
+import { GitHubPullRequest, Session, SessionProvider } from "../shared/session";
 
 const CodeViewer = lazy(async () =>
   import("./CodeViewer").then((module) => ({ default: module.CodeViewer })),
@@ -50,6 +50,11 @@ interface PreviewSelection {
   line?: number;
 }
 
+interface BranchContext {
+  branch: string | null;
+  github: GitHubPullRequest | null;
+}
+
 declare global {
   interface Window {
     electronAPI: {
@@ -68,8 +73,9 @@ declare global {
         worktreePath: string,
       ) => Promise<void>;
       selectFolder: () => Promise<string | null>;
+      openExternal: (url: string) => Promise<void>;
       getGitStatus: (sessionId: string) => Promise<GitFileStatus[]>;
-      getGitBranch: (sessionId: string) => Promise<string | null>;
+      getGitBranchContext: (sessionId: string) => Promise<BranchContext>;
       getGitDiffDocument: (sessionId: string, filePath: string) => Promise<DiffDocument | null>;
       listFiles: (sessionId: string, relativePath?: string) => Promise<FileTreeNode[]>;
       readFile: (sessionId: string, filePath: string) => Promise<FileContent | null>;
@@ -185,6 +191,50 @@ function repoNameForSession(session: Session): string {
   return session.repoPath.split("/").pop() || session.projectName;
 }
 
+function gitHubBadgeLabel(github: GitHubPullRequest): string {
+  switch (github.state) {
+    case "open":
+      return `PR #${github.prNumber}`;
+    case "merged":
+      return `Merged #${github.prNumber}`;
+    case "closed":
+      return `Closed #${github.prNumber}`;
+  }
+}
+
+function gitHubBadgeClass(github: GitHubPullRequest): string {
+  return `github-badge ${github.state}`;
+}
+
+function GitHubBadge({
+  github,
+  onClick,
+}: {
+  github: GitHubPullRequest;
+  onClick?: (event: MouseEvent<HTMLButtonElement>) => void;
+}): JSX.Element {
+  if (github.url) {
+    return (
+      <button
+        type="button"
+        className={`${gitHubBadgeClass(github)} interactive`}
+        onClick={onClick}
+        title={github.url}
+      >
+        <GitPullRequest size={11} strokeWidth={2} />
+        {gitHubBadgeLabel(github)}
+      </button>
+    );
+  }
+
+  return (
+    <span className={gitHubBadgeClass(github)} title={github.url}>
+      <GitPullRequest size={11} strokeWidth={2} />
+      {gitHubBadgeLabel(github)}
+    </span>
+  );
+}
+
 function SessionList({
   sessions,
   selectedId,
@@ -207,7 +257,7 @@ function SessionList({
       {activeSessions.map((session) => (
         <div
           key={session.id}
-          className={`session-card ${session.state} ${selectedId === session.id ? "selected" : ""}`}
+          className={`session-card ${session.state} ${session.worktree ? "has-worktree" : ""} ${selectedId === session.id ? "selected" : ""}`}
           onClick={() => onSelect(session)}
         >
           <div className="session-header">
@@ -217,54 +267,59 @@ function SessionList({
                 title={`${providerLabel(session.provider)} · ${session.state}`}
               />
               <div className="session-title-group">
-                <div className="session-top-row">
-                  <div className="session-title-row">
-                    <span className="session-project" title={repoNameForSession(session)}>
-                      {repoNameForSession(session)}
-                    </span>
-                    {session.worktree && (
-                      <button
-                        type="button"
-                        className="session-worktree-indicator"
-                        title={`Worktree: ${session.worktree.name}`}
-                        aria-label={`Worktree ${session.worktree.name}`}
-                        tabIndex={-1}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                        }}
-                      >
-                        <FolderTree size={11} strokeWidth={2} />
-                      </button>
-                    )}
+                <div className="session-preview-row">
+                  <div className="session-preview primary" title={session.lastMessage || "(no messages)"}>
+                    {session.lastMessage || "(no messages)"}
                   </div>
                 </div>
+                <div className="session-subtitle-row">
+                  <span className="session-project" title={repoNameForSession(session)}>
+                    {repoNameForSession(session)}
+                  </span>
+                  <span className="session-time">{formatTime(session.timestamp)}</span>
+                </div>
                 {session.worktree && (
-                  <div className="session-branch">
-                    <GitBranch size={11} strokeWidth={2} />
-                    <span>{session.worktree.branch}</span>
+                  <div className="session-worktree-row">
+                    <span
+                      className="session-worktree-indicator"
+                      title={`Worktree: ${session.worktree.name}`}
+                      aria-label={`Worktree ${session.worktree.name}`}
+                    >
+                      <FolderTree size={11} strokeWidth={2} />
+                    </span>
+                    <span className="session-worktree-branch" title={session.worktree.branch}>
+                      {session.worktree.branch}
+                    </span>
+                    {session.github && (
+                      <GitHubBadge
+                        github={session.github}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (session.github?.url) {
+                            void window.electronAPI.openExternal(session.github.url);
+                          }
+                        }}
+                      />
+                    )}
                   </div>
                 )}
               </div>
             </div>
-            <div className="session-meta">
-              {session.worktree && (
-                <button
-                  className="session-action-btn"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onDeleteWorktree(session);
-                  }}
-                  disabled={deletingSessionId === session.id}
-                  title="Remove worktree"
-                  aria-label="Remove worktree"
-                >
-                  <Trash2 size={13} strokeWidth={2} />
-                </button>
-              )}
-              <span className="session-time">{formatTime(session.timestamp)}</span>
-            </div>
+            {session.worktree && (
+              <button
+                className="session-action-btn"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onDeleteWorktree(session);
+                }}
+                disabled={deletingSessionId === session.id}
+                title="Remove worktree"
+                aria-label="Remove worktree"
+              >
+                <Trash2 size={13} strokeWidth={2} />
+              </button>
+            )}
           </div>
-          <div className="session-preview">{session.lastMessage || "(no messages)"}</div>
         </div>
       ))}
       {archivedSessions.length > 0 && (
@@ -282,14 +337,18 @@ function SessionList({
                       title={`${providerLabel(session.provider)} · archived`}
                     />
                     <div className="session-title-group">
-                      <div className="session-title-row">
-                        <span className="session-project">{session.projectName}</span>
+                      <div className="session-preview-row">
+                        <div className="session-preview primary" title={session.lastMessage || "(no messages)"}>
+                          {session.lastMessage || "(no messages)"}
+                        </div>
+                      </div>
+                      <div className="session-subtitle-row">
+                        <span className="session-project">{repoNameForSession(session)}</span>
+                        <span className="session-time">{formatTime(session.timestamp)}</span>
                       </div>
                     </div>
                   </div>
-                  <span className="session-time">{formatTime(session.timestamp)}</span>
                 </div>
-                <div className="session-preview">{session.lastMessage || "(no messages)"}</div>
               </div>
             ))}
         </>
@@ -629,6 +688,7 @@ export function App(): JSX.Element {
   const [isLoadingFile, setIsLoadingFile] = useState(false);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
+  const [currentGitHub, setCurrentGitHub] = useState<GitHubPullRequest | null>(null);
   const loadedDirectoriesRef = useRef<Set<string>>(new Set());
   const loadingDirectoriesRef = useRef<Set<string>>(new Set());
 
@@ -682,7 +742,7 @@ export function App(): JSX.Element {
     }
     term.open(container);
 
-    const filePathPattern = /[\w./\-][\w./\-]*\.\w+(?::(\d+)(?::(\d+))?)?/g;
+    const filePathPattern = /[\w./-][\w./-]*\.\w+(?::(\d+)(?::(\d+))?)?/g;
 
     function stringIndexToCellIndex(line: ReturnType<typeof term.buffer.active.getLine>, strIndex: number): number {
       let cellIndex = 0;
@@ -880,6 +940,7 @@ export function App(): JSX.Element {
       setDiffDocument(null);
       setIsLoadingDiff(false);
       setCurrentBranch(null);
+      setCurrentGitHub(null);
       resetFileExplorerState();
       return;
     }
@@ -887,16 +948,18 @@ export function App(): JSX.Element {
     let cancelled = false;
     const sessionId = selectedId;
     setCurrentBranch(null);
+    setCurrentGitHub(null);
 
     const fetchStatus = async (): Promise<void> => {
-      const [files, branch] = await Promise.all([
+      const [files, branchContext] = await Promise.all([
         window.electronAPI.getGitStatus(sessionId),
-        window.electronAPI.getGitBranch(sessionId),
+        window.electronAPI.getGitBranchContext(sessionId),
       ]);
       if (cancelled) {
         return;
       }
-      setCurrentBranch(branch);
+      setCurrentBranch(branchContext.branch);
+      setCurrentGitHub(branchContext.github);
       setChangedFiles((prev) => {
         if (JSON.stringify(prev) === JSON.stringify(files)) {
           return prev;
@@ -910,6 +973,7 @@ export function App(): JSX.Element {
         }
         return prev;
       });
+      refreshSessions();
     };
 
     fetchStatus();
@@ -918,7 +982,7 @@ export function App(): JSX.Element {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [resetFileExplorerState, selectedId]);
+  }, [refreshSessions, resetFileExplorerState, selectedId]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -1127,12 +1191,24 @@ export function App(): JSX.Element {
         {selectedId && (
           <div className="panel-header terminal-bar">
             <h2>Terminal</h2>
-            {currentBranch && (
-              <span className="terminal-bar-branch">
-                <GitBranch size={11} strokeWidth={2} />
-                {currentBranch}
-              </span>
-            )}
+            <div className="terminal-bar-meta">
+              {currentBranch && (
+                <span className="terminal-bar-branch">
+                  <GitBranch size={11} strokeWidth={2} />
+                  {currentBranch}
+                </span>
+              )}
+              {currentGitHub && (
+                <GitHubBadge
+                  github={currentGitHub}
+                  onClick={() => {
+                    if (currentGitHub.url) {
+                      void window.electronAPI.openExternal(currentGitHub.url);
+                    }
+                  }}
+                />
+              )}
+            </div>
           </div>
         )}
         <div ref={containerRef} className="terminal-host" />

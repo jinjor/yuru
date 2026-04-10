@@ -1,8 +1,16 @@
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import path from "path";
 import * as pty from "node-pty";
 import { loadSessions } from "./sessions.js";
-import { getGitStatus, getGitDiffDocument, getCurrentBranch, removeWorktree, branchExists } from "./git.js";
+import {
+  getGitStatus,
+  getGitDiffDocument,
+  getCurrentBranch,
+  getRepoRootForProject,
+  removeWorktree,
+  branchExists,
+} from "./git.js";
+import { getGitHubPullRequestForBranch } from "./github.js";
 import { listFiles, readFileContent, fileExists } from "./files.js";
 import {
   getSessionProvider,
@@ -372,6 +380,10 @@ app.whenReady().then(() => {
     return result.filePaths[0];
   });
 
+  ipcMain.handle("shell:openExternal", async (_event, url: string) => {
+    await shell.openExternal(url);
+  });
+
   ipcMain.handle("git:status", async (_event, sessionId: string) => {
     const runtime = sessionRuntimeMap.get(sessionId);
     if (!runtime) {
@@ -384,12 +396,22 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle("git:branch", async (_event, sessionId: string) => {
+  ipcMain.handle("git:branchContext", async (_event, sessionId: string) => {
     const runtime = sessionRuntimeMap.get(sessionId);
     if (!runtime) {
-      return null;
+      return { branch: null, github: null };
     }
-    return getCurrentBranch(runtime.cwd);
+
+    const branch = await getCurrentBranch(runtime.cwd);
+    if (!branch) {
+      return { branch: null, github: null };
+    }
+
+    const repoPath =
+      (await getRepoRootForProject(runtime.cwd)) ??
+      getSessionProvider(runtime.provider).repoPathFromProject(runtime.cwd);
+    const github = await getGitHubPullRequestForBranch(repoPath, branch);
+    return { branch, github };
   });
 
   ipcMain.handle("git:diffDocument", async (_event, sessionId: string, filePath: string) => {
