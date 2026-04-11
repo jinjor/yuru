@@ -1,8 +1,8 @@
-import { type MouseEvent, Suspense, lazy, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type CSSProperties, type MouseEvent as ReactMouseEvent, Suspense, lazy, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Terminal, type ILinkProvider, type ILink, type IBufferRange } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { Tree, NodeRendererProps } from "react-arborist";
-import { ChevronDown, ChevronRight, FolderTree, GitBranch, GitPullRequest, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, FolderTree, GitBranch, GitPullRequest, Trash2, X } from "lucide-react";
 import "@xterm/xterm/css/xterm.css";
 import { AgentDefinition } from "../shared/agent";
 import {
@@ -63,6 +63,10 @@ function useElementSize<T extends HTMLElement>(): [React.RefObject<T | null>, { 
   }, []);
 
   return [ref, size];
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
 }
 
 function formatTime(timestamp: number): string {
@@ -152,7 +156,7 @@ function GitHubBadge({
   onClick,
 }: {
   github: GitHubPullRequest;
-  onClick?: (event: MouseEvent<HTMLButtonElement>) => void;
+  onClick?: (event: ReactMouseEvent<HTMLButtonElement>) => void;
 }): JSX.Element {
   if (github.url) {
     return (
@@ -367,6 +371,7 @@ function ExplorerPanel({
   onSelectTreeFile,
   onToggleDirectory,
   treeLoading,
+  width,
 }: {
   activeTab: "changes" | "files";
   onChangeTab: (tab: "changes" | "files") => void;
@@ -378,13 +383,18 @@ function ExplorerPanel({
   onSelectTreeFile: (filePath: string) => void;
   onToggleDirectory: (path: string) => void;
   treeLoading: boolean;
+  width: number;
 }): JSX.Element {
   const [panelRef, panelSize] = useElementSize<HTMLDivElement>();
   const [headerRef, headerSize] = useElementSize<HTMLDivElement>();
   const treeHeight = Math.max(panelSize.height - headerSize.height, 0);
 
   return (
-    <aside ref={panelRef} className="changes-panel">
+    <aside
+      ref={panelRef}
+      className="changes-panel"
+      style={{ width, minWidth: width }}
+    >
       <div ref={headerRef} className="panel-header">
         <div className="panel-tabs">
           <button
@@ -608,6 +618,8 @@ function RepoPicker({
 }
 
 export function App(): JSX.Element {
+  const appRef = useRef<HTMLDivElement>(null);
+  const workspaceColumnRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalsRef = useRef<Map<string, TerminalInstance>>(new Map());
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -633,6 +645,9 @@ export function App(): JSX.Element {
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
   const [currentGitHub, setCurrentGitHub] = useState<GitHubPullRequest | null>(null);
+  const [sidebarWidth, setSidebarWidth] = useState(260);
+  const [changesPanelWidth, setChangesPanelWidth] = useState(250);
+  const [previewRatio, setPreviewRatio] = useState(0.6);
   const loadedDirectoriesRef = useRef<Set<string>>(new Set());
   const loadingDirectoriesRef = useRef<Set<string>>(new Set());
 
@@ -650,6 +665,30 @@ export function App(): JSX.Element {
       instance.container.style.display = "none";
     }
   }, []);
+
+  const runPointerDrag = useCallback(
+    (cursor: string, onMove: (event: globalThis.MouseEvent) => void): void => {
+      const previousCursor = document.body.style.cursor;
+      const previousUserSelect = document.body.style.userSelect;
+      document.body.style.cursor = cursor;
+      document.body.style.userSelect = "none";
+
+      const handleMouseMove = (event: globalThis.MouseEvent): void => {
+        onMove(event);
+      };
+
+      const stopDragging = (): void => {
+        document.body.style.cursor = previousCursor;
+        document.body.style.userSelect = previousUserSelect;
+        window.removeEventListener("mousemove", handleMouseMove);
+        window.removeEventListener("mouseup", stopDragging);
+      };
+
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", stopDragging);
+    },
+    [],
+  );
 
   const resetTerminal = useCallback((sessionId: string): void => {
     const instance = terminalsRef.current.get(sessionId);
@@ -882,6 +921,22 @@ export function App(): JSX.Element {
     }
   }, [hideAllTerminals, selectedId]);
 
+  useEffect(() => {
+    if (!selectedId) {
+      return;
+    }
+
+    const instance = terminalsRef.current.get(selectedId);
+    if (!instance) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      instance.fitAddon.fit();
+      window.electronAPI.ptyResize(selectedId, instance.term.cols, instance.term.rows);
+    });
+  }, [changesPanelWidth, previewRatio, previewSelection, selectedId, sidebarWidth]);
+
   // Polling: git status every 3 seconds for selected session
   useEffect(() => {
     if (!selectedId) {
@@ -1112,9 +1167,59 @@ export function App(): JSX.Element {
     setPreviewSelection({ kind: "file", path: filePath });
   };
 
+  const handleSidebarResizeStart = (event: ReactMouseEvent<HTMLDivElement>): void => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = sidebarWidth;
+    const appWidth = appRef.current?.clientWidth ?? 0;
+    if (appWidth === 0) {
+      return;
+    }
+
+    runPointerDrag("col-resize", (moveEvent) => {
+      const reservedWorkspaceWidth = selectedId ? 520 : 640;
+      const maxWidth = Math.max(220, appWidth - (selectedId ? changesPanelWidth : 0) - reservedWorkspaceWidth);
+      setSidebarWidth(clamp(startWidth + moveEvent.clientX - startX, 220, maxWidth));
+    });
+  };
+
+  const handleChangesResizeStart = (event: ReactMouseEvent<HTMLDivElement>): void => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = changesPanelWidth;
+    const appWidth = appRef.current?.clientWidth ?? 0;
+    if (appWidth === 0) {
+      return;
+    }
+
+    runPointerDrag("col-resize", (moveEvent) => {
+      const reservedWorkspaceWidth = 520;
+      const maxWidth = Math.max(220, appWidth - sidebarWidth - reservedWorkspaceWidth);
+      setChangesPanelWidth(clamp(startWidth - (moveEvent.clientX - startX), 220, maxWidth));
+    });
+  };
+
+  const handlePreviewResizeStart = (event: ReactMouseEvent<HTMLDivElement>): void => {
+    event.preventDefault();
+    const workspaceHeight = workspaceColumnRef.current?.clientHeight ?? 0;
+    if (workspaceHeight === 0) {
+      return;
+    }
+
+    const startY = event.clientY;
+    const startPreviewHeight = workspaceHeight * previewRatio;
+
+    runPointerDrag("row-resize", (moveEvent) => {
+      const minPreviewRatio = Math.min(0.75, 180 / workspaceHeight);
+      const maxPreviewRatio = Math.max(minPreviewRatio, 1 - 140 / workspaceHeight);
+      const nextRatio = (startPreviewHeight + moveEvent.clientY - startY) / workspaceHeight;
+      setPreviewRatio(clamp(nextRatio, minPreviewRatio, maxPreviewRatio));
+    });
+  };
+
   return (
-    <div className="app">
-      <aside className="sidebar">
+    <div className="app" ref={appRef}>
+      <aside className="sidebar" style={{ width: sidebarWidth, minWidth: sidebarWidth }}>
         <div className="sidebar-header">
           <h2>Sessions</h2>
           <button className="new-session-btn" onClick={() => setShowRepoPicker(true)}>
@@ -1129,65 +1234,39 @@ export function App(): JSX.Element {
           onDeleteWorktree={handleDeleteWorktree}
         />
       </aside>
-      <main className="terminal-container">
-        {selectedId && (
-          <div className="panel-header terminal-bar">
-            <h2>Terminal</h2>
-            <div className="terminal-bar-meta">
-              {currentBranch && (
-                <span className="terminal-bar-branch">
-                  <GitBranch size={11} strokeWidth={2} />
-                  {currentBranch}
-                </span>
-              )}
-              {currentGitHub && (
-                <GitHubBadge
-                  github={currentGitHub}
-                  onClick={() => {
-                    if (currentGitHub.url) {
-                      void window.electronAPI.openExternal(currentGitHub.url);
-                    }
-                  }}
-                />
-              )}
-            </div>
-          </div>
-        )}
-        <div ref={containerRef} className="terminal-host" />
-        {isCreatingSession && !selectedId && (
-          <div className="empty-state terminal-empty-state">
-            <p>Starting session...</p>
-          </div>
-        )}
-        {!isCreatingSession && !selectedId && (
-          <div className="empty-state terminal-empty-state">
-            <p>Select a session to resume</p>
-          </div>
-        )}
-      </main>
-      {selectedId && (
-        <>
-          <ExplorerPanel
-            activeTab={activeExplorerTab}
-            onChangeTab={setActiveExplorerTab}
-            files={changedFiles}
-            selectedDiffFile={previewSelection?.kind === "diff" ? previewSelection.path : null}
-            onSelectDiffFile={handleSelectDiffFile}
-            treeData={treeData}
-            selectedTreeFile={previewSelection?.kind === "file" ? previewSelection.path : null}
-            onSelectTreeFile={handleSelectTreeFile}
-            onToggleDirectory={(path) => {
-              void loadDirectory(path);
-            }}
-            treeLoading={loadingDirectories.has("")}
-          />
+      <div
+        className="pane-resize-handle vertical"
+        onMouseDown={handleSidebarResizeStart}
+        aria-hidden="true"
+      />
+      <div
+        ref={workspaceColumnRef}
+        className={`workspace-column ${previewSelection ? "has-preview" : ""}`}
+        style={
+          previewSelection
+            ? ({ "--preview-size": `${previewRatio * 100}%` } as CSSProperties)
+            : undefined
+        }
+      >
+        {previewSelection && (
           <div className="preview-panel">
             <div className="panel-header preview-header">
-              <h2>{previewSelection?.kind === "file" ? "Code" : "Diff"}</h2>
-              {previewSelection && <span className="preview-path">{previewSelection.path}</span>}
+              <h2>{previewSelection.kind === "file" ? "Code" : "Diff"}</h2>
+              <div className="preview-header-meta">
+                <span className="preview-path">{previewSelection.path}</span>
+                <button
+                  type="button"
+                  className="preview-close-btn"
+                  onClick={() => setPreviewSelection(null)}
+                  aria-label="Close code panel"
+                  title="Close code panel"
+                >
+                  <X size={14} strokeWidth={2} />
+                </button>
+              </div>
             </div>
             <div className="preview-body">
-              {previewSelection?.kind === "file" ? (
+              {previewSelection.kind === "file" ? (
                 <Suspense
                   fallback={
                     <div className="code-panel-empty">
@@ -1215,7 +1294,7 @@ export function App(): JSX.Element {
                   <DiffViewer
                     originalContent={diffDocument?.originalContent ?? null}
                     currentContent={diffDocument?.currentContent ?? null}
-                    filePath={previewSelection?.path ?? null}
+                    filePath={previewSelection.path}
                     fileSize={diffDocument?.size ?? null}
                     isBinary={diffDocument?.isBinary ?? false}
                     isLoading={isLoadingDiff}
@@ -1224,6 +1303,73 @@ export function App(): JSX.Element {
               )}
             </div>
           </div>
+        )}
+        {previewSelection && (
+          <div
+            className="pane-resize-handle horizontal workspace-split-handle"
+            onMouseDown={handlePreviewResizeStart}
+            aria-hidden="true"
+          />
+        )}
+        <main className="terminal-container">
+          {selectedId && (
+            <div className="panel-header terminal-bar">
+              <h2>Terminal</h2>
+              <div className="terminal-bar-meta">
+                {currentBranch && (
+                  <span className="terminal-bar-branch">
+                    <GitBranch size={11} strokeWidth={2} />
+                    {currentBranch}
+                  </span>
+                )}
+                {currentGitHub && (
+                  <GitHubBadge
+                    github={currentGitHub}
+                    onClick={() => {
+                      if (currentGitHub.url) {
+                        void window.electronAPI.openExternal(currentGitHub.url);
+                      }
+                    }}
+                  />
+                )}
+              </div>
+            </div>
+          )}
+          <div ref={containerRef} className="terminal-host" />
+          {isCreatingSession && !selectedId && (
+            <div className="empty-state terminal-empty-state">
+              <p>Starting session...</p>
+            </div>
+          )}
+          {!isCreatingSession && !selectedId && (
+            <div className="empty-state terminal-empty-state">
+              <p>Select a session to resume</p>
+            </div>
+          )}
+        </main>
+      </div>
+      {selectedId && (
+        <>
+          <div
+            className="pane-resize-handle vertical"
+            onMouseDown={handleChangesResizeStart}
+            aria-hidden="true"
+          />
+          <ExplorerPanel
+            activeTab={activeExplorerTab}
+            onChangeTab={setActiveExplorerTab}
+            files={changedFiles}
+            selectedDiffFile={previewSelection?.kind === "diff" ? previewSelection.path : null}
+            onSelectDiffFile={handleSelectDiffFile}
+            treeData={treeData}
+            selectedTreeFile={previewSelection?.kind === "file" ? previewSelection.path : null}
+            onSelectTreeFile={handleSelectTreeFile}
+            onToggleDirectory={(path) => {
+              void loadDirectory(path);
+            }}
+            treeLoading={loadingDirectories.has("")}
+            width={changesPanelWidth}
+          />
         </>
       )}
       {showRepoPicker && (

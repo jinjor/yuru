@@ -63,12 +63,78 @@ body,
   height: 100%;
 }
 
+.workspace-column {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.workspace-column.has-preview .preview-panel {
+  flex: 0 0 var(--preview-size, 60%);
+  min-height: 0;
+}
+
+.workspace-column.has-preview .terminal-container {
+  flex: 1 1 auto;
+  min-height: 180px;
+}
+
+.pane-resize-handle {
+  position: relative;
+  flex-shrink: 0;
+  background: transparent;
+  z-index: 1;
+}
+
+.pane-resize-handle::before {
+  content: "";
+  position: absolute;
+  background: var(--border);
+}
+
+.pane-resize-handle.vertical {
+  width: 5px;
+  margin-left: -2px;
+  margin-right: -2px;
+  cursor: col-resize;
+}
+
+.pane-resize-handle.vertical::before {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+}
+
+.pane-resize-handle.horizontal {
+  height: 5px;
+  margin-top: -2px;
+  margin-bottom: -2px;
+  cursor: row-resize;
+}
+
+.pane-resize-handle.horizontal::before {
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  transform: translateY(-50%);
+}
+
+.workspace-split-handle {
+  z-index: 2;
+}
+
+.workspace-split-handle::before {
+  background: rgba(255, 255, 255, 0.16);
+}
+
 /* Sidebar */
 .sidebar {
-  width: 260px;
-  min-width: 260px;
   background: var(--bg-panel);
-  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -77,11 +143,18 @@ body,
 .sidebar-header,
 .panel-header {
   padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.sidebar-header {
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .sidebar-header h2,
@@ -435,6 +508,7 @@ button.github-badge {
   position: relative;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .terminal-bar {
@@ -490,10 +564,7 @@ button.github-badge {
 
 /* Changes Panel */
 .changes-panel {
-  width: 250px;
-  min-width: 250px;
   background: var(--bg-panel);
-  border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -671,25 +742,56 @@ button.github-badge {
 
 /* Preview panel */
 .preview-panel {
-  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  border-left: 1px solid var(--border);
   background: var(--bg-app);
+  min-height: 0;
 }
 
 .preview-header {
   gap: 12px;
 }
 
+.preview-header-meta {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .preview-path {
   min-width: 0;
+  flex: 1;
   font-size: 11px;
   color: var(--text-subtle);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.preview-close-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-subtle);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.preview-close-btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .preview-body {
