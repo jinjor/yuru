@@ -1,4 +1,5 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, Menu, dialog, ipcMain, shell } from "electron";
+import type { MenuItemConstructorOptions } from "electron";
 import path from "path";
 import * as pty from "node-pty";
 import { loadSessions } from "./sessions.js";
@@ -39,10 +40,44 @@ const ptyProcesses = new Map<string, pty.IPty>();
 const pendingProcesses = new Set<pty.IPty>();
 const sessionRuntimeMap = new Map<string, RuntimeSessionInfo>();
 let worktreeWatcher: WorktreeWatcher | null = null;
+const APP_NAME = "Yuru";
+
+app.setName(APP_NAME);
 
 interface StartedSession {
   sessionId: string;
   providerSessionId: string | null;
+}
+
+function installApplicationMenu(): void {
+  const isMac = process.platform === "darwin";
+  const isDev = !app.isPackaged;
+  const macAppExtras: MenuItemConstructorOptions[] = isMac
+    ? [{ role: "hide" }, { role: "hideOthers" }, { role: "unhide" }, { type: "separator" }]
+    : [];
+  const template: MenuItemConstructorOptions[] = [
+    {
+      label: APP_NAME,
+      submenu: [
+        { role: "about", label: `About ${APP_NAME}` },
+        { type: "separator" },
+        { label: "Settings...", enabled: false },
+        { type: "separator" },
+        ...macAppExtras,
+        { role: "quit" },
+      ],
+    },
+    ...(isDev
+      ? [
+          {
+            label: "View",
+            submenu: [{ role: "toggleDevTools" }],
+          } satisfies MenuItemConstructorOptions,
+        ]
+      : []),
+  ];
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
 function createWindow(): void {
@@ -236,6 +271,11 @@ async function refreshWorktreeWatcher(): Promise<void> {
 }
 
 app.whenReady().then(() => {
+  app.setAboutPanelOptions({
+    applicationName: APP_NAME,
+    applicationVersion: app.getVersion(),
+  });
+  installApplicationMenu();
   createWindow();
 
   worktreeWatcher = new WorktreeWatcher();
