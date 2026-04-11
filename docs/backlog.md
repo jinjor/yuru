@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-04-09
+Last updated: 2026-04-11
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -13,6 +13,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 - `Now`: 今のテンションや作業効率に直結するもの
 - `Next`: その次に効きそうなもの
 - `Later`: 欲しいが、今すぐでなくてよいもの
+- 詳細メモが必要な item は `docs/backlog-details/<ID>-*.md` に置く
 
 ## Priority lens
 
@@ -53,6 +54,9 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F7 | feature | Terminal | ファイル名が改行を跨いでもリンクできるようにする | linkifier 改善 |
 | F8 | feature | Terminal | ファイルクリック時にツリー側も開く | navigation の連動 |
 | F9 | feature | Terminal | ウィンドウを広げた時に 1 行の文字数を増やす | xterm fit を調整 |
+| I3 | feature | App Runtime | 起動元ごとに `start/stop/restart` できるようにする | 複数起動時に別の Yuru を巻き込まないようにしたい |
+| I4 | feature | Persistence | Yuru の状態を永続化できるようにする | 何をどこに持つかを実装可能な形にしたい |
+| I5 | feature | Persistence | dev / prd で保存先を分ける | 開発版の状態が本番に影響しないようにしたい |
 
 ## Later
 
