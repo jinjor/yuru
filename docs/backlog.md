@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-04-11
+Last updated: 2026-04-12
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -28,7 +28,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 |---|---|---|---|---|
 | F21 | feature | App | メニュー整理。タイトルが `Electron` になっている問題を直す | アプリ全体の完成度に直結する |
 | F20 | feature | App | アプリのアイコンを付ける | テンションとプロダクト感を上げたい |
-| F2 | feature | Changes | 変更ファイル数を出す | 仕事で頻繁に見る情報で、判断が早くなる |
 | F22 | feature | CLI | `yuru` コマンドで起動できるようにする | 使い始めるまでの摩擦を下げたい |
 | I1 | investigate | Sessions | `Remove worktree` 失敗時に未コミット・未追跡ファイルをどう扱うか決める | 削除 UX の設計に必要 |
 | B1 | bug | Archived | Archived セクションの表示崩れを直す | 明確な UI バグ |
@@ -70,6 +69,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F15 | feature | Search | ファイル横断検索 | 別機能として扱いたい |
 | F18 | feature | GitHub | PR マージ時に worktree を自動整理する | 自動 archived までつなげたい |
 | F24 | feature | Empty state | 空画面から新規セッションを始められるようにする | あると親切だが、今すぐではない |
+| I6 | investigate | Codex / Sessions | Codex self-update 後のセッション終了 UX を見直す | 日常的ではないが、消えたように見えると驚きやすい |
 
 ## Open decisions
 
