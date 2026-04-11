@@ -48,22 +48,14 @@ export async function loadSessions(
     id,
     ...info,
   }));
-  const worktreeMap = await buildWorktreeMap(
-    Array.from(
-      new Set([
-        ...snapshots.map((snapshot) => snapshot.project),
-        ...runtimeSessions.map((runtime) => runtime.cwd),
-      ]),
-    ),
+  const projectPaths = Array.from(
+    new Set([
+      ...snapshots.map((snapshot) => snapshot.project),
+      ...runtimeSessions.map((runtime) => runtime.cwd),
+    ]),
   );
-  const repoPathMap = await buildRepoPathMap(
-    Array.from(
-      new Set([
-        ...snapshots.map((snapshot) => snapshot.project),
-        ...runtimeSessions.map((runtime) => runtime.cwd),
-      ]),
-    ),
-  );
+  const worktreeMap = await buildWorktreeMap(projectPaths);
+  const repoPathMap = await buildRepoPathMap(projectPaths);
   const runtimeByProviderSessionKey = new Map<string, { id: string; info: RuntimeSessionInfo }>();
   for (const [id, info] of activeSessions) {
     if (!info.providerSessionId) {

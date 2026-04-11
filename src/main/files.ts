@@ -1,23 +1,7 @@
 import fs from "fs";
 import path from "path";
+import { FileContent, FileTreeNode } from "../shared/ipc.js";
 import { getGitPathStates } from "./git.js";
-
-export interface FileTreeNode {
-  id: string;
-  path: string;
-  name: string;
-  kind: "file" | "directory";
-  children: FileTreeNode[] | null;
-  gitStatus?: string;
-  isIgnored: boolean;
-}
-
-export interface FileContent {
-  path: string;
-  content: string;
-  isBinary: boolean;
-  size: number;
-}
 
 function normalizeRelativePath(relativePath: string): string {
   return relativePath.split(path.sep).join("/");
@@ -99,6 +83,7 @@ export async function listFiles(cwd: string, relativePath = ""): Promise<FileTre
       }
     }
   }
+  const ignoredPathList = Array.from(ignoredPaths);
 
   const nodes = await Promise.all(
     entries
@@ -107,7 +92,7 @@ export async function listFiles(cwd: string, relativePath = ""): Promise<FileTre
         const entryPath = path.join(targetPath, entry.name);
         const entryRelativePath = normalizeRelativePath(path.relative(cwd, entryPath));
         const isDirectory = await detectDirectory(entryPath, entry);
-        const isIgnored = Array.from(ignoredPaths).some(
+        const isIgnored = ignoredPathList.some(
           (ignoredPath) =>
             entryRelativePath === ignoredPath || entryRelativePath.startsWith(`${ignoredPath}/`),
         );

@@ -1,5 +1,5 @@
-import { execFile } from "child_process";
 import { GitHubPullRequest } from "../shared/session.js";
+import { exec } from "./exec.js";
 
 interface TimedValue<T> {
   expiresAt: number;
@@ -13,18 +13,6 @@ let ghAvailableCache: TimedValue<boolean> | null = null;
 let ghAuthenticatedCache: TimedValue<boolean> | null = null;
 const repoSlugCache = new Map<string, string | null>();
 const pullRequestCache = new Map<string, TimedValue<GitHubPullRequest | null>>();
-
-function exec(cmd: string, args: string[], cwd: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    execFile(cmd, args, { cwd, maxBuffer: 10 * 1024 * 1024 }, (error, stdout) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve(stdout);
-    });
-  });
-}
 
 function getCachedValue<T>(entry: TimedValue<T> | null): T | null {
   if (!entry || entry.expiresAt <= Date.now()) {

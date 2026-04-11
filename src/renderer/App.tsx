@@ -5,6 +5,13 @@ import { Tree, NodeRendererProps } from "react-arborist";
 import { ChevronDown, ChevronRight, FolderTree, GitBranch, GitPullRequest, Trash2 } from "lucide-react";
 import "@xterm/xterm/css/xterm.css";
 import { AgentDefinition } from "../shared/agent";
+import {
+  ElectronAPI,
+  FileContent,
+  FileTreeNode,
+  GitDiffDocument,
+  GitFileStatus,
+} from "../shared/ipc";
 import { GitHubPullRequest, Session, SessionProvider } from "../shared/session";
 
 const CodeViewer = lazy(async () =>
@@ -14,79 +21,15 @@ const DiffViewer = lazy(async () =>
   import("./DiffViewer").then((module) => ({ default: module.DiffViewer })),
 );
 
-interface GitFileStatus {
-  path: string;
-  status: string;
-}
-
-interface FileTreeNode {
-  id: string;
-  path: string;
-  name: string;
-  kind: "file" | "directory";
-  children: FileTreeNode[] | null;
-  gitStatus?: string;
-  isIgnored: boolean;
-}
-
-interface FileContent {
-  path: string;
-  content: string;
-  isBinary: boolean;
-  size: number;
-}
-
-interface DiffDocument {
-  path: string;
-  originalContent: string;
-  currentContent: string;
-  isBinary: boolean;
-  size: number;
-}
-
 interface PreviewSelection {
   kind: "diff" | "file";
   path: string;
   line?: number;
 }
 
-interface BranchContext {
-  branch: string | null;
-  github: GitHubPullRequest | null;
-}
-
 declare global {
   interface Window {
-    electronAPI: {
-      getSessions: () => Promise<Session[]>;
-      getSessionProviders: () => Promise<AgentDefinition[]>;
-      selectSession: (session: Session) => void;
-      createSession: (provider: SessionProvider, repoPath: string) => Promise<Session>;
-      createWorktreeSession: (
-        provider: SessionProvider,
-        repoPath: string,
-        branchName: string,
-      ) => Promise<Session>;
-      removeWorktree: (
-        provider: SessionProvider,
-        repoPath: string,
-        worktreePath: string,
-      ) => Promise<void>;
-      selectFolder: () => Promise<string | null>;
-      openExternal: (url: string) => Promise<void>;
-      getGitStatus: (sessionId: string) => Promise<GitFileStatus[]>;
-      getGitBranchContext: (sessionId: string) => Promise<BranchContext>;
-      getGitDiffDocument: (sessionId: string, filePath: string) => Promise<DiffDocument | null>;
-      listFiles: (sessionId: string, relativePath?: string) => Promise<FileTreeNode[]>;
-      readFile: (sessionId: string, filePath: string) => Promise<FileContent | null>;
-      fileExists: (sessionId: string, filePath: string) => Promise<boolean>;
-      onSessionsStateChanged: (
-        callback: (active: { sessionId: string; cwd: string }[]) => void,
-      ) => void;
-      ptyWrite: (sessionId: string, data: string) => void;
-      ptyResize: (sessionId: string, cols: number, rows: number) => void;
-      onPtyData: (callback: (sessionId: string, data: string) => void) => void;
-    };
+    electronAPI: ElectronAPI;
   }
 }
 
@@ -144,13 +87,11 @@ function statusColor(status: string): string {
     case "M":
       return "#e2c08d";
     case "A":
+    case "R":
+    case "??":
       return "#73c991";
     case "D":
       return "#c74e39";
-    case "R":
-      return "#73c991";
-    case "??":
-      return "#73c991";
     default:
       return "#888";
   }
@@ -683,7 +624,7 @@ export function App(): JSX.Element {
   const [changedFiles, setChangedFiles] = useState<GitFileStatus[]>([]);
   const [activeExplorerTab, setActiveExplorerTab] = useState<"changes" | "files">("changes");
   const [previewSelection, setPreviewSelection] = useState<PreviewSelection | null>(null);
-  const [diffDocument, setDiffDocument] = useState<DiffDocument | null>(null);
+  const [diffDocument, setDiffDocument] = useState<GitDiffDocument | null>(null);
   const [isLoadingDiff, setIsLoadingDiff] = useState(false);
   const [treeData, setTreeData] = useState<FileTreeNode[]>([]);
   const [loadingDirectories, setLoadingDirectories] = useState<Set<string>>(new Set());
@@ -872,6 +813,12 @@ export function App(): JSX.Element {
     setIsLoadingFile(false);
   }, []);
 
+  const resetPreviewState = useCallback((): void => {
+    setPreviewSelection(null);
+    setDiffDocument(null);
+    setIsLoadingDiff(false);
+  }, []);
+
   const loadDirectory = useCallback(
     async (relativePath = ""): Promise<void> => {
       if (!selectedId) {
@@ -939,9 +886,7 @@ export function App(): JSX.Element {
   useEffect(() => {
     if (!selectedId) {
       setChangedFiles([]);
-      setPreviewSelection(null);
-      setDiffDocument(null);
-      setIsLoadingDiff(false);
+      resetPreviewState();
       setCurrentBranch(null);
       setCurrentGitHub(null);
       resetFileExplorerState();
@@ -985,7 +930,7 @@ export function App(): JSX.Element {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [refreshSessions, resetFileExplorerState, selectedId]);
+  }, [refreshSessions, resetFileExplorerState, resetPreviewState, selectedId]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -1094,9 +1039,7 @@ export function App(): JSX.Element {
     }
 
     window.electronAPI.selectSession(session);
-    setPreviewSelection(null);
-    setDiffDocument(null);
-    setIsLoadingDiff(false);
+    resetPreviewState();
     showTerminal(session.id);
   };
 
@@ -1110,9 +1053,7 @@ export function App(): JSX.Element {
     try {
       const session = await window.electronAPI.createSession(provider, repoPath);
       setSessions((prev) => [session, ...prev]);
-      setPreviewSelection(null);
-      setDiffDocument(null);
-      setIsLoadingDiff(false);
+      resetPreviewState();
       showTerminal(session.id);
     } finally {
       setIsCreatingSession(false);
@@ -1131,9 +1072,7 @@ export function App(): JSX.Element {
       const session = await window.electronAPI.createWorktreeSession(provider, repoPath, branchName);
       setWorktreeTarget(null);
       setSessions((prev) => [session, ...prev]);
-      setPreviewSelection(null);
-      setDiffDocument(null);
-      setIsLoadingDiff(false);
+      resetPreviewState();
       showTerminal(session.id);
     } catch (e) {
       setWorktreeError(e instanceof Error ? e.message : "Failed to create worktree");

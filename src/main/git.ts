@@ -1,58 +1,17 @@
-import { execFile } from "child_process";
 import fs from "fs";
 import path from "path";
+import { GitDiffDocument, GitFileStatus } from "../shared/ipc.js";
+import { exec, execBuffer } from "./exec.js";
 
 export interface WorktreeInfo {
   path: string;
   branch: string;
 }
 
-export interface GitFileStatus {
-  path: string;
-  status: string;
-}
-
 export interface GitPathState {
   path: string;
   status: string;
   ignored: boolean;
-}
-
-export interface GitDiffDocument {
-  path: string;
-  originalContent: string;
-  currentContent: string;
-  isBinary: boolean;
-  size: number;
-}
-
-function exec(cmd: string, args: string[], cwd: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    execFile(cmd, args, { cwd, maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-      resolve(stdout);
-    });
-  });
-}
-
-function execBuffer(cmd: string, args: string[], cwd: string): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    execFile(
-      cmd,
-      args,
-      { cwd, maxBuffer: 10 * 1024 * 1024, encoding: "buffer" },
-      (err, stdout) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve(stdout);
-      },
-    );
-  });
 }
 
 function parsePorcelainLine(line: string): GitPathState | null {

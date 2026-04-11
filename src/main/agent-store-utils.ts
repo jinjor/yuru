@@ -8,7 +8,7 @@ export async function readTextFileIfExists(filePath: string): Promise<string | n
   return fs.promises.readFile(filePath, "utf-8");
 }
 
-export function parseJsonLines(content: string): unknown[] {
+function parseJsonLines(content: string): unknown[] {
   return content
     .split("\n")
     .filter(Boolean)

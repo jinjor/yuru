@@ -25,6 +25,7 @@ import {
 } from "./agent.js";
 import { WorktreeWatcher } from "./worktree-watcher.js";
 import fs from "fs";
+import { ActiveSessionState, BranchContext } from "../shared/ipc.js";
 import {
   isResumableSession,
   Session,
@@ -38,6 +39,11 @@ const ptyProcesses = new Map<string, pty.IPty>();
 const pendingProcesses = new Set<pty.IPty>();
 const sessionRuntimeMap = new Map<string, RuntimeSessionInfo>();
 let worktreeWatcher: WorktreeWatcher | null = null;
+
+interface StartedSession {
+  sessionId: string;
+  providerSessionId: string | null;
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -160,11 +166,58 @@ function emitSessionsStateChanged(): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return;
   }
-  const activeSessions = Array.from(sessionRuntimeMap, ([sessionId, info]) => ({
+  const activeSessions: ActiveSessionState[] = Array.from(sessionRuntimeMap, ([sessionId, info]) => ({
     sessionId,
     cwd: info.cwd,
   }));
   mainWindow.webContents.send("sessions:stateChanged", activeSessions);
+}
+
+function buildActiveSession(params: {
+  sessionId: string;
+  provider: SessionProvider;
+  providerSessionId: string | null;
+  project: string;
+  repoPath: string;
+  worktree?: Session["worktree"];
+}): Session {
+  const { sessionId, provider, providerSessionId, project, repoPath, worktree } = params;
+  return {
+    id: sessionId,
+    provider,
+    providerSessionId,
+    project,
+    projectName: path.basename(project),
+    repoPath,
+    lastMessage: "",
+    timestamp: Date.now(),
+    state: "active",
+    worktree,
+  };
+}
+
+async function startSession(
+  provider: SessionProvider,
+  providerAdapter: SessionProviderAdapter,
+  pending: PendingSession,
+): Promise<StartedSession> {
+  if (providerAdapter.resolvesSessionIdLazily) {
+    const sessionId = toRuntimeSessionKey(provider, pending.startedAt);
+    registerSession(sessionId, pending, null);
+    void resolveLazySessionId(providerAdapter, pending, sessionId);
+    return {
+      sessionId,
+      providerSessionId: null,
+    };
+  }
+
+  const providerSessionId = await providerAdapter.waitForSessionId(pending);
+  const sessionId = toSessionKey(provider, providerSessionId);
+  registerSession(sessionId, pending, providerSessionId);
+  return {
+    sessionId,
+    providerSessionId,
+  };
 }
 
 async function refreshWorktreeWatcher(): Promise<void> {
@@ -229,39 +282,17 @@ app.whenReady().then(() => {
     const providerAdapter = getSessionProvider(provider);
     const pending = launchPendingSession(providerAdapter, await providerAdapter.createNewLaunch(repoPath));
     try {
-      if (providerAdapter.resolvesSessionIdLazily) {
-        const appSessionId = toRuntimeSessionKey(provider, pending.startedAt);
-        registerSession(appSessionId, pending, null);
-        void resolveLazySessionId(providerAdapter, pending, appSessionId);
-        return {
-          id: appSessionId,
-          provider,
-          providerSessionId: null,
-          project: repoPath,
-          projectName: path.basename(repoPath),
-          repoPath,
-          lastMessage: "",
-          timestamp: Date.now(),
-          state: "active",
-        } satisfies Session;
+      const { sessionId, providerSessionId } = await startSession(provider, providerAdapter, pending);
+      if (providerSessionId) {
+        await refreshWorktreeWatcher();
       }
-
-      const providerSessionId = await providerAdapter.waitForSessionId(pending);
-      const sessionId = toSessionKey(provider, providerSessionId);
-      registerSession(sessionId, pending, providerSessionId);
-      await refreshWorktreeWatcher();
-      const session: Session = {
-        id: sessionId,
+      return buildActiveSession({
+        sessionId,
         provider,
         providerSessionId,
         project: repoPath,
-        projectName: path.basename(repoPath),
         repoPath,
-        lastMessage: "",
-        timestamp: Date.now(),
-        state: "active",
-      };
-      return session;
+      });
     } catch (error) {
       if (!pending.exited) {
         pending.proc.kill();
@@ -298,55 +329,20 @@ app.whenReady().then(() => {
         await providerAdapter.createWorktreeLaunch(worktreeContext),
       );
       try {
-        if (providerAdapter.resolvesSessionIdLazily) {
-          const appSessionId = toRuntimeSessionKey(provider, pending.startedAt);
-          registerSession(appSessionId, pending, null);
-          void resolveLazySessionId(providerAdapter, pending, appSessionId);
-
-          await providerAdapter.finalizeWorktree(worktreeContext);
-          await refreshWorktreeWatcher();
-
-          return {
-            id: appSessionId,
-            provider,
-            providerSessionId: null,
-            project: worktreePath,
-            projectName: worktreeName,
-            repoPath,
-            lastMessage: "",
-            timestamp: Date.now(),
-            state: "active",
-            worktree: {
-              name: worktreeName,
-              branch: branchName,
-            },
-          } satisfies Session;
-        }
-
-        const providerSessionId = await providerAdapter.waitForSessionId(pending);
-        const sessionId = toSessionKey(provider, providerSessionId);
-        registerSession(sessionId, pending, providerSessionId);
-
+        const { sessionId, providerSessionId } = await startSession(provider, providerAdapter, pending);
         await providerAdapter.finalizeWorktree(worktreeContext);
-
         await refreshWorktreeWatcher();
-
-        const session: Session = {
-          id: sessionId,
+        return buildActiveSession({
+          sessionId,
           provider,
           providerSessionId,
           project: worktreePath,
-          projectName: worktreeName,
           repoPath,
-          lastMessage: "",
-          timestamp: Date.now(),
-          state: "active",
           worktree: {
             name: worktreeName,
             branch: branchName,
           },
-        };
-        return session;
+        });
       } catch (error) {
         if (!pending.exited) {
           pending.proc.kill();
@@ -362,7 +358,7 @@ app.whenReady().then(() => {
   ipcMain.handle(
     "worktree:remove",
     async (_event, _provider: SessionProvider, repoPath: string, worktreePath: string) => {
-    await removeWorktree(repoPath, worktreePath);
+      await removeWorktree(repoPath, worktreePath);
     },
   );
 
@@ -399,19 +395,19 @@ app.whenReady().then(() => {
   ipcMain.handle("git:branchContext", async (_event, sessionId: string) => {
     const runtime = sessionRuntimeMap.get(sessionId);
     if (!runtime) {
-      return { branch: null, github: null };
+      return { branch: null, github: null } satisfies BranchContext;
     }
 
     const branch = await getCurrentBranch(runtime.cwd);
     if (!branch) {
-      return { branch: null, github: null };
+      return { branch: null, github: null } satisfies BranchContext;
     }
 
     const repoPath =
       (await getRepoRootForProject(runtime.cwd)) ??
       getSessionProvider(runtime.provider).repoPathFromProject(runtime.cwd);
     const github = await getGitHubPullRequestForBranch(repoPath, branch);
-    return { branch, github };
+    return { branch, github } satisfies BranchContext;
   });
 
   ipcMain.handle("git:diffDocument", async (_event, sessionId: string, filePath: string) => {
