@@ -68,7 +68,8 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F15 | feature | Search | ファイル横断検索 | 別機能として扱いたい |
 | F18 | feature | GitHub | PR マージ時に worktree を自動整理する | 自動 archived までつなげたい |
 | F24 | feature | Empty state | 空画面から新規セッションを始められるようにする | あると親切だが、今すぐではない |
-| I6 | investigate | Codex / Sessions | Codex self-update 後のセッション終了 UX を見直す | 日常的ではないが、消えたように見えると驚きやすい |
+| I6 | investigate | Sessions / Terminal | セッション終了時メッセージの表示保持を見直す | 終了直前の案内や要約をその場で読めないと戸惑いやすい |
+| I7 | investigate | Sessions / Persistence | セッション終了メッセージの再到達性をどう担保するか決める | あとから確認できる保証がないと次の操作で迷いやすい |
 
 ## Open decisions
 
