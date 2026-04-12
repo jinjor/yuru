@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+YURU_HOME="${YURU_HOME:-$HOME/.yuru}"
+YURU_REPO_DIR="${YURU_REPO_DIR:-$YURU_HOME/repo}"
+YURU_APPLICATIONS_DIR="${YURU_APPLICATIONS_DIR:-$HOME/Applications}"
+CLI_PATH="$YURU_REPO_DIR/scripts/yuru-cli.mjs"
+APP_PATH="$YURU_APPLICATIONS_DIR/Yuru.app"
+COMMAND="${1:-open}"
+
+open_app() {
+  if [[ ! -d "$APP_PATH" ]]; then
+    echo "Yuru.app is not installed yet. Run: yuru latest" >&2
+    exit 1
+  fi
+
+  exec open -na "$APP_PATH"
+}
+
+if [[ "$COMMAND" == "open" ]]; then
+  open_app
+fi
+
+if [[ ! -f "$CLI_PATH" ]]; then
+  echo "Yuru is not installed yet. Run ./install.sh from a Yuru checkout." >&2
+  exit 1
+fi
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "Node.js is required to run Yuru. Install Node.js and try again." >&2
+  exit 1
+fi
+
+exec node "$CLI_PATH" "$@"

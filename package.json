@@ -5,6 +5,7 @@
   "main": "dist/main/index.js",
   "scripts": {
     "build": "tsc && vite build",
+    "package:local": "node ./scripts/package-local-app.mjs",
     "run": "electron .",
     "app:restart": "./scripts/restart-app-macos.sh",
     "lint": "oxlint src/",
@@ -20,17 +21,18 @@
     "diff": "^8.0.4",
     "electron": "^41.1.1",
     "lucide-react": "^1.7.0",
+    "node-pty": "^1.2.0-beta.12",
     "react": "^19.2.4",
     "react-arborist": "^3.4.3",
     "react-dom": "^19.2.4",
     "shiki": "^4.0.2"
   },
   "devDependencies": {
+    "@electron/packager": "^19.0.1",
     "@electron/rebuild": "^4.0.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
-    "node-pty": "^1.2.0-beta.12",
     "oxlint": "^1.58.0",
     "typescript": "^6.0.2",
     "vite": "^8.0.3"
