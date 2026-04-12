@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-04-12
+Last updated: 2026-04-13
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -27,7 +27,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | ID | Type | Area | Item | Why now |
 |---|---|---|---|---|
 | F20 | feature | App | アプリのアイコンを付ける | テンションとプロダクト感を上げたい |
-| F22 | feature | CLI | `yuru` コマンドで起動できるようにする | 使い始めるまでの摩擦を下げたい |
 | I9 | investigate | App Runtime | build/restart 後にたまに白画面になる原因を調べる | 開発中の再起動ループで不安になる |
 | I1 | investigate | Sessions | `Remove worktree` 失敗時に未コミット・未追跡ファイルをどう扱うか決める | 削除 UX の設計に必要 |
 | B1 | bug | Archived | Archived セクションの表示崩れを直す | 明確な UI バグ |
