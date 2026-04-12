@@ -2,6 +2,8 @@
 
 Yuru is a session-centered editor for Claude Code and Codex CLI.
 
+Current local-app workflow is supported on macOS only.
+
 ## Install
 
 ```sh
