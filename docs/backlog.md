@@ -29,7 +29,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F20 | feature | App | アプリのアイコンを付ける | テンションとプロダクト感を上げたい |
 | I9 | investigate | App Runtime | build/restart 後にたまに白画面になる原因を調べる | 開発中の再起動ループで不安になる |
 | I1 | investigate | Sessions | `Remove worktree` 失敗時に未コミット・未追跡ファイルをどう扱うか決める | 削除 UX の設計に必要 |
-| B1 | bug | Archived | Archived セクションの表示崩れを直す | 明確な UI バグ |
 | B3 | bug | Sessions | 古いセッション選択時の `No conversation found with ID: ...` のちらつきを消す | 誤解を生む |
 | P11 | polish | Sessions | 最新会話プレビューが一覧に同期されない問題を直す | 一覧の情報鮮度が低い |
 | B5 | bug | New Session | hover ハイライトが `WT` の手前で不自然に切れる問題を直す | 明確な UI バグ |
