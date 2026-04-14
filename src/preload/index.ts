@@ -5,7 +5,10 @@ import { Session, SessionProvider } from "../shared/session.js";
 const electronAPI: ElectronAPI = {
   getSessions: () => ipcRenderer.invoke("sessions:list"),
   getSessionProviders: () => ipcRenderer.invoke("providers:list"),
-  selectSession: (session: Session) => ipcRenderer.send("session:select", session),
+  getErrors: () => ipcRenderer.invoke("errors:list"),
+  dismissError: (id: string) => ipcRenderer.invoke("errors:dismiss", id),
+  clearErrors: () => ipcRenderer.invoke("errors:clear"),
+  selectSession: (session: Session) => ipcRenderer.invoke("session:select", session),
   createSession: (provider: SessionProvider, repoPath: string) =>
     ipcRenderer.invoke("session:create", provider, repoPath),
   createWorktreeSession: (provider: SessionProvider, repoPath: string, branchName: string) =>
@@ -23,6 +26,12 @@ const electronAPI: ElectronAPI = {
   readFile: (sessionId: string, filePath: string) =>
     ipcRenderer.invoke("files:read", sessionId, filePath),
   fileExists: (sessionId: string, filePath: string) => ipcRenderer.invoke("files:exists", sessionId, filePath),
+  onErrorAdded: (callback) =>
+    ipcRenderer.on("errors:added", (_event, error) => callback(error)),
+  onErrorRemoved: (callback) =>
+    ipcRenderer.on("errors:removed", (_event, id) => callback(id)),
+  onErrorsCleared: (callback) =>
+    ipcRenderer.on("errors:cleared", () => callback()),
   onSessionsStateChanged: (callback) =>
     ipcRenderer.on("sessions:stateChanged", (_event, active) => callback(active)),
   ptyWrite: (sessionId: string, data: string) => ipcRenderer.send("pty:write", sessionId, data),

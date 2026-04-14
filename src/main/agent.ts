@@ -20,12 +20,17 @@ export interface RuntimeSessionInfo {
 export interface PendingSession {
   proc: pty.IPty;
   provider: SessionProvider;
+  command: string;
+  launchLabel: string;
+  startupOutput: string;
   sessionCwd: string;
   providerSessionId: string | null;
   appSessionId: string | null;
   startedAt: number;
   existingProviderSessionIds: ReadonlySet<string>;
   exited: boolean;
+  startupSettled: boolean;
+  startupFailureReported: boolean;
 }
 
 export interface LaunchRequest {

@@ -1,6 +1,35 @@
 import type { AgentDefinition } from "./agent.js";
 import type { GitHubPullRequest, Session, SessionProvider } from "./session.js";
 
+export interface AppError {
+  code:
+    | "command_not_found"
+    | "command_failed"
+    | "git_failed"
+    | "filesystem_failed"
+    | "invalid_path"
+    | "unknown";
+  message: string;
+  detail?: string;
+}
+
+export interface AppErrorNotice {
+  id: string;
+  message: string;
+  detail?: string;
+  timestamp: number;
+}
+
+export type Result<T> =
+  | {
+      ok: true;
+      data: T;
+    }
+  | {
+      ok: false;
+      error: AppError;
+    };
+
 export interface GitFileStatus {
   path: string;
   status: string;
@@ -44,26 +73,32 @@ export interface ActiveSessionState {
 export interface ElectronAPI {
   getSessions: () => Promise<Session[]>;
   getSessionProviders: () => Promise<AgentDefinition[]>;
-  selectSession: (session: Session) => void;
-  createSession: (provider: SessionProvider, repoPath: string) => Promise<Session>;
+  getErrors: () => Promise<AppErrorNotice[]>;
+  dismissError: (id: string) => Promise<void>;
+  clearErrors: () => Promise<void>;
+  selectSession: (session: Session) => Promise<Result<boolean>>;
+  createSession: (provider: SessionProvider, repoPath: string) => Promise<Result<Session>>;
   createWorktreeSession: (
     provider: SessionProvider,
     repoPath: string,
     branchName: string,
-  ) => Promise<Session>;
+  ) => Promise<Result<Session>>;
   removeWorktree: (
     provider: SessionProvider,
     repoPath: string,
     worktreePath: string,
-  ) => Promise<void>;
+  ) => Promise<Result<boolean>>;
   selectFolder: () => Promise<string | null>;
   openExternal: (url: string) => Promise<void>;
-  getGitStatus: (sessionId: string) => Promise<GitFileStatus[]>;
-  getGitBranchContext: (sessionId: string) => Promise<BranchContext>;
-  getGitDiffDocument: (sessionId: string, filePath: string) => Promise<GitDiffDocument | null>;
-  listFiles: (sessionId: string, relativePath?: string) => Promise<FileTreeNode[]>;
-  readFile: (sessionId: string, filePath: string) => Promise<FileContent | null>;
+  getGitStatus: (sessionId: string) => Promise<Result<GitFileStatus[]>>;
+  getGitBranchContext: (sessionId: string) => Promise<Result<BranchContext>>;
+  getGitDiffDocument: (sessionId: string, filePath: string) => Promise<Result<GitDiffDocument | null>>;
+  listFiles: (sessionId: string, relativePath?: string) => Promise<Result<FileTreeNode[]>>;
+  readFile: (sessionId: string, filePath: string) => Promise<Result<FileContent | null>>;
   fileExists: (sessionId: string, filePath: string) => Promise<boolean>;
+  onErrorAdded: (callback: (error: AppErrorNotice) => void) => void;
+  onErrorRemoved: (callback: (id: string) => void) => void;
+  onErrorsCleared: (callback: () => void) => void;
   onSessionsStateChanged: (callback: (active: ActiveSessionState[]) => void) => void;
   ptyWrite: (sessionId: string, data: string) => void;
   ptyResize: (sessionId: string, cols: number, rows: number) => void;

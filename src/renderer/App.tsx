@@ -11,6 +11,7 @@ import {
   FileTreeNode,
   GitDiffDocument,
   GitFileStatus,
+  Result,
 } from "../shared/ipc";
 import { GitHubPullRequest, Session, SessionProvider } from "../shared/session";
 
@@ -631,7 +632,6 @@ export function App(): JSX.Element {
     repoPath: string;
     provider: SessionProvider;
   } | null>(null);
-  const [worktreeError, setWorktreeError] = useState<string | null>(null);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [changedFiles, setChangedFiles] = useState<GitFileStatus[]>([]);
   const [activeExplorerTab, setActiveExplorerTab] = useState<"changes" | "files">("changes");
@@ -653,6 +653,10 @@ export function App(): JSX.Element {
 
   const knownRepos = [...new Set(sessions.map((s) => s.repoPath))];
   const providerLabelById = new Map(availableProviders.map((provider) => [provider.id, provider.label]));
+
+  const resultDataOrNull = useCallback(<T,>(result: Result<T>): T | null => {
+    return result.ok ? result.data : null;
+  }, []);
 
   const onFileLinkActivateRef = useRef<(filePath: string, line?: number) => void>(() => {});
   onFileLinkActivateRef.current = (filePath: string, line?: number) => {
@@ -818,29 +822,34 @@ export function App(): JSX.Element {
   }, []);
 
   const refreshSessions = useCallback((): void => {
-    window.electronAPI.getSessions().then((nextSessions) => {
-      setSessions(nextSessions);
-      setDeletingSessionId((prev) => {
-        if (!prev) {
-          return null;
-        }
-        const deletingSession = nextSessions.find((session) => session.id === prev);
-        if (!deletingSession || deletingSession.state !== "inactive" || !deletingSession.worktree) {
-          return null;
-        }
-        return prev;
+    window.electronAPI
+      .getSessions()
+      .then((nextSessions) => {
+        setSessions(nextSessions);
+        setDeletingSessionId((prev) => {
+          if (!prev) {
+            return null;
+          }
+          const deletingSession = nextSessions.find((session) => session.id === prev);
+          if (!deletingSession || deletingSession.state !== "inactive" || !deletingSession.worktree) {
+            return null;
+          }
+          return prev;
+        });
+        setSelectedId((prev) => {
+          if (!prev) {
+            return null;
+          }
+          const selectedSession = nextSessions.find((session) => session.id === prev);
+          if (!selectedSession || selectedSession.state !== "active") {
+            return null;
+          }
+          return prev;
+        });
+      })
+      .catch((error) => {
+        console.error("Failed to load sessions.", error);
       });
-      setSelectedId((prev) => {
-        if (!prev) {
-          return null;
-        }
-        const selectedSession = nextSessions.find((session) => session.id === prev);
-        if (!selectedSession || selectedSession.state !== "active") {
-          return null;
-        }
-        return prev;
-      });
-    });
   }, []);
 
   const resetFileExplorerState = useCallback((): void => {
@@ -873,7 +882,11 @@ export function App(): JSX.Element {
       loadingDirectoriesRef.current = new Set(loadingDirectoriesRef.current).add(relativePath);
       setLoadingDirectories(loadingDirectoriesRef.current);
       try {
-        const nextNodes = await window.electronAPI.listFiles(selectedId, relativePath);
+        const result = await window.electronAPI.listFiles(selectedId, relativePath);
+        const nextNodes = resultDataOrNull(result);
+        if (!nextNodes) {
+          return;
+        }
         setTreeData((prev) =>
           relativePath ? replaceNodeChildren(prev, relativePath, nextNodes) : nextNodes,
         );
@@ -885,15 +898,20 @@ export function App(): JSX.Element {
         setLoadingDirectories(nextLoadingDirectories);
       }
     },
-    [selectedId],
+    [resultDataOrNull, selectedId],
   );
 
   // Load sessions and setup listeners
   useEffect(() => {
-    window.electronAPI.getSessionProviders().then((providers) => {
-      setAvailableProviders(providers);
-      setNewSessionProvider((prev) => prev ?? providers[0]?.id ?? null);
-    });
+    window.electronAPI
+      .getSessionProviders()
+      .then((providers) => {
+        setAvailableProviders(providers);
+        setNewSessionProvider((prev) => prev ?? providers[0]?.id ?? null);
+      })
+      .catch((error) => {
+        console.error("Failed to load session providers.", error);
+      });
 
     refreshSessions();
 
@@ -952,30 +970,39 @@ export function App(): JSX.Element {
     const sessionId = selectedId;
     setCurrentBranch(null);
     setCurrentGitHub(null);
+    setChangedFiles([]);
 
     const fetchStatus = async (): Promise<void> => {
-      const [files, branchContext] = await Promise.all([
+      const [filesResult, branchContextResult] = await Promise.all([
         window.electronAPI.getGitStatus(sessionId),
         window.electronAPI.getGitBranchContext(sessionId),
       ]);
       if (cancelled) {
         return;
       }
-      setCurrentBranch(branchContext.branch);
-      setCurrentGitHub(branchContext.github);
-      setChangedFiles((prev) => {
-        if (JSON.stringify(prev) === JSON.stringify(files)) {
+
+      const files = resultDataOrNull(filesResult);
+      if (files) {
+        setChangedFiles((prev) => {
+          if (JSON.stringify(prev) === JSON.stringify(files)) {
+            return prev;
+          }
+          return files;
+        });
+        setPreviewSelection((prev) => {
+          if (prev?.kind === "diff" && !files.some((f) => f.path === prev.path)) {
+            return null;
+          }
           return prev;
-        }
-        return files;
-      });
-      // Clear selected file if it's no longer in the list
-      setPreviewSelection((prev) => {
-        if (prev?.kind === "diff" && !files.some((f) => f.path === prev.path)) {
-          return null;
-        }
-        return prev;
-      });
+        });
+      }
+
+      const branchContext = resultDataOrNull(branchContextResult);
+      if (branchContext) {
+        setCurrentBranch(branchContext.branch);
+        setCurrentGitHub(branchContext.github);
+      }
+
       refreshSessions();
     };
 
@@ -985,7 +1012,7 @@ export function App(): JSX.Element {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [refreshSessions, resetFileExplorerState, resetPreviewState, selectedId]);
+  }, [refreshSessions, resetFileExplorerState, resetPreviewState, resultDataOrNull, selectedId]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -1008,8 +1035,9 @@ export function App(): JSX.Element {
     setIsLoadingDiff(true);
 
     const fetchDiff = async (showLoader: boolean): Promise<void> => {
-      const diff = await window.electronAPI.getGitDiffDocument(selectedId, previewSelection.path);
+      const result = await window.electronAPI.getGitDiffDocument(selectedId, previewSelection.path);
       if (!cancelled) {
+        const diff = resultDataOrNull(result);
         setDiffDocument(diff);
         if (showLoader) {
           setIsLoadingDiff(false);
@@ -1025,7 +1053,7 @@ export function App(): JSX.Element {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [previewSelection, selectedId]);
+  }, [previewSelection, resultDataOrNull, selectedId]);
 
   useEffect(() => {
     if (!selectedId || previewSelection?.kind !== "file") {
@@ -1036,10 +1064,11 @@ export function App(): JSX.Element {
 
     let cancelled = false;
     setIsLoadingFile(true);
-    window.electronAPI.readFile(selectedId, previewSelection.path).then((nextContent) => {
+    window.electronAPI.readFile(selectedId, previewSelection.path).then((result) => {
       if (cancelled) {
         return;
       }
+      const nextContent = resultDataOrNull(result);
       setFileContent(nextContent);
       setIsLoadingFile(false);
     });
@@ -1047,7 +1076,7 @@ export function App(): JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [previewSelection, selectedId]);
+  }, [previewSelection, resultDataOrNull, selectedId]);
 
   // Handle window resize — refit the active terminal
   useEffect(() => {
@@ -1085,18 +1114,25 @@ export function App(): JSX.Element {
     });
   };
 
-  const handleSelectSession = (session: Session): void => {
-    if (session.state === "archived") {
-      return;
-    }
-    if (session.state === "inactive") {
-      resetTerminal(session.id);
-    }
+  const handleSelectSession = useCallback(
+    async (session: Session): Promise<void> => {
+      if (session.state === "archived") {
+        return;
+      }
 
-    window.electronAPI.selectSession(session);
-    resetPreviewState();
-    showTerminal(session.id);
-  };
+      const result = await window.electronAPI.selectSession(session);
+      if (!result.ok) {
+        return;
+      }
+
+      if (session.state === "inactive") {
+        resetTerminal(session.id);
+      }
+      resetPreviewState();
+      showTerminal(session.id);
+    },
+    [resetPreviewState, resetTerminal],
+  );
 
   const handleCreateSession = async (
     repoPath: string,
@@ -1106,7 +1142,11 @@ export function App(): JSX.Element {
     setNewSessionProvider(provider);
     setIsCreatingSession(true);
     try {
-      const session = await window.electronAPI.createSession(provider, repoPath);
+      const result = await window.electronAPI.createSession(provider, repoPath);
+      if (!result.ok) {
+        return;
+      }
+      const session = result.data;
       setSessions((prev) => [session, ...prev]);
       resetPreviewState();
       showTerminal(session.id);
@@ -1120,17 +1160,18 @@ export function App(): JSX.Element {
       return;
     }
     const { repoPath, provider } = worktreeTarget;
-    setWorktreeError(null);
+    setWorktreeTarget(null);
     setNewSessionProvider(provider);
     setIsCreatingSession(true);
     try {
-      const session = await window.electronAPI.createWorktreeSession(provider, repoPath, branchName);
-      setWorktreeTarget(null);
+      const result = await window.electronAPI.createWorktreeSession(provider, repoPath, branchName);
+      if (!result.ok) {
+        return;
+      }
+      const session = result.data;
       setSessions((prev) => [session, ...prev]);
       resetPreviewState();
       showTerminal(session.id);
-    } catch (e) {
-      setWorktreeError(e instanceof Error ? e.message : "Failed to create worktree");
     } finally {
       setIsCreatingSession(false);
     }
@@ -1140,10 +1181,6 @@ export function App(): JSX.Element {
     if (!session.worktree) {
       return;
     }
-    if (session.state === "active") {
-      window.alert("Stop the session before removing this worktree.");
-      return;
-    }
     const confirmed = window.confirm(
       `Remove worktree "${session.worktree.name}" for ${session.repoPath.split("/").pop()}?`,
     );
@@ -1151,11 +1188,13 @@ export function App(): JSX.Element {
       return;
     }
     setDeletingSessionId(session.id);
-    try {
-      await window.electronAPI.removeWorktree(session.provider, session.repoPath, session.project);
-    } catch (error) {
+    const result = await window.electronAPI.removeWorktree(
+      session.provider,
+      session.repoPath,
+      session.project,
+    );
+    if (!result.ok) {
       setDeletingSessionId(null);
-      window.alert(error instanceof Error ? error.message : "Failed to remove worktree");
     }
   };
 
@@ -1383,7 +1422,6 @@ export function App(): JSX.Element {
             setShowRepoPicker(false);
             setNewSessionProvider(provider);
             setWorktreeTarget({ repoPath: repo, provider });
-            setWorktreeError(null);
           }}
           onCancel={() => setShowRepoPicker(false)}
         />
@@ -1392,7 +1430,7 @@ export function App(): JSX.Element {
         <BranchNameInput
           onSubmit={handleCreateWorktreeSession}
           onCancel={() => setWorktreeTarget(null)}
-          error={worktreeError}
+          error={null}
           providerLabel={providerLabelById.get(worktreeTarget.provider) ?? worktreeTarget.provider}
         />
       )}

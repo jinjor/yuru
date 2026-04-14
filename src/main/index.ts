@@ -26,7 +26,7 @@ import {
 } from "./agent.js";
 import { WorktreeWatcher } from "./worktree-watcher.js";
 import fs from "fs";
-import { ActiveSessionState, BranchContext } from "../shared/ipc.js";
+import { ActiveSessionState, AppError, AppErrorNotice, BranchContext, Result } from "../shared/ipc.js";
 import {
   isResumableSession,
   Session,
@@ -34,6 +34,13 @@ import {
   toRuntimeSessionKey,
   toSessionKey,
 } from "../shared/session.js";
+import { toAppError } from "./errors.js";
+import {
+  clearErrorNotices,
+  dismissErrorNotice,
+  listErrorNotices,
+  recordAppError,
+} from "./error-center.js";
 
 let mainWindow: BrowserWindow | null = null;
 const ptyProcesses = new Map<string, pty.IPty>();
@@ -41,12 +48,129 @@ const pendingProcesses = new Set<pty.IPty>();
 const sessionRuntimeMap = new Map<string, RuntimeSessionInfo>();
 let worktreeWatcher: WorktreeWatcher | null = null;
 const APP_NAME = "Yuru";
+const STARTUP_OUTPUT_LIMIT = 4000;
 
 app.setName(APP_NAME);
 
 interface StartedSession {
   sessionId: string;
   providerSessionId: string | null;
+}
+
+function ok<T>(data: T): Result<T> {
+  return {
+    ok: true,
+    data,
+  };
+}
+
+function fail<T>(error: AppError): Result<T> {
+  return {
+    ok: false,
+    error,
+  };
+}
+
+function emitErrorAdded(notice: AppErrorNotice): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  mainWindow.webContents.send("errors:added", notice);
+}
+
+function emitErrorRemoved(id: string): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  mainWindow.webContents.send("errors:removed", id);
+}
+
+function emitErrorsCleared(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  mainWindow.webContents.send("errors:cleared");
+}
+
+function logAppError(error: AppError): void {
+  if (error.detail) {
+    console.error(`[Yuru] ${error.message}`, error.detail);
+    return;
+  }
+  console.error(`[Yuru] ${error.message}`);
+}
+
+function reportError(error: AppError): AppError {
+  logAppError(error);
+  emitErrorAdded(recordAppError(error));
+  return error;
+}
+
+function failAndReport<T>(error: AppError): Result<T> {
+  return fail(reportError(error));
+}
+
+function appendStartupOutput(existing: string, chunk: string): string {
+  const combined = `${existing}${chunk}`;
+  if (combined.length <= STARTUP_OUTPUT_LIMIT) {
+    return combined;
+  }
+  return combined.slice(-STARTUP_OUTPUT_LIMIT);
+}
+
+function stripAnsi(text: string): string {
+  return text.replace(/\u001b\[[0-9;]*[A-Za-z]/g, "");
+}
+
+function summarizeStartupOutput(output: string): string | undefined {
+  const cleaned = stripAnsi(output)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (cleaned.length === 0) {
+    return undefined;
+  }
+  return cleaned.slice(-3).join(" ");
+}
+
+function startupFailureMessage(pending: PendingSession, exitCode: number, signal?: number): AppError {
+  const detail = startupExitDetail(pending.startupOutput, exitCode, signal);
+
+  if (exitCode === 127) {
+    return {
+      code: "command_not_found",
+      message: `${pending.launchLabel}. Yuru could not find a command needed to launch ${pending.command}.`,
+      detail,
+    };
+  }
+
+  if (exitCode === 126) {
+    return {
+      code: "command_failed",
+      message: `${pending.launchLabel}. Yuru found ${pending.command}, but could not execute it.`,
+      detail,
+    };
+  }
+
+  return {
+    code: "command_failed",
+    message: `${pending.launchLabel}. ${pending.command} exited before startup finished.`,
+    detail,
+  };
+}
+
+function startupExitDetail(output: string, exitCode: number, signal?: number): string | undefined {
+  const summary = summarizeStartupOutput(output);
+  if (summary) {
+    return summary;
+  }
+  if (signal && signal > 0) {
+    return `Process exited with signal ${signal}.`;
+  }
+  if (exitCode !== undefined && exitCode !== 0) {
+    return `Process exited with code ${exitCode}.`;
+  }
+  return "Process exited immediately.";
 }
 
 function installApplicationMenu(): void {
@@ -97,6 +221,7 @@ function createWindow(): void {
 function launchPendingSession(
   providerAdapter: SessionProviderAdapter,
   request: LaunchRequest,
+  launchLabel: string,
 ): PendingSession {
   const existingProviderSessionIds = request.existingProviderSessionIds ?? new Set<string>();
   const proc = pty.spawn(providerAdapter.command, request.args, {
@@ -110,24 +235,40 @@ function launchPendingSession(
   const pending: PendingSession = {
     proc,
     provider: providerAdapter.definition.id,
+    command: providerAdapter.command,
+    launchLabel,
+    startupOutput: "",
     sessionCwd: request.sessionCwd,
     providerSessionId: null,
     appSessionId: null,
     startedAt: Date.now(),
     existingProviderSessionIds,
     exited: false,
+    startupSettled: false,
+    startupFailureReported: false,
   };
 
+  setTimeout(() => {
+    pending.startupSettled = true;
+  }, 1500);
+
   proc.onData((data: string) => {
+    if (!pending.startupSettled) {
+      pending.startupOutput = appendStartupOutput(pending.startupOutput, data);
+    }
     if (!pending.appSessionId || !mainWindow || mainWindow.isDestroyed()) {
       return;
     }
     mainWindow.webContents.send("pty:data", pending.appSessionId, data);
   });
 
-  proc.onExit(() => {
+  proc.onExit(({ exitCode, signal }) => {
     pending.exited = true;
     pendingProcesses.delete(proc);
+    if (!pending.startupSettled && !pending.startupFailureReported) {
+      pending.startupFailureReported = true;
+      reportError(startupFailureMessage(pending, exitCode, signal));
+    }
     if (!pending.appSessionId) {
       return;
     }
@@ -178,6 +319,7 @@ async function resolveLazySessionId(
       return;
     }
     pending.providerSessionId = providerSessionId;
+    pending.startupSettled = true;
     updateRuntimeSessionProviderSessionId(appSessionId, providerSessionId);
     await refreshWorktreeWatcher();
     emitSessionsStateChanged();
@@ -302,42 +444,82 @@ app.whenReady().then(() => {
     return listSessionProviderDefinitions();
   });
 
-  ipcMain.on("session:select", async (_event, session: Session) => {
+  ipcMain.handle("errors:list", () => {
+    return listErrorNotices();
+  });
+
+  ipcMain.handle("errors:dismiss", (_event, id: string) => {
+    if (dismissErrorNotice(id)) {
+      emitErrorRemoved(id);
+    }
+  });
+
+  ipcMain.handle("errors:clear", () => {
+    if (clearErrorNotices()) {
+      emitErrorsCleared();
+    }
+  });
+
+  ipcMain.handle("session:select", async (_event, session: Session) => {
     if (session.state === "archived") {
-      return;
+      return failAndReport<boolean>({
+        code: "unknown",
+        message: "Archived sessions cannot be resumed.",
+      });
     }
     if (!isResumableSession(session)) {
-      return;
+      return failAndReport<boolean>({
+        code: "unknown",
+        message: "This session cannot be resumed.",
+      });
     }
     if (ptyProcesses.has(session.id)) {
-      return;
+      return ok(true);
     }
     const providerAdapter = getSessionProvider(session.provider);
-    const pending = launchPendingSession(providerAdapter, await providerAdapter.createResumeLaunch(session));
-    registerSession(session.id, pending, session.providerSessionId);
-    emitSessionsStateChanged();
+    try {
+      const pending = launchPendingSession(
+        providerAdapter,
+        await providerAdapter.createResumeLaunch(session),
+        "Failed to resume session",
+      );
+      registerSession(session.id, pending, session.providerSessionId);
+      emitSessionsStateChanged();
+      return ok(true);
+    } catch (error) {
+      return failAndReport<boolean>(toAppError(error, { command: providerAdapter.command }));
+    }
   });
 
   ipcMain.handle("session:create", async (_event, provider: SessionProvider, repoPath: string) => {
     const providerAdapter = getSessionProvider(provider);
-    const pending = launchPendingSession(providerAdapter, await providerAdapter.createNewLaunch(repoPath));
+    let pending: PendingSession | null = null;
     try {
+      pending = launchPendingSession(
+        providerAdapter,
+        await providerAdapter.createNewLaunch(repoPath),
+        "Failed to start session",
+      );
       const { sessionId, providerSessionId } = await startSession(provider, providerAdapter, pending);
+      pending.startupSettled = true;
       if (providerSessionId) {
         await refreshWorktreeWatcher();
       }
-      return buildActiveSession({
-        sessionId,
-        provider,
-        providerSessionId,
-        project: repoPath,
-        repoPath,
-      });
+      return ok(
+        buildActiveSession({
+          sessionId,
+          provider,
+          providerSessionId,
+          project: repoPath,
+          repoPath,
+        }),
+      );
     } catch (error) {
-      if (!pending.exited) {
+      if (pending && !pending.exited) {
         pending.proc.kill();
       }
-      throw error;
+      const appError = toAppError(error, { command: providerAdapter.command });
+      return pending?.startupFailureReported ? fail<Session>(appError) : failAndReport<Session>(appError);
     }
   });
 
@@ -356,41 +538,54 @@ app.whenReady().then(() => {
 
       // Pre-check: worktree directory and branch name must not already exist
       if (fs.existsSync(worktreePath)) {
-        throw new Error(`Worktree "${worktreeName}" already exists`);
+        return failAndReport<Session>({
+          code: "filesystem_failed",
+          message: `Worktree "${worktreeName}" already exists`,
+        });
       }
       if (await branchExists(repoPath, branchName)) {
-        throw new Error(`Branch "${branchName}" already exists`);
+        return failAndReport<Session>({
+          code: "git_failed",
+          message: `Branch "${branchName}" already exists`,
+        });
       }
 
-      await providerAdapter.prepareWorktree(worktreeContext);
-
-      const pending = launchPendingSession(
-        providerAdapter,
-        await providerAdapter.createWorktreeLaunch(worktreeContext),
-      );
+      let pending: PendingSession | null = null;
       try {
+        await providerAdapter.prepareWorktree(worktreeContext);
+
+        pending = launchPendingSession(
+          providerAdapter,
+          await providerAdapter.createWorktreeLaunch(worktreeContext),
+          "Failed to create worktree session",
+        );
         const { sessionId, providerSessionId } = await startSession(provider, providerAdapter, pending);
+        pending.startupSettled = true;
         await providerAdapter.finalizeWorktree(worktreeContext);
         await refreshWorktreeWatcher();
-        return buildActiveSession({
-          sessionId,
-          provider,
-          providerSessionId,
-          project: worktreePath,
-          repoPath,
-          worktree: {
-            name: worktreeName,
-            branch: branchName,
-          },
-        });
+        return ok(
+          buildActiveSession({
+            sessionId,
+            provider,
+            providerSessionId,
+            project: worktreePath,
+            repoPath,
+            worktree: {
+              name: worktreeName,
+              branch: branchName,
+            },
+          }),
+        );
       } catch (error) {
-        if (!pending.exited) {
+        if (pending && !pending.exited) {
           pending.proc.kill();
         }
         if (fs.existsSync(worktreePath)) {
           await removeWorktree(repoPath, worktreePath).catch(() => undefined);
         }
-        throw error;
+        const command = providerAdapter.command === "codex" ? "git" : providerAdapter.command;
+        const appError = toAppError(error, { command });
+        return pending?.startupFailureReported ? fail<Session>(appError) : failAndReport<Session>(appError);
       }
     },
   );
@@ -398,7 +593,21 @@ app.whenReady().then(() => {
   ipcMain.handle(
     "worktree:remove",
     async (_event, _provider: SessionProvider, repoPath: string, worktreePath: string) => {
-      await removeWorktree(repoPath, worktreePath);
+      const activeSessionExists = Array.from(sessionRuntimeMap.values()).some(
+        (runtime) => runtime.cwd === worktreePath,
+      );
+      if (activeSessionExists) {
+        return failAndReport<boolean>({
+          code: "unknown",
+          message: "Stop the session before removing this worktree.",
+        });
+      }
+      try {
+        await removeWorktree(repoPath, worktreePath);
+        return ok(true);
+      } catch (error) {
+        return failAndReport<boolean>(toAppError(error, { command: "git" }));
+      }
     },
   );
 
@@ -423,66 +632,70 @@ app.whenReady().then(() => {
   ipcMain.handle("git:status", async (_event, sessionId: string) => {
     const runtime = sessionRuntimeMap.get(sessionId);
     if (!runtime) {
-      return [];
+      return ok([]);
     }
     try {
-      return await getGitStatus(runtime.cwd);
-    } catch {
-      return [];
+      return ok(await getGitStatus(runtime.cwd));
+    } catch (error) {
+      return failAndReport(toAppError(error, { command: "git" }));
     }
   });
 
   ipcMain.handle("git:branchContext", async (_event, sessionId: string) => {
     const runtime = sessionRuntimeMap.get(sessionId);
     if (!runtime) {
-      return { branch: null, github: null } satisfies BranchContext;
+      return ok({ branch: null, github: null } satisfies BranchContext);
     }
 
-    const branch = await getCurrentBranch(runtime.cwd);
-    if (!branch) {
-      return { branch: null, github: null } satisfies BranchContext;
-    }
+    try {
+      const branch = await getCurrentBranch(runtime.cwd);
+      if (!branch) {
+        return ok({ branch: null, github: null } satisfies BranchContext);
+      }
 
-    const repoPath =
-      (await getRepoRootForProject(runtime.cwd)) ??
-      getSessionProvider(runtime.provider).repoPathFromProject(runtime.cwd);
-    const github = await getGitHubPullRequestForBranch(repoPath, branch);
-    return { branch, github } satisfies BranchContext;
+      const repoPath =
+        (await getRepoRootForProject(runtime.cwd)) ??
+        getSessionProvider(runtime.provider).repoPathFromProject(runtime.cwd);
+      const github = await getGitHubPullRequestForBranch(repoPath, branch);
+      return ok({ branch, github } satisfies BranchContext);
+    } catch (error) {
+      return failAndReport(toAppError(error, { command: "git" }));
+    }
   });
 
   ipcMain.handle("git:diffDocument", async (_event, sessionId: string, filePath: string) => {
     const runtime = sessionRuntimeMap.get(sessionId);
     if (!runtime) {
-      return null;
+      return ok(null);
     }
     try {
-      return await getGitDiffDocument(runtime.cwd, filePath);
-    } catch {
-      return null;
+      return ok(await getGitDiffDocument(runtime.cwd, filePath));
+    } catch (error) {
+      return failAndReport(toAppError(error, { command: "git" }));
     }
   });
 
   ipcMain.handle("files:list", async (_event, sessionId: string, relativePath?: string) => {
     const runtime = sessionRuntimeMap.get(sessionId);
     if (!runtime) {
-      return [];
+      return ok([]);
     }
     try {
-      return await listFiles(runtime.cwd, relativePath ?? "");
-    } catch {
-      return [];
+      return ok(await listFiles(runtime.cwd, relativePath ?? ""));
+    } catch (error) {
+      return failAndReport(toAppError(error));
     }
   });
 
   ipcMain.handle("files:read", async (_event, sessionId: string, filePath: string) => {
     const runtime = sessionRuntimeMap.get(sessionId);
     if (!runtime) {
-      return null;
+      return ok(null);
     }
     try {
-      return await readFileContent(runtime.cwd, filePath);
-    } catch {
-      return null;
+      return ok(await readFileContent(runtime.cwd, filePath));
+    } catch (error) {
+      return failAndReport(toAppError(error));
     }
   });
 
