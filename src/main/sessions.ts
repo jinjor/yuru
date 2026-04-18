@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { getRepoRootForProject, listWorktrees } from "./git.js";
 import { getGitHubPullRequestForBranch } from "./github.js";
-import { getSessionProvider, sessionProviders } from "./agent-registry.js";
+import { sessionProviders } from "./agent-registry.js";
 import { RuntimeSessionInfo } from "./agent.js";
 import { Session, toSessionKey } from "../shared/session.js";
 
@@ -83,9 +83,7 @@ export async function loadSessions(
       providerSessionId: snapshot.providerSessionId,
       project: snapshot.project,
       projectName: path.basename(snapshot.project),
-      repoPath:
-        repoPathMap.get(snapshot.project) ??
-        getSessionProvider(snapshot.provider).repoPathFromProject(snapshot.project),
+      repoPath: repoPathMap.get(snapshot.project) ?? snapshot.project,
       lastMessage: snapshot.lastMessage,
       timestamp: snapshot.timestamp,
       state,
@@ -107,8 +105,7 @@ export async function loadSessions(
       providerSessionId: info.providerSessionId,
       project: info.cwd,
       projectName: path.basename(info.cwd),
-      repoPath:
-        repoPathMap.get(info.cwd) ?? getSessionProvider(info.provider).repoPathFromProject(info.cwd),
+      repoPath: repoPathMap.get(info.cwd) ?? info.cwd,
       lastMessage: "",
       timestamp: info.startedAt,
       state: "active",

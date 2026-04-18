@@ -6,7 +6,6 @@ import { parseJsonLinesAs, readTextFileIfExists } from "../../agent-store-utils.
 import {
   claudeBranchName,
   claudeHistoryPath,
-  claudeRepoPathFromProject,
   claudeWorktreeCwd,
   pidFilePath,
 } from "./paths.js";
@@ -139,9 +138,6 @@ export const sessionProvider: SessionProviderAdapter = {
   },
   resolveWorktreePath(repoPath, worktreeName) {
     return claudeWorktreeCwd(repoPath, worktreeName);
-  },
-  repoPathFromProject(projectPath) {
-    return claudeRepoPathFromProject(projectPath);
   },
   waitForSessionId,
 };

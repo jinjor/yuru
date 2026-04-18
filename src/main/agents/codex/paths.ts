@@ -17,9 +17,3 @@ export function getCodexSessionsDir(): string {
 export function codexWorktreeCwd(repoPath: string, worktreeName: string): string {
   return path.join(repoPath, worktreeSegment, worktreeName);
 }
-
-export function codexRepoPathFromProject(projectPath: string): string {
-  const marker = `/${worktreeSegment}/`;
-  const idx = projectPath.indexOf(marker);
-  return idx === -1 ? projectPath : projectPath.substring(0, idx);
-}

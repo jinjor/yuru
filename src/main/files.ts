@@ -1,7 +1,6 @@
 import fs from "fs";
 import path from "path";
 import { FileContent, FileTreeNode } from "../shared/ipc.js";
-import { getGitPathStates } from "./git.js";
 
 function normalizeRelativePath(relativePath: string): string {
   return relativePath.split(path.sep).join("/");
@@ -32,19 +31,6 @@ async function detectDirectory(entryPath: string, dirent: fs.Dirent): Promise<bo
   }
 }
 
-function getStatusPriority(status: string): number {
-  switch (status) {
-    case "A":
-    case "R":
-    case "??":
-      return 3;
-    case "M":
-      return 2;
-    default:
-      return 0;
-  }
-}
-
 export function fileExists(cwd: string, relativePath: string): boolean {
   try {
     const targetPath = resolveSessionPath(cwd, relativePath);
@@ -57,33 +43,6 @@ export function fileExists(cwd: string, relativePath: string): boolean {
 export async function listFiles(cwd: string, relativePath = ""): Promise<FileTreeNode[]> {
   const targetPath = resolveSessionPath(cwd, relativePath);
   const entries = await fs.promises.readdir(targetPath, { withFileTypes: true });
-  const gitStates = await getGitPathStates(cwd);
-
-  const statusByPath = new Map<string, string>();
-  const ignoredPaths = new Set<string>();
-  for (const state of gitStates) {
-    if (state.ignored) {
-      ignoredPaths.add(state.path);
-      continue;
-    }
-    const existing = statusByPath.get(state.path);
-    if (!existing || getStatusPriority(state.status) > getStatusPriority(existing)) {
-      statusByPath.set(state.path, state.status);
-    }
-  }
-
-  const aggregateStatusByPath = new Map<string, string>();
-  for (const [statePath, status] of statusByPath) {
-    const segments = statePath.split("/");
-    for (let i = 1; i <= segments.length; i++) {
-      const currentPath = segments.slice(0, i).join("/");
-      const existing = aggregateStatusByPath.get(currentPath);
-      if (!existing || getStatusPriority(status) > getStatusPriority(existing)) {
-        aggregateStatusByPath.set(currentPath, status);
-      }
-    }
-  }
-  const ignoredPathList = Array.from(ignoredPaths);
 
   const nodes = await Promise.all(
     entries
@@ -92,18 +51,12 @@ export async function listFiles(cwd: string, relativePath = ""): Promise<FileTre
         const entryPath = path.join(targetPath, entry.name);
         const entryRelativePath = normalizeRelativePath(path.relative(cwd, entryPath));
         const isDirectory = await detectDirectory(entryPath, entry);
-        const isIgnored = ignoredPathList.some(
-          (ignoredPath) =>
-            entryRelativePath === ignoredPath || entryRelativePath.startsWith(`${ignoredPath}/`),
-        );
         return {
           id: entryRelativePath,
           path: entryRelativePath,
           name: entry.name,
           kind: isDirectory ? "directory" : "file",
           children: isDirectory ? [] : null,
-          gitStatus: aggregateStatusByPath.get(entryRelativePath),
-          isIgnored,
         } satisfies FileTreeNode;
       }),
   );

@@ -59,6 +59,5 @@ export interface SessionProviderAdapter {
   prepareWorktree(context: WorktreeContext): Promise<void>;
   finalizeWorktree(context: WorktreeContext): Promise<void>;
   resolveWorktreePath(repoPath: string, worktreeName: string): string;
-  repoPathFromProject(projectPath: string): string;
   waitForSessionId(pending: PendingSession): Promise<string>;
 }

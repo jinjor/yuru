@@ -1,17 +1,11 @@
 import fs from "fs";
 import path from "path";
-import { GitDiffDocument, GitFileStatus } from "../shared/ipc.js";
+import { GitDiffDocument, GitPathState } from "../shared/ipc.js";
 import { exec, execBuffer } from "./exec.js";
 
 export interface WorktreeInfo {
   path: string;
   branch: string;
-}
-
-export interface GitPathState {
-  path: string;
-  status: string;
-  ignored: boolean;
 }
 
 function parsePorcelainLine(line: string): GitPathState | null {
@@ -70,16 +64,6 @@ export async function getGitPathStates(cwd: string): Promise<GitPathState[]> {
     .split("\n")
     .map(parsePorcelainLine)
     .filter((entry): entry is GitPathState => entry !== null);
-}
-
-export async function getGitStatus(cwd: string): Promise<GitFileStatus[]> {
-  const entries = await getGitPathStates(cwd);
-  return entries
-    .filter((entry) => !entry.ignored && entry.status)
-    .map((entry) => ({
-      path: entry.path,
-      status: entry.status,
-    }));
 }
 
 async function hasHead(cwd: string): Promise<boolean> {

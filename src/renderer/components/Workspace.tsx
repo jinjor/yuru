@@ -1,12 +1,6 @@
 import type { RefObject } from "react";
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
-import type { TreeApi } from "react-arborist";
-import type {
-  FileContent,
-  FileTreeNode,
-  GitDiffDocument,
-  GitFileStatus,
-} from "../../shared/ipc";
+import type { BranchContext, FileContent, GitDiffDocument } from "../../shared/ipc";
 import type { GitHubPullRequest } from "../../shared/session";
 import { DiffPreviewPanel } from "./DiffPreviewPanel";
 import { ExplorerPanel } from "./ExplorerPanel";
@@ -14,7 +8,6 @@ import { FilePreviewPanel } from "./FilePreviewPanel";
 import { TerminalPanel } from "./TerminalPanel";
 import { usePaneLayout } from "../hooks/usePaneLayout";
 import type { PreviewSelection } from "../types";
-import { collectAncestorDirectories, replaceNodeChildren } from "../utils/fileTree";
 import { resultDataOrNull } from "../utils/result";
 
 interface WorkspaceProps {
@@ -22,7 +15,7 @@ interface WorkspaceProps {
   isCreatingSession: boolean;
   onOpenExternal: (url: string) => void;
   refreshSessions: () => void;
-  selectedId: string | null;
+  sessionId: string | null;
   sidebarWidth: number;
 }
 
@@ -31,38 +24,22 @@ export function Workspace({
   isCreatingSession,
   onOpenExternal,
   refreshSessions,
-  selectedId,
+  sessionId,
   sidebarWidth,
 }: WorkspaceProps) {
   const workspaceColumnRef = useRef<HTMLDivElement>(null);
-  const [changedFiles, setChangedFiles] = useState<GitFileStatus[]>([]);
-  const [activeExplorerTab, setActiveExplorerTab] = useState<"changes" | "files">("changes");
   const [previewSelection, setPreviewSelection] = useState<PreviewSelection | null>(null);
   const [diffDocument, setDiffDocument] = useState<GitDiffDocument | null>(null);
   const [isLoadingDiff, setIsLoadingDiff] = useState(false);
-  const [treeData, setTreeData] = useState<FileTreeNode[]>([]);
-  const [loadingDirectories, setLoadingDirectories] = useState<Set<string>>(new Set());
   const [fileContent, setFileContent] = useState<FileContent | null>(null);
   const [isLoadingFile, setIsLoadingFile] = useState(false);
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
   const [currentGitHub, setCurrentGitHub] = useState<GitHubPullRequest | null>(null);
-  const loadedDirectoriesRef = useRef<Set<string>>(new Set());
-  const loadingDirectoriesRef = useRef<Set<string>>(new Set());
-  const treeRef = useRef<TreeApi<FileTreeNode> | undefined>(undefined);
   const paneLayout = usePaneLayout({
     appRef,
     sidebarWidth,
     workspaceColumnRef,
   });
-
-  const resetFileExplorerState = useCallback((): void => {
-    setTreeData([]);
-    loadedDirectoriesRef.current = new Set();
-    loadingDirectoriesRef.current = new Set();
-    setLoadingDirectories(loadingDirectoriesRef.current);
-    setFileContent(null);
-    setIsLoadingFile(false);
-  }, []);
 
   const resetPreviewState = useCallback((): void => {
     setPreviewSelection(null);
@@ -70,133 +47,25 @@ export function Workspace({
     setIsLoadingDiff(false);
   }, []);
 
-  const loadDirectory = useCallback(
-    async (relativePath = ""): Promise<void> => {
-      if (!selectedId) {
-        return;
-      }
-      if (
-        loadedDirectoriesRef.current.has(relativePath) ||
-        loadingDirectoriesRef.current.has(relativePath)
-      ) {
-        return;
-      }
-
-      loadingDirectoriesRef.current = new Set(loadingDirectoriesRef.current).add(relativePath);
-      setLoadingDirectories(loadingDirectoriesRef.current);
-      try {
-        const result = await window.electronAPI.listFiles(selectedId, relativePath);
-        const nextNodes = resultDataOrNull(result);
-        if (!nextNodes) {
-          return;
-        }
-
-        setTreeData((prev) =>
-          relativePath ? replaceNodeChildren(prev, relativePath, nextNodes) : nextNodes,
-        );
-        loadedDirectoriesRef.current = new Set(loadedDirectoriesRef.current).add(relativePath);
-      } finally {
-        const nextLoadingDirectories = new Set(loadingDirectoriesRef.current);
-        nextLoadingDirectories.delete(relativePath);
-        loadingDirectoriesRef.current = nextLoadingDirectories;
-        setLoadingDirectories(nextLoadingDirectories);
-      }
-    },
-    [selectedId],
-  );
-
-  const revealChangedDirectories = useCallback(async (): Promise<void> => {
-    const directoryPaths = collectAncestorDirectories(changedFiles.map((file) => file.path));
-
-    await loadDirectory("");
-    for (const directoryPath of directoryPaths) {
-      await loadDirectory(directoryPath);
-    }
-
-    requestAnimationFrame(() => {
-      treeRef.current?.closeAll();
-      for (const directoryPath of directoryPaths) {
-        treeRef.current?.open(directoryPath);
-      }
-    });
-  }, [changedFiles, loadDirectory]);
-
-  const collapseAllDirectories = useCallback((): void => {
-    treeRef.current?.closeAll();
+  const handleBranchContextChange = useCallback((context: BranchContext): void => {
+    setCurrentBranch(context.branch);
+    setCurrentGitHub(context.github);
   }, []);
 
   useEffect(() => {
-    if (!selectedId) {
-      setChangedFiles([]);
-      resetPreviewState();
-      setCurrentBranch(null);
-      setCurrentGitHub(null);
-      resetFileExplorerState();
+    if (sessionId) {
       return;
     }
 
-    let cancelled = false;
-    const sessionId = selectedId;
+    resetPreviewState();
+    setFileContent(null);
+    setIsLoadingFile(false);
     setCurrentBranch(null);
     setCurrentGitHub(null);
-    setChangedFiles([]);
-
-    const fetchStatus = async (): Promise<void> => {
-      const [filesResult, branchContextResult] = await Promise.all([
-        window.electronAPI.getGitStatus(sessionId),
-        window.electronAPI.getGitBranchContext(sessionId),
-      ]);
-      if (cancelled) {
-        return;
-      }
-
-      const files = resultDataOrNull(filesResult);
-      if (files) {
-        setChangedFiles((prev) => {
-          if (JSON.stringify(prev) === JSON.stringify(files)) {
-            return prev;
-          }
-          return files;
-        });
-        setPreviewSelection((prev) => {
-          if (prev?.kind === "diff" && !files.some((file) => file.path === prev.path)) {
-            return null;
-          }
-          return prev;
-        });
-      }
-
-      const branchContext = resultDataOrNull(branchContextResult);
-      if (branchContext) {
-        setCurrentBranch(branchContext.branch);
-        setCurrentGitHub(branchContext.github);
-      }
-
-      refreshSessions();
-    };
-
-    void fetchStatus();
-    const interval = setInterval(() => {
-      void fetchStatus();
-    }, 3000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [refreshSessions, resetFileExplorerState, resetPreviewState, selectedId]);
+  }, [resetPreviewState, sessionId]);
 
   useEffect(() => {
-    if (!selectedId) {
-      return;
-    }
-
-    resetFileExplorerState();
-    void loadDirectory("");
-  }, [loadDirectory, resetFileExplorerState, selectedId]);
-
-  useEffect(() => {
-    if (!selectedId || previewSelection?.kind !== "diff") {
+    if (!sessionId || previewSelection?.kind !== "diff") {
       setDiffDocument(null);
       setIsLoadingDiff(false);
       return;
@@ -206,7 +75,10 @@ export function Workspace({
     setIsLoadingDiff(true);
 
     const fetchDiff = async (showLoader: boolean): Promise<void> => {
-      const result = await window.electronAPI.getGitDiffDocument(selectedId, previewSelection.path);
+      const result = await window.electronAPI.getGitDiffDocument(
+        sessionId,
+        previewSelection.path,
+      );
       if (cancelled) {
         return;
       }
@@ -227,10 +99,10 @@ export function Workspace({
       cancelled = true;
       clearInterval(interval);
     };
-  }, [previewSelection, selectedId]);
+  }, [previewSelection, sessionId]);
 
   useEffect(() => {
-    if (!selectedId || previewSelection?.kind !== "file") {
+    if (!sessionId || previewSelection?.kind !== "file") {
       setFileContent(null);
       setIsLoadingFile(false);
       return;
@@ -238,7 +110,7 @@ export function Workspace({
 
     let cancelled = false;
     setIsLoadingFile(true);
-    window.electronAPI.readFile(selectedId, previewSelection.path).then((result) => {
+    window.electronAPI.readFile(sessionId, previewSelection.path).then((result) => {
       if (cancelled) {
         return;
       }
@@ -251,7 +123,7 @@ export function Workspace({
     return () => {
       cancelled = true;
     };
-  }, [previewSelection, selectedId]);
+  }, [previewSelection, sessionId]);
 
   return (
     <>
@@ -299,13 +171,12 @@ export function Workspace({
           isCreatingSession={isCreatingSession}
           onFileLinkActivate={(filePath, line) => {
             setPreviewSelection({ kind: "file", path: filePath, line });
-            setActiveExplorerTab("files");
           }}
           onOpenExternal={onOpenExternal}
-          selectedId={selectedId}
+          selectedId={sessionId}
         />
       </div>
-      {selectedId && (
+      {sessionId && (
         <>
           <div
             className="pane-resize-handle vertical"
@@ -313,27 +184,11 @@ export function Workspace({
             aria-hidden="true"
           />
           <ExplorerPanel
-            activeTab={activeExplorerTab}
-            onChangeTab={setActiveExplorerTab}
-            files={changedFiles}
-            onCollapseAllDirectories={collapseAllDirectories}
-            onRevealChangedDirectories={() => {
-              void revealChangedDirectories();
-            }}
-            selectedDiffFile={previewSelection?.kind === "diff" ? previewSelection.path : null}
-            onSelectDiffFile={(filePath) => {
-              setPreviewSelection({ kind: "diff", path: filePath });
-            }}
-            treeData={treeData}
-            treeRef={treeRef}
-            selectedTreeFile={previewSelection?.kind === "file" ? previewSelection.path : null}
-            onSelectTreeFile={(filePath) => {
-              setPreviewSelection({ kind: "file", path: filePath });
-            }}
-            onToggleDirectory={(path) => {
-              void loadDirectory(path);
-            }}
-            treeLoading={loadingDirectories.has("")}
+            onBranchContextChange={handleBranchContextChange}
+            onPreviewSelectionChange={setPreviewSelection}
+            previewSelection={previewSelection}
+            refreshSessions={refreshSessions}
+            sessionId={sessionId}
             width={paneLayout.changesPanelWidth}
           />
         </>

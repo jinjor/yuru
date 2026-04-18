@@ -3,7 +3,6 @@ import { createWorktree } from "../../git.js";
 import { SessionProviderAdapter, SessionSnapshot, PendingSession, WorktreeContext } from "../../agent.js";
 import { listFilesRecursive, parseJsonLinesAs, readTextFileIfExists } from "../../agent-store-utils.js";
 import {
-  codexRepoPathFromProject,
   codexWorktreeCwd,
   getCodexHistoryPath,
   getCodexSessionsDir,
@@ -223,9 +222,6 @@ export const sessionProvider: SessionProviderAdapter = {
   },
   resolveWorktreePath(repoPath, worktreeName) {
     return codexWorktreeCwd(repoPath, worktreeName);
-  },
-  repoPathFromProject(projectPath) {
-    return codexRepoPathFromProject(projectPath);
   },
   waitForSessionId,
 };

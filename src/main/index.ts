@@ -4,7 +4,7 @@ import path from "path";
 import * as pty from "node-pty";
 import { loadSessions } from "./sessions.js";
 import {
-  getGitStatus,
+  getGitPathStates,
   getGitDiffDocument,
   getCurrentBranch,
   getRepoRootForProject,
@@ -25,8 +25,15 @@ import {
   WorktreeContext,
 } from "./agent.js";
 import { WorktreeWatcher } from "./worktree-watcher.js";
+import { FileTreeWatcher } from "./file-tree-watcher.js";
 import fs from "fs";
-import { ActiveSessionState, AppError, AppErrorNotice, BranchContext, Result } from "../shared/ipc.js";
+import {
+  ActiveSessionState,
+  AppError,
+  AppErrorNotice,
+  BranchContext,
+  Result,
+} from "../shared/ipc.js";
 import {
   isResumableSession,
   Session,
@@ -49,6 +56,12 @@ const ptyAttachments = new Map<string, { ready: boolean; pendingChunks: string[]
 const pendingProcesses = new Set<pty.IPty>();
 const sessionRuntimeMap = new Map<string, RuntimeSessionInfo>();
 let worktreeWatcher: WorktreeWatcher | null = null;
+const fileTreeWatcher = new FileTreeWatcher((sessionId, relativePath) => {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  mainWindow.webContents.send("files:changed", sessionId, relativePath);
+});
 const APP_NAME = "Yuru";
 const STARTUP_OUTPUT_LIMIT = 4000;
 const TERMINAL_SCROLLBACK_LIMIT = 200000;
@@ -311,6 +324,7 @@ function launchPendingSession(
     }
     ptyProcesses.delete(pending.appSessionId);
     ptyAttachments.delete(pending.appSessionId);
+    fileTreeWatcher.clearSession(pending.appSessionId);
     sessionRuntimeMap.delete(pending.appSessionId);
     void refreshWorktreeWatcher();
     emitSessionsStateChanged();
@@ -696,15 +710,15 @@ app.whenReady().then(() => {
     await shell.openExternal(url);
   });
 
-  ipcMain.handle("git:status", async (_event, sessionId: string) => {
+  ipcMain.handle("git:pathStates", async (_event, sessionId: string) => {
     const runtime = sessionRuntimeMap.get(sessionId);
     if (!runtime) {
       return ok([]);
     }
     try {
-      return ok(await getGitStatus(runtime.cwd));
+      return ok(await getGitPathStates(runtime.cwd));
     } catch (error) {
-      return failAndReport(toAppError(error, { command: "git" }));
+      return ok([]);
     }
   });
 
@@ -720,9 +734,7 @@ app.whenReady().then(() => {
         return ok({ branch: null, github: null } satisfies BranchContext);
       }
 
-      const repoPath =
-        (await getRepoRootForProject(runtime.cwd)) ??
-        getSessionProvider(runtime.provider).repoPathFromProject(runtime.cwd);
+      const repoPath = (await getRepoRootForProject(runtime.cwd)) ?? runtime.cwd;
       const github = await getGitHubPullRequestForBranch(repoPath, branch);
       return ok({ branch, github } satisfies BranchContext);
     } catch (error) {
@@ -774,6 +786,16 @@ app.whenReady().then(() => {
     return fileExists(runtime.cwd, filePath);
   });
 
+  ipcMain.handle("files:syncWatchTargets", async (_event, sessionId: string, relativePaths: string[]) => {
+    const runtime = sessionRuntimeMap.get(sessionId);
+    if (!runtime) {
+      fileTreeWatcher.clearSession(sessionId);
+      return;
+    }
+
+    await fileTreeWatcher.syncSessionTargets(sessionId, runtime.cwd, relativePaths);
+  });
+
   ipcMain.on("pty:write", (_event, sessionId: string, data: string) => {
     const proc = ptyProcesses.get(sessionId);
     if (proc) {
@@ -793,6 +815,7 @@ app.on("window-all-closed", () => {
   if (worktreeWatcher) {
     worktreeWatcher.stop();
   }
+  fileTreeWatcher.stop();
   killAllPty();
   app.quit();
 });

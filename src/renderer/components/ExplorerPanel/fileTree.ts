@@ -1,4 +1,4 @@
-import type { FileTreeNode } from "../../shared/ipc";
+import type { FileTreeNode } from "../../../shared/ipc";
 
 export function replaceNodeChildren(
   nodes: FileTreeNode[],
@@ -39,4 +39,32 @@ export function collectAncestorDirectories(filePaths: string[]): string[] {
     }
     return a.localeCompare(b);
   });
+}
+
+export function collectDirectoryPaths(nodes: FileTreeNode[]): Set<string> {
+  const paths = new Set<string>();
+
+  function walk(nextNodes: FileTreeNode[]): void {
+    for (const node of nextNodes) {
+      if (node.kind !== "directory") {
+        continue;
+      }
+
+      paths.add(node.path);
+      if (node.children) {
+        walk(node.children);
+      }
+    }
+  }
+
+  walk(nodes);
+  return paths;
+}
+
+export function normalizeExpandedDirectories(
+  expandedDirectories: readonly string[],
+  nodes: FileTreeNode[],
+): string[] {
+  const validPaths = collectDirectoryPaths(nodes);
+  return expandedDirectories.filter((path) => validPaths.has(path));
 }

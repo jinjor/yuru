@@ -35,14 +35,18 @@ export interface GitFileStatus {
   status: string;
 }
 
+export interface GitPathState {
+  path: string;
+  status: string;
+  ignored: boolean;
+}
+
 export interface FileTreeNode {
   id: string;
   path: string;
   name: string;
   kind: "file" | "directory";
   children: FileTreeNode[] | null;
-  gitStatus?: string;
-  isIgnored: boolean;
 }
 
 export interface FileContent {
@@ -90,16 +94,18 @@ export interface ElectronAPI {
   ) => Promise<Result<boolean>>;
   selectFolder: () => Promise<string | null>;
   openExternal: (url: string) => Promise<void>;
-  getGitStatus: (sessionId: string) => Promise<Result<GitFileStatus[]>>;
+  getGitPathStates: (sessionId: string) => Promise<Result<GitPathState[]>>;
   getGitBranchContext: (sessionId: string) => Promise<Result<BranchContext>>;
   getGitDiffDocument: (sessionId: string, filePath: string) => Promise<Result<GitDiffDocument | null>>;
   listFiles: (sessionId: string, relativePath?: string) => Promise<Result<FileTreeNode[]>>;
   readFile: (sessionId: string, filePath: string) => Promise<Result<FileContent | null>>;
   fileExists: (sessionId: string, filePath: string) => Promise<boolean>;
+  syncFileWatchTargets: (sessionId: string, relativePaths: string[]) => Promise<void>;
   onErrorAdded: (callback: (error: AppErrorNotice) => void) => void;
   onErrorRemoved: (callback: (id: string) => void) => void;
   onErrorsCleared: (callback: () => void) => void;
   onSessionsStateChanged: (callback: (active: ActiveSessionState[]) => void) => void;
+  onFileTreeChanged: (callback: (sessionId: string, relativePath: string) => void) => () => void;
   attachPty: (sessionId: string) => Promise<string>;
   readyPty: (sessionId: string) => Promise<void>;
   detachPty: (sessionId: string) => Promise<void>;

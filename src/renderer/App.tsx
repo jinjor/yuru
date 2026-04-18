@@ -231,7 +231,7 @@ export function App() {
         isCreatingSession={isCreatingSession}
         onOpenExternal={openExternal}
         refreshSessions={refreshSessions}
-        selectedId={selectedId}
+        sessionId={selectedId}
         sidebarWidth={sidebarWidth}
       />
       {showRepoPicker && (

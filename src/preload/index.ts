@@ -17,7 +17,7 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke("worktree:remove", provider, repoPath, worktreePath),
   selectFolder: () => ipcRenderer.invoke("dialog:selectFolder"),
   openExternal: (url: string) => ipcRenderer.invoke("shell:openExternal", url),
-  getGitStatus: (sessionId: string) => ipcRenderer.invoke("git:status", sessionId),
+  getGitPathStates: (sessionId: string) => ipcRenderer.invoke("git:pathStates", sessionId),
   getGitBranchContext: (sessionId: string) => ipcRenderer.invoke("git:branchContext", sessionId),
   getGitDiffDocument: (sessionId: string, filePath: string) =>
     ipcRenderer.invoke("git:diffDocument", sessionId, filePath),
@@ -26,6 +26,8 @@ const electronAPI: ElectronAPI = {
   readFile: (sessionId: string, filePath: string) =>
     ipcRenderer.invoke("files:read", sessionId, filePath),
   fileExists: (sessionId: string, filePath: string) => ipcRenderer.invoke("files:exists", sessionId, filePath),
+  syncFileWatchTargets: (sessionId: string, relativePaths: string[]) =>
+    ipcRenderer.invoke("files:syncWatchTargets", sessionId, relativePaths),
   onErrorAdded: (callback) =>
     ipcRenderer.on("errors:added", (_event, error) => callback(error)),
   onErrorRemoved: (callback) =>
@@ -34,6 +36,17 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.on("errors:cleared", () => callback()),
   onSessionsStateChanged: (callback) =>
     ipcRenderer.on("sessions:stateChanged", (_event, active) => callback(active)),
+  onFileTreeChanged: (callback) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      sessionId: string,
+      relativePath: string,
+    ) => callback(sessionId, relativePath);
+    ipcRenderer.on("files:changed", listener);
+    return () => {
+      ipcRenderer.removeListener("files:changed", listener);
+    };
+  },
   attachPty: (sessionId: string) => ipcRenderer.invoke("pty:attach", sessionId),
   readyPty: (sessionId: string) => ipcRenderer.invoke("pty:ready", sessionId),
   detachPty: (sessionId: string) => ipcRenderer.invoke("pty:detach", sessionId),
