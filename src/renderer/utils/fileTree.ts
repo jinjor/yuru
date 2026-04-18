@@ -21,3 +21,22 @@ export function replaceNodeChildren(
     };
   });
 }
+
+export function collectAncestorDirectories(filePaths: string[]): string[] {
+  const directories = new Set<string>();
+
+  for (const filePath of filePaths) {
+    const segments = filePath.split("/");
+    for (let i = 1; i < segments.length; i++) {
+      directories.add(segments.slice(0, i).join("/"));
+    }
+  }
+
+  return Array.from(directories).sort((a, b) => {
+    const depthDiff = a.split("/").length - b.split("/").length;
+    if (depthDiff !== 0) {
+      return depthDiff;
+    }
+    return a.localeCompare(b);
+  });
+}

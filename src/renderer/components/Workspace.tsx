@@ -1,5 +1,6 @@
 import type { RefObject } from "react";
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
+import type { TreeApi } from "react-arborist";
 import type {
   FileContent,
   FileTreeNode,
@@ -13,7 +14,7 @@ import { FilePreviewPanel } from "./FilePreviewPanel";
 import { TerminalPanel } from "./TerminalPanel";
 import { usePaneLayout } from "../hooks/usePaneLayout";
 import type { PreviewSelection } from "../types";
-import { replaceNodeChildren } from "../utils/fileTree";
+import { collectAncestorDirectories, replaceNodeChildren } from "../utils/fileTree";
 import { resultDataOrNull } from "../utils/result";
 
 interface WorkspaceProps {
@@ -47,6 +48,7 @@ export function Workspace({
   const [currentGitHub, setCurrentGitHub] = useState<GitHubPullRequest | null>(null);
   const loadedDirectoriesRef = useRef<Set<string>>(new Set());
   const loadingDirectoriesRef = useRef<Set<string>>(new Set());
+  const treeRef = useRef<TreeApi<FileTreeNode> | undefined>(undefined);
   const paneLayout = usePaneLayout({
     appRef,
     sidebarWidth,
@@ -102,6 +104,26 @@ export function Workspace({
     },
     [selectedId],
   );
+
+  const revealChangedDirectories = useCallback(async (): Promise<void> => {
+    const directoryPaths = collectAncestorDirectories(changedFiles.map((file) => file.path));
+
+    await loadDirectory("");
+    for (const directoryPath of directoryPaths) {
+      await loadDirectory(directoryPath);
+    }
+
+    requestAnimationFrame(() => {
+      treeRef.current?.closeAll();
+      for (const directoryPath of directoryPaths) {
+        treeRef.current?.open(directoryPath);
+      }
+    });
+  }, [changedFiles, loadDirectory]);
+
+  const collapseAllDirectories = useCallback((): void => {
+    treeRef.current?.closeAll();
+  }, []);
 
   useEffect(() => {
     if (!selectedId) {
@@ -294,11 +316,16 @@ export function Workspace({
             activeTab={activeExplorerTab}
             onChangeTab={setActiveExplorerTab}
             files={changedFiles}
+            onCollapseAllDirectories={collapseAllDirectories}
+            onRevealChangedDirectories={() => {
+              void revealChangedDirectories();
+            }}
             selectedDiffFile={previewSelection?.kind === "diff" ? previewSelection.path : null}
             onSelectDiffFile={(filePath) => {
               setPreviewSelection({ kind: "diff", path: filePath });
             }}
             treeData={treeData}
+            treeRef={treeRef}
             selectedTreeFile={previewSelection?.kind === "file" ? previewSelection.path : null}
             onSelectTreeFile={(filePath) => {
               setPreviewSelection({ kind: "file", path: filePath });

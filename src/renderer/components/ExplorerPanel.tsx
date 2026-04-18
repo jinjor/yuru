@@ -1,5 +1,6 @@
+import type { RefObject } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { Tree, type NodeRendererProps } from "react-arborist";
+import { Tree, type NodeRendererProps, type TreeApi } from "react-arborist";
 import type { FileTreeNode, GitFileStatus } from "../../shared/ipc";
 import { useElementSize } from "../hooks/useElementSize";
 import { statusColor, statusLabel, treeStatusClass } from "../utils/git";
@@ -8,11 +9,14 @@ interface ExplorerPanelProps {
   activeTab: "changes" | "files";
   files: GitFileStatus[];
   onChangeTab: (tab: "changes" | "files") => void;
+  onCollapseAllDirectories: () => void;
+  onRevealChangedDirectories: () => void;
   onSelectDiffFile: (filePath: string) => void;
   onSelectTreeFile: (filePath: string) => void;
   onToggleDirectory: (path: string) => void;
   selectedDiffFile: string | null;
   selectedTreeFile: string | null;
+  treeRef: RefObject<TreeApi<FileTreeNode> | undefined>;
   treeData: FileTreeNode[];
   treeLoading: boolean;
   width: number;
@@ -22,11 +26,14 @@ export function ExplorerPanel({
   activeTab,
   files,
   onChangeTab,
+  onCollapseAllDirectories,
+  onRevealChangedDirectories,
   onSelectDiffFile,
   onSelectTreeFile,
   onToggleDirectory,
   selectedDiffFile,
   selectedTreeFile,
+  treeRef,
   treeData,
   treeLoading,
   width,
@@ -37,7 +44,7 @@ export function ExplorerPanel({
 
   return (
     <aside ref={panelRef} className="changes-panel" style={{ width, minWidth: width }}>
-      <div ref={headerRef} className="panel-header">
+      <div ref={headerRef} className="panel-header panel-header-stack">
         <div className="panel-tabs">
           <button
             className={`panel-tab ${activeTab === "changes" ? "active" : ""}`}
@@ -55,6 +62,29 @@ export function ExplorerPanel({
             Files
           </button>
         </div>
+        {activeTab === "files" && (
+          <div className="panel-subactions">
+            <span className="panel-subactions-label">Files</span>
+            <div className="panel-header-actions">
+              <button
+                className="panel-header-action"
+                onClick={onRevealChangedDirectories}
+                disabled={files.length === 0}
+                title="Expand only the directories that contain changed files"
+              >
+                Changed dirs
+              </button>
+              <button
+                className="panel-header-action"
+                onClick={onCollapseAllDirectories}
+                disabled={treeData.length === 0}
+                title="Collapse all directories"
+              >
+                Collapse all
+              </button>
+            </div>
+          </div>
+        )}
       </div>
       {activeTab === "changes" ? (
         <div className="changes-list">
@@ -85,6 +115,7 @@ export function ExplorerPanel({
             <div className="empty-changes">No files</div>
           ) : (
             <Tree<FileTreeNode>
+              ref={treeRef}
               data={treeData}
               width="100%"
               height={treeHeight || 400}

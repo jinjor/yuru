@@ -26,7 +26,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 
 | ID | Type | Area | Item | Why now |
 |---|---|---|---|---|
-| F26 | feature | Files | diff があるファイルまでディレクトリを自動展開表示する | 実際に触って価値を確かめたい |
 | F27 | feature | Changes | staged / unstaged を分けて表示する | git の作業状態を仕事ですぐ把握したい |
 | F14 | feature | Files | ファイル検索 | ツリーを辿らずに目的のファイルへ行きたい |
 | F15 | feature | Search | コード検索 | repo 全体を横断してすぐ探したい |
@@ -49,11 +48,11 @@ UI 改善も機能追加も同じ土俵で扱う。
 | P7 | polish | New Session | `WT` 表示を置き換える | 文言かアイコンかを再検討 |
 | P8 | polish | New Session | Claude / Codex のアイコンを出す | Sessions 側とトーンを揃えたい |
 | P9 | polish | New Session | 長い repo path の省略ルールを見直す | 折りたたみが不自然 |
+| P13 | polish | Files | Files タブのアクション UI を整える | 階層感が弱く見た目もまだ野暮ったい |
 | F3 | feature | Changes | 変更行数も出す | diff 集計で対応したい |
 | F4 | feature | Diff | 各ファイルの変更行数表示 | Changes と整合させたい |
 | F5 | feature | Diff | 右端スクロール領域に差分位置マーカーを出す | minimap 的な把握用 |
 | F6 | feature | Files / Code | 追加・削除・更新された行を示す | diff 情報の再利用を想定 |
-| P12 | polish | Files | ディレクトリをすべて閉じる操作を追加する | ツリー状態をすぐリセットしたい |
 | F7 | feature | Terminal | ファイル名が改行を跨いでもリンクできるようにする | linkifier 改善 |
 | F8 | feature | Terminal | ファイルクリック時にツリー側も開く | navigation の連動 |
 | F9 | feature | Terminal | ウィンドウを広げた時に 1 行の文字数を増やす | xterm fit を調整 |
