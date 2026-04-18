@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-04-18
+Last updated: 2026-04-19
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -60,6 +60,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | I3 | feature | App Runtime | 起動元ごとに `start/stop/restart` できるようにする | 複数起動時に別の Yuru を巻き込まないようにしたい |
 | I4 | feature | Persistence | Yuru の状態を永続化できるようにする | 何をどこに持つかを実装可能な形にしたい |
 | I5 | feature | Persistence | dev / prd で保存先を分ける | 開発版の状態が本番に影響しないようにしたい |
+| I10 | investigate | Files | 自前 tree で大量のファイルを表示した時の重さ対策を考える | 切り替え後に実測して判断したい |
 
 ## Later
 
