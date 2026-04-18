@@ -44,11 +44,14 @@ import {
 
 let mainWindow: BrowserWindow | null = null;
 const ptyProcesses = new Map<string, pty.IPty>();
+const ptyScrollback = new Map<string, string>();
+const ptyAttachments = new Map<string, { ready: boolean; pendingChunks: string[] }>();
 const pendingProcesses = new Set<pty.IPty>();
 const sessionRuntimeMap = new Map<string, RuntimeSessionInfo>();
 let worktreeWatcher: WorktreeWatcher | null = null;
 const APP_NAME = "Yuru";
 const STARTUP_OUTPUT_LIMIT = 4000;
+const TERMINAL_SCROLLBACK_LIMIT = 200000;
 
 app.setName(APP_NAME);
 
@@ -116,6 +119,14 @@ function appendStartupOutput(existing: string, chunk: string): string {
     return combined;
   }
   return combined.slice(-STARTUP_OUTPUT_LIMIT);
+}
+
+function appendTerminalOutput(existing: string, chunk: string): string {
+  const combined = `${existing}${chunk}`;
+  if (combined.length <= TERMINAL_SCROLLBACK_LIMIT) {
+    return combined;
+  }
+  return combined.slice(-TERMINAL_SCROLLBACK_LIMIT);
 }
 
 function stripAnsi(text: string): string {
@@ -237,6 +248,7 @@ function launchPendingSession(
     provider: providerAdapter.definition.id,
     command: providerAdapter.command,
     launchLabel,
+    outputBuffer: "",
     startupOutput: "",
     sessionCwd: request.sessionCwd,
     providerSessionId: null,
@@ -253,10 +265,23 @@ function launchPendingSession(
   }, 1500);
 
   proc.onData((data: string) => {
+    pending.outputBuffer = appendTerminalOutput(pending.outputBuffer, data);
     if (!pending.startupSettled) {
       pending.startupOutput = appendStartupOutput(pending.startupOutput, data);
     }
     if (!pending.appSessionId || !mainWindow || mainWindow.isDestroyed()) {
+      return;
+    }
+    ptyScrollback.set(
+      pending.appSessionId,
+      appendTerminalOutput(ptyScrollback.get(pending.appSessionId) ?? "", data),
+    );
+    const attachment = ptyAttachments.get(pending.appSessionId);
+    if (!attachment) {
+      return;
+    }
+    if (!attachment.ready) {
+      attachment.pendingChunks.push(data);
       return;
     }
     mainWindow.webContents.send("pty:data", pending.appSessionId, data);
@@ -273,6 +298,7 @@ function launchPendingSession(
       return;
     }
     ptyProcesses.delete(pending.appSessionId);
+    ptyAttachments.delete(pending.appSessionId);
     sessionRuntimeMap.delete(pending.appSessionId);
     void refreshWorktreeWatcher();
     emitSessionsStateChanged();
@@ -290,6 +316,7 @@ function registerSession(
   pending.appSessionId = appSessionId;
   pendingProcesses.delete(pending.proc);
   ptyProcesses.set(appSessionId, pending.proc);
+  ptyScrollback.set(appSessionId, pending.outputBuffer);
   sessionRuntimeMap.set(appSessionId, {
     cwd: pending.sessionCwd,
     provider: pending.provider,
@@ -336,7 +363,9 @@ function killAllPty(): void {
     proc.kill();
   }
   ptyProcesses.clear();
+  ptyAttachments.clear();
   pendingProcesses.clear();
+  ptyScrollback.clear();
 }
 
 function emitSessionsStateChanged(): void {
@@ -442,6 +471,32 @@ app.whenReady().then(() => {
 
   ipcMain.handle("providers:list", () => {
     return listSessionProviderDefinitions();
+  });
+
+  ipcMain.handle("pty:attach", (_event, sessionId: string) => {
+    ptyAttachments.set(sessionId, {
+      ready: false,
+      pendingChunks: [],
+    });
+    return ptyScrollback.get(sessionId) ?? "";
+  });
+
+  ipcMain.handle("pty:ready", (_event, sessionId: string) => {
+    const attachment = ptyAttachments.get(sessionId);
+    if (!attachment || !mainWindow || mainWindow.isDestroyed()) {
+      return;
+    }
+
+    attachment.ready = true;
+    const pendingChunk = attachment.pendingChunks.join("");
+    attachment.pendingChunks = [];
+    if (pendingChunk) {
+      mainWindow.webContents.send("pty:data", sessionId, pendingChunk);
+    }
+  });
+
+  ipcMain.handle("pty:detach", (_event, sessionId: string) => {
+    ptyAttachments.delete(sessionId);
   });
 
   ipcMain.handle("errors:list", () => {

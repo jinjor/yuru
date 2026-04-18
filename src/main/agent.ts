@@ -22,6 +22,7 @@ export interface PendingSession {
   provider: SessionProvider;
   command: string;
   launchLabel: string;
+  outputBuffer: string;
   startupOutput: string;
   sessionCwd: string;
   providerSessionId: string | null;

@@ -34,11 +34,20 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.on("errors:cleared", () => callback()),
   onSessionsStateChanged: (callback) =>
     ipcRenderer.on("sessions:stateChanged", (_event, active) => callback(active)),
+  attachPty: (sessionId: string) => ipcRenderer.invoke("pty:attach", sessionId),
+  readyPty: (sessionId: string) => ipcRenderer.invoke("pty:ready", sessionId),
+  detachPty: (sessionId: string) => ipcRenderer.invoke("pty:detach", sessionId),
   ptyWrite: (sessionId: string, data: string) => ipcRenderer.send("pty:write", sessionId, data),
   ptyResize: (sessionId: string, cols: number, rows: number) =>
     ipcRenderer.send("pty:resize", sessionId, cols, rows),
-  onPtyData: (callback) =>
-    ipcRenderer.on("pty:data", (_event, sessionId, data) => callback(sessionId, data)),
+  onPtyData: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, sessionId: string, data: string) =>
+      callback(sessionId, data);
+    ipcRenderer.on("pty:data", listener);
+    return () => {
+      ipcRenderer.removeListener("pty:data", listener);
+    };
+  },
 };
 
 contextBridge.exposeInMainWorld("electronAPI", electronAPI);

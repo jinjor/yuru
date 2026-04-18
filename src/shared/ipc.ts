@@ -100,7 +100,10 @@ export interface ElectronAPI {
   onErrorRemoved: (callback: (id: string) => void) => void;
   onErrorsCleared: (callback: () => void) => void;
   onSessionsStateChanged: (callback: (active: ActiveSessionState[]) => void) => void;
+  attachPty: (sessionId: string) => Promise<string>;
+  readyPty: (sessionId: string) => Promise<void>;
+  detachPty: (sessionId: string) => Promise<void>;
   ptyWrite: (sessionId: string, data: string) => void;
   ptyResize: (sessionId: string, cols: number, rows: number) => void;
-  onPtyData: (callback: (sessionId: string, data: string) => void) => void;
+  onPtyData: (callback: (sessionId: string, data: string) => void) => () => void;
 }

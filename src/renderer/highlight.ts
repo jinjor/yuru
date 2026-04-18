@@ -1,8 +1,8 @@
-import { createHighlighter, type Highlighter, type ThemedToken } from "shiki";
+import type { BundledLanguage, Highlighter, ThemedToken } from "shiki";
 
 let highlighterPromise: Promise<Highlighter> | null = null;
 
-const defaultLangs = [
+const defaultLangs: BundledLanguage[] = [
   "typescript",
   "javascript",
   "tsx",
@@ -21,15 +21,17 @@ const defaultLangs = [
 
 function getHighlighter(): Promise<Highlighter> {
   if (!highlighterPromise) {
-    highlighterPromise = createHighlighter({
-      themes: ["dark-plus"],
-      langs: defaultLangs,
-    });
+    highlighterPromise = import("shiki").then(({ createHighlighter }) =>
+      createHighlighter({
+        themes: ["dark-plus"],
+        langs: defaultLangs,
+      }),
+    );
   }
   return highlighterPromise;
 }
 
-const extensionToLang: Record<string, string> = {
+const extensionToLang: Record<string, BundledLanguage> = {
   ts: "typescript",
   tsx: "tsx",
   js: "javascript",
@@ -52,7 +54,7 @@ const extensionToLang: Record<string, string> = {
   go: "go",
 };
 
-function detectLanguage(filePath: string): string | null {
+function detectLanguage(filePath: string): BundledLanguage | null {
   const ext = filePath.split(".").pop()?.toLowerCase();
   if (!ext) {
     return null;

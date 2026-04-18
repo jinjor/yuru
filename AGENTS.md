@@ -13,3 +13,4 @@ npm run app:restart
 
 - Product backlog: `docs/backlog.md`
 - Architecture notes: `docs/architecture.md`
+- Coding guidelines: `docs/coding-guidelines.md`
