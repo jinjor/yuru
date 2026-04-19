@@ -31,12 +31,14 @@ This is for checking behavior changes. Documentation-only edits do not need a re
   - ある状態変化が別の状態変化を生む時、後者はキャッシュであり、不要なら削除すべきである。
 
 - 嫌なコードの臭いを感じとり、設計の改善で解決できないかを考えること。
-  - useRef の多用
-  - useEffect の多用
-  - set しか使っていない useState
-  - requestAnimationFrame の使用
-  - deps list の一部をあえて抜いている
-  - 抽象度の高いレイヤーに具体的すぎるロジックが書かれている
+  - 例
+    - useRef の多用
+    - useEffect の多用
+    - set しか使っていない useState
+    - requestAnimationFrame の使用
+    - deps list の一部をあえて抜いている
+    - 抽象度の高いレイヤーに具体的すぎるロジックが書かれている
+  - 上記のようなパターンを避けることが目的なのではなく、これらの現象を生む設計の歪みを修正するのが目的。これらを避けるために設計が汚くなったら本末転倒。
 
 - コンポーネントを適切な粒度で切り分けること。
   - 1つのコンポーネントに全く性質の違う複数の状態を同居させないこと。
