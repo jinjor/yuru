@@ -8,6 +8,7 @@
     "package:local": "node ./scripts/package-local-app.mjs",
     "run": "electron .",
     "app:restart": "./scripts/restart-app-macos.sh",
+    "test": "node --test --experimental-strip-types test/**/*.test.mjs",
     "lint": "oxlint src/",
     "format": "oxfmt src/"
   },
