@@ -719,7 +719,7 @@ button.github-badge {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding-top: 8px;
+  padding: 8px 16px;
   border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
