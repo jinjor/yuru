@@ -48,6 +48,7 @@ import {
   listErrorNotices,
   recordAppError,
 } from "./error-center.js";
+import { createTerminalEnv } from "./terminal-env.js";
 
 let mainWindow: BrowserWindow | null = null;
 const ptyProcesses = new Map<string, pty.IPty>();
@@ -265,7 +266,7 @@ function launchPendingSession(
     cols: 80,
     rows: 24,
     cwd: request.cwd,
-    env: process.env as Record<string, string>,
+    env: createTerminalEnv(process.env),
   });
   pendingProcesses.add(proc);
   const pending: PendingSession = {
