@@ -1,0 +1,4 @@
+{
+  "git.repositoryScanMaxDepth": 3,
+  "git.detectWorktrees": true
+}
