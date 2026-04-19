@@ -9,7 +9,7 @@
     "run": "electron .",
     "app:restart": "./scripts/restart-app-macos.sh",
     "test": "node --test --experimental-strip-types test/**/*.test.mjs",
-    "lint": "oxlint src/",
+    "lint": "oxlint --deny-warnings src/",
     "format": "oxfmt src/"
   },
   "keywords": [],

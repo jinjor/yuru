@@ -66,6 +66,8 @@ const fileTreeWatcher = new FileTreeWatcher((sessionId, relativePath) => {
 const APP_NAME = "Yuru";
 const STARTUP_OUTPUT_LIMIT = 4000;
 const TERMINAL_SCROLLBACK_LIMIT = 200000;
+const ESCAPE_CHARACTER = String.fromCharCode(0x1b);
+const ANSI_ESCAPE_PATTERN = new RegExp(`${ESCAPE_CHARACTER}\\[[0-9;]*[A-Za-z]`, "g");
 
 app.setName(APP_NAME);
 
@@ -144,7 +146,7 @@ function appendTerminalOutput(existing: string, chunk: string): string {
 }
 
 function stripAnsi(text: string): string {
-  return text.replace(/\u001b\[[0-9;]*[A-Za-z]/g, "");
+  return text.replace(ANSI_ESCAPE_PATTERN, "");
 }
 
 function summarizeStartupOutput(output: string): string | undefined {
@@ -718,7 +720,7 @@ app.whenReady().then(() => {
     }
     try {
       return ok(await getGitPathStates(runtime.cwd));
-    } catch (error) {
+    } catch {
       return ok([]);
     }
   });
