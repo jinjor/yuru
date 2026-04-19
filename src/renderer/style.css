@@ -735,6 +735,7 @@ button.github-badge {
   flex: 1;
   min-height: 0;
   width: 100%;
+  overflow: auto;
 }
 
 .file-tree-row {

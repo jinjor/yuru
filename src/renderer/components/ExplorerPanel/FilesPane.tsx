@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { Tree, type NodeRendererProps, type TreeApi } from "react-arborist";
 import type { FileTreeNode, GitFileStatus, GitPathState } from "../../../shared/ipc";
 import type { PreviewSelection } from "../../types";
 import {
@@ -10,10 +9,14 @@ import {
 } from "../../utils/git";
 import { resultDataOrNull } from "../../utils/result";
 import {
+  buildWatchTargets,
+  buildVisibleTreeRows,
   collectAncestorDirectories,
-  collectDirectoryPaths,
   normalizeExpandedDirectories,
   replaceNodeChildren,
+  retainLoadedDirectories,
+  ROOT_DIRECTORY_PATH,
+  type VisibleTreeRow,
 } from "./fileTree";
 
 interface FilesPaneProps {
@@ -25,24 +28,20 @@ interface FilesPaneProps {
   sessionId: string;
 }
 
-function samePaths(left: readonly string[], right: readonly string[]): boolean {
-  if (left.length !== right.length) {
-    return false;
-  }
-  return left.every((path, index) => path === right[index]);
+interface FilesState {
+  expandedDirectories: Set<string>;
+  loadedDirectories: Set<string>;
+  loadingDirectories: Set<string>;
+  treeData: FileTreeNode[];
 }
 
-function filterEffectivelyExpandedDirectories(relativePaths: readonly string[]): string[] {
-  const openPaths = new Set(relativePaths);
-  return relativePaths.filter((relativePath) => {
-    const segments = relativePath.split("/");
-    for (let i = 1; i < segments.length; i++) {
-      if (!openPaths.has(segments.slice(0, i).join("/"))) {
-        return false;
-      }
-    }
-    return true;
-  });
+function createEmptyFilesState(): FilesState {
+  return {
+    expandedDirectories: new Set(),
+    loadedDirectories: new Set(),
+    loadingDirectories: new Set(),
+    treeData: [],
+  };
 }
 
 export function FilesPane({
@@ -53,150 +52,175 @@ export function FilesPane({
   previewSelection,
   sessionId,
 }: FilesPaneProps) {
-  const [treeData, setTreeData] = useState<FileTreeNode[]>([]);
-  const [, setExpandedDirectories] = useState<string[]>([]);
-  const [loadingDirectories, setLoadingDirectories] = useState<Set<string>>(new Set());
-  const treeDataRef = useRef<FileTreeNode[]>([]);
-  const expandedDirectoriesRef = useRef<string[]>([]);
-  const loadedDirectoriesRef = useRef<Set<string>>(new Set());
-  const loadingDirectoriesRef = useRef<Set<string>>(new Set());
-  const treeRef = useRef<TreeApi<FileTreeNode> | undefined>(undefined);
+  const [filesState, setFilesState] = useState<FilesState>(() => createEmptyFilesState());
+  const filesStateRef = useRef<FilesState>(filesState);
+  const inFlightLoadsRef = useRef<Map<string, Promise<void>>>(new Map());
+  const pendingForcedReloadsRef = useRef<Set<string>>(new Set());
+  const sessionGenerationRef = useRef(0);
   const treeStatusByPath = buildTreeStatusMap(gitPathStates);
   const treeIgnoredPaths = buildIgnoredPathSet(gitPathStates);
+  const { expandedDirectories, loadingDirectories, treeData } = filesState;
+  const visibleRows = buildVisibleTreeRows(treeData, expandedDirectories);
+
+  const replaceFilesState = useCallback((nextFilesState: FilesState): void => {
+    filesStateRef.current = nextFilesState;
+    setFilesState(nextFilesState);
+  }, []);
+
+  const updateFilesState = useCallback((updater: (prev: FilesState) => FilesState): void => {
+    setFilesState((prev) => {
+      const next = updater(prev);
+      filesStateRef.current = next;
+      return next;
+    });
+  }, []);
 
   const syncWatchTargets = useCallback(
-    (relativePaths: readonly string[]): void => {
-      const nextTargets = relativePaths.length === 0 ? [] : ["", ...relativePaths];
-      void window.electronAPI.syncFileWatchTargets(sessionId, nextTargets);
+    (relativePaths: ReadonlySet<string>): void => {
+      void window.electronAPI.syncFileWatchTargets(sessionId, buildWatchTargets(relativePaths));
     },
     [sessionId],
   );
 
-  const resetFilesState = useCallback((): void => {
-    treeDataRef.current = [];
-    expandedDirectoriesRef.current = [];
-    loadedDirectoriesRef.current = new Set();
-    loadingDirectoriesRef.current = new Set();
-    setTreeData([]);
-    setExpandedDirectories([]);
-    setLoadingDirectories(loadingDirectoriesRef.current);
-  }, []);
-
-  const commitExpandedDirectories = useCallback(
-    (nextExpandedDirectories: readonly string[], nextTreeData?: FileTreeNode[]): string[] => {
-      const normalized = normalizeExpandedDirectories(
-        Array.from(nextExpandedDirectories).sort((a, b) => a.localeCompare(b)),
-        nextTreeData ?? treeDataRef.current,
-      );
-
-      if (!samePaths(expandedDirectoriesRef.current, normalized)) {
-        expandedDirectoriesRef.current = normalized;
-        setExpandedDirectories(normalized);
-      }
-
-      syncWatchTargets(normalized);
-      return normalized;
-    },
-    [syncWatchTargets],
-  );
-
-  const applyTreeUpdate = useCallback(
-    (relativePath: string, nextNodes: FileTreeNode[]): void => {
+  const applyTreeUpdate = useCallback((relativePath: string, nextNodes: FileTreeNode[]): void => {
+    updateFilesState((prev) => {
       const nextTreeData =
-        relativePath.length > 0
-          ? replaceNodeChildren(treeDataRef.current, relativePath, nextNodes)
-          : nextNodes;
-      const validDirectoryPaths = collectDirectoryPaths(nextTreeData);
-      const nextLoadedDirectories = new Set<string>([""]);
-      for (const loadedPath of loadedDirectoriesRef.current) {
-        if (loadedPath === "" || validDirectoryPaths.has(loadedPath)) {
-          nextLoadedDirectories.add(loadedPath);
-        }
-      }
+        relativePath === ROOT_DIRECTORY_PATH
+          ? nextNodes
+          : replaceNodeChildren(prev.treeData, relativePath, nextNodes);
 
-      treeDataRef.current = nextTreeData;
-      loadedDirectoriesRef.current = nextLoadedDirectories;
-      setTreeData(nextTreeData);
-      commitExpandedDirectories(expandedDirectoriesRef.current, nextTreeData);
-    },
-    [commitExpandedDirectories],
-  );
+      return {
+        ...prev,
+        treeData: nextTreeData,
+        loadedDirectories: retainLoadedDirectories(
+          new Set(prev.loadedDirectories).add(relativePath),
+          nextTreeData,
+        ),
+        expandedDirectories: normalizeExpandedDirectories(prev.expandedDirectories, nextTreeData),
+      };
+    });
+  }, [updateFilesState]);
 
   const loadDirectory = useCallback(
-    async (relativePath = "", options?: { force?: boolean }): Promise<void> => {
-      const force = options?.force ?? false;
-      if (
-        (!force && loadedDirectoriesRef.current.has(relativePath)) ||
-        loadingDirectoriesRef.current.has(relativePath)
-      ) {
+    async (relativePath = ROOT_DIRECTORY_PATH, force = false): Promise<void> => {
+      if (!force && filesStateRef.current.loadedDirectories.has(relativePath)) {
         return;
       }
 
-      loadingDirectoriesRef.current = new Set(loadingDirectoriesRef.current).add(relativePath);
-      setLoadingDirectories(loadingDirectoriesRef.current);
-      try {
+      const inFlightLoad = inFlightLoadsRef.current.get(relativePath);
+      if (inFlightLoad) {
+        if (!force) {
+          return inFlightLoad;
+        }
+
+        pendingForcedReloadsRef.current.add(relativePath);
+        return inFlightLoad.finally(async () => {
+          if (!pendingForcedReloadsRef.current.has(relativePath)) {
+            return;
+          }
+          pendingForcedReloadsRef.current.delete(relativePath);
+          await loadDirectory(relativePath, true);
+        });
+      }
+
+      const generation = sessionGenerationRef.current;
+      const request = (async () => {
+        updateFilesState((prev) => ({
+          ...prev,
+          loadingDirectories: new Set(prev.loadingDirectories).add(relativePath),
+        }));
         const result = await window.electronAPI.listFiles(sessionId, relativePath);
+        if (sessionGenerationRef.current !== generation) {
+          return;
+        }
+
         const nextNodes = resultDataOrNull(result);
         if (!nextNodes) {
           return;
         }
 
         applyTreeUpdate(relativePath, nextNodes);
-        loadedDirectoriesRef.current = new Set(loadedDirectoriesRef.current).add(relativePath);
-      } finally {
-        const nextLoadingDirectories = new Set(loadingDirectoriesRef.current);
-        nextLoadingDirectories.delete(relativePath);
-        loadingDirectoriesRef.current = nextLoadingDirectories;
-        setLoadingDirectories(nextLoadingDirectories);
-      }
+      })().finally(() => {
+        inFlightLoadsRef.current.delete(relativePath);
+        if (sessionGenerationRef.current === generation) {
+          updateFilesState((prev) => {
+            const nextLoadingDirectories = new Set(prev.loadingDirectories);
+            nextLoadingDirectories.delete(relativePath);
+            return {
+              ...prev,
+              loadingDirectories: nextLoadingDirectories,
+            };
+          });
+        }
+      });
+
+      inFlightLoadsRef.current.set(relativePath, request);
+      return request;
     },
-    [applyTreeUpdate, sessionId],
+    [applyTreeUpdate, sessionId, updateFilesState],
   );
 
-  const syncExpandedDirectoriesFromTree = useCallback((): void => {
-    if (!treeRef.current) {
-      return;
-    }
-
-    const nextExpandedDirectories = Object.entries(treeRef.current.openState)
-      .filter(([, isOpen]) => isOpen)
-      .map(([path]) => path)
-      .sort((a, b) => a.localeCompare(b));
-    commitExpandedDirectories(filterEffectivelyExpandedDirectories(nextExpandedDirectories));
-  }, [commitExpandedDirectories]);
+  const toggleDirectory = useCallback(
+    (relativePath: string): void => {
+      const isOpen = filesStateRef.current.expandedDirectories.has(relativePath);
+      updateFilesState((prev) => {
+        const nextExpandedDirectories = new Set(prev.expandedDirectories);
+        if (isOpen) {
+          nextExpandedDirectories.delete(relativePath);
+        } else {
+          nextExpandedDirectories.add(relativePath);
+        }
+        return {
+          ...prev,
+          expandedDirectories: nextExpandedDirectories,
+        };
+      });
+      if (!isOpen) {
+        void loadDirectory(relativePath);
+      }
+    },
+    [loadDirectory, updateFilesState],
+  );
 
   const revealChangedDirectories = useCallback(async (): Promise<void> => {
     const directoryPaths = collectAncestorDirectories(changedFiles.map((file) => file.path));
 
-    await loadDirectory("");
+    await loadDirectory(ROOT_DIRECTORY_PATH);
     for (const directoryPath of directoryPaths) {
       await loadDirectory(directoryPath);
     }
 
-    treeRef.current?.closeAll();
-    for (const directoryPath of directoryPaths) {
-      treeRef.current?.open(directoryPath);
-    }
-    commitExpandedDirectories(directoryPaths);
-  }, [changedFiles, commitExpandedDirectories, loadDirectory]);
+    updateFilesState((prev) => ({
+      ...prev,
+      expandedDirectories: normalizeExpandedDirectories(directoryPaths, prev.treeData),
+    }));
+  }, [changedFiles, loadDirectory, updateFilesState]);
 
   const collapseAllDirectories = useCallback((): void => {
-    treeRef.current?.closeAll();
-    commitExpandedDirectories([]);
-  }, [commitExpandedDirectories]);
+    updateFilesState((prev) => ({
+      ...prev,
+      expandedDirectories: new Set(),
+    }));
+  }, [updateFilesState]);
 
   useEffect(() => {
-    resetFilesState();
-    commitExpandedDirectories([], []);
-    void loadDirectory("");
-  }, [commitExpandedDirectories, loadDirectory, resetFilesState, sessionId]);
+    syncWatchTargets(expandedDirectories);
+  }, [expandedDirectories, syncWatchTargets]);
+
+  useEffect(() => {
+    sessionGenerationRef.current += 1;
+    inFlightLoadsRef.current = new Map();
+    pendingForcedReloadsRef.current = new Set();
+    replaceFilesState(createEmptyFilesState());
+    void loadDirectory(ROOT_DIRECTORY_PATH);
+  }, [loadDirectory, replaceFilesState, sessionId]);
 
   useEffect(() => {
     const dispose = window.electronAPI.onFileTreeChanged((changedSessionId, relativePath) => {
       if (changedSessionId !== sessionId) {
         return;
       }
-      void loadDirectory(relativePath, { force: true });
+      void loadDirectory(relativePath, true);
     });
 
     return dispose;
@@ -204,9 +228,10 @@ export function FilesPane({
 
   useEffect(() => {
     return () => {
-      syncWatchTargets([]);
+      sessionGenerationRef.current += 1;
+      void window.electronAPI.syncFileWatchTargets(sessionId, []);
     };
-  }, [syncWatchTargets]);
+  }, [sessionId]);
 
   return (
     <>
@@ -233,41 +258,26 @@ export function FilesPane({
           </button>
         </div>
       </div>
-      <div className="file-tree">
-        {loadingDirectories.has("") && treeData.length === 0 ? (
+      <div className="file-tree" style={{ height }}>
+        {loadingDirectories.has(ROOT_DIRECTORY_PATH) && treeData.length === 0 ? (
           <div className="empty-changes">Loading files...</div>
         ) : treeData.length === 0 ? (
           <div className="empty-changes">No files</div>
         ) : (
-          <Tree<FileTreeNode>
-            ref={treeRef}
-            data={treeData}
-            width="100%"
-            height={height}
-            rowHeight={28}
-            indent={12}
-            openByDefault={false}
-            selection={previewSelection?.kind === "file" ? previewSelection.path : undefined}
-            disableDrag
-            disableEdit
-            onActivate={(node) => {
-              if (node.data.kind === "file") {
-                onPreviewSelectionChange({ kind: "file", path: node.data.path });
+          visibleRows.map((row) => (
+            <FileTreeRow
+              key={row.node.id}
+              isLoading={loadingDirectories.has(row.node.path)}
+              ignoredPaths={treeIgnoredPaths}
+              isSelected={
+                previewSelection?.kind === "file" && previewSelection.path === row.node.path
               }
-            }}
-            onToggle={(path) => {
-              void loadDirectory(path);
-              syncExpandedDirectoriesFromTree();
-            }}
-          >
-            {(props) => (
-              <FileTreeRow
-                {...props}
-                ignoredPaths={treeIgnoredPaths}
-                statusByPath={treeStatusByPath}
-              />
-            )}
-          </Tree>
+              onDirectoryToggle={toggleDirectory}
+              onFileSelect={onPreviewSelectionChange}
+              row={row}
+              statusByPath={treeStatusByPath}
+            />
+          ))
         )}
       </div>
     </>
@@ -275,36 +285,42 @@ export function FilesPane({
 }
 
 function FileTreeRow({
-  dragHandle,
+  isLoading,
   ignoredPaths,
-  node,
+  isSelected,
+  onDirectoryToggle,
+  onFileSelect,
+  row,
   statusByPath,
-  style,
-}: NodeRendererProps<FileTreeNode> & {
+}: {
+  isLoading: boolean;
   ignoredPaths: ReadonlySet<string>;
+  isSelected: boolean;
+  onDirectoryToggle: (path: string) => void;
+  onFileSelect: (selection: PreviewSelection | null) => void;
+  row: VisibleTreeRow;
   statusByPath: ReadonlyMap<string, string>;
 }) {
-  const isDirectory = node.data.kind === "directory";
-  const statusClass = treeStatusClass(statusByPath.get(node.data.path));
-  const isIgnored = ignoredPaths.has(node.data.path);
+  const { depth, isOpen, node } = row;
+  const isDirectory = node.kind === "directory";
+  const isIgnored = ignoredPaths.has(node.path);
+  const statusClass = treeStatusClass(statusByPath.get(node.path));
 
   return (
     <div
-      ref={dragHandle}
-      style={style}
-      className={`file-tree-row ${node.isSelected ? "selected" : ""}`}
+      className={`file-tree-row ${isSelected ? "selected" : ""}`}
       onClick={() => {
         if (isDirectory) {
-          node.toggle();
-        } else {
-          node.select();
-          node.activate();
+          onDirectoryToggle(node.path);
+          return;
         }
+        onFileSelect({ kind: "file", path: node.path });
       }}
+      style={{ height: 28, paddingLeft: 12 + depth * 12 }}
     >
       <span className={`file-tree-caret ${isDirectory ? "directory" : "file"}`}>
         {isDirectory ? (
-          node.isOpen ? (
+          isOpen ? (
             <ChevronDown size={15} strokeWidth={2.4} />
           ) : (
             <ChevronRight size={15} strokeWidth={2.4} />
@@ -312,9 +328,10 @@ function FileTreeRow({
         ) : null}
       </span>
       <span
-        className={`file-tree-name ${node.data.kind} ${statusClass} ${isIgnored ? "ignored" : ""}`}
+        className={`file-tree-name ${node.kind} ${statusClass} ${isIgnored ? "ignored" : ""}`}
       >
-        {node.data.name}
+        {node.name}
+        {isLoading ? "..." : ""}
       </span>
     </div>
   );
