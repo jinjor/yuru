@@ -2,37 +2,11 @@ import fs from "fs";
 import path from "path";
 import { GitDiffDocument, GitPathState } from "../shared/ipc.js";
 import { exec, execBuffer } from "./exec.js";
+import { parsePorcelainLine } from "./git-status.js";
 
 export interface WorktreeInfo {
   path: string;
   branch: string;
-}
-
-function parsePorcelainLine(line: string): GitPathState | null {
-  if (!line) {
-    return null;
-  }
-
-  const rawStatus = line.substring(0, 2);
-  const trimmedStatus = rawStatus.trim();
-  let filePath = line.substring(3).trim();
-
-  if (!filePath) {
-    return null;
-  }
-
-  if (filePath.includes(" -> ")) {
-    const parts = filePath.split(" -> ");
-    filePath = parts[parts.length - 1] ?? filePath;
-  }
-
-  filePath = filePath.replace(/\/$/, "");
-
-  return {
-    path: filePath,
-    status: trimmedStatus === "!!" ? "" : trimmedStatus,
-    ignored: trimmedStatus === "!!",
-  };
 }
 
 export async function getCurrentBranch(cwd: string): Promise<string | null> {

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import type { BranchContext, GitFileStatus, GitPathState } from "../../../shared/ipc";
+import type { BranchContext, GitPathState } from "../../../shared/ipc";
 import { useElementSize } from "../../hooks/useElementSize";
 import type { PreviewSelection } from "../../types";
-import { buildChangedFiles } from "../../utils/git";
+import { buildChangedFiles, buildStagedFiles, buildUnstagedFiles } from "../../utils/git";
 import { resultDataOrNull } from "../../utils/result";
 import { ChangesPane } from "./ChangesPane";
 import { FilesPane } from "./FilesPane";
@@ -27,15 +27,16 @@ export function ExplorerPanel({
   const [panelRef, panelSize] = useElementSize<HTMLDivElement>();
   const [headerRef, headerSize] = useElementSize<HTMLDivElement>();
   const [gitPathStates, setGitPathStates] = useState<GitPathState[]>([]);
-  const [changedFiles, setChangedFiles] = useState<GitFileStatus[]>([]);
   const [activeTab, setActiveTab] = useState<"changes" | "files">("changes");
   const contentHeight = Math.max(panelSize.height - headerSize.height, 0);
+  const changedFiles = buildChangedFiles(gitPathStates);
+  const stagedFiles = buildStagedFiles(gitPathStates);
+  const unstagedFiles = buildUnstagedFiles(gitPathStates);
 
   useEffect(() => {
     let cancelled = false;
     onBranchContextChange({ branch: null, github: null });
     setGitPathStates([]);
-    setChangedFiles([]);
 
     const fetchStatus = async (): Promise<void> => {
       const [pathStatesResult, branchContextResult] = await Promise.all([
@@ -48,18 +49,14 @@ export function ExplorerPanel({
 
       const pathStates = resultDataOrNull(pathStatesResult) ?? [];
       setGitPathStates(pathStates);
-      setChangedFiles((prev) => {
-        const nextFiles = buildChangedFiles(pathStates);
-        if (JSON.stringify(prev) === JSON.stringify(nextFiles)) {
-          return prev;
-        }
-        return nextFiles;
-      });
 
       if (
         previewSelection?.kind === "diff" &&
         !pathStates.some(
-          (entry) => !entry.ignored && entry.status && entry.path === previewSelection.path,
+          (entry) =>
+            !entry.ignored &&
+            (entry.indexStatus || entry.worktreeStatus) &&
+            entry.path === previewSelection.path,
         )
       ) {
         onPreviewSelectionChange(null);
@@ -110,9 +107,10 @@ export function ExplorerPanel({
       </div>
       {activeTab === "changes" ? (
         <ChangesPane
-          changedFiles={changedFiles}
           onPreviewSelectionChange={onPreviewSelectionChange}
           previewSelection={previewSelection}
+          stagedFiles={stagedFiles}
+          unstagedFiles={unstagedFiles}
         />
       ) : (
         <FilesPane

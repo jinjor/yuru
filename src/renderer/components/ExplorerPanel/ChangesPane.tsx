@@ -1,24 +1,62 @@
 import type { GitFileStatus } from "../../../shared/ipc";
 import type { PreviewSelection } from "../../types";
 import { statusColor, statusLabel } from "../../utils/git";
+import { buildChangeSections } from "./changes";
 
 interface ChangesPaneProps {
-  changedFiles: readonly GitFileStatus[];
   onPreviewSelectionChange: (selection: PreviewSelection | null) => void;
   previewSelection: PreviewSelection | null;
+  stagedFiles: readonly GitFileStatus[];
+  unstagedFiles: readonly GitFileStatus[];
 }
 
 export function ChangesPane({
-  changedFiles,
   onPreviewSelectionChange,
   previewSelection,
+  stagedFiles,
+  unstagedFiles,
 }: ChangesPaneProps) {
+  const sections = buildChangeSections({ stagedFiles, unstagedFiles });
+
+  if (sections.length === 0) {
+    return <div className="changes-list"><div className="empty-changes">No changes</div></div>;
+  }
+
   return (
     <div className="changes-list">
-      {changedFiles.length === 0 && <div className="empty-changes">No changes</div>}
-      {changedFiles.map((file) => (
+      {sections.map((section) => (
+        <ChangeSection
+          key={section.key}
+          files={section.files}
+          label={section.label}
+          onPreviewSelectionChange={onPreviewSelectionChange}
+          previewSelection={previewSelection}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ChangeSection({
+  files,
+  label,
+  onPreviewSelectionChange,
+  previewSelection,
+}: {
+  files: readonly GitFileStatus[];
+  label: string;
+  onPreviewSelectionChange: (selection: PreviewSelection | null) => void;
+  previewSelection: PreviewSelection | null;
+}) {
+  return (
+    <section className="change-section">
+      <div className="change-section-header">
+        <span>{label}</span>
+        <span className="change-section-count">{files.length}</span>
+      </div>
+      {files.map((file) => (
         <div
-          key={file.path}
+          key={`${label}:${file.path}`}
           className={`change-item ${previewSelection?.kind === "diff" && previewSelection.path === file.path ? "selected" : ""}`}
           onClick={() => onPreviewSelectionChange({ kind: "diff", path: file.path })}
         >
@@ -33,6 +71,6 @@ export function ChangesPane({
           </span>
         </div>
       ))}
-    </div>
+    </section>
   );
 }

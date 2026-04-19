@@ -52,12 +52,46 @@ export function treeStatusClass(status?: string): string {
   }
 }
 
+function statusForTree(entry: GitPathState): string {
+  if (!entry.indexStatus) {
+    return entry.worktreeStatus;
+  }
+  if (!entry.worktreeStatus) {
+    return entry.indexStatus;
+  }
+  if (entry.worktreeStatus === "D") {
+    return "D";
+  }
+
+  return statusPriority(entry.indexStatus) >= statusPriority(entry.worktreeStatus)
+    ? entry.indexStatus
+    : entry.worktreeStatus;
+}
+
 export function buildChangedFiles(pathStates: readonly GitPathState[]): GitFileStatus[] {
   return pathStates
-    .filter((entry) => !entry.ignored && entry.status)
+    .filter((entry) => !entry.ignored && (entry.indexStatus || entry.worktreeStatus))
     .map((entry) => ({
       path: entry.path,
-      status: entry.status,
+      status: statusForTree(entry),
+    }));
+}
+
+export function buildStagedFiles(pathStates: readonly GitPathState[]): GitFileStatus[] {
+  return pathStates
+    .filter((entry) => !entry.ignored && entry.indexStatus)
+    .map((entry) => ({
+      path: entry.path,
+      status: entry.indexStatus,
+    }));
+}
+
+export function buildUnstagedFiles(pathStates: readonly GitPathState[]): GitFileStatus[] {
+  return pathStates
+    .filter((entry) => !entry.ignored && entry.worktreeStatus)
+    .map((entry) => ({
+      path: entry.path,
+      status: entry.worktreeStatus,
     }));
 }
 
@@ -65,7 +99,8 @@ export function buildTreeStatusMap(pathStates: readonly GitPathState[]): Map<str
   const statuses = new Map<string, string>();
 
   for (const entry of pathStates) {
-    if (entry.ignored || !entry.status) {
+    const status = entry.ignored ? "" : statusForTree(entry);
+    if (!status) {
       continue;
     }
 
@@ -73,8 +108,8 @@ export function buildTreeStatusMap(pathStates: readonly GitPathState[]): Map<str
     for (let i = 1; i <= segments.length; i++) {
       const nextPath = segments.slice(0, i).join("/");
       const existing = statuses.get(nextPath);
-      if (!existing || statusPriority(entry.status) > statusPriority(existing)) {
-        statuses.set(nextPath, entry.status);
+      if (!existing || statusPriority(status) > statusPriority(existing)) {
+        statuses.set(nextPath, status);
       }
     }
   }

@@ -37,7 +37,8 @@ export interface GitFileStatus {
 
 export interface GitPathState {
   path: string;
-  status: string;
+  indexStatus: string;
+  worktreeStatus: string;
   ignored: boolean;
 }
 
