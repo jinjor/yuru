@@ -1,10 +1,9 @@
 import type { RefObject } from "react";
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
-import type { BranchContext, FileContent, GitDiffDocument } from "../../shared/ipc";
+import type { GitDiffDocument, GitPathState } from "../../shared/ipc";
 import type { GitHubPullRequest } from "../../shared/session";
 import { DiffPreviewPanel } from "./DiffPreviewPanel";
 import { ExplorerPanel } from "./ExplorerPanel";
-import { FilePreviewPanel } from "./FilePreviewPanel";
 import { TerminalPanel } from "./TerminalPanel";
 import { usePaneLayout } from "../hooks/usePaneLayout";
 import type { PreviewSelection } from "../types";
@@ -19,6 +18,13 @@ interface WorkspaceProps {
   sidebarWidth: number;
 }
 
+function isPathChanged(states: readonly GitPathState[], path: string): boolean {
+  return states.some(
+    (entry) =>
+      !entry.ignored && (entry.indexStatus || entry.worktreeStatus) && entry.path === path,
+  );
+}
+
 export function Workspace({
   appRef,
   isCreatingSession,
@@ -31,8 +37,7 @@ export function Workspace({
   const [previewSelection, setPreviewSelection] = useState<PreviewSelection | null>(null);
   const [diffDocument, setDiffDocument] = useState<GitDiffDocument | null>(null);
   const [isLoadingDiff, setIsLoadingDiff] = useState(false);
-  const [fileContent, setFileContent] = useState<FileContent | null>(null);
-  const [isLoadingFile, setIsLoadingFile] = useState(false);
+  const [gitPathStates, setGitPathStates] = useState<GitPathState[]>([]);
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
   const [currentGitHub, setCurrentGitHub] = useState<GitHubPullRequest | null>(null);
   const paneLayout = usePaneLayout({
@@ -40,6 +45,9 @@ export function Workspace({
     sidebarWidth,
     workspaceColumnRef,
   });
+  const previewPathChanged = previewSelection
+    ? isPathChanged(gitPathStates, previewSelection.path)
+    : false;
 
   const resetPreviewState = useCallback((): void => {
     setPreviewSelection(null);
@@ -47,25 +55,45 @@ export function Workspace({
     setIsLoadingDiff(false);
   }, []);
 
-  const handleBranchContextChange = useCallback((context: BranchContext): void => {
-    setCurrentBranch(context.branch);
-    setCurrentGitHub(context.github);
-  }, []);
-
   useEffect(() => {
-    if (sessionId) {
+    if (!sessionId) {
+      setGitPathStates([]);
+      setCurrentBranch(null);
+      setCurrentGitHub(null);
       return;
     }
 
-    resetPreviewState();
-    setFileContent(null);
-    setIsLoadingFile(false);
-    setCurrentBranch(null);
-    setCurrentGitHub(null);
-  }, [resetPreviewState, sessionId]);
+    let cancelled = false;
+
+    const fetchStatus = async (): Promise<void> => {
+      const [pathStatesResult, branchContextResult] = await Promise.all([
+        window.electronAPI.getGitPathStates(sessionId),
+        window.electronAPI.getGitBranchContext(sessionId),
+      ]);
+      if (cancelled) {
+        return;
+      }
+
+      setGitPathStates(resultDataOrNull(pathStatesResult) ?? []);
+      const branchContext = resultDataOrNull(branchContextResult);
+      setCurrentBranch(branchContext?.branch ?? null);
+      setCurrentGitHub(branchContext?.github ?? null);
+      refreshSessions();
+    };
+
+    void fetchStatus();
+    const interval = setInterval(() => {
+      void fetchStatus();
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [refreshSessions, sessionId]);
 
   useEffect(() => {
-    if (!sessionId || previewSelection?.kind !== "diff") {
+    if (!sessionId || !previewSelection) {
       setDiffDocument(null);
       setIsLoadingDiff(false);
       return;
@@ -83,14 +111,20 @@ export function Workspace({
         return;
       }
 
-      const diff = resultDataOrNull(result);
-      setDiffDocument(diff);
+      setDiffDocument(resultDataOrNull(result));
       if (showLoader) {
         setIsLoadingDiff(false);
       }
     };
 
     void fetchDiff(true);
+
+    if (!previewPathChanged) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
     const interval = setInterval(() => {
       void fetchDiff(false);
     }, 3000);
@@ -99,31 +133,7 @@ export function Workspace({
       cancelled = true;
       clearInterval(interval);
     };
-  }, [previewSelection, sessionId]);
-
-  useEffect(() => {
-    if (!sessionId || previewSelection?.kind !== "file") {
-      setFileContent(null);
-      setIsLoadingFile(false);
-      return;
-    }
-
-    let cancelled = false;
-    setIsLoadingFile(true);
-    window.electronAPI.readFile(sessionId, previewSelection.path).then((result) => {
-      if (cancelled) {
-        return;
-      }
-
-      const nextContent = resultDataOrNull(result);
-      setFileContent(nextContent);
-      setIsLoadingFile(false);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [previewSelection, sessionId]);
+  }, [previewPathChanged, previewSelection, sessionId]);
 
   return (
     <>
@@ -136,18 +146,10 @@ export function Workspace({
             : undefined
         }
       >
-        {previewSelection?.kind === "file" && (
-          <FilePreviewPanel
-            path={previewSelection.path}
-            line={previewSelection.line}
-            fileContent={fileContent}
-            isLoading={isLoadingFile}
-            onClose={resetPreviewState}
-          />
-        )}
-        {previewSelection?.kind === "diff" && (
+        {previewSelection && (
           <DiffPreviewPanel
             path={previewSelection.path}
+            line={previewSelection.line}
             diffDocument={diffDocument}
             isLoading={isLoadingDiff}
             onClose={resetPreviewState}
@@ -170,7 +172,7 @@ export function Workspace({
           ]}
           isCreatingSession={isCreatingSession}
           onFileLinkActivate={(filePath, line) => {
-            setPreviewSelection({ kind: "file", path: filePath, line });
+            setPreviewSelection({ path: filePath, line });
           }}
           onOpenExternal={onOpenExternal}
           selectedId={sessionId}
@@ -184,10 +186,9 @@ export function Workspace({
             aria-hidden="true"
           />
           <ExplorerPanel
-            onBranchContextChange={handleBranchContextChange}
+            gitPathStates={gitPathStates}
             onPreviewSelectionChange={setPreviewSelection}
             previewSelection={previewSelection}
-            refreshSessions={refreshSessions}
             sessionId={sessionId}
             width={paneLayout.changesPanelWidth}
           />

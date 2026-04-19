@@ -50,13 +50,6 @@ export interface FileTreeNode {
   children: FileTreeNode[] | null;
 }
 
-export interface FileContent {
-  path: string;
-  content: string;
-  isBinary: boolean;
-  size: number;
-}
-
 export interface GitDiffDocument {
   path: string;
   originalContent: string;
@@ -99,8 +92,7 @@ export interface ElectronAPI {
   getGitBranchContext: (sessionId: string) => Promise<Result<BranchContext>>;
   getGitDiffDocument: (sessionId: string, filePath: string) => Promise<Result<GitDiffDocument | null>>;
   listFiles: (sessionId: string, relativePath?: string) => Promise<Result<FileTreeNode[]>>;
-  readFile: (sessionId: string, filePath: string) => Promise<Result<FileContent | null>>;
-  fileExists: (sessionId: string, filePath: string) => Promise<boolean>;
+  resolveRepoFile: (sessionId: string, filePath: string) => Promise<string | null>;
   syncFileWatchTargets: (sessionId: string, relativePaths: string[]) => Promise<void>;
   onErrorAdded: (callback: (error: AppErrorNotice) => void) => void;
   onErrorRemoved: (callback: (id: string) => void) => void;

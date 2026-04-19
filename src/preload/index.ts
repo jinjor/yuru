@@ -23,9 +23,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke("git:diffDocument", sessionId, filePath),
   listFiles: (sessionId: string, relativePath?: string) =>
     ipcRenderer.invoke("files:list", sessionId, relativePath),
-  readFile: (sessionId: string, filePath: string) =>
-    ipcRenderer.invoke("files:read", sessionId, filePath),
-  fileExists: (sessionId: string, filePath: string) => ipcRenderer.invoke("files:exists", sessionId, filePath),
+  resolveRepoFile: (sessionId: string, filePath: string) =>
+    ipcRenderer.invoke("files:resolveRepoFile", sessionId, filePath),
   syncFileWatchTargets: (sessionId: string, relativePaths: string[]) =>
     ipcRenderer.invoke("files:syncWatchTargets", sessionId, relativePaths),
   onErrorAdded: (callback) =>

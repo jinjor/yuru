@@ -57,8 +57,8 @@ function ChangeSection({
       {files.map((file) => (
         <div
           key={`${label}:${file.path}`}
-          className={`change-item ${previewSelection?.kind === "diff" && previewSelection.path === file.path ? "selected" : ""}`}
-          onClick={() => onPreviewSelectionChange({ kind: "diff", path: file.path })}
+          className={`change-item ${previewSelection?.path === file.path ? "selected" : ""}`}
+          onClick={() => onPreviewSelectionChange({ path: file.path })}
         >
           <span className="change-status" style={{ color: statusColor(file.status) }}>
             {statusLabel(file.status)}

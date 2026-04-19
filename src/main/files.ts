@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { FileContent, FileTreeNode } from "../shared/ipc.js";
+import { FileTreeNode } from "../shared/ipc.js";
 
 function normalizeRelativePath(relativePath: string): string {
   return relativePath.split(path.sep).join("/");
@@ -31,12 +31,20 @@ async function detectDirectory(entryPath: string, dirent: fs.Dirent): Promise<bo
   }
 }
 
-export function fileExists(cwd: string, relativePath: string): boolean {
+export function resolveRepoFile(cwd: string, filePath: string): string | null {
   try {
-    const targetPath = resolveSessionPath(cwd, relativePath);
-    return fs.statSync(targetPath).isFile();
+    const basePath = path.resolve(cwd);
+    const absPath = path.isAbsolute(filePath) ? filePath : path.resolve(basePath, filePath);
+    const relative = path.relative(basePath, absPath);
+    if (relative.startsWith("..") || path.isAbsolute(relative)) {
+      return null;
+    }
+    if (!fs.statSync(absPath).isFile()) {
+      return null;
+    }
+    return normalizeRelativePath(relative);
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -71,15 +79,3 @@ export async function listFiles(cwd: string, relativePath = ""): Promise<FileTre
   return nodes;
 }
 
-export async function readFileContent(cwd: string, relativePath: string): Promise<FileContent> {
-  const targetPath = resolveSessionPath(cwd, relativePath);
-  const buffer = await fs.promises.readFile(targetPath);
-  const isBinary = buffer.includes(0);
-
-  return {
-    path: normalizeRelativePath(relativePath),
-    content: isBinary ? "" : buffer.toString("utf-8"),
-    isBinary,
-    size: buffer.byteLength,
-  };
-}

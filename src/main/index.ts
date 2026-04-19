@@ -12,7 +12,7 @@ import {
   branchExists,
 } from "./git.js";
 import { getGitHubPullRequestForBranch } from "./github.js";
-import { listFiles, readFileContent, fileExists } from "./files.js";
+import { listFiles, resolveRepoFile } from "./files.js";
 import {
   getSessionProvider,
   listSessionProviderDefinitions,
@@ -769,24 +769,12 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle("files:read", async (_event, sessionId: string, filePath: string) => {
+  ipcMain.handle("files:resolveRepoFile", (_event, sessionId: string, filePath: string) => {
     const runtime = sessionRuntimeMap.get(sessionId);
     if (!runtime) {
-      return ok(null);
+      return null;
     }
-    try {
-      return ok(await readFileContent(runtime.cwd, filePath));
-    } catch (error) {
-      return failAndReport(toAppError(error));
-    }
-  });
-
-  ipcMain.handle("files:exists", (_event, sessionId: string, filePath: string) => {
-    const runtime = sessionRuntimeMap.get(sessionId);
-    if (!runtime) {
-      return false;
-    }
-    return fileExists(runtime.cwd, filePath);
+    return resolveRepoFile(runtime.cwd, filePath);
   });
 
   ipcMain.handle("files:syncWatchTargets", async (_event, sessionId: string, relativePaths: string[]) => {

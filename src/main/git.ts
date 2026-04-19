@@ -86,13 +86,23 @@ function bufferToContent(buffer: Buffer | null): string {
   return buffer ? buffer.toString("utf-8") : "";
 }
 
+async function isPathChanged(cwd: string, filePath: string): Promise<boolean> {
+  const output = await exec("git", ["status", "--porcelain", "--", filePath], cwd);
+  return output.trim().length > 0;
+}
+
+async function loadOriginalBuffer(cwd: string, filePath: string): Promise<Buffer | null> {
+  const originalPath = await resolveOriginalPath(cwd, filePath);
+  return originalPath ? await readGitBlob(cwd, originalPath) : null;
+}
+
 export async function getGitDiffDocument(cwd: string, filePath: string): Promise<GitDiffDocument> {
   const currentPath = path.join(cwd, filePath);
   const currentBuffer = fs.existsSync(currentPath)
     ? await fs.promises.readFile(currentPath)
     : null;
-  const originalPath = await resolveOriginalPath(cwd, filePath);
-  const originalBuffer = originalPath ? await readGitBlob(cwd, originalPath) : null;
+  const changed = await isPathChanged(cwd, filePath);
+  const originalBuffer = changed ? await loadOriginalBuffer(cwd, filePath) : currentBuffer;
   const isBinary = [originalBuffer, currentBuffer].some((buffer) => buffer?.includes(0));
   const size = Math.max(originalBuffer?.byteLength ?? 0, currentBuffer?.byteLength ?? 0);
 

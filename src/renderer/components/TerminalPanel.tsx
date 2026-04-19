@@ -103,8 +103,11 @@ export function TerminalPanel({
 
         Promise.all(
           matches.map(async (entry): Promise<ILink | null> => {
-            const exists = await window.electronAPI.fileExists(selectedId, entry.filePath);
-            if (!exists) {
+            const repoRelativePath = await window.electronAPI.resolveRepoFile(
+              selectedId,
+              entry.filePath,
+            );
+            if (!repoRelativePath) {
               return null;
             }
 
@@ -120,7 +123,7 @@ export function TerminalPanel({
               text: entry.text,
               decorations: { pointerCursor: true, underline: true },
               activate(): void {
-                onFileLinkActivateRef.current(entry.filePath, entry.fileLine);
+                onFileLinkActivateRef.current(repoRelativePath, entry.fileLine);
               },
             } satisfies ILink;
           }),

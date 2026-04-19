@@ -8,6 +8,7 @@ import { PreviewPanel } from "./PreviewPanel";
 interface DiffPreviewPanelProps {
   diffDocument: GitDiffDocument | null;
   isLoading: boolean;
+  line?: number;
   onClose: () => void;
   path: string;
 }
@@ -15,6 +16,7 @@ interface DiffPreviewPanelProps {
 export function DiffPreviewPanel({
   diffDocument,
   isLoading,
+  line,
   onClose,
   path,
 }: DiffPreviewPanelProps) {
@@ -23,6 +25,7 @@ export function DiffPreviewPanel({
   const currentContent = diffDocument?.currentContent ?? null;
   const fileSize = diffDocument?.size ?? null;
   const isBinary = diffDocument?.isBinary ?? false;
+  const hasChanges = originalContent !== currentContent;
 
   useEffect(() => {
     let cancelled = false;
@@ -54,29 +57,33 @@ export function DiffPreviewPanel({
   }, [currentContent, fileSize, originalContent, path]);
 
   return (
-    <PreviewPanel title="Diff" path={path} onClose={onClose}>
+    <PreviewPanel title="Code" path={path} onClose={onClose}>
       {isLoading && (
         <div className="code-panel-empty">
-          <p>Loading diff...</p>
+          <p>Loading...</p>
         </div>
       )}
       {!isLoading && !path && (
         <div className="code-panel-empty">
-          <p>Select a file to view diff</p>
+          <p>Select a file to preview</p>
         </div>
       )}
       {!isLoading && path && originalContent === null && currentContent === null && (
         <div className="code-panel-empty">
-          <p>Diff preview is not available</p>
+          <p>Preview is not available</p>
         </div>
       )}
       {!isLoading && path && isBinary && (
         <div className="code-panel-empty">
-          <p>Binary diff preview is not available</p>
+          <p>Binary preview is not available</p>
         </div>
       )}
       {!isLoading && path && !isBinary && (originalContent !== null || currentContent !== null) && (
-        <SourceViewer lines={lines} className="diff-viewer" />
+        <SourceViewer
+          lines={lines}
+          className={hasChanges ? "diff-viewer" : ""}
+          scrollToLine={line}
+        />
       )}
     </PreviewPanel>
   );

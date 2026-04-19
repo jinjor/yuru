@@ -269,9 +269,7 @@ export function FilesPane({
               key={row.node.id}
               isLoading={loadingDirectories.has(row.node.path)}
               ignoredPaths={treeIgnoredPaths}
-              isSelected={
-                previewSelection?.kind === "file" && previewSelection.path === row.node.path
-              }
+              isSelected={previewSelection?.path === row.node.path}
               onDirectoryToggle={toggleDirectory}
               onFileSelect={onPreviewSelectionChange}
               row={row}
@@ -314,7 +312,7 @@ function FileTreeRow({
           onDirectoryToggle(node.path);
           return;
         }
-        onFileSelect({ kind: "file", path: node.path });
+        onFileSelect({ path: node.path });
       }}
       style={{ height: 28, paddingLeft: 12 + depth * 12 }}
     >
