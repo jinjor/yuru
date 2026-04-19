@@ -92,6 +92,7 @@ export interface ElectronAPI {
   getGitBranchContext: (sessionId: string) => Promise<Result<BranchContext>>;
   getGitDiffDocument: (sessionId: string, filePath: string) => Promise<Result<GitDiffDocument | null>>;
   listFiles: (sessionId: string, relativePath?: string) => Promise<Result<FileTreeNode[]>>;
+  listAllFiles: (sessionId: string) => Promise<Result<string[]>>;
   resolveRepoFile: (sessionId: string, filePath: string) => Promise<string | null>;
   syncFileWatchTargets: (sessionId: string, relativePaths: string[]) => Promise<void>;
   onErrorAdded: (callback: (error: AppErrorNotice) => void) => void;

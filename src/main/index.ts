@@ -12,7 +12,7 @@ import {
   branchExists,
 } from "./git.js";
 import { getGitHubPullRequestForBranch } from "./github.js";
-import { listFiles, resolveRepoFile } from "./files.js";
+import { listAllFiles, listFiles, resolveRepoFile } from "./files.js";
 import {
   getSessionProvider,
   listSessionProviderDefinitions,
@@ -766,6 +766,18 @@ app.whenReady().then(() => {
       return ok(await listFiles(runtime.cwd, relativePath ?? ""));
     } catch (error) {
       return failAndReport(toAppError(error));
+    }
+  });
+
+  ipcMain.handle("files:listAll", async (_event, sessionId: string) => {
+    const runtime = sessionRuntimeMap.get(sessionId);
+    if (!runtime) {
+      return ok([] as string[]);
+    }
+    try {
+      return ok(await listAllFiles(runtime.cwd));
+    } catch (error) {
+      return failAndReport(toAppError(error, { command: "git" }));
     }
   });
 

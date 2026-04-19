@@ -27,7 +27,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | ID | Type | Area | Item | Why now |
 |---|---|---|---|---|
 | F27 | feature | Changes | staged / unstaged を分けて表示する | git の作業状態を仕事ですぐ把握したい |
-| F14 | feature | Files | ファイル検索 | ツリーを辿らずに目的のファイルへ行きたい |
 | F15 | feature | Search | コード検索 | repo 全体を横断してすぐ探したい |
 | F20 | feature | App | アプリのアイコンを付ける | テンションとプロダクト感を上げたい |
 | I9 | investigate | App Runtime | build/restart 後にたまに白画面になる原因を調べる | 開発中の再起動ループで不安になる |
@@ -60,6 +59,8 @@ UI 改善も機能追加も同じ土俵で扱う。
 | I4 | feature | Persistence | Yuru の状態を永続化できるようにする | 何をどこに持つかを実装可能な形にしたい |
 | I5 | feature | Persistence | dev / prd で保存先を分ける | 開発版の状態が本番に影響しないようにしたい |
 | I10 | investigate | Files | 自前 tree で大量のファイルを表示した時の重さ対策を考える | 切り替え後に実測して判断したい |
+| F28 | feature | Files | ファイル検索の最近開いたファイル履歴 | Cmd+P 空入力時に履歴を出したい |
+| I11 | investigate | App | モーダルとショートカットの管理設計を決める (詳細: docs/backlog-details/I11-modal-management.md) | FileSearch 導入時に Cmd+P が他モーダル裏で発火する問題が出たため、場当たり対応せず設計として直したい |
 
 ## Later
 

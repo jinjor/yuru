@@ -4,6 +4,7 @@ import type { GitDiffDocument, GitPathState } from "../../shared/ipc";
 import type { GitHubPullRequest } from "../../shared/session";
 import { DiffPreviewPanel } from "./DiffPreviewPanel";
 import { ExplorerPanel } from "./ExplorerPanel";
+import { FileSearch } from "./FileSearch";
 import { TerminalPanel } from "./TerminalPanel";
 import { usePaneLayout } from "../hooks/usePaneLayout";
 import type { PreviewSelection } from "../types";
@@ -40,6 +41,7 @@ export function Workspace({
   const [gitPathStates, setGitPathStates] = useState<GitPathState[]>([]);
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
   const [currentGitHub, setCurrentGitHub] = useState<GitHubPullRequest | null>(null);
+  const [isFileSearchOpen, setIsFileSearchOpen] = useState(false);
   const paneLayout = usePaneLayout({
     appRef,
     sidebarWidth,
@@ -57,9 +59,25 @@ export function Workspace({
 
   useEffect(() => {
     if (!sessionId) {
-      setGitPathStates([]);
-      setCurrentBranch(null);
-      setCurrentGitHub(null);
+      return;
+    }
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      const isPaletteShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "p";
+      if (!isPaletteShortcut) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      setIsFileSearchOpen((prev) => !prev);
+    };
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (!sessionId) {
       return;
     }
 
@@ -193,6 +211,13 @@ export function Workspace({
             width={paneLayout.changesPanelWidth}
           />
         </>
+      )}
+      {sessionId && isFileSearchOpen && (
+        <FileSearch
+          onClose={() => setIsFileSearchOpen(false)}
+          onSelectFile={(path) => setPreviewSelection({ path })}
+          sessionId={sessionId}
+        />
       )}
     </>
   );

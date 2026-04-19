@@ -1115,3 +1115,97 @@ button.github-badge {
   font-size: 11px;
   color: var(--danger);
 }
+
+/* File Search */
+.file-search-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 7, 12, 0.56);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 100px;
+  z-index: 100;
+}
+
+.file-search {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  width: 560px;
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
+}
+
+.file-search-input-wrap {
+  padding: 12px 12px 0;
+}
+
+.file-search-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-app);
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+}
+
+.file-search-input:focus {
+  border-color: var(--accent);
+}
+
+.file-search-results {
+  margin-top: 8px;
+  padding: 4px 8px 8px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border);
+}
+
+.file-search-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.file-search-row.selected {
+  background: rgba(123, 193, 255, 0.14);
+}
+
+.file-search-name {
+  color: var(--text);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+  max-width: 60%;
+}
+
+.file-search-path {
+  color: var(--text-subtle);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.file-search-match {
+  color: #ffd580;
+  font-weight: 600;
+}
+
+.file-search-match-subtle {
+  color: #c79f52;
+  font-weight: 600;
+}

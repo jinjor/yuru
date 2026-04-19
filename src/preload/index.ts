@@ -23,6 +23,7 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke("git:diffDocument", sessionId, filePath),
   listFiles: (sessionId: string, relativePath?: string) =>
     ipcRenderer.invoke("files:list", sessionId, relativePath),
+  listAllFiles: (sessionId: string) => ipcRenderer.invoke("files:listAll", sessionId),
   resolveRepoFile: (sessionId: string, filePath: string) =>
     ipcRenderer.invoke("files:resolveRepoFile", sessionId, filePath),
   syncFileWatchTargets: (sessionId: string, relativePaths: string[]) =>

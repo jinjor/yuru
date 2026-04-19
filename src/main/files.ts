@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { FileTreeNode } from "../shared/ipc.js";
+import { execBuffer } from "./exec.js";
 
 function normalizeRelativePath(relativePath: string): string {
   return relativePath.split(path.sep).join("/");
@@ -46,6 +47,43 @@ export function resolveRepoFile(cwd: string, filePath: string): string | null {
   } catch {
     return null;
   }
+}
+
+export async function listAllFiles(cwd: string): Promise<string[]> {
+  const [trackedBuffer, untrackedBuffer] = await Promise.all([
+    execBuffer("git", ["ls-files", "-z", "--cached", "--stage"], cwd),
+    execBuffer("git", ["ls-files", "-z", "--others", "--exclude-standard"], cwd),
+  ]);
+  const tracked = parseStagedRecords(trackedBuffer.toString("utf-8"));
+  const untracked = splitNulSeparated(untrackedBuffer.toString("utf-8"));
+  return [...tracked, ...untracked];
+}
+
+function parseStagedRecords(text: string): string[] {
+  const paths: string[] = [];
+  for (const record of splitNulSeparated(text)) {
+    const tabIndex = record.indexOf("\t");
+    if (tabIndex < 0) {
+      continue;
+    }
+    const mode = record.slice(0, record.indexOf(" "));
+    if (mode === "160000") {
+      continue;
+    }
+    paths.push(record.slice(tabIndex + 1));
+  }
+  return paths;
+}
+
+function splitNulSeparated(text: string): string[] {
+  if (text.length === 0) {
+    return [];
+  }
+  const parts = text.split("\0");
+  if (parts.length > 0 && parts[parts.length - 1] === "") {
+    parts.pop();
+  }
+  return parts;
 }
 
 export async function listFiles(cwd: string, relativePath = ""): Promise<FileTreeNode[]> {
