@@ -1,6 +1,14 @@
 # I12 Session Worktree Adopt
 
-Last updated: 2026-04-20
+Last updated: 2026-04-24
+
+Status: not adopted.
+
+この案は、session を中心に据えたまま `cwd` のズレを `adopt` で補正する方向だった。
+検討と実運用を経て、Yuru は session-first ではなく worktree-first の作業単位へ寄せる方がよいと判断したため、この案は採用しない。
+
+この文書は、当時の問題整理と provider 調査の記録として残す。
+今後の設計判断は、この文書ではなく worktree-first workspace model の design doc を参照する。
 
 `I12` は、session 開始後に worktree へ移動したケースを Yuru がどう扱うかを決めるためのメモ。
 特に `Changes` や `Files` が参照する rooted path と、provider ごとの resume 条件のズレを整理する。

@@ -26,6 +26,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 
 | ID | Type | Area | Item | Why now |
 |---|---|---|---|---|
+| I13 | investigate | Workspaces | worktree-first workspace model を設計し、backlog/docs を刷新する | セッション中心の前提を見直し、今後の実装をシンプルにするため |
 | F15 | feature | Search | コード検索 | repo 全体を横断してすぐ探したい |
 | F20 | feature | App | アプリのアイコンを付ける | テンションとプロダクト感を上げたい |
 | I9 | investigate | App Runtime | build/restart 後にたまに白画面になる原因を調べる | 開発中の再起動ループで不安になる |
@@ -35,7 +36,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | P11 | polish | Sessions | 最新会話プレビューが一覧に同期されない問題を直す | 一覧の情報鮮度が低い |
 | B5 | bug | New Session | hover ハイライトが `WT` の手前で不自然に切れる問題を直す | 明確な UI バグ |
 | I2 | investigate | Sessions | Claude と Codex のセッション一覧 merge ロジックに無理がないか確認する | 表示改善前に土台確認したい |
-| I12 | investigate | Sessions / Worktree | セッション途中で worktree に移ったときの rooted path と adopt 方針を決める | 今の運用だと session 開始地点と実作業場所がズレやすい |
 
 ## Next
 
