@@ -1,8 +1,9 @@
 # Architecture Notes
 
-Last updated: 2026-04-09
+Last updated: 2026-04-24
 
-この文書は、コードを読んでも自明ではない前提や判断だけを残す。
+この文書は 2026-04-24 時点のアーキテクチャである。
+`I13` で採用した target architecture は `docs/architecture-v2.md` を参照する。
 実装の細部、型定義、処理手順の正確な姿はコードを正とする。
 
 ## Product shape

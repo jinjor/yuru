@@ -1,8 +1,8 @@
-# I3 App Runtime
+# F33 App Runtime
 
 Last updated: 2026-04-11
 
-`I3` は、起動元ごとに `start/stop/restart` を安全に扱えるようにするための実装メモ。
+`F33` は、起動元ごとに `start/stop/restart` を安全に扱えるようにするための実装メモ。
 対象はランタイム制御だけで、保存先の話は含めない。
 
 ## Goal
@@ -24,7 +24,7 @@ Last updated: 2026-04-11
 - Electron の `userData` の置き場所
 - 開発時と本番時の保存先分離
 
-これらは `I4` の話として分ける。
+これらは architecture v2 の persistence 方針として別に扱う。
 
 ## Implementation questions
 

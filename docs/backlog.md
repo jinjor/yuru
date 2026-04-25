@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-04-20
+Last updated: 2026-04-26
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -22,11 +22,33 @@ UI 改善も機能追加も同じ土俵で扱う。
 - 機能は、仕事で使う頻度が高いものほど優先する
 - 「壊れているか」よりも「早く仕事に使いたいか」を優先軸にする
 
+## V1 -> V2 Migration
+
+このセクションは、V1 から V2 への移行のためのストーリー一覧である。
+背景設計は [docs/architecture-v2.md](/Users/jinjor/projects/yuru/.claude/worktrees/i13-worktree-workspace-model/docs/architecture-v2.md:1) を参照する。
+いまは `Now` よりもこちらを優先する。
+
+1. Claude の worktree session 検出が成立するかを spike で確認する
+2. Codex の worktree session 検出が成立するかを spike で確認する
+3. ダミーの metadata で repository 一覧を表示できる
+4. `yuru add` で repository を Yuru 上で見ることができる
+5. `Workspace` コンポーネントを `SessionView` に rename できる
+6. backend で Files / Changes / Diff が参照する作業ルートを、`cwd` 直結ではない中立な概念として扱える
+7. repository から新規 worktree セッションを開始できる
+8. primary session のアイテムに active / inactive が表示できる
+9. primary な worktree から既存セッションを再開できる
+10. primary session のアイテムに provider が表示できる
+11. primary session のアイテムに preview 文字列が表示できる
+12. Claude の suggested worktree session を表示できる
+13. サジェストされた worktree session を primary に昇格できる
+14. Codex の suggested worktree session を表示し、primary に昇格できる
+15. primary session のアイテムに branch 名が表示されている
+16. V1 の session-first 実装を削除できる
+
 ## Now
 
 | ID | Type | Area | Item | Why now |
 |---|---|---|---|---|
-| I13 | investigate | Workspaces | worktree-first workspace model を設計し、backlog/docs を刷新する | セッション中心の前提を見直し、今後の実装をシンプルにするため |
 | F15 | feature | Search | コード検索 | repo 全体を横断してすぐ探したい |
 | F20 | feature | App | アプリのアイコンを付ける | テンションとプロダクト感を上げたい |
 | I9 | investigate | App Runtime | build/restart 後にたまに白画面になる原因を調べる | 開発中の再起動ループで不安になる |
@@ -35,7 +57,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | B6 | bug | Diff | `loading diff...` のちらつきを消す | 差分を見るたびにノイズになる |
 | P11 | polish | Sessions | 最新会話プレビューが一覧に同期されない問題を直す | 一覧の情報鮮度が低い |
 | B5 | bug | New Session | hover ハイライトが `WT` の手前で不自然に切れる問題を直す | 明確な UI バグ |
-| I2 | investigate | Sessions | Claude と Codex のセッション一覧 merge ロジックに無理がないか確認する | 表示改善前に土台確認したい |
 
 ## Next
 
@@ -55,9 +76,8 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F8 | feature | Terminal | ファイルクリック時にツリー側も開く | navigation の連動 |
 | F9 | feature | Terminal | ウィンドウを広げた時に 1 行の文字数を増やす | xterm fit を調整 |
 | F25 | feature | Updates | Yuru の更新通知を出す | ローカル build 運用だと更新に気づきにくい |
-| I3 | feature | App Runtime | 起動元ごとに `start/stop/restart` できるようにする | 複数起動時に別の Yuru を巻き込まないようにしたい |
-| I4 | feature | Persistence | Yuru の状態を永続化できるようにする | 何をどこに持つかを実装可能な形にしたい |
-| I5 | feature | Persistence | dev / prd で保存先を分ける | 開発版の状態が本番に影響しないようにしたい |
+| F33 | feature | App Runtime | 起動元ごとに `start/stop/restart` できるようにする | 複数起動時に別の Yuru を巻き込まないようにしたい |
+| F32 | feature | Terminal | task worktree 外の作業を standalone terminal として分離する | V2 移行後の補助導線として欲しい |
 | I10 | investigate | Files | 自前 tree で大量のファイルを表示した時の重さ対策を考える | 切り替え後に実測して判断したい |
 | F28 | feature | Files | ファイル検索の最近開いたファイル履歴 | Cmd+P 空入力時に履歴を出したい |
 | I11 | investigate | App | モーダルとショートカットの管理設計を決める (詳細: docs/backlog-details/I11-modal-management.md) | FileSearch 導入時に Cmd+P が他モーダル裏で発火する問題が出たため、場当たり対応せず設計として直したい |

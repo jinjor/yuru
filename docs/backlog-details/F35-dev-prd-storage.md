@@ -1,13 +1,13 @@
-# I5 Dev / Prd Storage Split
+# F35 Dev / Prd Storage Split
 
-Last updated: 2026-04-11
+Last updated: 2026-04-24
 
-`I5` は、開発時と本番時の保存先を分離するための実装メモ。
-保存データの種類そのものは `I4` として別に扱う。
+`F35` は、Yuru 自身が持つ保存データの dev / prd 保存先を分離するための実装メモ。
+保存データの中身そのものは `docs/architecture-v2.md` の persistence 方針として別に扱う。
 
 ## Goal
 
-- 開発版のほうが先に保存形式を変え、本番版と互換がなくなる可能性がある
+- 開発版のほうが先に Yuru metadata schema を変え、本番版と互換がなくなる可能性がある
 - そのため、dev と prd は保存先を分離したい
 - 一方で、本番側に `prd` のような余計なディレクトリ名は付けたくない
 
@@ -16,6 +16,7 @@ Last updated: 2026-04-11
 - Electron の `userData` はデフォルトでは `Application Support/Yuru` に寄る
 - 将来的には `Application Support` と `~/.yuru` の両方を使う可能性がある
 - 複数起動時の `restart` 問題とは別問題として扱う
+- Yuru metadata や今後の補助状態が dev / prd で混ざらないようにする
 
 ## Expected shape
 
