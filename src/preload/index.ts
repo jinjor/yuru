@@ -4,6 +4,7 @@ import { Session, SessionProvider } from "../shared/session.js";
 
 const electronAPI: ElectronAPI = {
   getSessions: () => ipcRenderer.invoke("sessions:list"),
+  getRepos: () => ipcRenderer.invoke("metadata:listRepos"),
   getSessionProviders: () => ipcRenderer.invoke("providers:list"),
   getErrors: () => ipcRenderer.invoke("errors:list"),
   dismissError: (id: string) => ipcRenderer.invoke("errors:dismiss", id),

@@ -216,7 +216,7 @@ provider ごとの hint は session identity を置き換えるためではな�
 
 1. [x] Claude の worktree session 検出が成立するかを spike で確認する
 2. [x] Codex の worktree session 検出が成立するかを spike で確認する
-3. [ ] ダミーの metadata で repository 一覧を表示できる
+3. [x] ダミーの metadata で repository 一覧を表示できる
    - metadata に `repos` のダミーデータを置ける
    - worktree が 0 件でも、その repo は左ペインに表示される
    - 既存の session-first 左ペインはまだ見えていてよい

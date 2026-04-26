@@ -2,6 +2,7 @@ import { app, BrowserWindow, Menu, dialog, ipcMain, shell } from "electron";
 import type { MenuItemConstructorOptions } from "electron";
 import path from "path";
 import * as pty from "node-pty";
+import { loadRepos } from "./metadata.js";
 import { loadSessions } from "./sessions.js";
 import {
   getGitPathStates,
@@ -496,6 +497,10 @@ app.whenReady().then(() => {
 
   ipcMain.handle("sessions:list", () => {
     return loadSessions(sessionRuntimeMap);
+  });
+
+  ipcMain.handle("metadata:listRepos", () => {
+    return loadRepos();
   });
 
   ipcMain.handle("providers:list", () => {

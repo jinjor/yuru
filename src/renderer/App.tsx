@@ -1,8 +1,10 @@
 import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
 import type { AgentDefinition } from "../shared/agent";
+import type { RepoMetadata } from "../shared/metadata";
 import type { Session, SessionProvider } from "../shared/session";
 import { BranchNameInput } from "./components/BranchNameInput";
+import { RepoList } from "./components/RepoList";
 import { RepoPicker } from "./components/RepoPicker";
 import { SessionList } from "./components/SessionList";
 import { Workspace } from "./components/Workspace";
@@ -11,6 +13,7 @@ import { clamp } from "./utils/layout";
 export function App() {
   const appRef = useRef<HTMLDivElement>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [repos, setRepos] = useState<RepoMetadata[]>([]);
   const [availableProviders, setAvailableProviders] = useState<AgentDefinition[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showRepoPicker, setShowRepoPicker] = useState(false);
@@ -67,6 +70,15 @@ export function App() {
       })
       .catch((error) => {
         console.error("Failed to load session providers.", error);
+      });
+
+    window.electronAPI
+      .getRepos()
+      .then((nextRepos) => {
+        setRepos(nextRepos);
+      })
+      .catch((error) => {
+        console.error("Failed to load repos.", error);
       });
 
     refreshSessions();
@@ -205,20 +217,28 @@ export function App() {
   return (
     <div className="app" ref={appRef}>
       <aside className="sidebar" style={{ width: sidebarWidth, minWidth: sidebarWidth }}>
-        <div className="sidebar-header">
-          <h2>Sessions</h2>
-          <button className="new-session-btn" onClick={() => setShowRepoPicker(true)}>
-            +
-          </button>
+        <div className="sidebar-section">
+          <div className="sidebar-header">
+            <h2>Repos</h2>
+          </div>
+          <RepoList repos={repos} />
         </div>
-        <SessionList
-          sessions={sessions}
-          selectedId={selectedId}
-          deletingSessionId={deletingSessionId}
-          onDeleteWorktree={handleDeleteWorktree}
-          onOpenExternal={openExternal}
-          onSelect={handleSelectSession}
-        />
+        <div className="sidebar-section sidebar-section-flex">
+          <div className="sidebar-header">
+            <h2>Sessions</h2>
+            <button className="new-session-btn" onClick={() => setShowRepoPicker(true)}>
+              +
+            </button>
+          </div>
+          <SessionList
+            sessions={sessions}
+            selectedId={selectedId}
+            deletingSessionId={deletingSessionId}
+            onDeleteWorktree={handleDeleteWorktree}
+            onOpenExternal={openExternal}
+            onSelect={handleSelectSession}
+          />
+        </div>
       </aside>
       <div
         className="pane-resize-handle vertical"
