@@ -21,6 +21,13 @@ yuru latest
 yuru
 ```
 
+To register a repository in Yuru:
+
+```sh
+cd /path/to/repo
+yuru add
+```
+
 To update the managed checkout and rebuild the local app:
 
 ```sh

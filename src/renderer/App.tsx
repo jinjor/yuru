@@ -213,7 +213,9 @@ export function App() {
     }
   }, []);
 
-  const knownRepos = [...new Set(sessions.map((session) => session.repoPath))];
+  const knownRepos = [
+    ...new Set([...repos.map((repo) => repo.repoPath), ...sessions.map((session) => session.repoPath)]),
+  ];
   return (
     <div className="app" ref={appRef}>
       <aside className="sidebar" style={{ width: sidebarWidth, minWidth: sidebarWidth }}>

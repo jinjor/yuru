@@ -220,7 +220,7 @@ provider ごとの hint は session identity を置き換えるためではな�
    - metadata に `repos` のダミーデータを置ける
    - worktree が 0 件でも、その repo は左ペインに表示される
    - 既存の session-first 左ペインはまだ見えていてよい
-4. [ ] `yuru add` で repository を Yuru 上で見ることができる
+4. [x] `yuru add` で repository を Yuru 上で見ることができる
    - user は repository 内で `yuru add` を実行できる
    - Yuru は `cwd` から repo root を見つけて metadata に登録できる
    - まだ task worktree がない repo でも、ここから作業開始の起点にできる

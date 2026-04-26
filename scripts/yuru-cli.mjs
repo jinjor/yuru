@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -9,6 +10,7 @@ const yuruHome = process.env.YURU_HOME ?? path.join(os.homedir(), ".yuru");
 const repoDir = process.env.YURU_REPO_DIR ?? path.join(yuruHome, "repo");
 const appsDir = process.env.YURU_APPLICATIONS_DIR ?? path.join(os.homedir(), "Applications");
 const appPath = path.join(appsDir, "Yuru.app");
+const metadataPath = process.env.YURU_METADATA_PATH ?? path.join(yuruHome, "metadata.json");
 const allowedRemotes = new Set([
   "git@github.com:jinjor/yuru",
   "git@github.com:jinjor/yuru.git",
@@ -26,6 +28,7 @@ function printHelp() {
 
 Commands:
   yuru        Launch ~/Applications/Yuru.app
+  yuru add    Register the current Git repository in Yuru
   yuru latest Update the managed checkout, rebuild, and replace Yuru.app
   yuru help   Show this message
 `);
@@ -42,12 +45,13 @@ function run(command, args, options = {}) {
   return result;
 }
 
-function read(command, args) {
+function read(command, args, options = {}) {
   return execFileSync(command, args, {
     cwd: repoDir,
     encoding: "utf8",
     env: process.env,
     stdio: ["ignore", "pipe", "pipe"],
+    ...options,
   }).trim();
 }
 
@@ -126,6 +130,67 @@ function openApp() {
   run("open", ["-na", appPath], { cwd: process.cwd() });
 }
 
+function parseMetadata(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    fail("Yuru metadata must be a JSON object.");
+  }
+  if (value.repos === undefined) {
+    return { ...value, repos: [] };
+  }
+  if (!Array.isArray(value.repos)) {
+    fail("Yuru metadata `repos` must be an array.");
+  }
+  for (const repo of value.repos) {
+    if (
+      !repo ||
+      typeof repo !== "object" ||
+      Array.isArray(repo) ||
+      typeof repo.id !== "string" ||
+      typeof repo.repoPath !== "string"
+    ) {
+      fail("Yuru metadata repo entries must have string id and repoPath.");
+    }
+  }
+  return value;
+}
+
+function loadMetadata() {
+  if (!fs.existsSync(metadataPath)) {
+    return { repos: [] };
+  }
+  return parseMetadata(JSON.parse(fs.readFileSync(metadataPath, "utf8")));
+}
+
+function saveMetadata(metadata) {
+  fs.mkdirSync(path.dirname(metadataPath), { recursive: true });
+  fs.writeFileSync(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`);
+}
+
+function resolveRepoRoot(cwd) {
+  try {
+    return read("git", ["rev-parse", "--show-toplevel"], { cwd });
+  } catch {
+    fail("Run `yuru add` inside a Git repository.");
+  }
+}
+
+function addRepo() {
+  const repoPath = resolveRepoRoot(process.cwd());
+  const metadata = loadMetadata();
+  const existingRepo = metadata.repos.find((repo) => repo.repoPath === repoPath);
+  if (existingRepo) {
+    console.log(`Already added: ${existingRepo.repoPath}`);
+    return;
+  }
+
+  metadata.repos.push({
+    id: crypto.randomUUID(),
+    repoPath,
+  });
+  saveMetadata(metadata);
+  console.log(`Added: ${repoPath}`);
+}
+
 function updateApp() {
   ensureMacOS();
   ensureManagedRepo();
@@ -147,6 +212,9 @@ const command = process.argv[2] ?? "open";
 switch (command) {
   case "open":
     openApp();
+    break;
+  case "add":
+    addRepo();
     break;
   case "latest":
     updateApp();
