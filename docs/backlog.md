@@ -52,7 +52,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F15 | feature | Search | コード検索 | repo 全体を横断してすぐ探したい |
 | F20 | feature | App | アプリのアイコンを付ける | テンションとプロダクト感を上げたい |
 | I9 | investigate | App Runtime | build/restart 後にたまに白画面になる原因を調べる | 開発中の再起動ループで不安になる |
-| I1 | investigate | Sessions | `Remove worktree` 失敗時に未コミット・未追跡ファイルをどう扱うか決める | 削除 UX の設計に必要 |
+| I1 | investigate | Sessions | worktree を安全に削除できる条件と UX を決める | squash merge 運用でも作業済み worktree を迷わず片付けたい |
 | B3 | bug | Sessions | 古いセッション選択時の `No conversation found with ID: ...` のちらつきを消す | 誤解を生む |
 | B6 | bug | Diff | `loading diff...` のちらつきを消す | 差分を見るたびにノイズになる |
 | P11 | polish | Sessions | 最新会話プレビューが一覧に同期されない問題を直す | 一覧の情報鮮度が低い |
@@ -98,5 +98,4 @@ UI 改善も機能追加も同じ土俵で扱う。
 
 ## Open decisions
 
-- `Remove worktree` 失敗時は `--force` を提案するだけにするか、明示的な force 削除フローを持つか
 - 変更ファイル数・変更行数の集計は都度計算かキャッシュか
