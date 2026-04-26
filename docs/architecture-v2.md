@@ -225,7 +225,7 @@ provider ごとの hint は session identity を置き換えるためではな�
    - Yuru は `cwd` から repo root を見つけて metadata に登録できる
    - まだ task worktree がない repo でも、ここから作業開始の起点にできる
    - すでに登録済みなら重複登録しない
-5. [ ] `Workspace` コンポーネントを `SessionView` に rename できる
+5. [ ] `Workspace` コンポーネントを `SessionView` に rename する
 6. [ ] backend で Files / Changes / Diff が参照する作業ルートを、`cwd` 直結ではない中立な概念として扱える
    - ここではまだ `worktreePath` に切り替えない
    - 実体は引き続き `cwd` のままにして、参照の形だけをリファクタリングする
@@ -242,7 +242,7 @@ provider ごとの hint は session identity を置き換えるためではな�
 13. [ ] サジェストされた worktree session を primary に昇格できる
 14. [ ] Codex の suggested worktree session を表示し、primary に昇格できる
 15. [ ] primary session のアイテムに branch 名が表示されている
-16. [ ] V1 の session-first 実装を削除できる
+16. [ ] V1 の session-first 実装を削除する
 
 ### Open points
 
