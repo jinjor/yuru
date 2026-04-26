@@ -25,25 +25,25 @@ UI 改善も機能追加も同じ土俵で扱う。
 ## V1 -> V2 Migration
 
 このセクションは、V1 から V2 への移行のためのストーリー一覧である。
-背景設計は [docs/architecture-v2.md](/Users/jinjor/projects/yuru/.claude/worktrees/i13-worktree-workspace-model/docs/architecture-v2.md:1) を参照する。
+背景設計は [docs/architecture-v2.md](architecture-v2.md) を参照する。
 いまは `Now` よりもこちらを優先する。
 
-1. Claude の worktree session 検出が成立するかを spike で確認する
-2. Codex の worktree session 検出が成立するかを spike で確認する
-3. ダミーの metadata で repository 一覧を表示できる
-4. `yuru add` で repository を Yuru 上で見ることができる
-5. `Workspace` コンポーネントを `SessionView` に rename できる
-6. backend で Files / Changes / Diff が参照する作業ルートを、`cwd` 直結ではない中立な概念として扱える
-7. repository から新規 worktree セッションを開始できる
-8. primary session のアイテムに active / inactive が表示できる
-9. primary な worktree から既存セッションを再開できる
-10. primary session のアイテムに provider が表示できる
-11. primary session のアイテムに preview 文字列が表示できる
-12. Claude の suggested worktree session を表示できる
-13. サジェストされた worktree session を primary に昇格できる
-14. Codex の suggested worktree session を表示し、primary に昇格できる
-15. primary session のアイテムに branch 名が表示されている
-16. V1 の session-first 実装を削除できる
+1. [x] Claude の worktree session 検出が成立するかを spike で確認する
+2. [x] Codex の worktree session 検出が成立するかを spike で確認する
+3. [ ] ダミーの metadata で repository 一覧を表示できる
+4. [ ] `yuru add` で repository を Yuru 上で見ることができる
+5. [ ] `Workspace` コンポーネントを `SessionView` に rename できる
+6. [ ] backend で Files / Changes / Diff が参照する作業ルートを、`cwd` 直結ではない中立な概念として扱える
+7. [ ] repository から新規 worktree セッションを開始できる
+8. [ ] primary session のアイテムに active / inactive が表示できる
+9. [ ] primary な worktree から既存セッションを再開できる
+10. [ ] primary session のアイテムに provider が表示できる
+11. [ ] primary session のアイテムに preview 文字列が表示できる
+12. [ ] Claude の suggested worktree session を表示できる
+13. [ ] サジェストされた worktree session を primary に昇格できる
+14. [ ] Codex の suggested worktree session を表示し、primary に昇格できる
+15. [ ] primary session のアイテムに branch 名が表示されている
+16. [ ] V1 の session-first 実装を削除できる
 
 ## Now
 
