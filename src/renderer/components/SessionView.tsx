@@ -10,7 +10,7 @@ import { usePaneLayout } from "../hooks/usePaneLayout";
 import type { PreviewSelection } from "../types";
 import { resultDataOrNull } from "../utils/result";
 
-interface WorkspaceProps {
+interface SessionViewProps {
   appRef: RefObject<HTMLDivElement | null>;
   isCreatingSession: boolean;
   onOpenExternal: (url: string) => void;
@@ -26,15 +26,15 @@ function isPathChanged(states: readonly GitPathState[], path: string): boolean {
   );
 }
 
-export function Workspace({
+export function SessionView({
   appRef,
   isCreatingSession,
   onOpenExternal,
   refreshSessions,
   sessionId,
   sidebarWidth,
-}: WorkspaceProps) {
-  const workspaceColumnRef = useRef<HTMLDivElement>(null);
+}: SessionViewProps) {
+  const sessionViewColumnRef = useRef<HTMLDivElement>(null);
   const [previewSelection, setPreviewSelection] = useState<PreviewSelection | null>(null);
   const [diffDocument, setDiffDocument] = useState<GitDiffDocument | null>(null);
   const [isLoadingDiff, setIsLoadingDiff] = useState(false);
@@ -45,7 +45,7 @@ export function Workspace({
   const paneLayout = usePaneLayout({
     appRef,
     sidebarWidth,
-    workspaceColumnRef,
+    sessionViewColumnRef,
   });
   const previewPathChanged = previewSelection
     ? isPathChanged(gitPathStates, previewSelection.path)
@@ -156,8 +156,8 @@ export function Workspace({
   return (
     <>
       <div
-        ref={workspaceColumnRef}
-        className={`workspace-column ${previewSelection ? "has-preview" : ""}`}
+        ref={sessionViewColumnRef}
+        className={`session-view-column ${previewSelection ? "has-preview" : ""}`}
         style={
           previewSelection
             ? ({ "--preview-size": `${paneLayout.previewRatio * 100}%` } as CSSProperties)
@@ -175,7 +175,7 @@ export function Workspace({
         )}
         {previewSelection && (
           <div
-            className="pane-resize-handle horizontal workspace-split-handle"
+            className="pane-resize-handle horizontal session-view-split-handle"
             onMouseDown={paneLayout.handlePreviewResizeStart}
             aria-hidden="true"
           />

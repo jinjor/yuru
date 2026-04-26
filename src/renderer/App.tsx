@@ -7,7 +7,7 @@ import { BranchNameInput } from "./components/BranchNameInput";
 import { RepoList } from "./components/RepoList";
 import { RepoPicker } from "./components/RepoPicker";
 import { SessionList } from "./components/SessionList";
-import { Workspace } from "./components/Workspace";
+import { SessionView } from "./components/SessionView";
 import { clamp } from "./utils/layout";
 
 export function App() {
@@ -109,8 +109,8 @@ export function App() {
       document.body.style.userSelect = "none";
 
       const handleMouseMove = (moveEvent: globalThis.MouseEvent): void => {
-        const reservedWorkspaceWidth = selectedId ? 520 : 640;
-        const maxWidth = Math.max(220, appWidth - reservedWorkspaceWidth);
+        const reservedSessionViewWidth = selectedId ? 520 : 640;
+        const maxWidth = Math.max(220, appWidth - reservedSessionViewWidth);
         setSidebarWidth(clamp(startWidth + moveEvent.clientX - startX, 220, maxWidth));
       };
 
@@ -247,7 +247,7 @@ export function App() {
         onMouseDown={handleSidebarResizeStart}
         aria-hidden="true"
       />
-      <Workspace
+      <SessionView
         key={selectedId ?? "no-session"}
         appRef={appRef}
         isCreatingSession={isCreatingSession}

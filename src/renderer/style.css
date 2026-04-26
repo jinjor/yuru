@@ -63,7 +63,7 @@ body,
   height: 100%;
 }
 
-.workspace-column {
+.session-view-column {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -71,12 +71,12 @@ body,
   overflow: hidden;
 }
 
-.workspace-column.has-preview .preview-panel {
+.session-view-column.has-preview .preview-panel {
   flex: 0 0 var(--preview-size, 60%);
   min-height: 0;
 }
 
-.workspace-column.has-preview .terminal-container {
+.session-view-column.has-preview .terminal-container {
   flex: 1 1 auto;
   min-height: 180px;
 }
@@ -124,11 +124,11 @@ body,
   transform: translateY(-50%);
 }
 
-.workspace-split-handle {
+.session-view-split-handle {
   z-index: 2;
 }
 
-.workspace-split-handle::before {
+.session-view-split-handle::before {
   background: rgba(255, 255, 255, 0.16);
 }
 
