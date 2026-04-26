@@ -77,6 +77,48 @@ Git-only では `merged` と言えないケース:
 - `active`
   provider process が動いている。まず停止が必要。
 
+## UI considerations
+
+- safe かどうかを常時 row に表示するか:
+  worktree list 上で `safe to remove` / `dirty` / `unmerged` のような状態を出すと安心できる一方、常時表示すると左ペインが重くなる。最初は `x` hover や削除確認 dialog で判定結果を出し、必要なら row badge を追加する方がシンプル。
+- 削除直前に fresh 判定する:
+  常時表示する場合でも、最終的な削除可否は `x` を押した時点で再計算する。PR state や dirty state は変わりやすいため、表示中の badge だけを source of truth にしない。
+- warning の強さを状態で変える:
+  `safe-clean-merged` は軽い確認、`safe-dirty-merged` は変更が消える警告、`dirty-unmerged` / `unknown` はより強い警告にする。
+
+## Branch cleanup
+
+worktree を消しても branch は残る。
+Git は checkout 中の branch 削除を拒否するため、branch を消すなら基本的には worktree 削除後に行う。
+
+選択肢:
+
+- worktree だけ消す:
+  最も安全。branch cleanup は別導線にする。
+- 確認 dialog に `also delete branch` を出す:
+  merged 済み branch だけ選択可能にする。未 merge / unknown の branch 削除は最初は扱わない。
+- PR merged 済みなら branch 削除も提案する:
+  squash merge 運用では local branch が main の ancestor にならないため、GitHub PR state を根拠にする必要がある。
+
+最初の実装では worktree 削除と branch 削除を分ける方がよい。
+同時にやる場合でも、branch 削除は明示 opt-in にする。
+
+## Session retention
+
+worktree を消した後、primary session / provider session を UI 上に残すかを決める必要がある。
+
+選択肢:
+
+- session を隠す:
+  worktree-first UI としては自然。task worktree が消えたら主導線から外す。
+- missing worktree として残す:
+  「この session はあったが worktree が消えた」ことを確認できる。debug / archive 的な補助表示に向いている。
+- provider session は残すが primary link を外す:
+  Yuru metadata 上の primary session だけ解除し、provider store 自体は削除しない。後から suggested session として再発見される余地を残せる。
+
+provider session 履歴は Yuru が削除しない。
+worktree-first の主導線では非表示にしつつ、必要なら archive / debug view で確認できる形がよさそう。
+
 ## Commands
 
 通常削除:
@@ -107,6 +149,9 @@ PR merge 時の自動整理は `F18` に寄せる。
 ## Open questions
 
 - dirty の詳細はファイル数だけで十分か、ファイル一覧まで出すか
+- safe かどうかを row に常時表示するか、削除確認時だけ表示するか
 - `origin/main` 以外の base branch をどう決めるか
 - GitHub が使えない repo では squash merge 済みをどう表示するか
 - active session を停止してから削除まで 1 フローにするか、まずは停止を促すだけにするか
+- worktree 削除時に branch 削除を opt-in で同時実行できるようにするか
+- worktree 削除後の primary session を hidden / missing / detached のどれとして扱うか
