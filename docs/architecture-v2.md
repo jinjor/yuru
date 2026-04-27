@@ -233,25 +233,31 @@ provider ごとの hint は session identity を置き換えるためではな�
 7. [ ] repository から新規 worktree セッションを開始し、右側に現在の session として表示できる
    - repo row から worktree 追加と provider session 開始を 1 操作で実行できる
    - 作成した worktree は metadata に task worktree として保存し、開始した provider session を primary として strong link する
-   - 左ペインは repo 配下に primary session 付き task worktree を表示する
-   - primary session のない Git worktree は左ペインに表示しない
+   - 開始した provider session は作成した worktree 上で動く
    - 開始した task worktree session は現在の session になり、右側にその session の Terminal / Files / Changes / Diff が表示される
    - Files / Changes / Diff は `worktreePath` を基準に動く
+   - 左ペインはまだ repo の表示だけでよい
+   - primary session 付き task worktree を左ペインに表示する feedback は次の story で扱う
+   - 既存の session-first 左ペインはまだ隠さない
+8. [ ] primary session 付き task worktree を左ペインに表示できる
+   - metadata の task worktree と primary strong link を読んで、repo 配下に表示する
+   - primary session のない Git worktree は左ペインに表示しない
    - UI 表示は task worktree 名と primary session の存在が分かる最低限でよい
    - 左ペインから task worktree row や primary session item を手動選択する操作はまだできなくてよい
    - 既存 primary session の再開操作はまだできなくてよい
       - active / inactive、provider、preview、branch は後続 story で足す
-   - 既存の session-first 左ペインはここで UI から隠す
-      - ただし旧 UI 実装は削除せず、後で使い回せるように残す
-8. [ ] primary session のアイテムに active / inactive が表示できる
-9. [ ] primary な worktree から既存セッションを再開できる
-10. [ ] primary session のアイテムに provider が表示できる
-11. [ ] primary session のアイテムに preview 文字列が表示できる
-12. [ ] Claude の suggested worktree session を表示できる
-13. [ ] サジェストされた worktree session を primary に昇格できる
-14. [ ] Codex の suggested worktree session を表示し、primary に昇格できる
-15. [ ] primary session のアイテムに branch 名が表示されている
-16. [ ] V1 の session-first 実装を削除する
+9. [ ] primary session のアイテムに active / inactive が表示できる
+10. [ ] primary な worktree から既存セッションを再開できる
+   - 左ペインから primary session 付き task worktree を選んで再開できる
+   - ここで既存の session-first 左ペインを UI から隠す
+   - ただし旧 UI 実装は削除せず、後で使い回せるように残す
+11. [ ] primary session のアイテムに provider が表示できる
+12. [ ] primary session のアイテムに preview 文字列が表示できる
+13. [ ] Claude の suggested worktree session を表示できる
+14. [ ] サジェストされた worktree session を primary に昇格できる
+15. [ ] Codex の suggested worktree session を表示し、primary に昇格できる
+16. [ ] primary session のアイテムに branch 名が表示されている
+17. [ ] V1 の session-first 実装を削除する
 
 ### Open points
 
