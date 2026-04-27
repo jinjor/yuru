@@ -1,6 +1,6 @@
 # Architecture v2
 
-Last updated: 2026-04-27
+Last updated: 2026-04-28
 
 この文書は、task-worktree-first モデルの target architecture をまとめる。
 現行実装の説明は `docs/architecture.md` を参照する。
@@ -230,10 +230,19 @@ provider ごとの hint は session identity を置き換えるためではな�
    - ここではまだ `worktreePath` に切り替えない
    - 実体は引き続き `cwd` のままにして、参照の形だけをリファクタリングする
    - ただし、このリファクタが次の story に吸収できると分かれば削除してよい
-7. [ ] repository から新規 worktree セッションを開始できる
-   - ここで初めて `worktreePath` ベースに切り替える
+7. [ ] repository から新規 worktree セッションを開始し、右側に現在の session として表示できる
+   - repo row から worktree 追加と provider session 開始を 1 操作で実行できる
+   - 作成した worktree は metadata に task worktree として保存し、開始した provider session を primary として strong link する
+   - 左ペインは repo 配下に primary session 付き task worktree を表示する
+   - primary session のない Git worktree は左ペインに表示しない
+   - 開始した task worktree session は現在の session になり、右側にその session の Terminal / Files / Changes / Diff が表示される
+   - Files / Changes / Diff は `worktreePath` を基準に動く
+   - UI 表示は task worktree 名と primary session の存在が分かる最低限でよい
+   - 左ペインから task worktree row や primary session item を手動選択する操作はまだできなくてよい
+   - 既存 primary session の再開操作はまだできなくてよい
+      - active / inactive、provider、preview、branch は後続 story で足す
    - 既存の session-first 左ペインはここで UI から隠す
-   - ただし実装は削除せず、後で使い回せるように残す
+      - ただし旧 UI 実装は削除せず、後で使い回せるように残す
 8. [ ] primary session のアイテムに active / inactive が表示できる
 9. [ ] primary な worktree から既存セッションを再開できる
 10. [ ] primary session のアイテムに provider が表示できる
@@ -246,5 +255,4 @@ provider ごとの hint は session identity を置き換えるためではな�
 
 ### Open points
 
-- `7` の時点で UI 上の worktree item に最低限どこまで表示するか
 - `active / inactive` を最終 UX に残すか、開発用の確認表示としてあとで外すか
