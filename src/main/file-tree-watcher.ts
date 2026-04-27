@@ -7,8 +7,8 @@ function normalizeRelativePath(relativePath: string): string {
   return relativePath.split(path.sep).join("/");
 }
 
-function resolveWatchPath(cwd: string, relativePath: string): string {
-  const basePath = path.resolve(cwd);
+function resolveWatchPath(workingRoot: string, relativePath: string): string {
+  const basePath = path.resolve(workingRoot);
   const targetPath = relativePath ? path.resolve(basePath, relativePath) : basePath;
   const relative = path.relative(basePath, targetPath);
   if (relative.startsWith("..") || path.isAbsolute(relative)) {
@@ -27,7 +27,7 @@ async function isDirectory(targetPath: string): Promise<boolean> {
 
 export class FileTreeWatcher {
   private sessionId: string | null = null;
-  private cwd: string | null = null;
+  private workingRootPath: string | null = null;
   private watchers = new Map<string, fs.FSWatcher>();
   private pendingPaths = new Set<string>();
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -36,19 +36,19 @@ export class FileTreeWatcher {
 
   async syncSessionTargets(
     sessionId: string,
-    cwd: string,
+    workingRoot: string,
     relativePaths: readonly string[],
   ): Promise<void> {
     const nextTargets = new Set(relativePaths.map(normalizeRelativePath));
 
     if (
       (this.sessionId && this.sessionId !== sessionId) ||
-      (this.cwd && this.cwd !== cwd)
+      (this.workingRootPath && this.workingRootPath !== workingRoot)
     ) {
       this.clear();
     }
     this.sessionId = sessionId;
-    this.cwd = cwd;
+    this.workingRootPath = workingRoot;
 
     for (const watchedPath of Array.from(this.watchers.keys())) {
       if (nextTargets.has(watchedPath)) {
@@ -62,7 +62,7 @@ export class FileTreeWatcher {
         continue;
       }
 
-      const absolutePath = resolveWatchPath(cwd, relativePath);
+      const absolutePath = resolveWatchPath(workingRoot, relativePath);
       if (!(await isDirectory(absolutePath))) {
         continue;
       }
@@ -107,7 +107,7 @@ export class FileTreeWatcher {
     }
     this.pendingPaths.clear();
     this.sessionId = null;
-    this.cwd = null;
+    this.workingRootPath = null;
   }
 
   private scheduleEmit(relativePath: string): void {

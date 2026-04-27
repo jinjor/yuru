@@ -7,8 +7,8 @@ function normalizeRelativePath(relativePath: string): string {
   return relativePath.split(path.sep).join("/");
 }
 
-function resolveSessionPath(cwd: string, relativePath = ""): string {
-  const basePath = path.resolve(cwd);
+function resolveSessionPath(workingRoot: string, relativePath = ""): string {
+  const basePath = path.resolve(workingRoot);
   const targetPath = relativePath ? path.resolve(basePath, relativePath) : basePath;
   const relative = path.relative(basePath, targetPath);
   if (relative.startsWith("..") || path.isAbsolute(relative)) {
@@ -32,9 +32,9 @@ async function detectDirectory(entryPath: string, dirent: fs.Dirent): Promise<bo
   }
 }
 
-export function resolveRepoFile(cwd: string, filePath: string): string | null {
+export function resolveRepoFile(workingRoot: string, filePath: string): string | null {
   try {
-    const basePath = path.resolve(cwd);
+    const basePath = path.resolve(workingRoot);
     const absPath = path.isAbsolute(filePath) ? filePath : path.resolve(basePath, filePath);
     const relative = path.relative(basePath, absPath);
     if (relative.startsWith("..") || path.isAbsolute(relative)) {
@@ -49,10 +49,10 @@ export function resolveRepoFile(cwd: string, filePath: string): string | null {
   }
 }
 
-export async function listAllFiles(cwd: string): Promise<string[]> {
+export async function listAllFiles(workingRoot: string): Promise<string[]> {
   const [trackedBuffer, untrackedBuffer] = await Promise.all([
-    execBuffer("git", ["ls-files", "-z", "--cached", "--stage"], cwd),
-    execBuffer("git", ["ls-files", "-z", "--others", "--exclude-standard"], cwd),
+    execBuffer("git", ["ls-files", "-z", "--cached", "--stage"], workingRoot),
+    execBuffer("git", ["ls-files", "-z", "--others", "--exclude-standard"], workingRoot),
   ]);
   const tracked = parseStagedRecords(trackedBuffer.toString("utf-8"));
   const untracked = splitNulSeparated(untrackedBuffer.toString("utf-8"));
@@ -86,8 +86,11 @@ function splitNulSeparated(text: string): string[] {
   return parts;
 }
 
-export async function listFiles(cwd: string, relativePath = ""): Promise<FileTreeNode[]> {
-  const targetPath = resolveSessionPath(cwd, relativePath);
+export async function listFiles(
+  workingRoot: string,
+  relativePath = "",
+): Promise<FileTreeNode[]> {
+  const targetPath = resolveSessionPath(workingRoot, relativePath);
   const entries = await fs.promises.readdir(targetPath, { withFileTypes: true });
 
   const nodes = await Promise.all(
@@ -95,7 +98,7 @@ export async function listFiles(cwd: string, relativePath = ""): Promise<FileTre
       .filter((entry) => entry.name !== ".git")
       .map(async (entry) => {
         const entryPath = path.join(targetPath, entry.name);
-        const entryRelativePath = normalizeRelativePath(path.relative(cwd, entryPath));
+        const entryRelativePath = normalizeRelativePath(path.relative(workingRoot, entryPath));
         const isDirectory = await detectDirectory(entryPath, entry);
         return {
           id: entryRelativePath,
@@ -116,4 +119,3 @@ export async function listFiles(cwd: string, relativePath = ""): Promise<FileTre
 
   return nodes;
 }
-

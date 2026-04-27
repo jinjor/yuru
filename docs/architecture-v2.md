@@ -1,6 +1,6 @@
 # Architecture v2
 
-Last updated: 2026-04-26
+Last updated: 2026-04-27
 
 この文書は、task-worktree-first モデルの target architecture をまとめる。
 現行実装の説明は `docs/architecture.md` を参照する。
@@ -226,7 +226,7 @@ provider ごとの hint は session identity を置き換えるためではな�
    - まだ task worktree がない repo でも、ここから作業開始の起点にできる
    - すでに登録済みなら重複登録しない
 5. [x] `Workspace` コンポーネントを `SessionView` に rename する
-6. [ ] backend で Files / Changes / Diff が参照する作業ルートを、`cwd` 直結ではない中立な概念として扱える
+6. [x] backend で Files / Changes / Diff が参照する作業ルートを、`cwd` 直結ではない中立な概念として扱える
    - ここではまだ `worktreePath` に切り替えない
    - 実体は引き続き `cwd` のままにして、参照の形だけをリファクタリングする
    - ただし、このリファクタが次の story に吸収できると分かれば削除してよい
@@ -246,7 +246,5 @@ provider ごとの hint は session identity を置き換えるためではな�
 
 ### Open points
 
-- `6` の中立な概念名を何にするか
-- `6` を独立 story として残すか、`7` に吸収するか
 - `7` の時点で UI 上の worktree item に最低限どこまで表示するか
 - `active / inactive` を最終 UX に残すか、開発用の確認表示としてあとで外すか

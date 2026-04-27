@@ -130,6 +130,11 @@ function failAndReport<T>(error: AppError): Result<T> {
   return fail(reportError(error));
 }
 
+function getWorkingRootForSession(sessionId: string): string | null {
+  const runtime = sessionRuntimeMap.get(sessionId);
+  return runtime?.cwd ?? null;
+}
+
 function appendStartupOutput(existing: string, chunk: string): string {
   const combined = `${existing}${chunk}`;
   if (combined.length <= STARTUP_OUTPUT_LIMIT) {
@@ -719,12 +724,12 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("git:pathStates", async (_event, sessionId: string) => {
-    const runtime = sessionRuntimeMap.get(sessionId);
-    if (!runtime) {
+    const workingRoot = getWorkingRootForSession(sessionId);
+    if (!workingRoot) {
       return ok([]);
     }
     try {
-      return ok(await getGitPathStates(runtime.cwd));
+      return ok(await getGitPathStates(workingRoot));
     } catch {
       return ok([]);
     }
@@ -751,57 +756,57 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("git:diffDocument", async (_event, sessionId: string, filePath: string) => {
-    const runtime = sessionRuntimeMap.get(sessionId);
-    if (!runtime) {
+    const workingRoot = getWorkingRootForSession(sessionId);
+    if (!workingRoot) {
       return ok(null);
     }
     try {
-      return ok(await getGitDiffDocument(runtime.cwd, filePath));
+      return ok(await getGitDiffDocument(workingRoot, filePath));
     } catch (error) {
       return failAndReport(toAppError(error, { command: "git" }));
     }
   });
 
   ipcMain.handle("files:list", async (_event, sessionId: string, relativePath?: string) => {
-    const runtime = sessionRuntimeMap.get(sessionId);
-    if (!runtime) {
+    const workingRoot = getWorkingRootForSession(sessionId);
+    if (!workingRoot) {
       return ok([]);
     }
     try {
-      return ok(await listFiles(runtime.cwd, relativePath ?? ""));
+      return ok(await listFiles(workingRoot, relativePath ?? ""));
     } catch (error) {
       return failAndReport(toAppError(error));
     }
   });
 
   ipcMain.handle("files:listAll", async (_event, sessionId: string) => {
-    const runtime = sessionRuntimeMap.get(sessionId);
-    if (!runtime) {
+    const workingRoot = getWorkingRootForSession(sessionId);
+    if (!workingRoot) {
       return ok([] as string[]);
     }
     try {
-      return ok(await listAllFiles(runtime.cwd));
+      return ok(await listAllFiles(workingRoot));
     } catch (error) {
       return failAndReport(toAppError(error, { command: "git" }));
     }
   });
 
   ipcMain.handle("files:resolveRepoFile", (_event, sessionId: string, filePath: string) => {
-    const runtime = sessionRuntimeMap.get(sessionId);
-    if (!runtime) {
+    const workingRoot = getWorkingRootForSession(sessionId);
+    if (!workingRoot) {
       return null;
     }
-    return resolveRepoFile(runtime.cwd, filePath);
+    return resolveRepoFile(workingRoot, filePath);
   });
 
   ipcMain.handle("files:syncWatchTargets", async (_event, sessionId: string, relativePaths: string[]) => {
-    const runtime = sessionRuntimeMap.get(sessionId);
-    if (!runtime) {
+    const workingRoot = getWorkingRootForSession(sessionId);
+    if (!workingRoot) {
       fileTreeWatcher.clearSession(sessionId);
       return;
     }
 
-    await fileTreeWatcher.syncSessionTargets(sessionId, runtime.cwd, relativePaths);
+    await fileTreeWatcher.syncSessionTargets(sessionId, workingRoot, relativePaths);
   });
 
   ipcMain.on("pty:write", (_event, sessionId: string, data: string) => {
