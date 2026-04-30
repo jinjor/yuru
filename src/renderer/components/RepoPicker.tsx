@@ -5,7 +5,7 @@ interface RepoPickerProps {
   onCancel: () => void;
   onChangeProvider: (provider: SessionProvider) => void;
   onSelect: (repoPath: string, provider: SessionProvider) => void;
-  onSelectWorktree: (repoPath: string, provider: SessionProvider) => void;
+  onSelectWorktree: (repoPath: string) => void;
   provider: SessionProvider | null;
   providers: AgentDefinition[];
   repos: string[];
@@ -58,14 +58,9 @@ export function RepoPicker({
             </div>
             <button
               className="repo-picker-worktree-btn"
-              onClick={() => {
-                if (!provider) {
-                  return;
-                }
-                onSelectWorktree(repo, provider);
-              }}
-              title={provider ? `New ${provider} session in worktree` : "Choose an agent first"}
-              disabled={!provider}
+              onClick={() => onSelectWorktree(repo)}
+              title={providers.length === 0 ? "No agents available" : "New session in worktree"}
+              disabled={providers.length === 0}
             >
               WT
             </button>

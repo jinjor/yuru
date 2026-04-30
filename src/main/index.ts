@@ -1,8 +1,15 @@
 import { app, BrowserWindow, Menu, dialog, ipcMain, shell } from "electron";
 import type { MenuItemConstructorOptions } from "electron";
+import crypto from "crypto";
 import path from "path";
 import * as pty from "node-pty";
-import { loadRepos } from "./metadata.js";
+import {
+  attachPrimarySession,
+  findRepoByPath,
+  loadRepos,
+  removeTaskWorktreeByPath,
+  upsertTaskWorktree,
+} from "./metadata.js";
 import { loadSessions } from "./sessions.js";
 import {
   getGitPathStates,
@@ -346,6 +353,7 @@ function registerSession(
   appSessionId: string,
   pending: PendingSession,
   providerSessionId: string | null,
+  taskWorktreeId?: string,
 ): void {
   pending.providerSessionId = providerSessionId;
   pending.appSessionId = appSessionId;
@@ -357,6 +365,7 @@ function registerSession(
     provider: pending.provider,
     providerSessionId,
     startedAt: pending.startedAt,
+    taskWorktreeId,
   });
 }
 
@@ -383,6 +392,13 @@ async function resolveLazySessionId(
     pending.providerSessionId = providerSessionId;
     pending.startupSettled = true;
     updateRuntimeSessionProviderSessionId(appSessionId, providerSessionId);
+    const taskWorktreeId = sessionRuntimeMap.get(appSessionId)?.taskWorktreeId;
+    if (taskWorktreeId) {
+      attachPrimarySession(taskWorktreeId, {
+        provider: pending.provider,
+        providerSessionId,
+      });
+    }
     await refreshWorktreeWatcher();
     emitSessionsStateChanged();
   } catch {
@@ -441,10 +457,11 @@ async function startSession(
   provider: SessionProvider,
   providerAdapter: SessionProviderAdapter,
   pending: PendingSession,
+  taskWorktreeId?: string,
 ): Promise<StartedSession> {
   if (providerAdapter.resolvesSessionIdLazily) {
     const sessionId = toRuntimeSessionKey(provider, pending.startedAt);
-    registerSession(sessionId, pending, null);
+    registerSession(sessionId, pending, null, taskWorktreeId);
     void resolveLazySessionId(providerAdapter, pending, sessionId);
     return {
       sessionId,
@@ -454,7 +471,7 @@ async function startSession(
 
   const providerSessionId = await providerAdapter.waitForSessionId(pending);
   const sessionId = toSessionKey(provider, providerSessionId);
-  registerSession(sessionId, pending, providerSessionId);
+  registerSession(sessionId, pending, providerSessionId, taskWorktreeId);
   return {
     sessionId,
     providerSessionId,
@@ -644,17 +661,38 @@ app.whenReady().then(() => {
         });
       }
 
+      const repo = findRepoByPath(repoPath);
+      if (!repo) {
+        return failAndReport<Session>({
+          code: "unknown",
+          message: `Repository "${repoPath}" is not registered in Yuru. Run \`yuru add\` first.`,
+        });
+      }
+
+      const taskWorktreeId = crypto.randomUUID();
       let pending: PendingSession | null = null;
       try {
         await providerAdapter.prepareWorktree(worktreeContext);
+        upsertTaskWorktree(taskWorktreeId, repo.id, worktreePath);
 
         pending = launchPendingSession(
           providerAdapter,
           await providerAdapter.createWorktreeLaunch(worktreeContext),
           "Failed to create worktree session",
         );
-        const { sessionId, providerSessionId } = await startSession(provider, providerAdapter, pending);
+        const { sessionId, providerSessionId } = await startSession(
+          provider,
+          providerAdapter,
+          pending,
+          taskWorktreeId,
+        );
         pending.startupSettled = true;
+        if (providerSessionId) {
+          attachPrimarySession(taskWorktreeId, {
+            provider,
+            providerSessionId,
+          });
+        }
         await providerAdapter.finalizeWorktree(worktreeContext);
         await refreshWorktreeWatcher();
         return ok(
@@ -677,6 +715,7 @@ app.whenReady().then(() => {
         if (fs.existsSync(worktreePath)) {
           await removeWorktree(repoPath, worktreePath).catch(() => undefined);
         }
+        removeTaskWorktreeByPath(worktreePath);
         const command = providerAdapter.command === "codex" ? "git" : providerAdapter.command;
         const appError = toAppError(error, { command });
         return pending?.startupFailureReported ? fail<Session>(appError) : failAndReport<Session>(appError);
@@ -698,6 +737,7 @@ app.whenReady().then(() => {
       }
       try {
         await removeWorktree(repoPath, worktreePath);
+        removeTaskWorktreeByPath(worktreePath);
         return ok(true);
       } catch (error) {
         return failAndReport<boolean>(toAppError(error, { command: "git" }));

@@ -230,7 +230,7 @@ provider ごとの hint は session identity を置き換えるためではな�
    - ここではまだ `worktreePath` に切り替えない
    - 実体は引き続き `cwd` のままにして、参照の形だけをリファクタリングする
    - ただし、このリファクタが次の story に吸収できると分かれば削除してよい
-7. [ ] repository から新規 worktree セッションを開始し、右側に現在の session として表示できる
+7. [x] repository から新規 worktree セッションを開始し、右側に現在の session として表示できる
    - repo row から worktree 追加と provider session 開始を 1 操作で実行できる
    - 作成した worktree は metadata に task worktree として保存し、開始した provider session を primary として strong link する
    - 開始した provider session は作成した worktree 上で動く

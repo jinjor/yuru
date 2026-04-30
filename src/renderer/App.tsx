@@ -18,10 +18,7 @@ export function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showRepoPicker, setShowRepoPicker] = useState(false);
   const [newSessionProvider, setNewSessionProvider] = useState<SessionProvider | null>(null);
-  const [worktreeTarget, setWorktreeTarget] = useState<{
-    repoPath: string;
-    provider: SessionProvider;
-  } | null>(null);
+  const [worktreeTarget, setWorktreeTarget] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(260);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
@@ -165,14 +162,13 @@ export function App() {
   );
 
   const handleCreateWorktreeSession = useCallback(
-    async (branchName: string): Promise<void> => {
+    async (branchName: string, provider: SessionProvider): Promise<void> => {
       if (!worktreeTarget) {
         return;
       }
 
-      const { repoPath, provider } = worktreeTarget;
+      const repoPath = worktreeTarget;
       setWorktreeTarget(null);
-      setNewSessionProvider(provider);
       setIsCreatingSession(true);
       try {
         const result = await window.electronAPI.createWorktreeSession(provider, repoPath, branchName);
@@ -223,7 +219,11 @@ export function App() {
           <div className="sidebar-header">
             <h2>Repos</h2>
           </div>
-          <RepoList repos={repos} />
+          <RepoList
+            repos={repos}
+            providers={availableProviders}
+            onCreateWorktreeSession={(repoPath) => setWorktreeTarget(repoPath)}
+          />
         </div>
         <div className="sidebar-section sidebar-section-flex">
           <div className="sidebar-header">
@@ -263,16 +263,16 @@ export function App() {
           provider={newSessionProvider}
           onChangeProvider={setNewSessionProvider}
           onSelect={handleCreateSession}
-          onSelectWorktree={(repo, provider) => {
+          onSelectWorktree={(repo) => {
             setShowRepoPicker(false);
-            setNewSessionProvider(provider);
-            setWorktreeTarget({ repoPath: repo, provider });
+            setWorktreeTarget(repo);
           }}
           onCancel={() => setShowRepoPicker(false)}
         />
       )}
       {worktreeTarget && (
         <BranchNameInput
+          providers={availableProviders}
           onSubmit={handleCreateWorktreeSession}
           onCancel={() => setWorktreeTarget(null)}
           error={null}
