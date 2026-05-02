@@ -1,5 +1,5 @@
 import type { AgentDefinition } from "./agent.js";
-import type { RepoMetadata } from "./metadata.js";
+import type { RepoListItem } from "./metadata.js";
 import type { GitHubPullRequest, Session, SessionProvider } from "./session.js";
 
 export interface AppError {
@@ -71,7 +71,7 @@ export interface ActiveSessionState {
 
 export interface ElectronAPI {
   getSessions: () => Promise<Session[]>;
-  getRepos: () => Promise<RepoMetadata[]>;
+  getRepos: () => Promise<RepoListItem[]>;
   getSessionProviders: () => Promise<AgentDefinition[]>;
   getErrors: () => Promise<AppErrorNotice[]>;
   dismissError: (id: string) => Promise<void>;

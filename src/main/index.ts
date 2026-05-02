@@ -6,7 +6,7 @@ import * as pty from "node-pty";
 import {
   attachPrimarySession,
   findRepoByPath,
-  loadRepos,
+  loadRepoList,
   removeTaskWorktreeByPath,
   upsertTaskWorktree,
 } from "./metadata.js";
@@ -281,7 +281,7 @@ function launchPendingSession(
     cols: 80,
     rows: 24,
     cwd: request.cwd,
-    env: createTerminalEnv(process.env),
+    env: createTerminalEnv(process.env, providerAdapter.definition.id),
   });
   pendingProcesses.add(proc);
   const pending: PendingSession = {
@@ -522,7 +522,7 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("metadata:listRepos", () => {
-    return loadRepos();
+    return loadRepoList();
   });
 
   ipcMain.handle("providers:list", () => {

@@ -239,7 +239,7 @@ provider ごとの hint は session identity を置き換えるためではな�
    - 左ペインはまだ repo の表示だけでよい
    - primary session 付き task worktree を左ペインに表示する feedback は次の story で扱う
    - 既存の session-first 左ペインはまだ隠さない
-8. [ ] primary session 付き task worktree を左ペインに表示できる
+8. [x] primary session 付き task worktree を左ペインに表示できる
    - metadata の task worktree と primary strong link を読んで、repo 配下に表示する
    - primary session のない Git worktree は左ペインに表示しない
    - UI 表示は task worktree 名と primary session の存在が分かる最低限でよい

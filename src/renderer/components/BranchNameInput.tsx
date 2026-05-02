@@ -7,10 +7,11 @@ interface BranchNameInputProps {
   error: string | null;
   providers: AgentDefinition[];
   onCancel: () => void;
+  onChange: () => void;
   onSubmit: (branchName: string, provider: SessionProvider) => void;
 }
 
-export function BranchNameInput({ error, providers, onCancel, onSubmit }: BranchNameInputProps) {
+export function BranchNameInput({ error, providers, onCancel, onChange, onSubmit }: BranchNameInputProps) {
   const [name, setName] = useState(generateDefaultBranch);
   const [provider, setProvider] = useState<SessionProvider | null>(providers[0]?.id ?? null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -51,7 +52,10 @@ export function BranchNameInput({ error, providers, onCancel, onSubmit }: Branch
             type="text"
             className="worktree-name-input"
             value={name}
-            onChange={(event) => setName(event.target.value)}
+            onChange={(event) => {
+              setName(event.target.value);
+              onChange();
+            }}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 handleSubmit();

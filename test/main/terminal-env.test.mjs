@@ -23,3 +23,20 @@ test("createTerminalEnv は既存の COLORTERM を維持する", () => {
 
   assert.equal(env.COLORTERM, "24bit");
 });
+
+test("createTerminalEnv は Codex 起動時に親の Codex thread/session 情報を渡さない", () => {
+  const env = createTerminalEnv(
+    {
+      CODEX_HOME: "/tmp/codex-home",
+      CODEX_THREAD_ID: "parent-thread",
+      CODEX_SESSION_ID: "parent-session",
+      CODEX_CONVERSATION_ID: "parent-conversation",
+    },
+    "codex",
+  );
+
+  assert.equal(env.CODEX_HOME, "/tmp/codex-home");
+  assert.equal(env.CODEX_THREAD_ID, undefined);
+  assert.equal(env.CODEX_SESSION_ID, undefined);
+  assert.equal(env.CODEX_CONVERSATION_ID, undefined);
+});

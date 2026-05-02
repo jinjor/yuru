@@ -1,7 +1,7 @@
 import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
 import type { AgentDefinition } from "../shared/agent";
-import type { RepoMetadata } from "../shared/metadata";
+import type { RepoListItem } from "../shared/metadata";
 import type { Session, SessionProvider } from "../shared/session";
 import { BranchNameInput } from "./components/BranchNameInput";
 import { RepoList } from "./components/RepoList";
@@ -13,12 +13,13 @@ import { clamp } from "./utils/layout";
 export function App() {
   const appRef = useRef<HTMLDivElement>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [repos, setRepos] = useState<RepoMetadata[]>([]);
+  const [repos, setRepos] = useState<RepoListItem[]>([]);
   const [availableProviders, setAvailableProviders] = useState<AgentDefinition[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showRepoPicker, setShowRepoPicker] = useState(false);
   const [newSessionProvider, setNewSessionProvider] = useState<SessionProvider | null>(null);
   const [worktreeTarget, setWorktreeTarget] = useState<string | null>(null);
+  const [worktreeError, setWorktreeError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(260);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
@@ -54,6 +55,17 @@ export function App() {
       });
   }, []);
 
+  const refreshRepos = useCallback((): void => {
+    window.electronAPI
+      .getRepos()
+      .then((nextRepos) => {
+        setRepos(nextRepos);
+      })
+      .catch((error) => {
+        console.error("Failed to load repos.", error);
+      });
+  }, []);
+
   const openExternal = useCallback((url: string): void => {
     void window.electronAPI.openExternal(url);
   }, []);
@@ -69,20 +81,13 @@ export function App() {
         console.error("Failed to load session providers.", error);
       });
 
-    window.electronAPI
-      .getRepos()
-      .then((nextRepos) => {
-        setRepos(nextRepos);
-      })
-      .catch((error) => {
-        console.error("Failed to load repos.", error);
-      });
-
+    refreshRepos();
     refreshSessions();
     window.electronAPI.onSessionsStateChanged(() => {
+      refreshRepos();
       refreshSessions();
     });
-  }, [refreshSessions]);
+  }, [refreshRepos, refreshSessions]);
 
   useEffect(() => {
     if (!availableProviders.some((provider) => provider.id === newSessionProvider)) {
@@ -168,22 +173,25 @@ export function App() {
       }
 
       const repoPath = worktreeTarget;
-      setWorktreeTarget(null);
+      setWorktreeError(null);
       setIsCreatingSession(true);
       try {
         const result = await window.electronAPI.createWorktreeSession(provider, repoPath, branchName);
         if (!result.ok) {
+          setWorktreeError(result.error.detail ?? result.error.message);
           return;
         }
 
         const session = result.data;
         setSessions((prev) => [session, ...prev]);
         setSelectedId(session.id);
+        setWorktreeTarget(null);
+        refreshRepos();
       } finally {
         setIsCreatingSession(false);
       }
     },
-    [worktreeTarget],
+    [refreshRepos, worktreeTarget],
   );
 
   const handleDeleteWorktree = useCallback(async (session: Session): Promise<void> => {
@@ -206,8 +214,11 @@ export function App() {
     );
     if (!result.ok) {
       setDeletingSessionId(null);
+      return;
     }
-  }, []);
+    refreshRepos();
+    refreshSessions();
+  }, [refreshRepos, refreshSessions]);
 
   const knownRepos = [
     ...new Set([...repos.map((repo) => repo.repoPath), ...sessions.map((session) => session.repoPath)]),
@@ -222,7 +233,10 @@ export function App() {
           <RepoList
             repos={repos}
             providers={availableProviders}
-            onCreateWorktreeSession={(repoPath) => setWorktreeTarget(repoPath)}
+            onCreateWorktreeSession={(repoPath) => {
+              setWorktreeError(null);
+              setWorktreeTarget(repoPath);
+            }}
           />
         </div>
         <div className="sidebar-section sidebar-section-flex">
@@ -265,6 +279,7 @@ export function App() {
           onSelect={handleCreateSession}
           onSelectWorktree={(repo) => {
             setShowRepoPicker(false);
+            setWorktreeError(null);
             setWorktreeTarget(repo);
           }}
           onCancel={() => setShowRepoPicker(false)}
@@ -274,8 +289,12 @@ export function App() {
         <BranchNameInput
           providers={availableProviders}
           onSubmit={handleCreateWorktreeSession}
-          onCancel={() => setWorktreeTarget(null)}
-          error={null}
+          onChange={() => setWorktreeError(null)}
+          onCancel={() => {
+            setWorktreeError(null);
+            setWorktreeTarget(null);
+          }}
+          error={worktreeError}
         />
       )}
     </div>

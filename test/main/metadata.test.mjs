@@ -13,6 +13,7 @@ const {
   attachPrimarySession,
   findRepoByPath,
   loadMetadata,
+  loadRepoList,
   parseMetadata,
   removeTaskWorktreeByPath,
   upsertTaskWorktree,
@@ -81,6 +82,62 @@ test("findRepoByPath は登録済みの repo を返す", () => {
     repoPath: "/tmp/repo",
   });
   assert.equal(findRepoByPath("/tmp/missing"), null);
+});
+
+test("loadRepoList は repo 配下の task worktree と primary 状態を返す", () => {
+  seed({
+    repos: [
+      { id: "repo-1", repoPath: "/tmp/repo-a" },
+      { id: "repo-2", repoPath: "/tmp/repo-b" },
+    ],
+    taskWorktrees: [
+      {
+        taskWorktreeId: "wt-1",
+        repoId: "repo-1",
+        worktreePath: "/tmp/repo-a/.yuru/worktrees/task-a",
+        primarySession: { provider: "codex", providerSessionId: "codex-1" },
+      },
+      {
+        taskWorktreeId: "wt-2",
+        repoId: "repo-1",
+        worktreePath: "/tmp/repo-a/.yuru/worktrees/task-b",
+      },
+      {
+        taskWorktreeId: "wt-3",
+        repoId: "missing-repo",
+        worktreePath: "/tmp/missing/task-c",
+        primarySession: { provider: "claude", providerSessionId: "claude-1" },
+      },
+    ],
+  });
+
+  assert.deepEqual(loadRepoList(), [
+    {
+      id: "repo-1",
+      repoPath: "/tmp/repo-a",
+      taskWorktrees: [
+        {
+          taskWorktreeId: "wt-1",
+          worktreePath: "/tmp/repo-a/.yuru/worktrees/task-a",
+          name: "task-a",
+          primarySession: { provider: "codex", providerSessionId: "codex-1" },
+          suggestedSessions: [],
+        },
+        {
+          taskWorktreeId: "wt-2",
+          worktreePath: "/tmp/repo-a/.yuru/worktrees/task-b",
+          name: "task-b",
+          primarySession: undefined,
+          suggestedSessions: [],
+        },
+      ],
+    },
+    {
+      id: "repo-2",
+      repoPath: "/tmp/repo-b",
+      taskWorktrees: [],
+    },
+  ]);
 });
 
 test("upsertTaskWorktree は指定した ID で新規登録する", () => {

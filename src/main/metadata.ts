@@ -3,7 +3,9 @@ import os from "os";
 import path from "path";
 import type {
   PrimarySessionMetadata,
+  RepoListItem,
   RepoMetadata,
+  TaskWorktreeListItem,
   TaskWorktreeMetadata,
   YuruMetadata,
 } from "../shared/metadata.js";
@@ -19,6 +21,27 @@ export function loadMetadata(): YuruMetadata {
 
 export function loadRepos(): RepoMetadata[] {
   return loadMetadata().repos;
+}
+
+export function loadRepoList(): RepoListItem[] {
+  const metadata = loadMetadata();
+  const taskWorktreesByRepoId = new Map<string, TaskWorktreeListItem[]>();
+  for (const taskWorktree of metadata.taskWorktrees) {
+    const entries = taskWorktreesByRepoId.get(taskWorktree.repoId) ?? [];
+    entries.push({
+      taskWorktreeId: taskWorktree.taskWorktreeId,
+      worktreePath: taskWorktree.worktreePath,
+      name: path.basename(taskWorktree.worktreePath),
+      primarySession: taskWorktree.primarySession,
+      suggestedSessions: [],
+    });
+    taskWorktreesByRepoId.set(taskWorktree.repoId, entries);
+  }
+
+  return metadata.repos.map((repo) => ({
+    ...repo,
+    taskWorktrees: taskWorktreesByRepoId.get(repo.id) ?? [],
+  }));
 }
 
 export function loadTaskWorktrees(): TaskWorktreeMetadata[] {
