@@ -230,8 +230,26 @@ body,
   min-height: 22px;
   display: flex;
   align-items: center;
+  gap: 8px;
   padding: 2px 8px;
   border-radius: 5px;
+}
+
+.repo-task-worktree-state-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  background: #59677e;
+}
+
+.repo-task-worktree-state-dot.active {
+  background: #6dd58f;
+  box-shadow: 0 0 0 1px rgba(109, 213, 143, 0.35), 0 0 8px rgba(109, 213, 143, 0.32);
+}
+
+.repo-task-worktree-state-dot.inactive {
+  opacity: 0.6;
 }
 
 .repo-task-worktree-name {

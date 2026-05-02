@@ -246,7 +246,7 @@ provider ごとの hint は session identity を置き換えるためではな�
    - 左ペインから task worktree row や primary session item を手動選択する操作はまだできなくてよい
    - 既存 primary session の再開操作はまだできなくてよい
       - active / inactive、provider、preview、branch は後続 story で足す
-9. [ ] primary session のアイテムに active / inactive が表示できる
+9. [x] primary session のアイテムに active / inactive が表示できる
 10. [ ] primary な worktree から既存セッションを再開できる
    - 左ペインから primary session 付き task worktree を選んで再開できる
    - ここで既存の session-first 左ペインを UI から隠す

@@ -18,6 +18,7 @@ const {
   removeTaskWorktreeByPath,
   upsertTaskWorktree,
 } = await import("../../src/main/metadata.ts");
+const { toSessionKey } = await import("../../src/shared/session.ts");
 
 function reset() {
   fs.rmSync(metadataPath, { force: true });
@@ -120,7 +121,7 @@ test("loadRepoList は repo 配下の task worktree と primary 状態を返す"
           taskWorktreeId: "wt-1",
           worktreePath: "/tmp/repo-a/.yuru/worktrees/task-a",
           name: "task-a",
-          primarySession: { provider: "codex", providerSessionId: "codex-1" },
+          primarySession: { provider: "codex", providerSessionId: "codex-1", state: "inactive" },
           suggestedSessions: [],
         },
         {
@@ -138,6 +139,31 @@ test("loadRepoList は repo 配下の task worktree と primary 状態を返す"
       taskWorktrees: [],
     },
   ]);
+});
+
+test("loadRepoList は active session key と一致する primary を active として返す", () => {
+  seed({
+    repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
+    taskWorktrees: [
+      {
+        taskWorktreeId: "wt-1",
+        repoId: "repo-1",
+        worktreePath: "/tmp/repo-a/.yuru/worktrees/task-a",
+        primarySession: { provider: "codex", providerSessionId: "codex-1" },
+      },
+      {
+        taskWorktreeId: "wt-2",
+        repoId: "repo-1",
+        worktreePath: "/tmp/repo-a/.yuru/worktrees/task-b",
+        primarySession: { provider: "claude", providerSessionId: "claude-1" },
+      },
+    ],
+  });
+
+  const result = loadRepoList(new Set([toSessionKey("codex", "codex-1")]));
+  const taskWorktrees = result[0].taskWorktrees;
+  assert.equal(taskWorktrees[0].primarySession.state, "active");
+  assert.equal(taskWorktrees[1].primarySession.state, "inactive");
 });
 
 test("upsertTaskWorktree は指定した ID で新規登録する", () => {

@@ -30,19 +30,28 @@ export function RepoList({ repos, providers, onCreateWorktreeSession }: RepoList
               +
             </button>
           </div>
-          {repo.taskWorktrees.filter((taskWorktree) => taskWorktree.primarySession).length > 0 && (
+          {repo.taskWorktrees.some((taskWorktree) => taskWorktree.primarySession) && (
             <div className="repo-task-worktrees">
-              {repo.taskWorktrees
-                .filter((taskWorktree) => taskWorktree.primarySession)
-                .map((taskWorktree) => (
+              {repo.taskWorktrees.map((taskWorktree) => {
+                const primarySession = taskWorktree.primarySession;
+                if (!primarySession) {
+                  return null;
+                }
+                return (
                   <div
                     key={taskWorktree.taskWorktreeId}
                     className="repo-task-worktree-row"
                     title={taskWorktree.worktreePath}
                   >
+                    <span
+                      className={`repo-task-worktree-state-dot ${primarySession.state}`}
+                      title={`Primary session · ${primarySession.state}`}
+                      aria-label={`Primary session ${primarySession.state}`}
+                    />
                     <span className="repo-task-worktree-name">{taskWorktree.name}</span>
                   </div>
-                ))}
+                );
+              })}
             </div>
           )}
         </div>

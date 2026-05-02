@@ -142,6 +142,16 @@ function getWorkingRootForSession(sessionId: string): string | null {
   return runtime?.cwd ?? null;
 }
 
+function getActiveSessionKeys(): Set<string> {
+  const keys = new Set<string>();
+  for (const info of sessionRuntimeMap.values()) {
+    if (info.providerSessionId) {
+      keys.add(toSessionKey(info.provider, info.providerSessionId));
+    }
+  }
+  return keys;
+}
+
 function appendStartupOutput(existing: string, chunk: string): string {
   const combined = `${existing}${chunk}`;
   if (combined.length <= STARTUP_OUTPUT_LIMIT) {
@@ -522,7 +532,7 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("metadata:listRepos", () => {
-    return loadRepoList();
+    return loadRepoList(getActiveSessionKeys());
   });
 
   ipcMain.handle("providers:list", () => {

@@ -19,11 +19,17 @@ export interface TaskWorktreeMetadata {
   primarySession?: PrimarySessionMetadata;
 }
 
+export type PrimarySessionState = "active" | "inactive";
+
+export interface PrimarySessionListItem extends PrimarySessionMetadata {
+  state: PrimarySessionState;
+}
+
 export interface TaskWorktreeListItem {
   taskWorktreeId: string;
   worktreePath: string;
   name: string;
-  primarySession?: PrimarySessionMetadata;
+  primarySession?: PrimarySessionListItem;
   suggestedSessions: SuggestedSessionMetadata[];
 }
 

@@ -9,7 +9,7 @@ import type {
   TaskWorktreeMetadata,
   YuruMetadata,
 } from "../shared/metadata.js";
-import type { SessionProvider } from "../shared/session.js";
+import { toSessionKey, type SessionProvider } from "../shared/session.js";
 
 export function loadMetadata(): YuruMetadata {
   const metadataPath = getMetadataPath();
@@ -23,16 +23,27 @@ export function loadRepos(): RepoMetadata[] {
   return loadMetadata().repos;
 }
 
-export function loadRepoList(): RepoListItem[] {
+export function loadRepoList(activeSessionKeys?: ReadonlySet<string>): RepoListItem[] {
+  const activeKeys = activeSessionKeys ?? new Set<string>();
   const metadata = loadMetadata();
   const taskWorktreesByRepoId = new Map<string, TaskWorktreeListItem[]>();
   for (const taskWorktree of metadata.taskWorktrees) {
     const entries = taskWorktreesByRepoId.get(taskWorktree.repoId) ?? [];
+    const primarySession = taskWorktree.primarySession;
     entries.push({
       taskWorktreeId: taskWorktree.taskWorktreeId,
       worktreePath: taskWorktree.worktreePath,
       name: path.basename(taskWorktree.worktreePath),
-      primarySession: taskWorktree.primarySession,
+      primarySession: primarySession
+        ? {
+            ...primarySession,
+            state: activeKeys.has(
+              toSessionKey(primarySession.provider, primarySession.providerSessionId),
+            )
+              ? "active"
+              : "inactive",
+          }
+        : undefined,
       suggestedSessions: [],
     });
     taskWorktreesByRepoId.set(taskWorktree.repoId, entries);
