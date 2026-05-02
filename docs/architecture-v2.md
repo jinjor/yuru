@@ -253,11 +253,16 @@ provider ごとの hint は session identity を置き換えるためではな�
    - ただし旧 UI 実装は削除せず、後で使い回せるように残す
 11. [ ] primary session のアイテムに provider が表示できる
 12. [ ] primary session のアイテムに preview 文字列が表示できる
-13. [ ] Claude の suggested worktree session を表示できる
-14. [ ] サジェストされた worktree session を primary に昇格できる
-15. [ ] Codex の suggested worktree session を表示し、primary に昇格できる
-16. [ ] primary session のアイテムに branch 名が表示されている
-17. [ ] V1 の session-first 実装を削除する
+13. [ ] Git worktree から task worktree 一覧を組み立てられる
+   - registered repo ごとに Git worktree を列挙し、main worktree を除外する
+   - metadata の primary session と runtime active session を重ねて `repo.taskWorktrees` として渡す
+   - metadata にない Git worktree も empty worktree として表示対象に含める
+   - suggested worktree session 検出の土台として、provider store を重ねられる形にしておく
+14. [ ] Claude の suggested worktree session を表示できる
+15. [ ] サジェストされた worktree session を primary に昇格できる
+16. [ ] Codex の suggested worktree session を表示し、primary に昇格できる
+17. [ ] primary session のアイテムに branch 名が表示されている
+18. [ ] V1 の session-first 実装を削除する
 
 ### Open points
 
