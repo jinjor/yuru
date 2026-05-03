@@ -12,10 +12,9 @@ import { resultDataOrNull } from "../utils/result";
 
 interface SessionViewProps {
   appRef: RefObject<HTMLDivElement | null>;
-  isCreatingSession: boolean;
   onOpenExternal: (url: string) => void;
   refreshRepos: () => void;
-  sessionId: string | null;
+  sessionId: string;
   sidebarWidth: number;
 }
 
@@ -28,7 +27,6 @@ function isPathChanged(states: readonly GitPathState[], path: string): boolean {
 
 export function SessionView({
   appRef,
-  isCreatingSession,
   onOpenExternal,
   refreshRepos,
   sessionId,
@@ -188,7 +186,6 @@ export function SessionView({
             paneLayout.previewRatio,
             previewSelection,
           ]}
-          isCreatingSession={isCreatingSession}
           onFileLinkActivate={(filePath, line) => {
             setPreviewSelection({ path: filePath, line });
           }}

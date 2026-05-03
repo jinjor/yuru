@@ -5,6 +5,7 @@ import path from "path";
 import * as pty from "node-pty";
 import {
   attachPrimarySession,
+  detachPrimarySessionByPath,
   findRepoByPath,
   loadRepoList,
   removeTaskWorktreeByPath,
@@ -135,6 +136,14 @@ function reportError(error: AppError): AppError {
 
 function failAndReport<T>(error: AppError): Result<T> {
   return fail(reportError(error));
+}
+
+function isAppError(error: unknown): error is AppError {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+  const maybeError = error as { code?: unknown; message?: unknown };
+  return typeof maybeError.code === "string" && typeof maybeError.message === "string";
 }
 
 function getWorkingRootForSession(sessionId: string): string | null {
@@ -340,6 +349,8 @@ function launchPendingSession(
 
   proc.onExit(({ exitCode, signal }) => {
     pending.exited = true;
+    pending.exitCode = exitCode;
+    pending.signal = signal;
     console.info("[Yuru] session process exited", {
       sessionId: pending.appSessionId,
       provider: pending.provider,
@@ -366,6 +377,33 @@ function launchPendingSession(
   });
 
   return pending;
+}
+
+async function waitForResumeReady(
+  providerAdapter: SessionProviderAdapter,
+  pending: PendingSession,
+  expectedProviderSessionId: string,
+): Promise<void> {
+  if (providerAdapter.resolvesSessionIdLazily) {
+    return;
+  }
+
+  try {
+    const providerSessionId = await providerAdapter.waitForSessionId(pending);
+    pending.startupSettled = true;
+    if (providerSessionId !== expectedProviderSessionId) {
+      throw {
+        code: "command_failed",
+        message: `${pending.launchLabel}. ${pending.command} resumed a different session.`,
+        detail: `Expected ${expectedProviderSessionId}, got ${providerSessionId}.`,
+      } satisfies AppError;
+    }
+  } catch (error) {
+    if (pending.exited) {
+      throw startupFailureMessage(pending, pending.exitCode ?? 1, pending.signal);
+    }
+    throw error;
+  }
 }
 
 function registerSession(
@@ -607,17 +645,38 @@ app.whenReady().then(() => {
       return ok(true);
     }
     const providerAdapter = getSessionProvider(session.provider);
+    let pending: PendingSession | null = null;
     try {
-      const pending = launchPendingSession(
+      if (!(await providerAdapter.hasStoredSession(session.providerSessionId))) {
+        detachPrimarySessionByPath(session.project, {
+          provider: session.provider,
+          providerSessionId: session.providerSessionId,
+        });
+        emitSessionsStateChanged();
+        return failAndReport<boolean>({
+          code: "command_failed",
+          message: "This session no longer exists.",
+          detail: `${session.provider} session ${session.providerSessionId} was not found in saved conversations.`,
+        });
+      }
+
+      pending = launchPendingSession(
         providerAdapter,
         await providerAdapter.createResumeLaunch(session),
         "Failed to resume session",
       );
+      await waitForResumeReady(providerAdapter, pending, session.providerSessionId);
       registerSession(session.id, pending, session.providerSessionId);
       emitSessionsStateChanged();
       return ok(true);
     } catch (error) {
-      return failAndReport<boolean>(toAppError(error, { command: providerAdapter.command }));
+      if (pending && !pending.exited) {
+        pending.proc.kill();
+      }
+      const appError = isAppError(error)
+        ? error
+        : toAppError(error, { command: providerAdapter.command });
+      return pending?.startupFailureReported ? fail<boolean>(appError) : failAndReport<boolean>(appError);
     }
   });
 

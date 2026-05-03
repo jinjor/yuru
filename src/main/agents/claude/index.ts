@@ -7,10 +7,15 @@ import type {
   SessionSnapshot,
   WorktreeContext,
 } from "../../agent.js";
-import { parseJsonLinesAs, readTextFileIfExists } from "../../agent-store-utils.js";
+import {
+  listFilesRecursive,
+  parseJsonLinesAs,
+  readTextFileIfExists,
+} from "../../agent-store-utils.js";
 import {
   claudeBranchName,
   claudeHistoryPath,
+  claudeProjectsPath,
   claudeWorktreeCwd,
   pidFilePath,
 } from "./paths.js";
@@ -72,6 +77,17 @@ async function loadStoredSessions(): Promise<SessionSnapshot[]> {
   return Array.from(sessionMap.values());
 }
 
+async function hasStoredSession(providerSessionId: string): Promise<boolean> {
+  if ((await loadStoredSessions()).some((session) => session.providerSessionId === providerSessionId)) {
+    return true;
+  }
+
+  const sessionFileName = `${providerSessionId}.jsonl`;
+  return (await listFilesRecursive(claudeProjectsPath())).some(
+    (filePath) => filePath.endsWith(`/${sessionFileName}`),
+  );
+}
+
 async function waitForSessionId(pending: PendingSession): Promise<string> {
   const sessionFile = pidFilePath(pending.proc.pid);
   for (let attempt = 0; attempt < 150; attempt++) {
@@ -101,6 +117,7 @@ export const sessionProvider: SessionProviderAdapter = {
   command: "claude",
   resolvesSessionIdLazily: false,
   loadStoredSessions,
+  hasStoredSession,
   async createNewLaunch(repoPath) {
     return {
       cwd: repoPath,

@@ -103,21 +103,22 @@ function reconcileSelectedSession(
 
 export function App() {
   const appRef = useRef<HTMLDivElement>(null);
+  const resumeRequestRef = useRef(0);
   const [repos, setRepos] = useState<RepoListItem[]>([]);
   const [availableProviders, setAvailableProviders] = useState<AgentDefinition[]>([]);
-  const [selectedSession, setSelectedSession] = useState<SelectedSession | null>(null);
+  const [activeSession, setActiveSession] = useState<SelectedSession | null>(null);
   const [worktreeTarget, setWorktreeTarget] = useState<string | null>(null);
   const [worktreeError, setWorktreeError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(260);
-  const [isCreatingSession, setIsCreatingSession] = useState(false);
-  const selectedId = selectedSession?.sessionId ?? null;
+  const activeSessionId = activeSession?.sessionId ?? null;
+  const selectedPrimarySessionKey = activeSession?.primarySessionKey ?? null;
 
   const refreshRepos = useCallback((): void => {
     window.electronAPI
       .getRepos()
       .then((nextRepos) => {
         setRepos(nextRepos);
-        setSelectedSession((prev) => reconcileSelectedSession(nextRepos, prev));
+        setActiveSession((prev) => reconcileSelectedSession(nextRepos, prev));
       })
       .catch((error) => {
         console.error("Failed to load repos.", error);
@@ -160,7 +161,7 @@ export function App() {
       document.body.style.userSelect = "none";
 
       const handleMouseMove = (moveEvent: globalThis.MouseEvent): void => {
-        const reservedSessionViewWidth = selectedId ? 520 : 640;
+        const reservedSessionViewWidth = activeSessionId ? 520 : 640;
         const maxWidth = Math.max(220, appWidth - reservedSessionViewWidth);
         setSidebarWidth(clamp(startWidth + moveEvent.clientX - startX, 220, maxWidth));
       };
@@ -175,7 +176,7 @@ export function App() {
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("mouseup", stopDragging);
     },
-    [selectedId, sidebarWidth],
+    [activeSessionId, sidebarWidth],
   );
 
   const handleSelectPrimarySession = useCallback(
@@ -189,12 +190,16 @@ export function App() {
         return;
       }
 
+      const requestId = ++resumeRequestRef.current;
       const result = await window.electronAPI.selectSession(session);
+      if (resumeRequestRef.current !== requestId) {
+        return;
+      }
       if (!result.ok) {
         return;
       }
 
-      setSelectedSession({
+      setActiveSession({
         sessionId: session.id,
         primarySessionKey: primarySession.providerSessionKey,
       });
@@ -211,26 +216,21 @@ export function App() {
 
       const repoPath = worktreeTarget;
       setWorktreeError(null);
-      setIsCreatingSession(true);
-      try {
-        const result = await window.electronAPI.createWorktreeSession(provider, repoPath, branchName);
-        if (!result.ok) {
-          setWorktreeError(result.error.detail ?? result.error.message);
-          return;
-        }
-
-        const session = result.data;
-        setSelectedSession({
-          sessionId: session.id,
-          primarySessionKey: session.providerSessionId
-            ? toSessionKey(session.provider, session.providerSessionId)
-            : null,
-        });
-        setWorktreeTarget(null);
-        refreshRepos();
-      } finally {
-        setIsCreatingSession(false);
+      const result = await window.electronAPI.createWorktreeSession(provider, repoPath, branchName);
+      if (!result.ok) {
+        setWorktreeError(result.error.detail ?? result.error.message);
+        return;
       }
+
+      const session = result.data;
+      setActiveSession({
+        sessionId: session.id,
+        primarySessionKey: session.providerSessionId
+          ? toSessionKey(session.provider, session.providerSessionId)
+          : null,
+      });
+      setWorktreeTarget(null);
+      refreshRepos();
     },
     [refreshRepos, worktreeTarget],
   );
@@ -245,7 +245,7 @@ export function App() {
           <RepoList
             repos={repos}
             providers={availableProviders}
-            selectedPrimarySessionKey={selectedSession?.primarySessionKey ?? null}
+            selectedPrimarySessionKey={selectedPrimarySessionKey}
             onCreateWorktreeSession={(repoPath) => {
               setWorktreeError(null);
               setWorktreeTarget(repoPath);
@@ -259,15 +259,18 @@ export function App() {
         onMouseDown={handleSidebarResizeStart}
         aria-hidden="true"
       />
-      <SessionView
-        key={selectedId ?? "no-session"}
-        appRef={appRef}
-        isCreatingSession={isCreatingSession}
-        onOpenExternal={openExternal}
-        refreshRepos={refreshRepos}
-        sessionId={selectedId}
-        sidebarWidth={sidebarWidth}
-      />
+      {activeSessionId ? (
+        <SessionView
+          key={activeSessionId}
+          appRef={appRef}
+          onOpenExternal={openExternal}
+          refreshRepos={refreshRepos}
+          sessionId={activeSessionId}
+          sidebarWidth={sidebarWidth}
+        />
+      ) : (
+        <SessionPlaceholder />
+      )}
       {worktreeTarget && (
         <BranchNameInput
           providers={availableProviders}
@@ -281,5 +284,15 @@ export function App() {
         />
       )}
     </div>
+  );
+}
+
+function SessionPlaceholder() {
+  return (
+    <main className="terminal-container">
+      <div className="empty-state terminal-empty-state">
+        <p>Select a session to resume</p>
+      </div>
+    </main>
   );
 }

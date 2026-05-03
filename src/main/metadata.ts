@@ -105,6 +105,24 @@ export function attachPrimarySession(
   saveMetadata(metadata);
 }
 
+export function detachPrimarySessionByPath(
+  worktreePath: string,
+  primary: PrimarySessionMetadata,
+): void {
+  const metadata = loadMetadata();
+  const target = metadata.taskWorktrees.find((entry) => entry.worktreePath === worktreePath);
+  if (
+    !target?.primarySession ||
+    target.primarySession.provider !== primary.provider ||
+    target.primarySession.providerSessionId !== primary.providerSessionId
+  ) {
+    return;
+  }
+
+  delete target.primarySession;
+  saveMetadata(metadata);
+}
+
 export function removeTaskWorktreeByPath(worktreePath: string): void {
   const metadata = loadMetadata();
   const next = metadata.taskWorktrees.filter((entry) => entry.worktreePath !== worktreePath);

@@ -9,10 +9,9 @@ interface TerminalPanelProps {
   currentBranch: string | null;
   currentGitHub: GitHubPullRequest | null;
   fitDependencies: readonly unknown[];
-  isCreatingSession: boolean;
   onFileLinkActivate: (filePath: string, line?: number) => void;
   onOpenExternal: (url: string) => void;
-  selectedId: string | null;
+  selectedId: string;
 }
 
 interface TerminalInstance {
@@ -25,7 +24,6 @@ export function TerminalPanel({
   currentBranch,
   currentGitHub,
   fitDependencies,
-  isCreatingSession,
   onFileLinkActivate,
   onOpenExternal,
   selectedId,
@@ -36,7 +34,7 @@ export function TerminalPanel({
   onFileLinkActivateRef.current = onFileLinkActivate;
 
   const fitTerminal = useCallback((): void => {
-    if (!selectedId || !terminalRef.current) {
+    if (!terminalRef.current) {
       return;
     }
 
@@ -49,7 +47,7 @@ export function TerminalPanel({
   }, [selectedId]);
 
   useEffect(() => {
-    if (!selectedId || !containerRef.current) {
+    if (!containerRef.current) {
       return;
     }
 
@@ -209,7 +207,7 @@ export function TerminalPanel({
   }, [fitTerminal, selectedId]);
 
   useEffect(() => {
-    if (!selectedId || !terminalRef.current) {
+    if (!terminalRef.current) {
       return;
     }
 
@@ -229,40 +227,28 @@ export function TerminalPanel({
 
   return (
     <main className="terminal-container">
-      {selectedId && (
-        <div className="panel-header terminal-bar">
-          <h2>Terminal</h2>
-          <div className="terminal-bar-meta">
-            {currentBranch && (
-              <span className="terminal-bar-branch">
-                <GitBranch size={11} strokeWidth={2} />
-                {currentBranch}
-              </span>
-            )}
-            {currentGitHub && (
-              <GitHubBadge
-                github={currentGitHub}
-                onClick={() => {
-                  if (currentGitHub.url) {
-                    onOpenExternal(currentGitHub.url);
-                  }
-                }}
-              />
-            )}
-          </div>
+      <div className="panel-header terminal-bar">
+        <h2>Terminal</h2>
+        <div className="terminal-bar-meta">
+          {currentBranch && (
+            <span className="terminal-bar-branch">
+              <GitBranch size={11} strokeWidth={2} />
+              {currentBranch}
+            </span>
+          )}
+          {currentGitHub && (
+            <GitHubBadge
+              github={currentGitHub}
+              onClick={() => {
+                if (currentGitHub.url) {
+                  onOpenExternal(currentGitHub.url);
+                }
+              }}
+            />
+          )}
         </div>
-      )}
+      </div>
       <div ref={containerRef} className="terminal-host" />
-      {isCreatingSession && !selectedId && (
-        <div className="empty-state terminal-empty-state">
-          <p>Starting session...</p>
-        </div>
-      )}
-      {!isCreatingSession && !selectedId && (
-        <div className="empty-state terminal-empty-state">
-          <p>Select a session to resume</p>
-        </div>
-      )}
     </main>
   );
 }

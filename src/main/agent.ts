@@ -31,6 +31,8 @@ export interface PendingSession {
   startedAt: number;
   existingProviderSessionIds: ReadonlySet<string>;
   exited: boolean;
+  exitCode?: number;
+  signal?: number;
   startupSettled: boolean;
   startupFailureReported: boolean;
 }
@@ -54,6 +56,7 @@ export interface SessionProviderAdapter {
   command: string;
   resolvesSessionIdLazily: boolean;
   loadStoredSessions(): Promise<SessionSnapshot[]>;
+  hasStoredSession(providerSessionId: string): Promise<boolean>;
   createNewLaunch(repoPath: string): Promise<LaunchRequest>;
   createResumeLaunch(session: ResumableSession): Promise<LaunchRequest>;
   createWorktreeLaunch(context: WorktreeContext): Promise<LaunchRequest>;

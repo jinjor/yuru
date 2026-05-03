@@ -125,6 +125,10 @@ async function listExistingSessionIds(): Promise<Set<string>> {
   return new Set((await readCodexSessionMetas()).keys());
 }
 
+async function hasStoredSession(providerSessionId: string): Promise<boolean> {
+  return (await readCodexSessionMetas()).has(providerSessionId);
+}
+
 async function loadStoredSessions(): Promise<SessionSnapshot[]> {
   const historyContent = await readTextFileIfExists(getCodexHistoryPath());
   const historyBySessionId = new Map<string, { lastMessage: string; timestamp: number }>();
@@ -196,6 +200,7 @@ export const sessionProvider: SessionProviderAdapter = {
   command: "codex",
   resolvesSessionIdLazily: true,
   loadStoredSessions,
+  hasStoredSession,
   async createNewLaunch(repoPath) {
     return {
       cwd: repoPath,
