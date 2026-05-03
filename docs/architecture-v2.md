@@ -263,6 +263,11 @@ provider ごとの hint は session identity を置き換えるためではな�
 16. [ ] Codex の suggested worktree session を表示し、primary に昇格できる
 17. [ ] primary session のアイテムに branch 名が表示されている
 18. [ ] V1 の session-first 実装を削除する
+19. [ ] metadata の stale な task worktree を起動時に掃除できる
+   - `loadRepoList` のような表示経路ではなく、起動時に 1 回だけ走る maintenance 処理として独立させる
+   - registered repo ごとに `git worktree list` が成功した時だけ、その repo の `taskWorktrees` のうち成功 list に含まれない record を削除する
+   - repo 自体の cleanup はしない（path 不在は missing repo として後続 UX に回す。一時的に読めないだけのケースと区別できないため）
+   - 「ない」を error から推測せず、成功した list の差分として data で判定する（exit code や stderr 文字列に依存しない）
 
 ### Open points
 
