@@ -23,7 +23,7 @@ fs.writeFileSync(
   })}\n`,
 );
 
-const { loadSessions } = await import("../../src/main/sessions.ts");
+const { loadSessions, loadStoredSessionPreviews } = await import("../../src/main/sessions.ts");
 const { toSessionKey } = await import("../../src/shared/session.ts");
 
 test.after(() => {
@@ -55,4 +55,10 @@ test("loadSessions は active runtime の cwd を snapshot project より優先�
   assert.equal(sessions[0].id, sessionKey);
   assert.equal(sessions[0].state, "active");
   assert.equal(sessions[0].project, runtimeProject);
+});
+
+test("loadStoredSessionPreviews は stored session の preview を key で返す", async () => {
+  const previews = await loadStoredSessionPreviews();
+
+  assert.equal(previews.get(toSessionKey("claude", "claude-1")), "last message");
 });

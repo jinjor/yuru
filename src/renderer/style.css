@@ -226,9 +226,9 @@ body,
   width: 100%;
   min-height: 22px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
-  padding: 2px 8px;
+  padding: 4px 8px;
   border-radius: 5px;
   border: 0;
   background: transparent;
@@ -243,6 +243,8 @@ body,
 }
 
 .repo-task-worktree-row.empty {
+  align-items: center;
+  padding: 2px 8px;
   cursor: default;
 }
 
@@ -260,6 +262,7 @@ body,
   height: 8px;
   border-radius: 999px;
   flex-shrink: 0;
+  margin-top: 4px;
   background: #59677e;
 }
 
@@ -282,13 +285,29 @@ body,
   text-align: center;
 }
 
-.repo-task-worktree-name {
+.repo-task-worktree-text {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.repo-task-worktree-name,
+.repo-task-worktree-preview {
   min-width: 0;
   font-size: 12px;
-  color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.repo-task-worktree-name {
+  color: var(--text-muted);
+}
+
+.repo-task-worktree-preview {
+  color: var(--text);
 }
 
 .repo-list-empty {

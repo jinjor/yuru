@@ -57,6 +57,7 @@ export function RepoList({
                     </div>
                   );
                 }
+                const preview = primarySession.preview || "(no messages)";
                 return (
                   <button
                     key={taskWorktree.taskWorktreeId}
@@ -71,7 +72,12 @@ export function RepoList({
                       title={`Primary session · ${primarySession.state}`}
                       aria-label={`Primary session ${primarySession.state}`}
                     />
-                    <span className="repo-task-worktree-name">{taskWorktree.name}</span>
+                    <span className="repo-task-worktree-text">
+                      <span className="repo-task-worktree-name">{taskWorktree.name}</span>
+                      <span className="repo-task-worktree-preview" title={preview}>
+                        {preview}
+                      </span>
+                    </span>
                   </button>
                 );
               })}

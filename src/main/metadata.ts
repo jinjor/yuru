@@ -29,6 +29,7 @@ export function loadRepos(): RepoMetadata[] {
 export async function loadRepoList(
   activeSessionIdsByKey?: ReadonlyMap<string, string>,
   listGitWorktrees: ListWorktrees = listWorktrees,
+  primarySessionPreviewsByKey?: ReadonlyMap<string, string>,
 ): Promise<RepoListItem[]> {
   const metadata = loadMetadata();
   return Promise.all(
@@ -46,6 +47,7 @@ export async function loadRepoList(
           gitWorktree.path,
           metadataByPath.get(toWorktreePathKey(gitWorktree.path)),
           activeSessionIdsByKey,
+          primarySessionPreviewsByKey,
         ),
       );
 
@@ -239,6 +241,7 @@ function toTaskWorktreeListItem(
   worktreePath: string,
   metadataEntry: TaskWorktreeMetadata | undefined,
   activeSessionIdsByKey: ReadonlyMap<string, string> | undefined,
+  primarySessionPreviewsByKey: ReadonlyMap<string, string> | undefined,
 ): TaskWorktreeListItem {
   const primarySession = metadataEntry?.primarySession;
   const primarySessionKey = primarySession
@@ -258,6 +261,7 @@ function toTaskWorktreeListItem(
           providerSessionKey: primarySessionKey,
           activeAppSessionId,
           state: activeAppSessionId ? "active" : "inactive",
+          preview: primarySessionPreviewsByKey?.get(primarySessionKey) ?? "",
         }
       : undefined,
     suggestedSessions: [],

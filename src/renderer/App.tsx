@@ -33,7 +33,7 @@ function sessionFromPrimarySession(
     project: taskWorktree.worktreePath,
     projectName: taskWorktree.name,
     repoPath: repo.repoPath,
-    lastMessage: "",
+    lastMessage: primarySession.preview,
     timestamp: Date.now(),
     state: primarySession.state,
   };

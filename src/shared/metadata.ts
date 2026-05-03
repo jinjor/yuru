@@ -25,6 +25,7 @@ export interface PrimarySessionListItem extends PrimarySessionMetadata {
   providerSessionKey: string;
   activeAppSessionId: string | null;
   state: PrimarySessionState;
+  preview: string;
 }
 
 export interface TaskWorktreeListItem {

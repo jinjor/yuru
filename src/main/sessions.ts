@@ -45,6 +45,14 @@ async function loadStoredSessionSnapshots() {
   ).flat();
 }
 
+export async function loadStoredSessionPreviews(): Promise<Map<string, string>> {
+  const previews = new Map<string, string>();
+  for (const snapshot of await loadStoredSessionSnapshots()) {
+    previews.set(toSessionKey(snapshot.provider, snapshot.providerSessionId), snapshot.lastMessage);
+  }
+  return previews;
+}
+
 export async function loadSessions(
   runtimeActiveSessions?: ReadonlyMap<string, RuntimeSessionInfo>,
 ): Promise<Session[]> {

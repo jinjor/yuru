@@ -144,6 +144,7 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
             providerSessionKey: toSessionKey("codex", "codex-1"),
             activeAppSessionId: null,
             state: "inactive",
+            preview: "",
           },
           suggestedSessions: [],
         },
@@ -209,9 +210,41 @@ test("loadRepoList は active session key と一致する primary を active と
   assert.equal(taskWorktrees[0].primarySession.state, "active");
   assert.equal(taskWorktrees[0].primarySession.providerSessionKey, toSessionKey("codex", "codex-1"));
   assert.equal(taskWorktrees[0].primarySession.activeAppSessionId, "runtime-1");
+  assert.equal(taskWorktrees[0].primarySession.preview, "");
   assert.equal(taskWorktrees[1].primarySession.state, "inactive");
   assert.equal(taskWorktrees[1].primarySession.providerSessionKey, toSessionKey("claude", "claude-1"));
   assert.equal(taskWorktrees[1].primarySession.activeAppSessionId, null);
+  assert.equal(taskWorktrees[1].primarySession.preview, "");
+});
+
+test("loadRepoList は primary session の preview を返す", async () => {
+  seed({
+    repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
+    taskWorktrees: [
+      {
+        taskWorktreeId: "wt-1",
+        repoId: "repo-1",
+        worktreePath: "/tmp/repo-a/.yuru/worktrees/task-a",
+        primarySession: { provider: "codex", providerSessionId: "codex-1" },
+      },
+    ],
+  });
+  const listGitWorktrees = listGitWorktreesFrom(
+    new Map([
+      [
+        "/tmp/repo-a",
+        [{ path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a" }],
+      ],
+    ]),
+  );
+
+  const result = await loadRepoList(
+    undefined,
+    listGitWorktrees,
+    new Map([[toSessionKey("codex", "codex-1"), "preview text"]]),
+  );
+
+  assert.equal(result[0].taskWorktrees[0].primarySession.preview, "preview text");
 });
 
 test("upsertTaskWorktree は指定した ID で新規登録する", () => {

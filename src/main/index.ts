@@ -12,7 +12,7 @@ import {
   removeTaskWorktreeByPath,
   upsertTaskWorktree,
 } from "./metadata.js";
-import { loadSessions } from "./sessions.js";
+import { loadSessions, loadStoredSessionPreviews } from "./sessions.js";
 import {
   getGitPathStates,
   getGitDiffDocument,
@@ -581,8 +581,9 @@ app.whenReady().then(() => {
     return loadSessions(sessionRuntimeMap);
   });
 
-  ipcMain.handle("metadata:listRepos", () => {
-    return loadRepoList(getActiveSessionIdsByKey());
+  ipcMain.handle("metadata:listRepos", async () => {
+    const previewsByKey = await loadStoredSessionPreviews();
+    return loadRepoList(getActiveSessionIdsByKey(), undefined, previewsByKey);
   });
 
   ipcMain.handle("providers:list", () => {
