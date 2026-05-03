@@ -17,6 +17,14 @@ This is for checking behavior changes. Documentation-only edits do not need a re
 - Architecture notes: `docs/architecture.md`
 - Coding guidelines: `docs/coding-guidelines.md`
 
+## Communication
+
+- 人間はざっくりとしかコードを読んでいない前提で話すこと。
+  - 設計やバグの原因を説明する時は、変数名や関数名を細かく並べずに「つまりどういうことか」を伝えること。
+  - 詳細な変数名や関数名が必要な場合は、それが何を表すものかを丁寧に説明すること。
+  - 悪い例: `x` が `y` で初期化されず `z` が不定になっています。
+  - 良い例: セッション ID が初期化時に取得できないのでポーリングしています。
+
 ## Design
 
 - シンプルは正義、複雑さは悪。
