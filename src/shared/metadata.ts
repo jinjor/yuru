@@ -22,6 +22,8 @@ export interface TaskWorktreeMetadata {
 export type PrimarySessionState = "active" | "inactive";
 
 export interface PrimarySessionListItem extends PrimarySessionMetadata {
+  providerSessionKey: string;
+  activeAppSessionId: string | null;
   state: PrimarySessionState;
 }
 

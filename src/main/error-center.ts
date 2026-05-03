@@ -1,4 +1,4 @@
-import { AppError, AppErrorNotice } from "../shared/ipc.js";
+import type { AppError, AppErrorNotice } from "../shared/ipc.js";
 
 const MAX_ERRORS = 25;
 const notices: AppErrorNotice[] = [];

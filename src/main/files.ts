@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { FileTreeNode } from "../shared/ipc.js";
+import type { FileTreeNode } from "../shared/ipc.js";
 import { execBuffer } from "./exec.js";
 
 function normalizeRelativePath(relativePath: string): string {

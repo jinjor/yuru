@@ -1,7 +1,12 @@
 import { setTimeout } from "node:timers/promises";
 import fs from "fs";
 import { branchExists, renameBranch } from "../../git.js";
-import { SessionProviderAdapter, SessionSnapshot, PendingSession, WorktreeContext } from "../../agent.js";
+import type {
+  PendingSession,
+  SessionProviderAdapter,
+  SessionSnapshot,
+  WorktreeContext,
+} from "../../agent.js";
 import { parseJsonLinesAs, readTextFileIfExists } from "../../agent-store-utils.js";
 import {
   claudeBranchName,

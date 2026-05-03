@@ -1,4 +1,4 @@
-import { SessionProvider } from "./session.js";
+import type { SessionProvider } from "./session.js";
 
 export interface AgentDefinition {
   id: SessionProvider;

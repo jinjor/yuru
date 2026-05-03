@@ -247,7 +247,7 @@ provider ごとの hint は session identity を置き換えるためではな�
    - 既存 primary session の再開操作はまだできなくてよい
       - active / inactive、provider、preview、branch は後続 story で足す
 9. [x] primary session のアイテムに active / inactive が表示できる
-10. [ ] primary な worktree から既存セッションを再開できる
+10. [x] primary な worktree から既存セッションを再開できる
    - 左ペインから primary session 付き task worktree を選んで再開できる
    - ここで既存の session-first 左ペインを UI から隠す
    - ただし旧 UI 実装は削除せず、後で使い回せるように残す

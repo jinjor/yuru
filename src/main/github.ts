@@ -1,4 +1,4 @@
-import { GitHubPullRequest } from "../shared/session.js";
+import type { GitHubPullRequest } from "../shared/session.js";
 import { exec } from "./exec.js";
 
 interface TimedValue<T> {

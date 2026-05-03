@@ -3,8 +3,8 @@ import path from "path";
 import { getRepoRootForProject, listWorktrees } from "./git.js";
 import { getGitHubPullRequestForBranch } from "./github.js";
 import { sessionProviders } from "./agent-registry.js";
-import { RuntimeSessionInfo } from "./agent.js";
-import { Session, toSessionKey } from "../shared/session.js";
+import type { RuntimeSessionInfo } from "./agent.js";
+import { toSessionKey, type Session } from "../shared/session.js";
 
 async function buildWorktreeMap(projectPaths: string[]): Promise<Map<string, { name: string; branch: string }>> {
   const worktreeMap = new Map<string, { name: string; branch: string }>();
@@ -37,13 +37,17 @@ async function buildRepoPathMap(projectPaths: string[]): Promise<Map<string, str
   return repoPathMap;
 }
 
+async function loadStoredSessionSnapshots() {
+  return (
+    await Promise.all(Object.values(sessionProviders).map((provider) => provider.loadStoredSessions()))
+  ).flat();
+}
+
 export async function loadSessions(
   runtimeActiveSessions?: ReadonlyMap<string, RuntimeSessionInfo>,
 ): Promise<Session[]> {
   const activeSessions = runtimeActiveSessions ?? new Map<string, RuntimeSessionInfo>();
-  const snapshots = (
-    await Promise.all(Object.values(sessionProviders).map((provider) => provider.loadStoredSessions()))
-  ).flat();
+  const snapshots = await loadStoredSessionSnapshots();
   const runtimeSessions = Array.from(activeSessions, ([id, info]) => ({
     id,
     ...info,
@@ -68,26 +72,24 @@ export async function loadSessions(
     const providerSessionKey = toSessionKey(snapshot.provider, snapshot.providerSessionId);
     const runtime = runtimeByProviderSessionKey.get(providerSessionKey);
     const id = runtime?.id ?? providerSessionKey;
-    let state: Session["state"];
-    if (!fs.existsSync(snapshot.project)) {
-      state = "archived";
-    } else if (runtime) {
-      state = "active";
-    } else {
-      state = "inactive";
-    }
+    const project = runtime?.info.cwd ?? snapshot.project;
+    const state: Session["state"] = runtime
+      ? "active"
+      : fs.existsSync(snapshot.project)
+        ? "inactive"
+        : "archived";
 
     return {
       id,
       provider: snapshot.provider,
       providerSessionId: snapshot.providerSessionId,
-      project: snapshot.project,
-      projectName: path.basename(snapshot.project),
-      repoPath: repoPathMap.get(snapshot.project) ?? snapshot.project,
+      project,
+      projectName: path.basename(project),
+      repoPath: repoPathMap.get(project) ?? project,
       lastMessage: snapshot.lastMessage,
       timestamp: snapshot.timestamp,
       state,
-      worktree: worktreeMap.get(snapshot.project),
+      worktree: worktreeMap.get(project),
     } satisfies Session;
   });
 

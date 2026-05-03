@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
-import { ElectronAPI } from "../shared/ipc.js";
-import { Session, SessionProvider } from "../shared/session.js";
+import type { ElectronAPI } from "../shared/ipc.js";
+import type { Session, SessionProvider } from "../shared/session.js";
 
 const electronAPI: ElectronAPI = {
   getSessions: () => ipcRenderer.invoke("sessions:list"),

@@ -1,4 +1,4 @@
-import { AppError } from "../shared/ipc.js";
+import type { AppError } from "../shared/ipc.js";
 
 function errorDetail(error: unknown): string | undefined {
   if (error instanceof Error) {

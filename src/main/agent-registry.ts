@@ -1,6 +1,6 @@
-import { SessionProvider } from "../shared/session.js";
-import { AgentDefinition } from "../shared/agent.js";
-import { SessionProviderAdapter } from "./agent.js";
+import type { SessionProvider } from "../shared/session.js";
+import type { AgentDefinition } from "../shared/agent.js";
+import type { SessionProviderAdapter } from "./agent.js";
 import { sessionProvider as claudeProvider } from "./agents/claude/index.js";
 import { sessionProvider as codexProvider } from "./agents/codex/index.js";
 

@@ -1,13 +1,21 @@
 import type { AgentDefinition } from "../../shared/agent";
-import type { RepoListItem } from "../../shared/metadata";
+import type { RepoListItem, TaskWorktreeListItem } from "../../shared/metadata";
 
 interface RepoListProps {
   repos: RepoListItem[];
   providers: AgentDefinition[];
+  selectedPrimarySessionKey: string | null;
   onCreateWorktreeSession: (repoPath: string) => void;
+  onSelectPrimarySession: (repo: RepoListItem, taskWorktree: TaskWorktreeListItem) => void;
 }
 
-export function RepoList({ repos, providers, onCreateWorktreeSession }: RepoListProps) {
+export function RepoList({
+  repos,
+  providers,
+  selectedPrimarySessionKey,
+  onCreateWorktreeSession,
+  onSelectPrimarySession,
+}: RepoListProps) {
   if (repos.length === 0) {
     return <div className="repo-list-empty">No repositories</div>;
   }
@@ -38,10 +46,13 @@ export function RepoList({ repos, providers, onCreateWorktreeSession }: RepoList
                   return null;
                 }
                 return (
-                  <div
+                  <button
                     key={taskWorktree.taskWorktreeId}
-                    className="repo-task-worktree-row"
+                    type="button"
+                    className={`repo-task-worktree-row ${selectedPrimarySessionKey === primarySession.providerSessionKey ? "selected" : ""}`}
+                    onClick={() => onSelectPrimarySession(repo, taskWorktree)}
                     title={taskWorktree.worktreePath}
+                    aria-label={`Resume primary session for ${taskWorktree.name}`}
                   >
                     <span
                       className={`repo-task-worktree-state-dot ${primarySession.state}`}
@@ -49,7 +60,7 @@ export function RepoList({ repos, providers, onCreateWorktreeSession }: RepoList
                       aria-label={`Primary session ${primarySession.state}`}
                     />
                     <span className="repo-task-worktree-name">{taskWorktree.name}</span>
-                  </div>
+                  </button>
                 );
               })}
             </div>

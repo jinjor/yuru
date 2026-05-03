@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { GitDiffDocument, GitPathState } from "../shared/ipc.js";
+import type { GitDiffDocument, GitPathState } from "../shared/ipc.js";
 import { exec, execBuffer } from "./exec.js";
 import { parsePorcelainLine } from "./git-status.js";
 

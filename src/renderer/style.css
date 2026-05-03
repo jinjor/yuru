@@ -146,10 +146,6 @@ body,
   min-height: 0;
 }
 
-.sidebar-section-flex {
-  flex: 1;
-}
-
 /* Repo list */
 .repo-list {
   display: flex;
@@ -227,12 +223,28 @@ body,
 }
 
 .repo-task-worktree-row {
+  width: 100%;
   min-height: 22px;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 2px 8px;
   border-radius: 5px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.repo-task-worktree-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.repo-task-worktree-row.selected {
+  background: rgba(123, 193, 255, 0.1);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .repo-task-worktree-state-dot {
@@ -290,26 +302,6 @@ body,
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--text-muted);
-}
-
-.new-session-btn {
-  background: transparent;
-  border: 1px solid var(--border-strong);
-  color: var(--text);
-  font-size: 16px;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-}
-
-.new-session-btn:hover {
-  background: var(--bg-hover);
-  border-color: var(--accent);
 }
 
 /* Session List */

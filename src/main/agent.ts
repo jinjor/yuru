@@ -1,6 +1,6 @@
 import * as pty from "node-pty";
-import { ResumableSession, SessionProvider } from "../shared/session.js";
-import { AgentDefinition } from "../shared/agent.js";
+import type { ResumableSession, SessionProvider } from "../shared/session.js";
+import type { AgentDefinition } from "../shared/agent.js";
 
 export interface SessionSnapshot {
   provider: SessionProvider;

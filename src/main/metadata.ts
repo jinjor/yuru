@@ -23,25 +23,28 @@ export function loadRepos(): RepoMetadata[] {
   return loadMetadata().repos;
 }
 
-export function loadRepoList(activeSessionKeys?: ReadonlySet<string>): RepoListItem[] {
-  const activeKeys = activeSessionKeys ?? new Set<string>();
+export function loadRepoList(activeSessionIdsByKey?: ReadonlyMap<string, string>): RepoListItem[] {
   const metadata = loadMetadata();
   const taskWorktreesByRepoId = new Map<string, TaskWorktreeListItem[]>();
   for (const taskWorktree of metadata.taskWorktrees) {
     const entries = taskWorktreesByRepoId.get(taskWorktree.repoId) ?? [];
     const primarySession = taskWorktree.primarySession;
+    const primarySessionKey = primarySession
+      ? toSessionKey(primarySession.provider, primarySession.providerSessionId)
+      : null;
+    const activeAppSessionId = primarySessionKey
+      ? activeSessionIdsByKey?.get(primarySessionKey) ?? null
+      : null;
     entries.push({
       taskWorktreeId: taskWorktree.taskWorktreeId,
       worktreePath: taskWorktree.worktreePath,
       name: path.basename(taskWorktree.worktreePath),
-      primarySession: primarySession
+      primarySession: primarySession && primarySessionKey
         ? {
             ...primarySession,
-            state: activeKeys.has(
-              toSessionKey(primarySession.provider, primarySession.providerSessionId),
-            )
-              ? "active"
-              : "inactive",
+            providerSessionKey: primarySessionKey,
+            activeAppSessionId,
+            state: activeAppSessionId ? "active" : "inactive",
           }
         : undefined,
       suggestedSessions: [],

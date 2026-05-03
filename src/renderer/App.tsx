@@ -1,65 +1,123 @@
 import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
 import type { AgentDefinition } from "../shared/agent";
-import type { RepoListItem } from "../shared/metadata";
-import type { Session, SessionProvider } from "../shared/session";
+import type { PrimarySessionListItem, RepoListItem, TaskWorktreeListItem } from "../shared/metadata";
+import { type Session, type SessionProvider, toSessionKey } from "../shared/session";
 import { BranchNameInput } from "./components/BranchNameInput";
 import { RepoList } from "./components/RepoList";
-import { RepoPicker } from "./components/RepoPicker";
-import { SessionList } from "./components/SessionList";
 import { SessionView } from "./components/SessionView";
 import { clamp } from "./utils/layout";
 
+interface SelectedSession {
+  sessionId: string;
+  primarySessionKey: string | null;
+}
+
+function appSessionIdForPrimarySession(primarySession: PrimarySessionListItem): string {
+  return primarySession.activeAppSessionId ?? primarySession.providerSessionKey;
+}
+
+function sessionFromPrimarySession(
+  repo: RepoListItem,
+  taskWorktree: TaskWorktreeListItem,
+): Session | null {
+  const primarySession = taskWorktree.primarySession;
+  if (!primarySession) {
+    return null;
+  }
+
+  return {
+    id: appSessionIdForPrimarySession(primarySession),
+    provider: primarySession.provider,
+    providerSessionId: primarySession.providerSessionId,
+    project: taskWorktree.worktreePath,
+    projectName: taskWorktree.name,
+    repoPath: repo.repoPath,
+    lastMessage: "",
+    timestamp: Date.now(),
+    state: primarySession.state,
+  };
+}
+
+function findPrimarySessionByKey(
+  repos: readonly RepoListItem[],
+  primarySessionKey: string,
+): PrimarySessionListItem | null {
+  for (const repo of repos) {
+    for (const taskWorktree of repo.taskWorktrees) {
+      const primarySession = taskWorktree.primarySession;
+      if (primarySession?.providerSessionKey === primarySessionKey) {
+        return primarySession;
+      }
+    }
+  }
+  return null;
+}
+
+function findPrimarySessionByActiveAppSessionId(
+  repos: readonly RepoListItem[],
+  activeAppSessionId: string,
+): PrimarySessionListItem | null {
+  for (const repo of repos) {
+    for (const taskWorktree of repo.taskWorktrees) {
+      const primarySession = taskWorktree.primarySession;
+      if (primarySession?.activeAppSessionId === activeAppSessionId) {
+        return primarySession;
+      }
+    }
+  }
+  return null;
+}
+
+function reconcileSelectedSession(
+  repos: readonly RepoListItem[],
+  selectedSession: SelectedSession | null,
+): SelectedSession | null {
+  if (!selectedSession) {
+    return null;
+  }
+
+  if (!selectedSession.primarySessionKey) {
+    const primarySession = findPrimarySessionByActiveAppSessionId(
+      repos,
+      selectedSession.sessionId,
+    );
+    return primarySession
+      ? {
+          sessionId: appSessionIdForPrimarySession(primarySession),
+          primarySessionKey: primarySession.providerSessionKey,
+        }
+      : selectedSession;
+  }
+
+  const primarySession = findPrimarySessionByKey(repos, selectedSession.primarySessionKey);
+  if (!primarySession || !primarySession.activeAppSessionId) {
+    return null;
+  }
+
+  return {
+    sessionId: primarySession.activeAppSessionId,
+    primarySessionKey: primarySession.providerSessionKey,
+  };
+}
+
 export function App() {
   const appRef = useRef<HTMLDivElement>(null);
-  const [sessions, setSessions] = useState<Session[]>([]);
   const [repos, setRepos] = useState<RepoListItem[]>([]);
   const [availableProviders, setAvailableProviders] = useState<AgentDefinition[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [showRepoPicker, setShowRepoPicker] = useState(false);
-  const [newSessionProvider, setNewSessionProvider] = useState<SessionProvider | null>(null);
+  const [selectedSession, setSelectedSession] = useState<SelectedSession | null>(null);
   const [worktreeTarget, setWorktreeTarget] = useState<string | null>(null);
   const [worktreeError, setWorktreeError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(260);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
-  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
-
-  const refreshSessions = useCallback((): void => {
-    window.electronAPI
-      .getSessions()
-      .then((nextSessions) => {
-        setSessions(nextSessions);
-        setDeletingSessionId((prev) => {
-          if (!prev) {
-            return null;
-          }
-          const deletingSession = nextSessions.find((session) => session.id === prev);
-          if (!deletingSession || deletingSession.state !== "inactive" || !deletingSession.worktree) {
-            return null;
-          }
-          return prev;
-        });
-        setSelectedId((prev) => {
-          if (!prev) {
-            return null;
-          }
-          const selectedSession = nextSessions.find((session) => session.id === prev);
-          if (!selectedSession || selectedSession.state !== "active") {
-            return null;
-          }
-          return prev;
-        });
-      })
-      .catch((error) => {
-        console.error("Failed to load sessions.", error);
-      });
-  }, []);
+  const selectedId = selectedSession?.sessionId ?? null;
 
   const refreshRepos = useCallback((): void => {
     window.electronAPI
       .getRepos()
       .then((nextRepos) => {
         setRepos(nextRepos);
+        setSelectedSession((prev) => reconcileSelectedSession(nextRepos, prev));
       })
       .catch((error) => {
         console.error("Failed to load repos.", error);
@@ -75,25 +133,16 @@ export function App() {
       .getSessionProviders()
       .then((providers) => {
         setAvailableProviders(providers);
-        setNewSessionProvider((prev) => prev ?? providers[0]?.id ?? null);
       })
       .catch((error) => {
         console.error("Failed to load session providers.", error);
       });
 
     refreshRepos();
-    refreshSessions();
     window.electronAPI.onSessionsStateChanged(() => {
       refreshRepos();
-      refreshSessions();
     });
-  }, [refreshRepos, refreshSessions]);
-
-  useEffect(() => {
-    if (!availableProviders.some((provider) => provider.id === newSessionProvider)) {
-      setNewSessionProvider(availableProviders[0]?.id ?? null);
-    }
-  }, [availableProviders, newSessionProvider]);
+  }, [refreshRepos]);
 
   const handleSidebarResizeStart = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>): void => {
@@ -129,9 +178,14 @@ export function App() {
     [selectedId, sidebarWidth],
   );
 
-  const handleSelectSession = useCallback(
-    async (session: Session): Promise<void> => {
-      if (session.state === "archived") {
+  const handleSelectPrimarySession = useCallback(
+    async (repo: RepoListItem, taskWorktree: TaskWorktreeListItem): Promise<void> => {
+      const primarySession = taskWorktree.primarySession;
+      if (!primarySession) {
+        return;
+      }
+      const session = sessionFromPrimarySession(repo, taskWorktree);
+      if (!session) {
         return;
       }
 
@@ -140,30 +194,13 @@ export function App() {
         return;
       }
 
-      setSelectedId(session.id);
+      setSelectedSession({
+        sessionId: session.id,
+        primarySessionKey: primarySession.providerSessionKey,
+      });
+      refreshRepos();
     },
-    [],
-  );
-
-  const handleCreateSession = useCallback(
-    async (repoPath: string, provider: SessionProvider): Promise<void> => {
-      setShowRepoPicker(false);
-      setNewSessionProvider(provider);
-      setIsCreatingSession(true);
-      try {
-        const result = await window.electronAPI.createSession(provider, repoPath);
-        if (!result.ok) {
-          return;
-        }
-
-        const session = result.data;
-        setSessions((prev) => [session, ...prev]);
-        setSelectedId(session.id);
-      } finally {
-        setIsCreatingSession(false);
-      }
-    },
-    [],
+    [refreshRepos],
   );
 
   const handleCreateWorktreeSession = useCallback(
@@ -183,8 +220,12 @@ export function App() {
         }
 
         const session = result.data;
-        setSessions((prev) => [session, ...prev]);
-        setSelectedId(session.id);
+        setSelectedSession({
+          sessionId: session.id,
+          primarySessionKey: session.providerSessionId
+            ? toSessionKey(session.provider, session.providerSessionId)
+            : null,
+        });
         setWorktreeTarget(null);
         refreshRepos();
       } finally {
@@ -194,35 +235,6 @@ export function App() {
     [refreshRepos, worktreeTarget],
   );
 
-  const handleDeleteWorktree = useCallback(async (session: Session): Promise<void> => {
-    if (!session.worktree) {
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `Remove worktree "${session.worktree.name}" for ${session.repoPath.split("/").pop()}?`,
-    );
-    if (!confirmed) {
-      return;
-    }
-
-    setDeletingSessionId(session.id);
-    const result = await window.electronAPI.removeWorktree(
-      session.provider,
-      session.repoPath,
-      session.project,
-    );
-    if (!result.ok) {
-      setDeletingSessionId(null);
-      return;
-    }
-    refreshRepos();
-    refreshSessions();
-  }, [refreshRepos, refreshSessions]);
-
-  const knownRepos = [
-    ...new Set([...repos.map((repo) => repo.repoPath), ...sessions.map((session) => session.repoPath)]),
-  ];
   return (
     <div className="app" ref={appRef}>
       <aside className="sidebar" style={{ width: sidebarWidth, minWidth: sidebarWidth }}>
@@ -233,26 +245,12 @@ export function App() {
           <RepoList
             repos={repos}
             providers={availableProviders}
+            selectedPrimarySessionKey={selectedSession?.primarySessionKey ?? null}
             onCreateWorktreeSession={(repoPath) => {
               setWorktreeError(null);
               setWorktreeTarget(repoPath);
             }}
-          />
-        </div>
-        <div className="sidebar-section sidebar-section-flex">
-          <div className="sidebar-header">
-            <h2>Sessions</h2>
-            <button className="new-session-btn" onClick={() => setShowRepoPicker(true)}>
-              +
-            </button>
-          </div>
-          <SessionList
-            sessions={sessions}
-            selectedId={selectedId}
-            deletingSessionId={deletingSessionId}
-            onDeleteWorktree={handleDeleteWorktree}
-            onOpenExternal={openExternal}
-            onSelect={handleSelectSession}
+            onSelectPrimarySession={handleSelectPrimarySession}
           />
         </div>
       </aside>
@@ -266,25 +264,10 @@ export function App() {
         appRef={appRef}
         isCreatingSession={isCreatingSession}
         onOpenExternal={openExternal}
-        refreshSessions={refreshSessions}
+        refreshRepos={refreshRepos}
         sessionId={selectedId}
         sidebarWidth={sidebarWidth}
       />
-      {showRepoPicker && (
-        <RepoPicker
-          repos={knownRepos}
-          providers={availableProviders}
-          provider={newSessionProvider}
-          onChangeProvider={setNewSessionProvider}
-          onSelect={handleCreateSession}
-          onSelectWorktree={(repo) => {
-            setShowRepoPicker(false);
-            setWorktreeError(null);
-            setWorktreeTarget(repo);
-          }}
-          onCancel={() => setShowRepoPicker(false)}
-        />
-      )}
       {worktreeTarget && (
         <BranchNameInput
           providers={availableProviders}

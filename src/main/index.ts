@@ -26,26 +26,26 @@ import {
   listSessionProviderDefinitions,
 } from "./agent-registry.js";
 import {
-  LaunchRequest,
-  PendingSession,
-  RuntimeSessionInfo,
-  SessionProviderAdapter,
-  WorktreeContext,
+  type LaunchRequest,
+  type PendingSession,
+  type RuntimeSessionInfo,
+  type SessionProviderAdapter,
+  type WorktreeContext,
 } from "./agent.js";
 import { WorktreeWatcher } from "./worktree-watcher.js";
 import { FileTreeWatcher } from "./file-tree-watcher.js";
 import fs from "fs";
 import {
-  ActiveSessionState,
-  AppError,
-  AppErrorNotice,
-  BranchContext,
-  Result,
+  type ActiveSessionState,
+  type AppError,
+  type AppErrorNotice,
+  type BranchContext,
+  type Result,
 } from "../shared/ipc.js";
 import {
   isResumableSession,
-  Session,
-  SessionProvider,
+  type Session,
+  type SessionProvider,
   toRuntimeSessionKey,
   toSessionKey,
 } from "../shared/session.js";
@@ -142,14 +142,14 @@ function getWorkingRootForSession(sessionId: string): string | null {
   return runtime?.cwd ?? null;
 }
 
-function getActiveSessionKeys(): Set<string> {
-  const keys = new Set<string>();
-  for (const info of sessionRuntimeMap.values()) {
+function getActiveSessionIdsByKey(): Map<string, string> {
+  const idsByKey = new Map<string, string>();
+  for (const [sessionId, info] of sessionRuntimeMap) {
     if (info.providerSessionId) {
-      keys.add(toSessionKey(info.provider, info.providerSessionId));
+      idsByKey.set(toSessionKey(info.provider, info.providerSessionId), sessionId);
     }
   }
-  return keys;
+  return idsByKey;
 }
 
 function appendStartupOutput(existing: string, chunk: string): string {
@@ -340,6 +340,15 @@ function launchPendingSession(
 
   proc.onExit(({ exitCode, signal }) => {
     pending.exited = true;
+    console.info("[Yuru] session process exited", {
+      sessionId: pending.appSessionId,
+      provider: pending.provider,
+      providerSessionId: pending.providerSessionId,
+      cwd: pending.sessionCwd,
+      exitCode,
+      signal,
+      startupSettled: pending.startupSettled,
+    });
     pendingProcesses.delete(proc);
     if (!pending.startupSettled && !pending.startupFailureReported) {
       pending.startupFailureReported = true;
@@ -532,7 +541,7 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("metadata:listRepos", () => {
-    return loadRepoList(getActiveSessionKeys());
+    return loadRepoList(getActiveSessionIdsByKey());
   });
 
   ipcMain.handle("providers:list", () => {

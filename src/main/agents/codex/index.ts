@@ -1,6 +1,11 @@
 import { setTimeout } from "node:timers/promises";
 import { createWorktree } from "../../git.js";
-import { SessionProviderAdapter, SessionSnapshot, PendingSession, WorktreeContext } from "../../agent.js";
+import type {
+  PendingSession,
+  SessionProviderAdapter,
+  SessionSnapshot,
+  WorktreeContext,
+} from "../../agent.js";
 import { listFilesRecursive, parseJsonLinesAs, readTextFileIfExists } from "../../agent-store-utils.js";
 import {
   codexWorktreeCwd,

@@ -14,7 +14,7 @@ interface SessionViewProps {
   appRef: RefObject<HTMLDivElement | null>;
   isCreatingSession: boolean;
   onOpenExternal: (url: string) => void;
-  refreshSessions: () => void;
+  refreshRepos: () => void;
   sessionId: string | null;
   sidebarWidth: number;
 }
@@ -30,7 +30,7 @@ export function SessionView({
   appRef,
   isCreatingSession,
   onOpenExternal,
-  refreshSessions,
+  refreshRepos,
   sessionId,
   sidebarWidth,
 }: SessionViewProps) {
@@ -96,7 +96,7 @@ export function SessionView({
       const branchContext = resultDataOrNull(branchContextResult);
       setCurrentBranch(branchContext?.branch ?? null);
       setCurrentGitHub(branchContext?.github ?? null);
-      refreshSessions();
+      refreshRepos();
     };
 
     void fetchStatus();
@@ -108,7 +108,7 @@ export function SessionView({
       cancelled = true;
       clearInterval(interval);
     };
-  }, [refreshSessions, sessionId]);
+  }, [refreshRepos, sessionId]);
 
   useEffect(() => {
     if (!sessionId || !previewSelection) {
