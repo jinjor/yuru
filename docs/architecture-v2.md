@@ -110,7 +110,7 @@ repo root 自体の main worktree は含めない。
   - attach されるまで通常 UI の主役にはしない
 - missing task worktree:
   - metadata に記録された `worktreePath` が消えている状態
-  - main UI からは隠し、archive/debug 的な場所で整理できるようにする
+  - main UI からは隠す
 - missing repo:
   - metadata にある `repoPath` が存在しないか、Git repository として読めない状態
   - 通常 UI では主役にせず、整理できるようにする
@@ -253,7 +253,7 @@ provider ごとの hint は session identity を置き換えるためではな�
    - ただし旧 UI 実装は削除せず、後で使い回せるように残す
 11. [ ] primary session のアイテムに provider が表示できる
 12. [ ] primary session のアイテムに preview 文字列が表示できる
-13. [ ] Git worktree から task worktree 一覧を組み立てられる
+13. [x] Git worktree から task worktree 一覧を組み立てられる
    - registered repo ごとに Git worktree を列挙し、main worktree を除外する
    - metadata の primary session と runtime active session を重ねて `repo.taskWorktrees` として渡す
    - metadata にない Git worktree も empty worktree として表示対象に含める

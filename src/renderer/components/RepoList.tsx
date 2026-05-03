@@ -38,12 +38,24 @@ export function RepoList({
               +
             </button>
           </div>
-          {repo.taskWorktrees.some((taskWorktree) => taskWorktree.primarySession) && (
+          {repo.taskWorktrees.length > 0 && (
             <div className="repo-task-worktrees">
               {repo.taskWorktrees.map((taskWorktree) => {
                 const primarySession = taskWorktree.primarySession;
                 if (!primarySession) {
-                  return null;
+                  return (
+                    <div
+                      key={taskWorktree.taskWorktreeId}
+                      className="repo-task-worktree-row empty"
+                      title={taskWorktree.worktreePath}
+                      aria-label={`Worktree ${taskWorktree.name}`}
+                    >
+                      <span className="repo-task-worktree-empty-glyph" aria-hidden="true">
+                        +
+                      </span>
+                      <span className="repo-task-worktree-name">{taskWorktree.name}</span>
+                    </div>
+                  );
                 }
                 return (
                   <button

@@ -6,7 +6,7 @@ import { parsePorcelainLine } from "./git-status.js";
 
 export interface WorktreeInfo {
   path: string;
-  branch: string;
+  branch: string | null;
 }
 
 export async function getCurrentBranch(cwd: string): Promise<string | null> {
@@ -117,25 +117,46 @@ export async function getGitDiffDocument(cwd: string, filePath: string): Promise
 
 export async function listWorktrees(cwd: string): Promise<WorktreeInfo[]> {
   const output = await exec("git", ["worktree", "list", "--porcelain"], cwd);
+  const mainWorktreePath = await getRepoRootForProject(cwd);
+  return parseWorktreeListPorcelain(output, mainWorktreePath);
+}
+
+export function parseWorktreeListPorcelain(
+  output: string,
+  mainWorktreePath: string | null,
+): WorktreeInfo[] {
+  if (!output.trim()) {
+    return [];
+  }
+
   const worktrees: WorktreeInfo[] = [];
+  const mainWorktreePathKey = mainWorktreePath ? toWorktreePathKey(mainWorktreePath) : null;
   const blocks = output.trim().split("\n\n");
-  // Skip the first block — it's always the main worktree (the repo itself)
-  for (let i = 1; i < blocks.length; i++) {
-    const lines = blocks[i].split("\n");
-    let wtPath = "";
-    let branch = "";
+  for (const block of blocks) {
+    const lines = block.split("\n");
+    let wtPath: string | null = null;
+    let branch: string | null = null;
     for (const line of lines) {
       if (line.startsWith("worktree ")) {
         wtPath = line.substring("worktree ".length);
       } else if (line.startsWith("branch ")) {
-        branch = line.substring("branch ".length).replace("refs/heads/", "");
+        branch = parseWorktreeBranch(line.substring("branch ".length));
       }
     }
-    if (wtPath && branch) {
+    if (wtPath && toWorktreePathKey(wtPath) !== mainWorktreePathKey) {
       worktrees.push({ path: wtPath, branch });
     }
   }
   return worktrees;
+}
+
+function parseWorktreeBranch(ref: string): string {
+  const headsPrefix = "refs/heads/";
+  return ref.startsWith(headsPrefix) ? ref.substring(headsPrefix.length) : ref;
+}
+
+function toWorktreePathKey(worktreePath: string): string {
+  return path.resolve(worktreePath);
 }
 
 export async function branchExists(cwd: string, branchName: string): Promise<boolean> {

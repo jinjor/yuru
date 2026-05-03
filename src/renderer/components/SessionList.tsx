@@ -120,8 +120,11 @@ function SessionCard({
                 >
                   <FolderTree size={11} strokeWidth={2} />
                 </span>
-                <span className="session-worktree-branch" title={session.worktree.branch}>
-                  {session.worktree.branch}
+                <span
+                  className="session-worktree-branch"
+                  title={session.worktree.branch ?? "detached HEAD"}
+                >
+                  {session.worktree.branch ?? "detached HEAD"}
                 </span>
                 {session.github && (
                   <GitHubBadge

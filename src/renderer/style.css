@@ -242,6 +242,14 @@ body,
   background: rgba(255, 255, 255, 0.03);
 }
 
+.repo-task-worktree-row.empty {
+  cursor: default;
+}
+
+.repo-task-worktree-row.empty:hover {
+  background: transparent;
+}
+
 .repo-task-worktree-row.selected {
   background: rgba(123, 193, 255, 0.1);
   box-shadow: inset 2px 0 0 var(--accent);
@@ -262,6 +270,16 @@ body,
 
 .repo-task-worktree-state-dot.inactive {
   opacity: 0.6;
+}
+
+.repo-task-worktree-empty-glyph {
+  width: 8px;
+  flex-shrink: 0;
+  color: #7f8da3;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
 }
 
 .repo-task-worktree-name {

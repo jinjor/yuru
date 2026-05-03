@@ -10,6 +10,9 @@ import type {
   YuruMetadata,
 } from "../shared/metadata.js";
 import { toSessionKey, type SessionProvider } from "../shared/session.js";
+import { listWorktrees, type WorktreeInfo } from "./git.js";
+
+type ListWorktrees = (repoPath: string) => Promise<readonly WorktreeInfo[]>;
 
 export function loadMetadata(): YuruMetadata {
   const metadataPath = getMetadataPath();
@@ -23,39 +26,35 @@ export function loadRepos(): RepoMetadata[] {
   return loadMetadata().repos;
 }
 
-export function loadRepoList(activeSessionIdsByKey?: ReadonlyMap<string, string>): RepoListItem[] {
+export async function loadRepoList(
+  activeSessionIdsByKey?: ReadonlyMap<string, string>,
+  listGitWorktrees: ListWorktrees = listWorktrees,
+): Promise<RepoListItem[]> {
   const metadata = loadMetadata();
-  const taskWorktreesByRepoId = new Map<string, TaskWorktreeListItem[]>();
-  for (const taskWorktree of metadata.taskWorktrees) {
-    const entries = taskWorktreesByRepoId.get(taskWorktree.repoId) ?? [];
-    const primarySession = taskWorktree.primarySession;
-    const primarySessionKey = primarySession
-      ? toSessionKey(primarySession.provider, primarySession.providerSessionId)
-      : null;
-    const activeAppSessionId = primarySessionKey
-      ? activeSessionIdsByKey?.get(primarySessionKey) ?? null
-      : null;
-    entries.push({
-      taskWorktreeId: taskWorktree.taskWorktreeId,
-      worktreePath: taskWorktree.worktreePath,
-      name: path.basename(taskWorktree.worktreePath),
-      primarySession: primarySession && primarySessionKey
-        ? {
-            ...primarySession,
-            providerSessionKey: primarySessionKey,
-            activeAppSessionId,
-            state: activeAppSessionId ? "active" : "inactive",
-          }
-        : undefined,
-      suggestedSessions: [],
-    });
-    taskWorktreesByRepoId.set(taskWorktree.repoId, entries);
-  }
+  return Promise.all(
+    metadata.repos.map(async (repo) => {
+      // TODO: repo の存在確認。存在しない repo は返さない。
+      const metadataByPath = new Map(
+        metadata.taskWorktrees
+          .filter((taskWorktree) => taskWorktree.repoId === repo.id)
+          .map((taskWorktree) => [toWorktreePathKey(taskWorktree.worktreePath), taskWorktree]),
+      );
+      const gitWorktrees = await loadGitWorktrees(repo.repoPath, listGitWorktrees);
+      const taskWorktrees = gitWorktrees.map((gitWorktree) =>
+        toTaskWorktreeListItem(
+          repo.id,
+          gitWorktree.path,
+          metadataByPath.get(toWorktreePathKey(gitWorktree.path)),
+          activeSessionIdsByKey,
+        ),
+      );
 
-  return metadata.repos.map((repo) => ({
-    ...repo,
-    taskWorktrees: taskWorktreesByRepoId.get(repo.id) ?? [],
-  }));
+      return {
+        ...repo,
+        taskWorktrees,
+      };
+    }),
+  );
 }
 
 export function loadTaskWorktrees(): TaskWorktreeMetadata[] {
@@ -222,6 +221,51 @@ function parsePrimarySession(value: unknown): PrimarySessionMetadata {
     provider: maybe.provider as SessionProvider,
     providerSessionId: maybe.providerSessionId,
   };
+}
+
+async function loadGitWorktrees(
+  repoPath: string,
+  listGitWorktrees: ListWorktrees,
+): Promise<readonly WorktreeInfo[]> {
+  try {
+    return await listGitWorktrees(repoPath);
+  } catch {
+    return [];
+  }
+}
+
+function toTaskWorktreeListItem(
+  repoId: string,
+  worktreePath: string,
+  metadataEntry: TaskWorktreeMetadata | undefined,
+  activeSessionIdsByKey: ReadonlyMap<string, string> | undefined,
+): TaskWorktreeListItem {
+  const primarySession = metadataEntry?.primarySession;
+  const primarySessionKey = primarySession
+    ? toSessionKey(primarySession.provider, primarySession.providerSessionId)
+    : null;
+  const activeAppSessionId = primarySessionKey
+    ? activeSessionIdsByKey?.get(primarySessionKey) ?? null
+    : null;
+
+  return {
+    taskWorktreeId: metadataEntry?.taskWorktreeId ?? `git:${repoId}:${worktreePath}`,
+    worktreePath,
+    name: path.basename(worktreePath),
+    primarySession: primarySession && primarySessionKey
+      ? {
+          ...primarySession,
+          providerSessionKey: primarySessionKey,
+          activeAppSessionId,
+          state: activeAppSessionId ? "active" : "inactive",
+        }
+      : undefined,
+    suggestedSessions: [],
+  };
+}
+
+function toWorktreePathKey(worktreePath: string): string {
+  return path.resolve(worktreePath);
 }
 
 function saveMetadata(metadata: YuruMetadata): void {

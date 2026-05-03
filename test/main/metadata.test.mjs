@@ -28,6 +28,10 @@ function seed(metadata) {
   fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
 }
 
+function listGitWorktreesFrom(worktreesByRepoPath) {
+  return async (repoPath) => worktreesByRepoPath.get(repoPath) ?? [];
+}
+
 test.beforeEach(reset);
 test.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
 
@@ -85,7 +89,7 @@ test("findRepoByPath は登録済みの repo を返す", () => {
   assert.equal(findRepoByPath("/tmp/missing"), null);
 });
 
-test("loadRepoList は repo 配下の task worktree と primary 状態を返す", () => {
+test("loadRepoList は Git worktree に metadata の primary 状態を重ねて返す", async () => {
   seed({
     repos: [
       { id: "repo-1", repoPath: "/tmp/repo-a" },
@@ -105,14 +109,27 @@ test("loadRepoList は repo 配下の task worktree と primary 状態を返す"
       },
       {
         taskWorktreeId: "wt-3",
-        repoId: "missing-repo",
-        worktreePath: "/tmp/missing/task-c",
+        repoId: "repo-1",
+        worktreePath: "/tmp/repo-a/.yuru/worktrees/missing-task",
         primarySession: { provider: "claude", providerSessionId: "claude-1" },
       },
     ],
   });
+  const listGitWorktrees = listGitWorktreesFrom(
+    new Map([
+      [
+        "/tmp/repo-a",
+        [
+          { path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a" },
+          { path: "/tmp/repo-a/.yuru/worktrees/task-b", branch: "task-b" },
+          { path: "/tmp/repo-a/.yuru/worktrees/git-only", branch: "git-only" },
+        ],
+      ],
+      ["/tmp/repo-b", []],
+    ]),
+  );
 
-  assert.deepEqual(loadRepoList(), [
+  assert.deepEqual(await loadRepoList(undefined, listGitWorktrees), [
     {
       id: "repo-1",
       repoPath: "/tmp/repo-a",
@@ -137,6 +154,13 @@ test("loadRepoList は repo 配下の task worktree と primary 状態を返す"
           primarySession: undefined,
           suggestedSessions: [],
         },
+        {
+          taskWorktreeId: "git:repo-1:/tmp/repo-a/.yuru/worktrees/git-only",
+          worktreePath: "/tmp/repo-a/.yuru/worktrees/git-only",
+          name: "git-only",
+          primarySession: undefined,
+          suggestedSessions: [],
+        },
       ],
     },
     {
@@ -147,7 +171,7 @@ test("loadRepoList は repo 配下の task worktree と primary 状態を返す"
   ]);
 });
 
-test("loadRepoList は active session key と一致する primary を active として返す", () => {
+test("loadRepoList は active session key と一致する primary を active として返す", async () => {
   seed({
     repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
     taskWorktrees: [
@@ -165,8 +189,22 @@ test("loadRepoList は active session key と一致する primary を active と
       },
     ],
   });
+  const listGitWorktrees = listGitWorktreesFrom(
+    new Map([
+      [
+        "/tmp/repo-a",
+        [
+          { path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a" },
+          { path: "/tmp/repo-a/.yuru/worktrees/task-b", branch: "task-b" },
+        ],
+      ],
+    ]),
+  );
 
-  const result = loadRepoList(new Map([[toSessionKey("codex", "codex-1"), "runtime-1"]]));
+  const result = await loadRepoList(
+    new Map([[toSessionKey("codex", "codex-1"), "runtime-1"]]),
+    listGitWorktrees,
+  );
   const taskWorktrees = result[0].taskWorktrees;
   assert.equal(taskWorktrees[0].primarySession.state, "active");
   assert.equal(taskWorktrees[0].primarySession.providerSessionKey, toSessionKey("codex", "codex-1"));

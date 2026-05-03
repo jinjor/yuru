@@ -8,6 +8,7 @@ import {
   detachPrimarySessionByPath,
   findRepoByPath,
   loadRepoList,
+  loadRepos,
   removeTaskWorktreeByPath,
   upsertTaskWorktree,
 } from "./metadata.js";
@@ -542,14 +543,14 @@ async function refreshWorktreeWatcher(): Promise<void> {
     return;
   }
   const sessions = await loadSessions(sessionRuntimeMap);
-  const repos = Array.from(
-    new Set(
-      sessions
-        .filter((session) => session.worktree && session.state !== "archived")
-        .map((session) => session.repoPath),
-    ),
-  );
-  worktreeWatcher.setRepos(repos);
+  const repos = new Set(loadRepos().map((repo) => repo.repoPath));
+  const sessionRepoPaths = sessions
+    .filter((session) => session.worktree && session.state !== "archived")
+    .map((session) => session.repoPath);
+  for (const repoPath of sessionRepoPaths) {
+    repos.add(repoPath);
+  }
+  worktreeWatcher.setRepos(Array.from(repos));
 }
 
 app.whenReady().then(() => {

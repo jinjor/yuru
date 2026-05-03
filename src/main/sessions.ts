@@ -6,8 +6,10 @@ import { sessionProviders } from "./agent-registry.js";
 import type { RuntimeSessionInfo } from "./agent.js";
 import { toSessionKey, type Session } from "../shared/session.js";
 
-async function buildWorktreeMap(projectPaths: string[]): Promise<Map<string, { name: string; branch: string }>> {
-  const worktreeMap = new Map<string, { name: string; branch: string }>();
+async function buildWorktreeMap(
+  projectPaths: string[],
+): Promise<Map<string, { name: string; branch: string | null }>> {
+  const worktreeMap = new Map<string, { name: string; branch: string | null }>();
   for (const projectPath of projectPaths) {
     try {
       const worktrees = await listWorktrees(projectPath);
@@ -117,7 +119,7 @@ export async function loadSessions(
 
   const worktreeQueries = new Map<string, Promise<Session["github"]>>();
   for (const session of sessions) {
-    if (!session.worktree || session.state === "archived") {
+    if (!session.worktree?.branch || session.state === "archived") {
       continue;
     }
     const cacheKey = `${session.repoPath}:${session.worktree.branch}`;
@@ -131,7 +133,7 @@ export async function loadSessions(
 
   await Promise.all(
     sessions.map(async (session) => {
-      if (!session.worktree || session.state === "archived") {
+      if (!session.worktree?.branch || session.state === "archived") {
         session.github = null;
         return;
       }

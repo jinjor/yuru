@@ -18,7 +18,7 @@ export interface Session {
   state: "active" | "inactive" | "archived";
   worktree?: {
     name: string;
-    branch: string;
+    branch: string | null;
   };
   github?: GitHubPullRequest | null;
 }
