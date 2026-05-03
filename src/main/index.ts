@@ -58,6 +58,7 @@ import {
   recordAppError,
 } from "./error-center.js";
 import { createTerminalEnv } from "./terminal-env.js";
+import { createShellLaunchCommand } from "./shell-launch.js";
 
 let mainWindow: BrowserWindow | null = null;
 const ptyProcesses = new Map<string, pty.IPty>();
@@ -295,7 +296,8 @@ function launchPendingSession(
   launchLabel: string,
 ): PendingSession {
   const existingProviderSessionIds = request.existingProviderSessionIds ?? new Set<string>();
-  const proc = pty.spawn(providerAdapter.command, request.args, {
+  const launchCommand = createShellLaunchCommand(providerAdapter.command, request.args, process.env);
+  const proc = pty.spawn(launchCommand.command, launchCommand.args, {
     name: "xterm-256color",
     cols: 80,
     rows: 24,
