@@ -24,6 +24,7 @@ This is for checking behavior changes. Documentation-only edits do not need a re
   - 詳細な変数名や関数名が必要な場合は、それが何を表すものかを丁寧に説明すること。
   - 悪い例: `x` が `y` で初期化されず `z` が不定になっています。
   - 良い例: セッション ID が初期化時に取得できないのでポーリングしています。
+- 勝手に独自用語を生み出さず、既存のコード・ドキュメント・ユーザーの言葉に合わせること。
 
 ## Design
 
@@ -34,7 +35,6 @@ This is for checking behavior changes. Documentation-only edits do not need a re
   - 将来の可能性を考えて余計なコードを書かないこと（YAGNI）。
   - 限りなく可能性の低い状況に対応するために大量のコードを書かないこと。
   - 余計なフォールバック処理を書いてデバッグを困難にしないこと。
-  - 勝手に独自用語を生み出さず、既存のコード・ドキュメント・ユーザーの言葉に合わせること。
 
 - 状態の居場所を考えること。
   - single source of truth を重視すること。
@@ -45,7 +45,7 @@ This is for checking behavior changes. Documentation-only edits do not need a re
     - useRef の多用
     - useEffect の多用
     - set しか使っていない useState
-    - requestAnimationFrame の使用
+    - requestAnimationFrame, setTimeout の使用
     - deps list の一部をあえて抜いている
     - 抽象度の高いレイヤーに具体的すぎるロジックが書かれている
   - 上記のようなパターンを避けることが目的なのではなく、これらの現象を生む設計の歪みを修正するのが目的。これらを避けるために設計が汚くなったら本末転倒。
