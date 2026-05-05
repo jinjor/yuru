@@ -4,11 +4,13 @@ import crypto from "crypto";
 import path from "path";
 import * as pty from "node-pty";
 import {
+  type ActiveRuntimeSessionListItem,
   attachPrimarySession,
   detachPrimarySessionByPath,
   findRepoByPath,
   loadRepoList,
   loadRepos,
+  loadTaskWorktrees,
   removeTaskWorktreeByPath,
   upsertTaskWorktree,
 } from "./metadata.js";
@@ -167,6 +169,21 @@ function getActiveRuntimeSessionIdsByKey(): Map<string, string> {
     }
   }
   return idsByKey;
+}
+
+function getActiveRuntimeSessionsByTaskWorktreeId(): Map<string, ActiveRuntimeSessionListItem> {
+  const sessionsByTaskWorktreeId = new Map<string, ActiveRuntimeSessionListItem>();
+  for (const [runtimeSessionId, info] of sessionRuntimeMap) {
+    if (!info.taskWorktreeId) {
+      continue;
+    }
+    sessionsByTaskWorktreeId.set(info.taskWorktreeId, {
+      runtimeSessionId,
+      provider: info.provider,
+      providerSessionId: info.providerSessionId,
+    });
+  }
+  return sessionsByTaskWorktreeId;
 }
 
 function appendStartupOutput(existing: string, chunk: string): string {
@@ -504,47 +521,32 @@ function buildRuntimeSessionSelection(runtimeSessionId: string): RuntimeSessionS
   return { runtimeSessionId };
 }
 
-async function findWorktreeSessionSelection(
+function findWorktreeSessionSelection(
   taskWorktreeId: string,
   providerSessionKey: string,
-): Promise<WorktreeSessionSelection | null> {
-  const previewsByKey = await loadStoredSessionPreviews();
-  const repos = await loadRepoList(getActiveRuntimeSessionIdsByKey(), undefined, previewsByKey);
-  for (const repo of repos) {
-    for (const taskWorktree of repo.taskWorktrees) {
-      if (taskWorktree.taskWorktreeId !== taskWorktreeId) {
-        continue;
-      }
-      const candidateSessions = [
-        taskWorktree.primarySession,
-        ...taskWorktree.suggestedSessions.map((suggestedSession) => ({
-          ...suggestedSession,
-          providerSessionKey: toSessionKey(
-            suggestedSession.provider,
-            suggestedSession.providerSessionId,
-          ),
-          activeRuntimeSessionId: null,
-          state: "inactive" as const,
-          preview: previewsByKey.get(
-            toSessionKey(suggestedSession.provider, suggestedSession.providerSessionId),
-          ) ?? "",
-        })),
-      ].filter((session) => session !== undefined);
-      const worktreeSession = candidateSessions.find(
-        (session) => session.providerSessionKey === providerSessionKey,
-      );
-      if (!worktreeSession) {
-        return null;
-      }
-      return {
-        activeRuntimeSessionId: worktreeSession.activeRuntimeSessionId,
-        provider: worktreeSession.provider,
-        providerSessionId: worktreeSession.providerSessionId,
-        project: taskWorktree.worktreePath,
-      };
-    }
+): WorktreeSessionSelection | null {
+  const taskWorktree = loadTaskWorktrees().find(
+    (entry) => entry.taskWorktreeId === taskWorktreeId,
+  );
+  const primarySession = taskWorktree?.primarySession;
+  if (!taskWorktree || !primarySession) {
+    return null;
   }
-  return null;
+
+  const primarySessionKey = toSessionKey(
+    primarySession.provider,
+    primarySession.providerSessionId,
+  );
+  if (primarySessionKey !== providerSessionKey) {
+    return null;
+  }
+
+  return {
+    activeRuntimeSessionId: getActiveRuntimeSessionIdsByKey().get(primarySessionKey) ?? null,
+    provider: primarySession.provider,
+    providerSessionId: primarySession.providerSessionId,
+    project: taskWorktree.worktreePath,
+  };
 }
 
 async function startSession(
@@ -617,7 +619,12 @@ app.whenReady().then(() => {
 
   ipcMain.handle("metadata:listRepos", async () => {
     const previewsByKey = await loadStoredSessionPreviews();
-    return loadRepoList(getActiveRuntimeSessionIdsByKey(), undefined, previewsByKey);
+    return loadRepoList(
+      getActiveRuntimeSessionIdsByKey(),
+      undefined,
+      previewsByKey,
+      getActiveRuntimeSessionsByTaskWorktreeId(),
+    );
   });
 
   ipcMain.handle("providers:list", () => {

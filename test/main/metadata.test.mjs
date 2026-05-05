@@ -140,7 +140,6 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
           name: "task-a",
           primarySession: {
             provider: "codex",
-            providerSessionId: "codex-1",
             providerSessionKey: toSessionKey("codex", "codex-1"),
             activeRuntimeSessionId: null,
             state: "inactive",
@@ -215,6 +214,51 @@ test("loadRepoList は active session key と一致する primary を active と
   assert.equal(taskWorktrees[1].primarySession.providerSessionKey, toSessionKey("claude", "claude-1"));
   assert.equal(taskWorktrees[1].primarySession.activeRuntimeSessionId, null);
   assert.equal(taskWorktrees[1].primarySession.preview, "");
+});
+
+test("loadRepoList は metadata primary がなくても active runtime session を primary として返す", async () => {
+  seed({
+    repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
+    taskWorktrees: [
+      {
+        taskWorktreeId: "wt-1",
+        repoId: "repo-1",
+        worktreePath: "/tmp/repo-a/.yuru/worktrees/task-a",
+      },
+    ],
+  });
+  const listGitWorktrees = listGitWorktreesFrom(
+    new Map([
+      [
+        "/tmp/repo-a",
+        [{ path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a" }],
+      ],
+    ]),
+  );
+
+  const result = await loadRepoList(
+    undefined,
+    listGitWorktrees,
+    undefined,
+    new Map([
+      [
+        "wt-1",
+        {
+          runtimeSessionId: "runtime-1",
+          provider: "codex",
+          providerSessionId: null,
+        },
+      ],
+    ]),
+  );
+
+  assert.deepEqual(result[0].taskWorktrees[0].primarySession, {
+    provider: "codex",
+    providerSessionKey: null,
+    activeRuntimeSessionId: "runtime-1",
+    state: "active",
+    preview: "",
+  });
 });
 
 test("loadRepoList は primary session の preview を返す", async () => {

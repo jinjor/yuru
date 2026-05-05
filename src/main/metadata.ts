@@ -14,6 +14,12 @@ import { listWorktrees, type WorktreeInfo } from "./git.js";
 
 type ListWorktrees = (repoPath: string) => Promise<readonly WorktreeInfo[]>;
 
+export interface ActiveRuntimeSessionListItem {
+  runtimeSessionId: RuntimeSessionId;
+  provider: SessionProvider;
+  providerSessionId: string | null;
+}
+
 export function loadMetadata(): YuruMetadata {
   const metadataPath = getMetadataPath();
   if (!fs.existsSync(metadataPath)) {
@@ -30,6 +36,7 @@ export async function loadRepoList(
   activeRuntimeSessionIdsByKey?: ReadonlyMap<string, RuntimeSessionId>,
   listGitWorktrees: ListWorktrees = listWorktrees,
   primarySessionPreviewsByKey?: ReadonlyMap<string, string>,
+  activeRuntimeSessionsByTaskWorktreeId?: ReadonlyMap<string, ActiveRuntimeSessionListItem>,
 ): Promise<RepoListItem[]> {
   const metadata = loadMetadata();
   return Promise.all(
@@ -48,6 +55,7 @@ export async function loadRepoList(
           metadataByPath.get(toWorktreePathKey(gitWorktree.path)),
           activeRuntimeSessionIdsByKey,
           primarySessionPreviewsByKey,
+          activeRuntimeSessionsByTaskWorktreeId,
         ),
       );
 
@@ -242,7 +250,9 @@ function toTaskWorktreeListItem(
   metadataEntry: TaskWorktreeMetadata | undefined,
   activeRuntimeSessionIdsByKey: ReadonlyMap<string, RuntimeSessionId> | undefined,
   primarySessionPreviewsByKey: ReadonlyMap<string, string> | undefined,
+  activeRuntimeSessionsByTaskWorktreeId: ReadonlyMap<string, ActiveRuntimeSessionListItem> | undefined,
 ): TaskWorktreeListItem {
+  const taskWorktreeId = metadataEntry?.taskWorktreeId ?? `git:${repoId}:${worktreePath}`;
   const primarySession = metadataEntry?.primarySession;
   const primarySessionKey = primarySession
     ? toSessionKey(primarySession.provider, primarySession.providerSessionId)
@@ -250,19 +260,33 @@ function toTaskWorktreeListItem(
   const activeRuntimeSessionId = primarySessionKey
     ? activeRuntimeSessionIdsByKey?.get(primarySessionKey) ?? null
     : null;
+  const activeRuntimeSession = activeRuntimeSessionsByTaskWorktreeId?.get(taskWorktreeId);
+  const activeRuntimeSessionKey = activeRuntimeSession?.providerSessionId
+    ? toSessionKey(activeRuntimeSession.provider, activeRuntimeSession.providerSessionId)
+    : null;
 
   return {
-    taskWorktreeId: metadataEntry?.taskWorktreeId ?? `git:${repoId}:${worktreePath}`,
+    taskWorktreeId,
     worktreePath,
     name: path.basename(worktreePath),
     primarySession: primarySession && primarySessionKey
       ? {
-          ...primarySession,
+          provider: primarySession.provider,
           providerSessionKey: primarySessionKey,
           activeRuntimeSessionId,
           state: activeRuntimeSessionId ? "active" : "inactive",
           preview: primarySessionPreviewsByKey?.get(primarySessionKey) ?? "",
         }
+      : activeRuntimeSession
+        ? {
+            provider: activeRuntimeSession.provider,
+            providerSessionKey: activeRuntimeSessionKey,
+            activeRuntimeSessionId: activeRuntimeSession.runtimeSessionId,
+            state: "active",
+            preview: activeRuntimeSessionKey
+              ? primarySessionPreviewsByKey?.get(activeRuntimeSessionKey) ?? ""
+              : "",
+          }
       : undefined,
     suggestedSessions: [],
   };

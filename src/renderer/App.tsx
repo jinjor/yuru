@@ -89,7 +89,7 @@ export function App() {
     [selectedRuntimeSessionId, sidebarWidth],
   );
 
-  const handleSelectPrimarySession = useCallback(
+  const handleResumePrimarySession = useCallback(
     async (taskWorktreeId: string, providerSessionKey: string): Promise<void> => {
       const requestId = ++resumeRequestRef.current;
       const result = await window.electronAPI.selectWorktreeSession(
@@ -145,7 +145,8 @@ export function App() {
               setWorktreeError(null);
               setWorktreeTarget(repoPath);
             }}
-            onSelectPrimarySession={handleSelectPrimarySession}
+            onSelectRuntimeSession={setSelectedRuntimeSessionId}
+            onResumePrimarySession={handleResumePrimarySession}
           />
         </div>
       </aside>

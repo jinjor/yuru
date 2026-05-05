@@ -7,7 +7,8 @@ interface RepoListProps {
   providers: AgentDefinition[];
   selectedRuntimeSessionId: string | null;
   onCreateWorktreeSession: (repoPath: string) => void;
-  onSelectPrimarySession: (taskWorktreeId: string, providerSessionKey: string) => void;
+  onSelectRuntimeSession: (runtimeSessionId: string) => void;
+  onResumePrimarySession: (taskWorktreeId: string, providerSessionKey: string) => void;
 }
 
 export function RepoList({
@@ -15,7 +16,8 @@ export function RepoList({
   providers,
   selectedRuntimeSessionId,
   onCreateWorktreeSession,
-  onSelectPrimarySession,
+  onSelectRuntimeSession,
+  onResumePrimarySession,
 }: RepoListProps) {
   if (repos.length === 0) {
     return <div className="repo-list-empty">No repositories</div>;
@@ -60,17 +62,26 @@ export function RepoList({
                 }
                 const preview = primarySession.preview || "(no messages)";
                 const providerName = providerLabel(primarySession.provider);
+                const isSelected =
+                  selectedRuntimeSessionId !== null &&
+                  selectedRuntimeSessionId === primarySession.activeRuntimeSessionId;
                 return (
                   <button
                     key={taskWorktree.taskWorktreeId}
                     type="button"
-                    className={`repo-task-worktree-row ${selectedRuntimeSessionId === primarySession.activeRuntimeSessionId ? "selected" : ""}`}
-                    onClick={() =>
-                      onSelectPrimarySession(
-                        taskWorktree.taskWorktreeId,
-                        primarySession.providerSessionKey,
-                      )
-                    }
+                    className={`repo-task-worktree-row ${isSelected ? "selected" : ""}`}
+                    onClick={() => {
+                      if (primarySession.activeRuntimeSessionId) {
+                        onSelectRuntimeSession(primarySession.activeRuntimeSessionId);
+                        return;
+                      }
+                      if (primarySession.providerSessionKey) {
+                        onResumePrimarySession(
+                          taskWorktree.taskWorktreeId,
+                          primarySession.providerSessionKey,
+                        );
+                      }
+                    }}
                     title={taskWorktree.worktreePath}
                     aria-label={`Resume primary session for ${taskWorktree.name}`}
                   >
