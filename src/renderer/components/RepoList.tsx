@@ -7,7 +7,7 @@ interface RepoListProps {
   providers: AgentDefinition[];
   selectedPrimarySessionKey: string | null;
   onCreateWorktreeSession: (repoPath: string) => void;
-  onSelectPrimarySession: (repo: RepoListItem, taskWorktree: TaskWorktreeListItem) => void;
+  onSelectPrimarySession: (taskWorktreeId: string) => void;
 }
 
 export function RepoList({
@@ -65,7 +65,7 @@ export function RepoList({
                     key={taskWorktree.taskWorktreeId}
                     type="button"
                     className={`repo-task-worktree-row ${selectedPrimarySessionKey === primarySession.providerSessionKey ? "selected" : ""}`}
-                    onClick={() => onSelectPrimarySession(repo, taskWorktree)}
+                    onClick={() => onSelectPrimarySession(taskWorktree.taskWorktreeId)}
                     title={taskWorktree.worktreePath}
                     aria-label={`Resume primary session for ${taskWorktree.name}`}
                   >

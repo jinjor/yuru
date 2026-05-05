@@ -39,6 +39,21 @@ function sessionFromPrimarySession(
   };
 }
 
+function findTaskWorktreeById(
+  repos: readonly RepoListItem[],
+  taskWorktreeId: string,
+): { repo: RepoListItem; taskWorktree: TaskWorktreeListItem } | null {
+  for (const repo of repos) {
+    const taskWorktree = repo.taskWorktrees.find(
+      (entry) => entry.taskWorktreeId === taskWorktreeId,
+    );
+    if (taskWorktree) {
+      return { repo, taskWorktree };
+    }
+  }
+  return null;
+}
+
 function findPrimarySessionByKey(
   repos: readonly RepoListItem[],
   primarySessionKey: string,
@@ -177,7 +192,12 @@ export function App() {
   );
 
   const handleSelectPrimarySession = useCallback(
-    async (repo: RepoListItem, taskWorktree: TaskWorktreeListItem): Promise<void> => {
+    async (taskWorktreeId: string): Promise<void> => {
+      const target = findTaskWorktreeById(repos, taskWorktreeId);
+      if (!target) {
+        return;
+      }
+      const { repo, taskWorktree } = target;
       const primarySession = taskWorktree.primarySession;
       if (!primarySession) {
         return;
@@ -202,7 +222,7 @@ export function App() {
       });
       refreshRepos();
     },
-    [refreshRepos],
+    [refreshRepos, repos],
   );
 
   const handleCreateWorktreeSession = useCallback(
