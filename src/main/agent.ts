@@ -1,5 +1,5 @@
 import * as pty from "node-pty";
-import type { ResumableSession, SessionProvider } from "../shared/session.js";
+import type { SessionProvider } from "../shared/session.js";
 import type { AgentDefinition } from "../shared/agent.js";
 
 export interface SessionSnapshot {
@@ -51,6 +51,12 @@ export interface WorktreeContext {
   branchName: string;
 }
 
+export interface ResumeSessionTarget {
+  provider: SessionProvider;
+  providerSessionId: string;
+  project: string;
+}
+
 export interface SessionProviderAdapter {
   definition: AgentDefinition;
   command: string;
@@ -58,7 +64,7 @@ export interface SessionProviderAdapter {
   loadStoredSessions(): Promise<SessionSnapshot[]>;
   hasStoredSession(providerSessionId: string): Promise<boolean>;
   createNewLaunch(repoPath: string): Promise<LaunchRequest>;
-  createResumeLaunch(session: ResumableSession): Promise<LaunchRequest>;
+  createResumeLaunch(session: ResumeSessionTarget): Promise<LaunchRequest>;
   createWorktreeLaunch(context: WorktreeContext): Promise<LaunchRequest>;
   prepareWorktree(context: WorktreeContext): Promise<void>;
   finalizeWorktree(context: WorktreeContext): Promise<void>;

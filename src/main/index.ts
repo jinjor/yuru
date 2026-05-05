@@ -45,7 +45,6 @@ import {
   type Result,
 } from "../shared/ipc.js";
 import {
-  type ResumableSession,
   type Session,
   type SessionProvider,
   toRuntimeSessionKey,
@@ -85,6 +84,16 @@ app.setName(APP_NAME);
 interface StartedSession {
   runtimeSessionId: string;
   providerSessionId: string | null;
+}
+
+interface WorktreeSessionSelection {
+  activeRuntimeSessionId: string | null;
+  provider: SessionProvider;
+  providerSessionId: string;
+  project: string;
+  projectName: string;
+  repoPath: string;
+  lastMessage: string;
 }
 
 function ok<T>(data: T): Result<T> {
@@ -429,6 +438,10 @@ function registerRuntimeSession(
   });
 }
 
+function createRuntimeSessionId(provider: SessionProvider, pending: PendingSession): string {
+  return toRuntimeSessionKey(provider, pending.startedAt);
+}
+
 function updateRuntimeSessionProviderSessionId(runtimeSessionId: string, providerSessionId: string): void {
   const runtime = sessionRuntimeMap.get(runtimeSessionId);
   if (runtime) {
@@ -513,10 +526,27 @@ function buildActiveSession(params: {
   };
 }
 
-async function buildWorktreeSession(
+function buildSelectedWorktreeSession(
+  selection: WorktreeSessionSelection,
+  runtimeSessionId: string,
+): Session {
+  return {
+    id: runtimeSessionId,
+    provider: selection.provider,
+    providerSessionId: selection.providerSessionId,
+    project: selection.project,
+    projectName: selection.projectName,
+    repoPath: selection.repoPath,
+    lastMessage: selection.lastMessage,
+    timestamp: Date.now(),
+    state: "active",
+  };
+}
+
+async function findWorktreeSessionSelection(
   taskWorktreeId: string,
   providerSessionKey: string,
-): Promise<ResumableSession | null> {
+): Promise<WorktreeSessionSelection | null> {
   const previewsByKey = await loadStoredSessionPreviews();
   const repos = await loadRepoList(getActiveRuntimeSessionIdsByKey(), undefined, previewsByKey);
   for (const repo of repos) {
@@ -546,15 +576,13 @@ async function buildWorktreeSession(
         return null;
       }
       return {
-        id: worktreeSession.activeRuntimeSessionId ?? worktreeSession.providerSessionKey,
+        activeRuntimeSessionId: worktreeSession.activeRuntimeSessionId,
         provider: worktreeSession.provider,
         providerSessionId: worktreeSession.providerSessionId,
         project: taskWorktree.worktreePath,
         projectName: taskWorktree.name,
         repoPath: repo.repoPath,
         lastMessage: worktreeSession.preview,
-        timestamp: Date.now(),
-        state: worktreeSession.state,
       };
     }
   }
@@ -567,8 +595,9 @@ async function startSession(
   pending: PendingSession,
   taskWorktreeId?: string,
 ): Promise<StartedSession> {
+  const runtimeSessionId = createRuntimeSessionId(provider, pending);
+
   if (providerAdapter.resolvesSessionIdLazily) {
-    const runtimeSessionId = toRuntimeSessionKey(provider, pending.startedAt);
     registerRuntimeSession(runtimeSessionId, pending, null, taskWorktreeId);
     void resolveLazySessionId(providerAdapter, pending, runtimeSessionId);
     return {
@@ -578,7 +607,6 @@ async function startSession(
   }
 
   const providerSessionId = await providerAdapter.waitForSessionId(pending);
-  const runtimeSessionId = toSessionKey(provider, providerSessionId);
   registerRuntimeSession(runtimeSessionId, pending, providerSessionId, taskWorktreeId);
   return {
     runtimeSessionId,
@@ -683,41 +711,42 @@ app.whenReady().then(() => {
   ipcMain.handle(
     "worktreeSession:select",
     async (_event, taskWorktreeId: string, providerSessionKey: string) => {
-      const session = await buildWorktreeSession(taskWorktreeId, providerSessionKey);
-      if (!session) {
+      const selection = await findWorktreeSessionSelection(taskWorktreeId, providerSessionKey);
+      if (!selection) {
         return failAndReport<Session>({
           code: "unknown",
           message: "This worktree session no longer exists.",
         });
       }
-      if (ptyProcesses.has(session.id)) {
-        return ok(session);
+      if (selection.activeRuntimeSessionId && ptyProcesses.has(selection.activeRuntimeSessionId)) {
+        return ok(buildSelectedWorktreeSession(selection, selection.activeRuntimeSessionId));
       }
-      const providerAdapter = getSessionProvider(session.provider);
+      const providerAdapter = getSessionProvider(selection.provider);
       let pending: PendingSession | null = null;
       try {
-        if (!(await providerAdapter.hasStoredSession(session.providerSessionId))) {
-          detachPrimarySessionByPath(session.project, {
-            provider: session.provider,
-            providerSessionId: session.providerSessionId,
+        if (!(await providerAdapter.hasStoredSession(selection.providerSessionId))) {
+          detachPrimarySessionByPath(selection.project, {
+            provider: selection.provider,
+            providerSessionId: selection.providerSessionId,
           });
           emitSessionsStateChanged();
           return failAndReport<Session>({
             code: "command_failed",
             message: "This session no longer exists.",
-            detail: `${session.provider} session ${session.providerSessionId} was not found in saved conversations.`,
+            detail: `${selection.provider} session ${selection.providerSessionId} was not found in saved conversations.`,
           });
         }
 
         pending = launchPendingSession(
           providerAdapter,
-          await providerAdapter.createResumeLaunch(session),
+          await providerAdapter.createResumeLaunch(selection),
           "Failed to resume session",
         );
-        await waitForResumeReady(providerAdapter, pending, session.providerSessionId);
-        registerRuntimeSession(session.id, pending, session.providerSessionId);
+        await waitForResumeReady(providerAdapter, pending, selection.providerSessionId);
+        const runtimeSessionId = createRuntimeSessionId(selection.provider, pending);
+        registerRuntimeSession(runtimeSessionId, pending, selection.providerSessionId);
         emitSessionsStateChanged();
-        return ok(session);
+        return ok(buildSelectedWorktreeSession(selection, runtimeSessionId));
       } catch (error) {
         if (pending && !pending.exited) {
           pending.proc.kill();
