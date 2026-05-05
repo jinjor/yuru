@@ -39,6 +39,7 @@ This is for checking behavior changes. Documentation-only edits do not need a re
 - 状態の居場所を考えること。
   - single source of truth を重視すること。
   - ある状態変化が別の状態変化を生む時、後者はキャッシュであり、不要なら削除すべきである。
+  - selected な状態は、その選択を一意に表す ID だけを持つことを基本にする。選択対象のオブジェクト全体を state に持たないこと。
 
 - 嫌なコードの臭いを感じとり、設計の改善で解決できないかを考えること。
   - 例
@@ -48,6 +49,8 @@ This is for checking behavior changes. Documentation-only edits do not need a re
     - requestAnimationFrame, setTimeout の使用
     - deps list の一部をあえて抜いている
     - 抽象度の高いレイヤーに具体的すぎるロジックが書かれている
+    - `selectedXXX` が ID ではなくオブジェクトになっている
+    - 選択時のコールバックが ID ではなくオブジェクトを渡している
   - 上記のようなパターンを避けることが目的なのではなく、これらの現象を生む設計の歪みを修正するのが目的。これらを避けるために設計が汚くなったら本末転倒。
 
 - コンポーネントを適切な粒度で切り分けること。
