@@ -76,7 +76,10 @@ export interface ElectronAPI {
   getErrors: () => Promise<AppErrorNotice[]>;
   dismissError: (id: string) => Promise<void>;
   clearErrors: () => Promise<void>;
-  selectSession: (session: Session) => Promise<Result<boolean>>;
+  selectWorktreeSession: (
+    taskWorktreeId: string,
+    providerSessionKey: string,
+  ) => Promise<Result<Session>>;
   createSession: (provider: SessionProvider, repoPath: string) => Promise<Result<Session>>;
   createWorktreeSession: (
     provider: SessionProvider,

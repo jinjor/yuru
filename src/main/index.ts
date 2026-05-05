@@ -45,7 +45,7 @@ import {
   type Result,
 } from "../shared/ipc.js";
 import {
-  isResumableSession,
+  type ResumableSession,
   type Session,
   type SessionProvider,
   toRuntimeSessionKey,
@@ -513,6 +513,54 @@ function buildActiveSession(params: {
   };
 }
 
+async function buildWorktreeSession(
+  taskWorktreeId: string,
+  providerSessionKey: string,
+): Promise<ResumableSession | null> {
+  const previewsByKey = await loadStoredSessionPreviews();
+  const repos = await loadRepoList(getActiveSessionIdsByKey(), undefined, previewsByKey);
+  for (const repo of repos) {
+    for (const taskWorktree of repo.taskWorktrees) {
+      if (taskWorktree.taskWorktreeId !== taskWorktreeId) {
+        continue;
+      }
+      const candidateSessions = [
+        taskWorktree.primarySession,
+        ...taskWorktree.suggestedSessions.map((suggestedSession) => ({
+          ...suggestedSession,
+          providerSessionKey: toSessionKey(
+            suggestedSession.provider,
+            suggestedSession.providerSessionId,
+          ),
+          activeRuntimeSessionId: null,
+          state: "inactive" as const,
+          preview: previewsByKey.get(
+            toSessionKey(suggestedSession.provider, suggestedSession.providerSessionId),
+          ) ?? "",
+        })),
+      ].filter((session) => session !== undefined);
+      const worktreeSession = candidateSessions.find(
+        (session) => session.providerSessionKey === providerSessionKey,
+      );
+      if (!worktreeSession) {
+        return null;
+      }
+      return {
+        id: worktreeSession.activeRuntimeSessionId ?? worktreeSession.providerSessionKey,
+        provider: worktreeSession.provider,
+        providerSessionId: worktreeSession.providerSessionId,
+        project: taskWorktree.worktreePath,
+        projectName: taskWorktree.name,
+        repoPath: repo.repoPath,
+        lastMessage: worktreeSession.preview,
+        timestamp: Date.now(),
+        state: worktreeSession.state,
+      };
+    }
+  }
+  return null;
+}
+
 async function startSession(
   provider: SessionProvider,
   providerAdapter: SessionProviderAdapter,
@@ -632,57 +680,55 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle("session:select", async (_event, session: Session) => {
-    if (session.state === "archived") {
-      return failAndReport<boolean>({
-        code: "unknown",
-        message: "Archived sessions cannot be resumed.",
-      });
-    }
-    if (!isResumableSession(session)) {
-      return failAndReport<boolean>({
-        code: "unknown",
-        message: "This session cannot be resumed.",
-      });
-    }
-    if (ptyProcesses.has(session.id)) {
-      return ok(true);
-    }
-    const providerAdapter = getSessionProvider(session.provider);
-    let pending: PendingSession | null = null;
-    try {
-      if (!(await providerAdapter.hasStoredSession(session.providerSessionId))) {
-        detachPrimarySessionByPath(session.project, {
-          provider: session.provider,
-          providerSessionId: session.providerSessionId,
-        });
-        emitSessionsStateChanged();
-        return failAndReport<boolean>({
-          code: "command_failed",
-          message: "This session no longer exists.",
-          detail: `${session.provider} session ${session.providerSessionId} was not found in saved conversations.`,
+  ipcMain.handle(
+    "worktreeSession:select",
+    async (_event, taskWorktreeId: string, providerSessionKey: string) => {
+      const session = await buildWorktreeSession(taskWorktreeId, providerSessionKey);
+      if (!session) {
+        return failAndReport<Session>({
+          code: "unknown",
+          message: "This worktree session no longer exists.",
         });
       }
+      if (ptyProcesses.has(session.id)) {
+        return ok(session);
+      }
+      const providerAdapter = getSessionProvider(session.provider);
+      let pending: PendingSession | null = null;
+      try {
+        if (!(await providerAdapter.hasStoredSession(session.providerSessionId))) {
+          detachPrimarySessionByPath(session.project, {
+            provider: session.provider,
+            providerSessionId: session.providerSessionId,
+          });
+          emitSessionsStateChanged();
+          return failAndReport<Session>({
+            code: "command_failed",
+            message: "This session no longer exists.",
+            detail: `${session.provider} session ${session.providerSessionId} was not found in saved conversations.`,
+          });
+        }
 
-      pending = launchPendingSession(
-        providerAdapter,
-        await providerAdapter.createResumeLaunch(session),
-        "Failed to resume session",
-      );
-      await waitForResumeReady(providerAdapter, pending, session.providerSessionId);
-      registerSession(session.id, pending, session.providerSessionId);
-      emitSessionsStateChanged();
-      return ok(true);
-    } catch (error) {
-      if (pending && !pending.exited) {
-        pending.proc.kill();
+        pending = launchPendingSession(
+          providerAdapter,
+          await providerAdapter.createResumeLaunch(session),
+          "Failed to resume session",
+        );
+        await waitForResumeReady(providerAdapter, pending, session.providerSessionId);
+        registerSession(session.id, pending, session.providerSessionId);
+        emitSessionsStateChanged();
+        return ok(session);
+      } catch (error) {
+        if (pending && !pending.exited) {
+          pending.proc.kill();
+        }
+        const appError = isAppError(error)
+          ? error
+          : toAppError(error, { command: providerAdapter.command });
+        return pending?.startupFailureReported ? fail<Session>(appError) : failAndReport<Session>(appError);
       }
-      const appError = isAppError(error)
-        ? error
-        : toAppError(error, { command: providerAdapter.command });
-      return pending?.startupFailureReported ? fail<boolean>(appError) : failAndReport<boolean>(appError);
-    }
-  });
+    },
+  );
 
   ipcMain.handle("session:create", async (_event, provider: SessionProvider, repoPath: string) => {
     const providerAdapter = getSessionProvider(provider);

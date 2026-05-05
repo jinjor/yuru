@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { ElectronAPI } from "../shared/ipc.js";
-import type { Session, SessionProvider } from "../shared/session.js";
+import type { SessionProvider } from "../shared/session.js";
 
 const electronAPI: ElectronAPI = {
   getSessions: () => ipcRenderer.invoke("sessions:list"),
@@ -9,7 +9,8 @@ const electronAPI: ElectronAPI = {
   getErrors: () => ipcRenderer.invoke("errors:list"),
   dismissError: (id: string) => ipcRenderer.invoke("errors:dismiss", id),
   clearErrors: () => ipcRenderer.invoke("errors:clear"),
-  selectSession: (session: Session) => ipcRenderer.invoke("session:select", session),
+  selectWorktreeSession: (taskWorktreeId: string, providerSessionKey: string) =>
+    ipcRenderer.invoke("worktreeSession:select", taskWorktreeId, providerSessionKey),
   createSession: (provider: SessionProvider, repoPath: string) =>
     ipcRenderer.invoke("session:create", provider, repoPath),
   createWorktreeSession: (provider: SessionProvider, repoPath: string, branchName: string) =>

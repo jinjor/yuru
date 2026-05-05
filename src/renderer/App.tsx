@@ -1,7 +1,7 @@
 import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
 import type { AgentDefinition } from "../shared/agent";
-import type { PrimarySessionListItem, RepoListItem, TaskWorktreeListItem } from "../shared/metadata";
+import type { PrimarySessionListItem, RepoListItem } from "../shared/metadata";
 import { type Session, type SessionProvider, toSessionKey } from "../shared/session";
 import { BranchNameInput } from "./components/BranchNameInput";
 import { RepoList } from "./components/RepoList";
@@ -15,43 +15,6 @@ interface SelectedSession {
 
 function sessionIdForPrimarySession(primarySession: PrimarySessionListItem): string {
   return primarySession.activeRuntimeSessionId ?? primarySession.providerSessionKey;
-}
-
-function sessionFromPrimarySession(
-  repo: RepoListItem,
-  taskWorktree: TaskWorktreeListItem,
-): Session | null {
-  const primarySession = taskWorktree.primarySession;
-  if (!primarySession) {
-    return null;
-  }
-
-  return {
-    id: sessionIdForPrimarySession(primarySession),
-    provider: primarySession.provider,
-    providerSessionId: primarySession.providerSessionId,
-    project: taskWorktree.worktreePath,
-    projectName: taskWorktree.name,
-    repoPath: repo.repoPath,
-    lastMessage: primarySession.preview,
-    timestamp: Date.now(),
-    state: primarySession.state,
-  };
-}
-
-function findTaskWorktreeById(
-  repos: readonly RepoListItem[],
-  taskWorktreeId: string,
-): { repo: RepoListItem; taskWorktree: TaskWorktreeListItem } | null {
-  for (const repo of repos) {
-    const taskWorktree = repo.taskWorktrees.find(
-      (entry) => entry.taskWorktreeId === taskWorktreeId,
-    );
-    if (taskWorktree) {
-      return { repo, taskWorktree };
-    }
-  }
-  return null;
 }
 
 function findPrimarySessionByKey(
@@ -192,23 +155,12 @@ export function App() {
   );
 
   const handleSelectPrimarySession = useCallback(
-    async (taskWorktreeId: string): Promise<void> => {
-      const target = findTaskWorktreeById(repos, taskWorktreeId);
-      if (!target) {
-        return;
-      }
-      const { repo, taskWorktree } = target;
-      const primarySession = taskWorktree.primarySession;
-      if (!primarySession) {
-        return;
-      }
-      const session = sessionFromPrimarySession(repo, taskWorktree);
-      if (!session) {
-        return;
-      }
-
+    async (taskWorktreeId: string, providerSessionKey: string): Promise<void> => {
       const requestId = ++resumeRequestRef.current;
-      const result = await window.electronAPI.selectSession(session);
+      const result = await window.electronAPI.selectWorktreeSession(
+        taskWorktreeId,
+        providerSessionKey,
+      );
       if (resumeRequestRef.current !== requestId) {
         return;
       }
@@ -216,13 +168,14 @@ export function App() {
         return;
       }
 
+      const session = result.data;
       setSelectedSession({
         sessionId: session.id,
-        primarySessionKey: primarySession.providerSessionKey,
+        primarySessionKey: providerSessionKey,
       });
       refreshRepos();
     },
-    [refreshRepos, repos],
+    [refreshRepos],
   );
 
   const handleCreateWorktreeSession = useCallback(
