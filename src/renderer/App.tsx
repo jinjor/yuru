@@ -106,19 +106,19 @@ export function App() {
   const resumeRequestRef = useRef(0);
   const [repos, setRepos] = useState<RepoListItem[]>([]);
   const [availableProviders, setAvailableProviders] = useState<AgentDefinition[]>([]);
-  const [activeSession, setActiveSession] = useState<SelectedSession | null>(null);
+  const [selectedSession, setSelectedSession] = useState<SelectedSession | null>(null);
   const [worktreeTarget, setWorktreeTarget] = useState<string | null>(null);
   const [worktreeError, setWorktreeError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(260);
-  const activeSessionId = activeSession?.sessionId ?? null;
-  const selectedPrimarySessionKey = activeSession?.primarySessionKey ?? null;
+  const selectedSessionId = selectedSession?.sessionId ?? null;
+  const selectedPrimarySessionKey = selectedSession?.primarySessionKey ?? null;
 
   const refreshRepos = useCallback((): void => {
     window.electronAPI
       .getRepos()
       .then((nextRepos) => {
         setRepos(nextRepos);
-        setActiveSession((prev) => reconcileSelectedSession(nextRepos, prev));
+        setSelectedSession((prev) => reconcileSelectedSession(nextRepos, prev));
       })
       .catch((error) => {
         console.error("Failed to load repos.", error);
@@ -161,7 +161,7 @@ export function App() {
       document.body.style.userSelect = "none";
 
       const handleMouseMove = (moveEvent: globalThis.MouseEvent): void => {
-        const reservedSessionViewWidth = activeSessionId ? 520 : 640;
+        const reservedSessionViewWidth = selectedSessionId ? 520 : 640;
         const maxWidth = Math.max(220, appWidth - reservedSessionViewWidth);
         setSidebarWidth(clamp(startWidth + moveEvent.clientX - startX, 220, maxWidth));
       };
@@ -176,7 +176,7 @@ export function App() {
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("mouseup", stopDragging);
     },
-    [activeSessionId, sidebarWidth],
+    [selectedSessionId, sidebarWidth],
   );
 
   const handleSelectPrimarySession = useCallback(
@@ -199,7 +199,7 @@ export function App() {
         return;
       }
 
-      setActiveSession({
+      setSelectedSession({
         sessionId: session.id,
         primarySessionKey: primarySession.providerSessionKey,
       });
@@ -223,7 +223,7 @@ export function App() {
       }
 
       const session = result.data;
-      setActiveSession({
+      setSelectedSession({
         sessionId: session.id,
         primarySessionKey: session.providerSessionId
           ? toSessionKey(session.provider, session.providerSessionId)
@@ -259,13 +259,13 @@ export function App() {
         onMouseDown={handleSidebarResizeStart}
         aria-hidden="true"
       />
-      {activeSessionId ? (
+      {selectedSessionId ? (
         <SessionView
-          key={activeSessionId}
+          key={selectedSessionId}
           appRef={appRef}
           onOpenExternal={openExternal}
           refreshRepos={refreshRepos}
-          sessionId={activeSessionId}
+          sessionId={selectedSessionId}
           sidebarWidth={sidebarWidth}
         />
       ) : (
