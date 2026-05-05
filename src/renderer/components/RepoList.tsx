@@ -5,7 +5,7 @@ import { providerLabel } from "../utils/session";
 interface RepoListProps {
   repos: RepoListItem[];
   providers: AgentDefinition[];
-  selectedPrimarySessionKey: string | null;
+  selectedRuntimeSessionId: string | null;
   onCreateWorktreeSession: (repoPath: string) => void;
   onSelectPrimarySession: (taskWorktreeId: string, providerSessionKey: string) => void;
 }
@@ -13,7 +13,7 @@ interface RepoListProps {
 export function RepoList({
   repos,
   providers,
-  selectedPrimarySessionKey,
+  selectedRuntimeSessionId,
   onCreateWorktreeSession,
   onSelectPrimarySession,
 }: RepoListProps) {
@@ -64,7 +64,7 @@ export function RepoList({
                   <button
                     key={taskWorktree.taskWorktreeId}
                     type="button"
-                    className={`repo-task-worktree-row ${selectedPrimarySessionKey === primarySession.providerSessionKey ? "selected" : ""}`}
+                    className={`repo-task-worktree-row ${selectedRuntimeSessionId === primarySession.activeRuntimeSessionId ? "selected" : ""}`}
                     onClick={() =>
                       onSelectPrimarySession(
                         taskWorktree.taskWorktreeId,

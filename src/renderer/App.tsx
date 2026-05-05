@@ -1,27 +1,12 @@
 import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
 import type { AgentDefinition } from "../shared/agent";
-import type { PrimarySessionListItem, RepoListItem } from "../shared/metadata";
+import type { RepoListItem } from "../shared/metadata";
 import { type SessionProvider } from "../shared/session";
 import { BranchNameInput } from "./components/BranchNameInput";
 import { RepoList } from "./components/RepoList";
 import { SessionView } from "./components/SessionView";
 import { clamp } from "./utils/layout";
-
-function findPrimarySessionByRuntimeSessionId(
-  repos: readonly RepoListItem[],
-  runtimeSessionId: string,
-): PrimarySessionListItem | null {
-  for (const repo of repos) {
-    for (const taskWorktree of repo.taskWorktrees) {
-      const primarySession = taskWorktree.primarySession;
-      if (primarySession?.activeRuntimeSessionId === runtimeSessionId) {
-        return primarySession;
-      }
-    }
-  }
-  return null;
-}
 
 export function App() {
   const appRef = useRef<HTMLDivElement>(null);
@@ -32,9 +17,6 @@ export function App() {
   const [worktreeTarget, setWorktreeTarget] = useState<string | null>(null);
   const [worktreeError, setWorktreeError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(260);
-  const selectedPrimarySessionKey = selectedRuntimeSessionId
-    ? findPrimarySessionByRuntimeSessionId(repos, selectedRuntimeSessionId)?.providerSessionKey ?? null
-    : null;
 
   const refreshRepos = useCallback((): void => {
     window.electronAPI
@@ -158,7 +140,7 @@ export function App() {
           <RepoList
             repos={repos}
             providers={availableProviders}
-            selectedPrimarySessionKey={selectedPrimarySessionKey}
+            selectedRuntimeSessionId={selectedRuntimeSessionId}
             onCreateWorktreeSession={(repoPath) => {
               setWorktreeError(null);
               setWorktreeTarget(repoPath);
