@@ -19,17 +19,17 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke("worktree:remove", provider, repoPath, worktreePath),
   selectFolder: () => ipcRenderer.invoke("dialog:selectFolder"),
   openExternal: (url: string) => ipcRenderer.invoke("shell:openExternal", url),
-  getGitPathStates: (sessionId: string) => ipcRenderer.invoke("git:pathStates", sessionId),
-  getGitBranchContext: (sessionId: string) => ipcRenderer.invoke("git:branchContext", sessionId),
-  getGitDiffDocument: (sessionId: string, filePath: string) =>
-    ipcRenderer.invoke("git:diffDocument", sessionId, filePath),
-  listFiles: (sessionId: string, relativePath?: string) =>
-    ipcRenderer.invoke("files:list", sessionId, relativePath),
-  listAllFiles: (sessionId: string) => ipcRenderer.invoke("files:listAll", sessionId),
-  resolveRepoFile: (sessionId: string, filePath: string) =>
-    ipcRenderer.invoke("files:resolveRepoFile", sessionId, filePath),
-  syncFileWatchTargets: (sessionId: string, relativePaths: string[]) =>
-    ipcRenderer.invoke("files:syncWatchTargets", sessionId, relativePaths),
+  getGitPathStates: (runtimeSessionId: string) => ipcRenderer.invoke("git:pathStates", runtimeSessionId),
+  getGitBranchContext: (runtimeSessionId: string) => ipcRenderer.invoke("git:branchContext", runtimeSessionId),
+  getGitDiffDocument: (runtimeSessionId: string, filePath: string) =>
+    ipcRenderer.invoke("git:diffDocument", runtimeSessionId, filePath),
+  listFiles: (runtimeSessionId: string, relativePath?: string) =>
+    ipcRenderer.invoke("files:list", runtimeSessionId, relativePath),
+  listAllFiles: (runtimeSessionId: string) => ipcRenderer.invoke("files:listAll", runtimeSessionId),
+  resolveRepoFile: (runtimeSessionId: string, filePath: string) =>
+    ipcRenderer.invoke("files:resolveRepoFile", runtimeSessionId, filePath),
+  syncFileWatchTargets: (runtimeSessionId: string, relativePaths: string[]) =>
+    ipcRenderer.invoke("files:syncWatchTargets", runtimeSessionId, relativePaths),
   onErrorAdded: (callback) =>
     ipcRenderer.on("errors:added", (_event, error) => callback(error)),
   onErrorRemoved: (callback) =>
@@ -41,23 +41,23 @@ const electronAPI: ElectronAPI = {
   onFileTreeChanged: (callback) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
-      sessionId: string,
+      runtimeSessionId: string,
       relativePath: string,
-    ) => callback(sessionId, relativePath);
+    ) => callback(runtimeSessionId, relativePath);
     ipcRenderer.on("files:changed", listener);
     return () => {
       ipcRenderer.removeListener("files:changed", listener);
     };
   },
-  attachPty: (sessionId: string) => ipcRenderer.invoke("pty:attach", sessionId),
-  readyPty: (sessionId: string) => ipcRenderer.invoke("pty:ready", sessionId),
-  detachPty: (sessionId: string) => ipcRenderer.invoke("pty:detach", sessionId),
-  ptyWrite: (sessionId: string, data: string) => ipcRenderer.send("pty:write", sessionId, data),
-  ptyResize: (sessionId: string, cols: number, rows: number) =>
-    ipcRenderer.send("pty:resize", sessionId, cols, rows),
+  attachPty: (runtimeSessionId: string) => ipcRenderer.invoke("pty:attach", runtimeSessionId),
+  readyPty: (runtimeSessionId: string) => ipcRenderer.invoke("pty:ready", runtimeSessionId),
+  detachPty: (runtimeSessionId: string) => ipcRenderer.invoke("pty:detach", runtimeSessionId),
+  ptyWrite: (runtimeSessionId: string, data: string) => ipcRenderer.send("pty:write", runtimeSessionId, data),
+  ptyResize: (runtimeSessionId: string, cols: number, rows: number) =>
+    ipcRenderer.send("pty:resize", runtimeSessionId, cols, rows),
   onPtyData: (callback) => {
-    const listener = (_event: Electron.IpcRendererEvent, sessionId: string, data: string) =>
-      callback(sessionId, data);
+    const listener = (_event: Electron.IpcRendererEvent, runtimeSessionId: string, data: string) =>
+      callback(runtimeSessionId, data);
     ipcRenderer.on("pty:data", listener);
     return () => {
       ipcRenderer.removeListener("pty:data", listener);

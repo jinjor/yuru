@@ -4,7 +4,7 @@ import { resultDataOrNull } from "../utils/result";
 interface FileSearchProps {
   onClose: () => void;
   onSelectFile: (path: string) => void;
-  sessionId: string;
+  runtimeSessionId: string;
 }
 
 interface MatchRange {
@@ -27,7 +27,7 @@ interface ScoredResult {
 
 const MAX_RESULTS = 200;
 
-export function FileSearch({ onClose, onSelectFile, sessionId }: FileSearchProps) {
+export function FileSearch({ onClose, onSelectFile, runtimeSessionId }: FileSearchProps) {
   const [query, setQuery] = useState("");
   const [candidates, setCandidates] = useState<FileCandidate[] | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -36,7 +36,7 @@ export function FileSearch({ onClose, onSelectFile, sessionId }: FileSearchProps
   useEffect(() => {
     let cancelled = false;
     window.electronAPI
-      .listAllFiles(sessionId)
+      .listAllFiles(runtimeSessionId)
       .then((result) => {
         if (cancelled) {
           return;
@@ -47,7 +47,7 @@ export function FileSearch({ onClose, onSelectFile, sessionId }: FileSearchProps
     return () => {
       cancelled = true;
     };
-  }, [sessionId]);
+  }, [runtimeSessionId]);
 
   const results = useMemo(() => {
     if (!candidates || query.trim().length === 0) {

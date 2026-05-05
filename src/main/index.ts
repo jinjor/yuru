@@ -68,11 +68,11 @@ const ptyAttachments = new Map<string, { ready: boolean; pendingChunks: string[]
 const pendingProcesses = new Set<pty.IPty>();
 const sessionRuntimeMap = new Map<string, RuntimeSessionInfo>();
 let worktreeWatcher: WorktreeWatcher | null = null;
-const fileTreeWatcher = new FileTreeWatcher((sessionId, relativePath) => {
+const fileTreeWatcher = new FileTreeWatcher((runtimeSessionId, relativePath) => {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return;
   }
-  mainWindow.webContents.send("files:changed", sessionId, relativePath);
+  mainWindow.webContents.send("files:changed", runtimeSessionId, relativePath);
 });
 const APP_NAME = "Yuru";
 const STARTUP_OUTPUT_LIMIT = 4000;
@@ -83,7 +83,7 @@ const ANSI_ESCAPE_PATTERN = new RegExp(`${ESCAPE_CHARACTER}\\[[0-9;]*[A-Za-z]`, 
 app.setName(APP_NAME);
 
 interface StartedSession {
-  sessionId: string;
+  runtimeSessionId: string;
   providerSessionId: string | null;
 }
 
@@ -148,16 +148,16 @@ function isAppError(error: unknown): error is AppError {
   return typeof maybeError.code === "string" && typeof maybeError.message === "string";
 }
 
-function getWorkingRootForSession(sessionId: string): string | null {
-  const runtime = sessionRuntimeMap.get(sessionId);
+function getWorkingRootForRuntimeSession(runtimeSessionId: string): string | null {
+  const runtime = sessionRuntimeMap.get(runtimeSessionId);
   return runtime?.cwd ?? null;
 }
 
-function getActiveSessionIdsByKey(): Map<string, string> {
+function getActiveRuntimeSessionIdsByKey(): Map<string, string> {
   const idsByKey = new Map<string, string>();
-  for (const [sessionId, info] of sessionRuntimeMap) {
+  for (const [runtimeSessionId, info] of sessionRuntimeMap) {
     if (info.providerSessionId) {
-      idsByKey.set(toSessionKey(info.provider, info.providerSessionId), sessionId);
+      idsByKey.set(toSessionKey(info.provider, info.providerSessionId), runtimeSessionId);
     }
   }
   return idsByKey;
@@ -355,7 +355,7 @@ function launchPendingSession(
     pending.exitCode = exitCode;
     pending.signal = signal;
     console.info("[Yuru] session process exited", {
-      sessionId: pending.runtimeSessionId,
+      runtimeSessionId: pending.runtimeSessionId,
       provider: pending.provider,
       providerSessionId: pending.providerSessionId,
       cwd: pending.sessionCwd,
@@ -409,7 +409,7 @@ async function waitForResumeReady(
   }
 }
 
-function registerSession(
+function registerRuntimeSession(
   runtimeSessionId: string,
   pending: PendingSession,
   providerSessionId: string | null,
@@ -483,24 +483,24 @@ function emitSessionsStateChanged(): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return;
   }
-  const activeSessions: ActiveSessionState[] = Array.from(sessionRuntimeMap, ([sessionId, info]) => ({
-    sessionId,
+  const activeSessions: ActiveSessionState[] = Array.from(sessionRuntimeMap, ([runtimeSessionId, info]) => ({
+    runtimeSessionId,
     cwd: info.cwd,
   }));
   mainWindow.webContents.send("sessions:stateChanged", activeSessions);
 }
 
 function buildActiveSession(params: {
-  sessionId: string;
+  runtimeSessionId: string;
   provider: SessionProvider;
   providerSessionId: string | null;
   project: string;
   repoPath: string;
   worktree?: Session["worktree"];
 }): Session {
-  const { sessionId, provider, providerSessionId, project, repoPath, worktree } = params;
+  const { runtimeSessionId, provider, providerSessionId, project, repoPath, worktree } = params;
   return {
-    id: sessionId,
+    id: runtimeSessionId,
     provider,
     providerSessionId,
     project,
@@ -518,7 +518,7 @@ async function buildWorktreeSession(
   providerSessionKey: string,
 ): Promise<ResumableSession | null> {
   const previewsByKey = await loadStoredSessionPreviews();
-  const repos = await loadRepoList(getActiveSessionIdsByKey(), undefined, previewsByKey);
+  const repos = await loadRepoList(getActiveRuntimeSessionIdsByKey(), undefined, previewsByKey);
   for (const repo of repos) {
     for (const taskWorktree of repo.taskWorktrees) {
       if (taskWorktree.taskWorktreeId !== taskWorktreeId) {
@@ -568,20 +568,20 @@ async function startSession(
   taskWorktreeId?: string,
 ): Promise<StartedSession> {
   if (providerAdapter.resolvesSessionIdLazily) {
-    const sessionId = toRuntimeSessionKey(provider, pending.startedAt);
-    registerSession(sessionId, pending, null, taskWorktreeId);
-    void resolveLazySessionId(providerAdapter, pending, sessionId);
+    const runtimeSessionId = toRuntimeSessionKey(provider, pending.startedAt);
+    registerRuntimeSession(runtimeSessionId, pending, null, taskWorktreeId);
+    void resolveLazySessionId(providerAdapter, pending, runtimeSessionId);
     return {
-      sessionId,
+      runtimeSessionId,
       providerSessionId: null,
     };
   }
 
   const providerSessionId = await providerAdapter.waitForSessionId(pending);
-  const sessionId = toSessionKey(provider, providerSessionId);
-  registerSession(sessionId, pending, providerSessionId, taskWorktreeId);
+  const runtimeSessionId = toSessionKey(provider, providerSessionId);
+  registerRuntimeSession(runtimeSessionId, pending, providerSessionId, taskWorktreeId);
   return {
-    sessionId,
+    runtimeSessionId,
     providerSessionId,
   };
 }
@@ -611,11 +611,11 @@ app.whenReady().then(() => {
 
   worktreeWatcher = new WorktreeWatcher();
   worktreeWatcher.onChange(() => {
-    for (const [sessionId, info] of sessionRuntimeMap) {
+    for (const [runtimeSessionId, info] of sessionRuntimeMap) {
       if (fs.existsSync(info.cwd)) {
         continue;
       }
-      const proc = ptyProcesses.get(sessionId);
+      const proc = ptyProcesses.get(runtimeSessionId);
       if (proc) {
         proc.kill();
       }
@@ -631,23 +631,23 @@ app.whenReady().then(() => {
 
   ipcMain.handle("metadata:listRepos", async () => {
     const previewsByKey = await loadStoredSessionPreviews();
-    return loadRepoList(getActiveSessionIdsByKey(), undefined, previewsByKey);
+    return loadRepoList(getActiveRuntimeSessionIdsByKey(), undefined, previewsByKey);
   });
 
   ipcMain.handle("providers:list", () => {
     return listSessionProviderDefinitions();
   });
 
-  ipcMain.handle("pty:attach", (_event, sessionId: string) => {
-    ptyAttachments.set(sessionId, {
+  ipcMain.handle("pty:attach", (_event, runtimeSessionId: string) => {
+    ptyAttachments.set(runtimeSessionId, {
       ready: false,
       pendingChunks: [],
     });
-    return ptyScrollback.get(sessionId) ?? "";
+    return ptyScrollback.get(runtimeSessionId) ?? "";
   });
 
-  ipcMain.handle("pty:ready", (_event, sessionId: string) => {
-    const attachment = ptyAttachments.get(sessionId);
+  ipcMain.handle("pty:ready", (_event, runtimeSessionId: string) => {
+    const attachment = ptyAttachments.get(runtimeSessionId);
     if (!attachment || !mainWindow || mainWindow.isDestroyed()) {
       return;
     }
@@ -656,12 +656,12 @@ app.whenReady().then(() => {
     const pendingChunk = attachment.pendingChunks.join("");
     attachment.pendingChunks = [];
     if (pendingChunk) {
-      mainWindow.webContents.send("pty:data", sessionId, pendingChunk);
+      mainWindow.webContents.send("pty:data", runtimeSessionId, pendingChunk);
     }
   });
 
-  ipcMain.handle("pty:detach", (_event, sessionId: string) => {
-    ptyAttachments.delete(sessionId);
+  ipcMain.handle("pty:detach", (_event, runtimeSessionId: string) => {
+    ptyAttachments.delete(runtimeSessionId);
   });
 
   ipcMain.handle("errors:list", () => {
@@ -715,7 +715,7 @@ app.whenReady().then(() => {
           "Failed to resume session",
         );
         await waitForResumeReady(providerAdapter, pending, session.providerSessionId);
-        registerSession(session.id, pending, session.providerSessionId);
+        registerRuntimeSession(session.id, pending, session.providerSessionId);
         emitSessionsStateChanged();
         return ok(session);
       } catch (error) {
@@ -739,14 +739,14 @@ app.whenReady().then(() => {
         await providerAdapter.createNewLaunch(repoPath),
         "Failed to start session",
       );
-      const { sessionId, providerSessionId } = await startSession(provider, providerAdapter, pending);
+      const { runtimeSessionId, providerSessionId } = await startSession(provider, providerAdapter, pending);
       pending.startupSettled = true;
       if (providerSessionId) {
         await refreshWorktreeWatcher();
       }
       return ok(
         buildActiveSession({
-          sessionId,
+          runtimeSessionId,
           provider,
           providerSessionId,
           project: repoPath,
@@ -808,7 +808,7 @@ app.whenReady().then(() => {
           await providerAdapter.createWorktreeLaunch(worktreeContext),
           "Failed to create worktree session",
         );
-        const { sessionId, providerSessionId } = await startSession(
+        const { runtimeSessionId, providerSessionId } = await startSession(
           provider,
           providerAdapter,
           pending,
@@ -825,7 +825,7 @@ app.whenReady().then(() => {
         await refreshWorktreeWatcher();
         return ok(
           buildActiveSession({
-            sessionId,
+            runtimeSessionId,
             provider,
             providerSessionId,
             project: worktreePath,
@@ -891,8 +891,8 @@ app.whenReady().then(() => {
     await shell.openExternal(url);
   });
 
-  ipcMain.handle("git:pathStates", async (_event, sessionId: string) => {
-    const workingRoot = getWorkingRootForSession(sessionId);
+  ipcMain.handle("git:pathStates", async (_event, runtimeSessionId: string) => {
+    const workingRoot = getWorkingRootForRuntimeSession(runtimeSessionId);
     if (!workingRoot) {
       return ok([]);
     }
@@ -903,8 +903,8 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle("git:branchContext", async (_event, sessionId: string) => {
-    const runtime = sessionRuntimeMap.get(sessionId);
+  ipcMain.handle("git:branchContext", async (_event, runtimeSessionId: string) => {
+    const runtime = sessionRuntimeMap.get(runtimeSessionId);
     if (!runtime) {
       return ok({ branch: null, github: null } satisfies BranchContext);
     }
@@ -923,8 +923,8 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle("git:diffDocument", async (_event, sessionId: string, filePath: string) => {
-    const workingRoot = getWorkingRootForSession(sessionId);
+  ipcMain.handle("git:diffDocument", async (_event, runtimeSessionId: string, filePath: string) => {
+    const workingRoot = getWorkingRootForRuntimeSession(runtimeSessionId);
     if (!workingRoot) {
       return ok(null);
     }
@@ -935,8 +935,8 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle("files:list", async (_event, sessionId: string, relativePath?: string) => {
-    const workingRoot = getWorkingRootForSession(sessionId);
+  ipcMain.handle("files:list", async (_event, runtimeSessionId: string, relativePath?: string) => {
+    const workingRoot = getWorkingRootForRuntimeSession(runtimeSessionId);
     if (!workingRoot) {
       return ok([]);
     }
@@ -947,8 +947,8 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle("files:listAll", async (_event, sessionId: string) => {
-    const workingRoot = getWorkingRootForSession(sessionId);
+  ipcMain.handle("files:listAll", async (_event, runtimeSessionId: string) => {
+    const workingRoot = getWorkingRootForRuntimeSession(runtimeSessionId);
     if (!workingRoot) {
       return ok([] as string[]);
     }
@@ -959,33 +959,33 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle("files:resolveRepoFile", (_event, sessionId: string, filePath: string) => {
-    const workingRoot = getWorkingRootForSession(sessionId);
+  ipcMain.handle("files:resolveRepoFile", (_event, runtimeSessionId: string, filePath: string) => {
+    const workingRoot = getWorkingRootForRuntimeSession(runtimeSessionId);
     if (!workingRoot) {
       return null;
     }
     return resolveRepoFile(workingRoot, filePath);
   });
 
-  ipcMain.handle("files:syncWatchTargets", async (_event, sessionId: string, relativePaths: string[]) => {
-    const workingRoot = getWorkingRootForSession(sessionId);
+  ipcMain.handle("files:syncWatchTargets", async (_event, runtimeSessionId: string, relativePaths: string[]) => {
+    const workingRoot = getWorkingRootForRuntimeSession(runtimeSessionId);
     if (!workingRoot) {
-      fileTreeWatcher.clearSession(sessionId);
+      fileTreeWatcher.clearSession(runtimeSessionId);
       return;
     }
 
-    await fileTreeWatcher.syncSessionTargets(sessionId, workingRoot, relativePaths);
+    await fileTreeWatcher.syncSessionTargets(runtimeSessionId, workingRoot, relativePaths);
   });
 
-  ipcMain.on("pty:write", (_event, sessionId: string, data: string) => {
-    const proc = ptyProcesses.get(sessionId);
+  ipcMain.on("pty:write", (_event, runtimeSessionId: string, data: string) => {
+    const proc = ptyProcesses.get(runtimeSessionId);
     if (proc) {
       proc.write(data);
     }
   });
 
-  ipcMain.on("pty:resize", (_event, sessionId: string, cols: number, rows: number) => {
-    const proc = ptyProcesses.get(sessionId);
+  ipcMain.on("pty:resize", (_event, runtimeSessionId: string, cols: number, rows: number) => {
+    const proc = ptyProcesses.get(runtimeSessionId);
     if (proc) {
       proc.resize(cols, rows);
     }

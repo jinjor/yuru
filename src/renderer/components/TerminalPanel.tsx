@@ -11,7 +11,7 @@ interface TerminalPanelProps {
   fitDependencies: readonly unknown[];
   onFileLinkActivate: (filePath: string, line?: number) => void;
   onOpenExternal: (url: string) => void;
-  selectedId: string;
+  runtimeSessionId: string;
 }
 
 interface TerminalInstance {
@@ -26,7 +26,7 @@ export function TerminalPanel({
   fitDependencies,
   onFileLinkActivate,
   onOpenExternal,
-  selectedId,
+  runtimeSessionId,
 }: TerminalPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<TerminalInstance | null>(null);
@@ -40,11 +40,11 @@ export function TerminalPanel({
 
     terminalRef.current.fitAddon.fit();
     window.electronAPI.ptyResize(
-      selectedId,
+      runtimeSessionId,
       terminalRef.current.term.cols,
       terminalRef.current.term.rows,
     );
-  }, [selectedId]);
+  }, [runtimeSessionId]);
 
   useEffect(() => {
     if (!containerRef.current) {
@@ -102,7 +102,7 @@ export function TerminalPanel({
         Promise.all(
           matches.map(async (entry): Promise<ILink | null> => {
             const repoRelativePath = await window.electronAPI.resolveRepoFile(
-              selectedId,
+              runtimeSessionId,
               entry.filePath,
             );
             if (!repoRelativePath) {
@@ -137,7 +137,7 @@ export function TerminalPanel({
         if (event.type === "keydown") {
           event.preventDefault();
           event.stopPropagation();
-          window.electronAPI.ptyWrite(selectedId, "\x1b[13;2u");
+          window.electronAPI.ptyWrite(runtimeSessionId, "\x1b[13;2u");
         }
         return false;
       }
@@ -145,18 +145,18 @@ export function TerminalPanel({
     });
 
     term.onData((data) => {
-      window.electronAPI.ptyWrite(selectedId, data);
+      window.electronAPI.ptyWrite(runtimeSessionId, data);
     });
 
     term.onResize(({ cols, rows }) => {
-      window.electronAPI.ptyResize(selectedId, cols, rows);
+      window.electronAPI.ptyResize(runtimeSessionId, cols, rows);
     });
 
     terminalRef.current = { term, fitAddon, container };
 
     let disposed = false;
-    const disposePtyListener = window.electronAPI.onPtyData((sessionId, data) => {
-      if (disposed || sessionId !== selectedId || !terminalRef.current) {
+    const disposePtyListener = window.electronAPI.onPtyData((dataRuntimeSessionId, data) => {
+      if (disposed || dataRuntimeSessionId !== runtimeSessionId || !terminalRef.current) {
         return;
       }
 
@@ -171,7 +171,7 @@ export function TerminalPanel({
       fitTerminal();
       term.focus();
       void window.electronAPI
-        .attachPty(selectedId)
+        .attachPty(runtimeSessionId)
         .then((scrollback) => {
           if (disposed || !terminalRef.current) {
             return;
@@ -184,7 +184,7 @@ export function TerminalPanel({
             }
 
             fitTerminal();
-            void window.electronAPI.readyPty(selectedId);
+            void window.electronAPI.readyPty(runtimeSessionId);
           });
         })
         .catch(() => {
@@ -199,12 +199,12 @@ export function TerminalPanel({
     return () => {
       disposed = true;
       disposePtyListener();
-      void window.electronAPI.detachPty(selectedId);
+      void window.electronAPI.detachPty(runtimeSessionId);
       terminalRef.current = null;
       term.dispose();
       container.remove();
     };
-  }, [fitTerminal, selectedId]);
+  }, [fitTerminal, runtimeSessionId]);
 
   useEffect(() => {
     if (!terminalRef.current) {
@@ -214,7 +214,7 @@ export function TerminalPanel({
     requestAnimationFrame(() => {
       fitTerminal();
     });
-  }, [fitTerminal, selectedId, ...fitDependencies]);
+  }, [fitTerminal, runtimeSessionId, ...fitDependencies]);
 
   useEffect(() => {
     const handleResize = (): void => {

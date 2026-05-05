@@ -9,7 +9,7 @@ import type {
   TaskWorktreeMetadata,
   YuruMetadata,
 } from "../shared/metadata.js";
-import { toSessionKey, type SessionProvider } from "../shared/session.js";
+import { toSessionKey, type RuntimeSessionId, type SessionProvider } from "../shared/session.js";
 import { listWorktrees, type WorktreeInfo } from "./git.js";
 
 type ListWorktrees = (repoPath: string) => Promise<readonly WorktreeInfo[]>;
@@ -27,7 +27,7 @@ export function loadRepos(): RepoMetadata[] {
 }
 
 export async function loadRepoList(
-  activeSessionIdsByKey?: ReadonlyMap<string, string>,
+  activeRuntimeSessionIdsByKey?: ReadonlyMap<string, RuntimeSessionId>,
   listGitWorktrees: ListWorktrees = listWorktrees,
   primarySessionPreviewsByKey?: ReadonlyMap<string, string>,
 ): Promise<RepoListItem[]> {
@@ -46,7 +46,7 @@ export async function loadRepoList(
           repo.id,
           gitWorktree.path,
           metadataByPath.get(toWorktreePathKey(gitWorktree.path)),
-          activeSessionIdsByKey,
+          activeRuntimeSessionIdsByKey,
           primarySessionPreviewsByKey,
         ),
       );
@@ -240,7 +240,7 @@ function toTaskWorktreeListItem(
   repoId: string,
   worktreePath: string,
   metadataEntry: TaskWorktreeMetadata | undefined,
-  activeSessionIdsByKey: ReadonlyMap<string, string> | undefined,
+  activeRuntimeSessionIdsByKey: ReadonlyMap<string, RuntimeSessionId> | undefined,
   primarySessionPreviewsByKey: ReadonlyMap<string, string> | undefined,
 ): TaskWorktreeListItem {
   const primarySession = metadataEntry?.primarySession;
@@ -248,7 +248,7 @@ function toTaskWorktreeListItem(
     ? toSessionKey(primarySession.provider, primarySession.providerSessionId)
     : null;
   const activeRuntimeSessionId = primarySessionKey
-    ? activeSessionIdsByKey?.get(primarySessionKey) ?? null
+    ? activeRuntimeSessionIdsByKey?.get(primarySessionKey) ?? null
     : null;
 
   return {

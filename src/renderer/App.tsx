@@ -2,35 +2,11 @@ import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useRef, use
 import "@xterm/xterm/css/xterm.css";
 import type { AgentDefinition } from "../shared/agent";
 import type { PrimarySessionListItem, RepoListItem } from "../shared/metadata";
-import { type Session, type SessionProvider, toSessionKey } from "../shared/session";
+import { isRuntimeSessionKey, type SessionProvider } from "../shared/session";
 import { BranchNameInput } from "./components/BranchNameInput";
 import { RepoList } from "./components/RepoList";
 import { SessionView } from "./components/SessionView";
 import { clamp } from "./utils/layout";
-
-interface SelectedSession {
-  sessionId: string;
-  primarySessionKey: string | null;
-}
-
-function sessionIdForPrimarySession(primarySession: PrimarySessionListItem): string {
-  return primarySession.activeRuntimeSessionId ?? primarySession.providerSessionKey;
-}
-
-function findPrimarySessionByKey(
-  repos: readonly RepoListItem[],
-  primarySessionKey: string,
-): PrimarySessionListItem | null {
-  for (const repo of repos) {
-    for (const taskWorktree of repo.taskWorktrees) {
-      const primarySession = taskWorktree.primarySession;
-      if (primarySession?.providerSessionKey === primarySessionKey) {
-        return primarySession;
-      }
-    }
-  }
-  return null;
-}
 
 function findPrimarySessionByRuntimeSessionId(
   repos: readonly RepoListItem[],
@@ -47,33 +23,19 @@ function findPrimarySessionByRuntimeSessionId(
   return null;
 }
 
-function reconcileSelectedSession(
+function reconcileSelectedRuntimeSessionId(
   repos: readonly RepoListItem[],
-  selectedSession: SelectedSession | null,
-): SelectedSession | null {
-  if (!selectedSession) {
+  selectedRuntimeSessionId: string | null,
+): string | null {
+  if (!selectedRuntimeSessionId) {
     return null;
   }
 
-  if (!selectedSession.primarySessionKey) {
-    const primarySession = findPrimarySessionByRuntimeSessionId(repos, selectedSession.sessionId);
-    return primarySession
-      ? {
-          sessionId: sessionIdForPrimarySession(primarySession),
-          primarySessionKey: primarySession.providerSessionKey,
-        }
-      : selectedSession;
+  if (findPrimarySessionByRuntimeSessionId(repos, selectedRuntimeSessionId)) {
+    return selectedRuntimeSessionId;
   }
 
-  const primarySession = findPrimarySessionByKey(repos, selectedSession.primarySessionKey);
-  if (!primarySession || !primarySession.activeRuntimeSessionId) {
-    return null;
-  }
-
-  return {
-    sessionId: primarySession.activeRuntimeSessionId,
-    primarySessionKey: primarySession.providerSessionKey,
-  };
+  return isRuntimeSessionKey(selectedRuntimeSessionId) ? selectedRuntimeSessionId : null;
 }
 
 export function App() {
@@ -81,19 +43,20 @@ export function App() {
   const resumeRequestRef = useRef(0);
   const [repos, setRepos] = useState<RepoListItem[]>([]);
   const [availableProviders, setAvailableProviders] = useState<AgentDefinition[]>([]);
-  const [selectedSession, setSelectedSession] = useState<SelectedSession | null>(null);
+  const [selectedRuntimeSessionId, setSelectedRuntimeSessionId] = useState<string | null>(null);
   const [worktreeTarget, setWorktreeTarget] = useState<string | null>(null);
   const [worktreeError, setWorktreeError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(260);
-  const selectedSessionId = selectedSession?.sessionId ?? null;
-  const selectedPrimarySessionKey = selectedSession?.primarySessionKey ?? null;
+  const selectedPrimarySessionKey = selectedRuntimeSessionId
+    ? findPrimarySessionByRuntimeSessionId(repos, selectedRuntimeSessionId)?.providerSessionKey ?? null
+    : null;
 
   const refreshRepos = useCallback((): void => {
     window.electronAPI
       .getRepos()
       .then((nextRepos) => {
         setRepos(nextRepos);
-        setSelectedSession((prev) => reconcileSelectedSession(nextRepos, prev));
+        setSelectedRuntimeSessionId((prev) => reconcileSelectedRuntimeSessionId(nextRepos, prev));
       })
       .catch((error) => {
         console.error("Failed to load repos.", error);
@@ -136,7 +99,7 @@ export function App() {
       document.body.style.userSelect = "none";
 
       const handleMouseMove = (moveEvent: globalThis.MouseEvent): void => {
-        const reservedSessionViewWidth = selectedSessionId ? 520 : 640;
+        const reservedSessionViewWidth = selectedRuntimeSessionId ? 520 : 640;
         const maxWidth = Math.max(220, appWidth - reservedSessionViewWidth);
         setSidebarWidth(clamp(startWidth + moveEvent.clientX - startX, 220, maxWidth));
       };
@@ -151,7 +114,7 @@ export function App() {
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("mouseup", stopDragging);
     },
-    [selectedSessionId, sidebarWidth],
+    [selectedRuntimeSessionId, sidebarWidth],
   );
 
   const handleSelectPrimarySession = useCallback(
@@ -169,10 +132,7 @@ export function App() {
       }
 
       const session = result.data;
-      setSelectedSession({
-        sessionId: session.id,
-        primarySessionKey: providerSessionKey,
-      });
+      setSelectedRuntimeSessionId(session.id);
       refreshRepos();
     },
     [refreshRepos],
@@ -193,12 +153,7 @@ export function App() {
       }
 
       const session = result.data;
-      setSelectedSession({
-        sessionId: session.id,
-        primarySessionKey: session.providerSessionId
-          ? toSessionKey(session.provider, session.providerSessionId)
-          : null,
-      });
+      setSelectedRuntimeSessionId(session.id);
       setWorktreeTarget(null);
       refreshRepos();
     },
@@ -229,13 +184,13 @@ export function App() {
         onMouseDown={handleSidebarResizeStart}
         aria-hidden="true"
       />
-      {selectedSessionId ? (
+      {selectedRuntimeSessionId ? (
         <SessionView
-          key={selectedSessionId}
+          key={selectedRuntimeSessionId}
           appRef={appRef}
           onOpenExternal={openExternal}
           refreshRepos={refreshRepos}
-          sessionId={selectedSessionId}
+          runtimeSessionId={selectedRuntimeSessionId}
           sidebarWidth={sidebarWidth}
         />
       ) : (

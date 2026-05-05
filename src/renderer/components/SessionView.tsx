@@ -14,7 +14,7 @@ interface SessionViewProps {
   appRef: RefObject<HTMLDivElement | null>;
   onOpenExternal: (url: string) => void;
   refreshRepos: () => void;
-  sessionId: string;
+  runtimeSessionId: string;
   sidebarWidth: number;
 }
 
@@ -29,7 +29,7 @@ export function SessionView({
   appRef,
   onOpenExternal,
   refreshRepos,
-  sessionId,
+  runtimeSessionId,
   sidebarWidth,
 }: SessionViewProps) {
   const sessionViewColumnRef = useRef<HTMLDivElement>(null);
@@ -56,7 +56,7 @@ export function SessionView({
   }, []);
 
   useEffect(() => {
-    if (!sessionId) {
+    if (!runtimeSessionId) {
       return;
     }
     const handleKeyDown = (event: KeyboardEvent): void => {
@@ -72,10 +72,10 @@ export function SessionView({
     return () => {
       window.removeEventListener("keydown", handleKeyDown, true);
     };
-  }, [sessionId]);
+  }, [runtimeSessionId]);
 
   useEffect(() => {
-    if (!sessionId) {
+    if (!runtimeSessionId) {
       return;
     }
 
@@ -83,8 +83,8 @@ export function SessionView({
 
     const fetchStatus = async (): Promise<void> => {
       const [pathStatesResult, branchContextResult] = await Promise.all([
-        window.electronAPI.getGitPathStates(sessionId),
-        window.electronAPI.getGitBranchContext(sessionId),
+        window.electronAPI.getGitPathStates(runtimeSessionId),
+        window.electronAPI.getGitBranchContext(runtimeSessionId),
       ]);
       if (cancelled) {
         return;
@@ -106,10 +106,10 @@ export function SessionView({
       cancelled = true;
       clearInterval(interval);
     };
-  }, [refreshRepos, sessionId]);
+  }, [refreshRepos, runtimeSessionId]);
 
   useEffect(() => {
-    if (!sessionId || !previewSelection) {
+    if (!runtimeSessionId || !previewSelection) {
       setDiffDocument(null);
       setIsLoadingDiff(false);
       return;
@@ -120,7 +120,7 @@ export function SessionView({
 
     const fetchDiff = async (showLoader: boolean): Promise<void> => {
       const result = await window.electronAPI.getGitDiffDocument(
-        sessionId,
+        runtimeSessionId,
         previewSelection.path,
       );
       if (cancelled) {
@@ -149,7 +149,7 @@ export function SessionView({
       cancelled = true;
       clearInterval(interval);
     };
-  }, [previewPathChanged, previewSelection, sessionId]);
+  }, [previewPathChanged, previewSelection, runtimeSessionId]);
 
   return (
     <>
@@ -190,10 +190,10 @@ export function SessionView({
             setPreviewSelection({ path: filePath, line });
           }}
           onOpenExternal={onOpenExternal}
-          selectedId={sessionId}
+          runtimeSessionId={runtimeSessionId}
         />
       </div>
-      {sessionId && (
+      {runtimeSessionId && (
         <>
           <div
             className="pane-resize-handle vertical"
@@ -204,16 +204,16 @@ export function SessionView({
             gitPathStates={gitPathStates}
             onPreviewSelectionChange={setPreviewSelection}
             previewSelection={previewSelection}
-            sessionId={sessionId}
+            runtimeSessionId={runtimeSessionId}
             width={paneLayout.changesPanelWidth}
           />
         </>
       )}
-      {sessionId && isFileSearchOpen && (
+      {runtimeSessionId && isFileSearchOpen && (
         <FileSearch
           onClose={() => setIsFileSearchOpen(false)}
           onSelectFile={(path) => setPreviewSelection({ path })}
-          sessionId={sessionId}
+          runtimeSessionId={runtimeSessionId}
         />
       )}
     </>

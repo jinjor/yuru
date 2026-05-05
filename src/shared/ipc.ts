@@ -1,6 +1,11 @@
 import type { AgentDefinition } from "./agent.js";
 import type { RepoListItem } from "./metadata.js";
-import type { GitHubPullRequest, Session, SessionProvider } from "./session.js";
+import type {
+  GitHubPullRequest,
+  RuntimeSessionId,
+  Session,
+  SessionProvider,
+} from "./session.js";
 
 export interface AppError {
   code:
@@ -65,7 +70,7 @@ export interface BranchContext {
 }
 
 export interface ActiveSessionState {
-  sessionId: string;
+  runtimeSessionId: RuntimeSessionId;
   cwd: string;
 }
 
@@ -93,22 +98,22 @@ export interface ElectronAPI {
   ) => Promise<Result<boolean>>;
   selectFolder: () => Promise<string | null>;
   openExternal: (url: string) => Promise<void>;
-  getGitPathStates: (sessionId: string) => Promise<Result<GitPathState[]>>;
-  getGitBranchContext: (sessionId: string) => Promise<Result<BranchContext>>;
-  getGitDiffDocument: (sessionId: string, filePath: string) => Promise<Result<GitDiffDocument | null>>;
-  listFiles: (sessionId: string, relativePath?: string) => Promise<Result<FileTreeNode[]>>;
-  listAllFiles: (sessionId: string) => Promise<Result<string[]>>;
-  resolveRepoFile: (sessionId: string, filePath: string) => Promise<string | null>;
-  syncFileWatchTargets: (sessionId: string, relativePaths: string[]) => Promise<void>;
+  getGitPathStates: (runtimeSessionId: RuntimeSessionId) => Promise<Result<GitPathState[]>>;
+  getGitBranchContext: (runtimeSessionId: RuntimeSessionId) => Promise<Result<BranchContext>>;
+  getGitDiffDocument: (runtimeSessionId: RuntimeSessionId, filePath: string) => Promise<Result<GitDiffDocument | null>>;
+  listFiles: (runtimeSessionId: RuntimeSessionId, relativePath?: string) => Promise<Result<FileTreeNode[]>>;
+  listAllFiles: (runtimeSessionId: RuntimeSessionId) => Promise<Result<string[]>>;
+  resolveRepoFile: (runtimeSessionId: RuntimeSessionId, filePath: string) => Promise<string | null>;
+  syncFileWatchTargets: (runtimeSessionId: RuntimeSessionId, relativePaths: string[]) => Promise<void>;
   onErrorAdded: (callback: (error: AppErrorNotice) => void) => void;
   onErrorRemoved: (callback: (id: string) => void) => void;
   onErrorsCleared: (callback: () => void) => void;
   onSessionsStateChanged: (callback: (active: ActiveSessionState[]) => void) => void;
-  onFileTreeChanged: (callback: (sessionId: string, relativePath: string) => void) => () => void;
-  attachPty: (sessionId: string) => Promise<string>;
-  readyPty: (sessionId: string) => Promise<void>;
-  detachPty: (sessionId: string) => Promise<void>;
-  ptyWrite: (sessionId: string, data: string) => void;
-  ptyResize: (sessionId: string, cols: number, rows: number) => void;
-  onPtyData: (callback: (sessionId: string, data: string) => void) => () => void;
+  onFileTreeChanged: (callback: (runtimeSessionId: RuntimeSessionId, relativePath: string) => void) => () => void;
+  attachPty: (runtimeSessionId: RuntimeSessionId) => Promise<string>;
+  readyPty: (runtimeSessionId: RuntimeSessionId) => Promise<void>;
+  detachPty: (runtimeSessionId: RuntimeSessionId) => Promise<void>;
+  ptyWrite: (runtimeSessionId: RuntimeSessionId, data: string) => void;
+  ptyResize: (runtimeSessionId: RuntimeSessionId, cols: number, rows: number) => void;
+  onPtyData: (callback: (runtimeSessionId: RuntimeSessionId, data: string) => void) => () => void;
 }
