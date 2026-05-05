@@ -1,5 +1,5 @@
 import type { AgentDefinition } from "../../shared/agent";
-import type { RepoListItem, TaskWorktreeListItem } from "../../shared/metadata";
+import type { RepoListItem } from "../../shared/metadata";
 import { providerLabel } from "../utils/session";
 
 interface RepoListProps {
