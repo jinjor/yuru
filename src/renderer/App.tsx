@@ -2,7 +2,7 @@ import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useRef, use
 import "@xterm/xterm/css/xterm.css";
 import type { AgentDefinition } from "../shared/agent";
 import type { PrimarySessionListItem, RepoListItem } from "../shared/metadata";
-import { isRuntimeSessionKey, type SessionProvider } from "../shared/session";
+import { type SessionProvider } from "../shared/session";
 import { BranchNameInput } from "./components/BranchNameInput";
 import { RepoList } from "./components/RepoList";
 import { SessionView } from "./components/SessionView";
@@ -23,21 +23,6 @@ function findPrimarySessionByRuntimeSessionId(
   return null;
 }
 
-function reconcileSelectedRuntimeSessionId(
-  repos: readonly RepoListItem[],
-  selectedRuntimeSessionId: string | null,
-): string | null {
-  if (!selectedRuntimeSessionId) {
-    return null;
-  }
-
-  if (findPrimarySessionByRuntimeSessionId(repos, selectedRuntimeSessionId)) {
-    return selectedRuntimeSessionId;
-  }
-
-  return isRuntimeSessionKey(selectedRuntimeSessionId) ? selectedRuntimeSessionId : null;
-}
-
 export function App() {
   const appRef = useRef<HTMLDivElement>(null);
   const resumeRequestRef = useRef(0);
@@ -56,7 +41,6 @@ export function App() {
       .getRepos()
       .then((nextRepos) => {
         setRepos(nextRepos);
-        setSelectedRuntimeSessionId((prev) => reconcileSelectedRuntimeSessionId(nextRepos, prev));
       })
       .catch((error) => {
         console.error("Failed to load repos.", error);
@@ -78,7 +62,13 @@ export function App() {
       });
 
     refreshRepos();
-    window.electronAPI.onSessionsStateChanged(() => {
+    window.electronAPI.onSessionsStateChanged((activeSessions) => {
+      const activeRuntimeSessionIds = new Set(
+        activeSessions.map((session) => session.runtimeSessionId),
+      );
+      setSelectedRuntimeSessionId((prev) =>
+        prev && !activeRuntimeSessionIds.has(prev) ? null : prev,
+      );
       refreshRepos();
     });
   }, [refreshRepos]);

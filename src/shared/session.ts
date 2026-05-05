@@ -32,10 +32,6 @@ export function toRuntimeSessionKey(provider: SessionProvider, startedAt: number
   return `${provider}:runtime:${startedAt}`;
 }
 
-export function isRuntimeSessionKey(sessionId: string): boolean {
-  return sessionId.startsWith("claude:runtime:") || sessionId.startsWith("codex:runtime:");
-}
-
 export interface ResumableSession extends Session {
   providerSessionId: string;
 }
