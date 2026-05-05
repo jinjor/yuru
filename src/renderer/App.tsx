@@ -131,8 +131,7 @@ export function App() {
         return;
       }
 
-      const session = result.data;
-      setSelectedRuntimeSessionId(session.id);
+      setSelectedRuntimeSessionId(result.data.runtimeSessionId);
       refreshRepos();
     },
     [refreshRepos],
@@ -152,8 +151,7 @@ export function App() {
         return;
       }
 
-      const session = result.data;
-      setSelectedRuntimeSessionId(session.id);
+      setSelectedRuntimeSessionId(result.data.runtimeSessionId);
       setWorktreeTarget(null);
       refreshRepos();
     },

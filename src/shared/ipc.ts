@@ -74,6 +74,10 @@ export interface ActiveSessionState {
   cwd: string;
 }
 
+export interface RuntimeSessionSelection {
+  runtimeSessionId: RuntimeSessionId;
+}
+
 export interface ElectronAPI {
   getSessions: () => Promise<Session[]>;
   getRepos: () => Promise<RepoListItem[]>;
@@ -84,13 +88,13 @@ export interface ElectronAPI {
   selectWorktreeSession: (
     taskWorktreeId: string,
     providerSessionKey: string,
-  ) => Promise<Result<Session>>;
-  createSession: (provider: SessionProvider, repoPath: string) => Promise<Result<Session>>;
+  ) => Promise<Result<RuntimeSessionSelection>>;
+  createSession: (provider: SessionProvider, repoPath: string) => Promise<Result<RuntimeSessionSelection>>;
   createWorktreeSession: (
     provider: SessionProvider,
     repoPath: string,
     branchName: string,
-  ) => Promise<Result<Session>>;
+  ) => Promise<Result<RuntimeSessionSelection>>;
   removeWorktree: (
     provider: SessionProvider,
     repoPath: string,
