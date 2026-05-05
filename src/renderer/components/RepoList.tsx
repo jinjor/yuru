@@ -1,5 +1,6 @@
 import type { AgentDefinition } from "../../shared/agent";
 import type { RepoListItem, TaskWorktreeListItem } from "../../shared/metadata";
+import { providerLabel } from "../utils/session";
 
 interface RepoListProps {
   repos: RepoListItem[];
@@ -58,6 +59,7 @@ export function RepoList({
                   );
                 }
                 const preview = primarySession.preview || "(no messages)";
+                const providerName = providerLabel(primarySession.provider);
                 return (
                   <button
                     key={taskWorktree.taskWorktreeId}
@@ -68,9 +70,9 @@ export function RepoList({
                     aria-label={`Resume primary session for ${taskWorktree.name}`}
                   >
                     <span
-                      className={`repo-task-worktree-state-dot ${primarySession.state}`}
-                      title={`Primary session · ${primarySession.state}`}
-                      aria-label={`Primary session ${primarySession.state}`}
+                      className={`session-provider-dot provider-${primarySession.provider} ${primarySession.state}`}
+                      title={`${providerName} · ${primarySession.state}`}
+                      aria-label={`${providerName} primary session ${primarySession.state}`}
                     />
                     <span className="repo-task-worktree-text">
                       <span className="repo-task-worktree-name">{taskWorktree.name}</span>

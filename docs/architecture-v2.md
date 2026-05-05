@@ -251,7 +251,7 @@ provider ごとの hint は session identity を置き換えるためではな�
    - 左ペインから primary session 付き task worktree を選んで再開できる
    - ここで既存の session-first 左ペインを UI から隠す
    - ただし旧 UI 実装は削除せず、後で使い回せるように残す
-11. [ ] primary session のアイテムに provider が表示できる
+11. [x] primary session のアイテムに provider が表示できる
 12. [x] primary session のアイテムに preview 文字列が表示できる
 13. [x] Git worktree から task worktree 一覧を組み立てられる
    - registered repo ごとに Git worktree を列挙し、main worktree を除外する
