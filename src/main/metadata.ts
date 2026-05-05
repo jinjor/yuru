@@ -247,7 +247,7 @@ function toTaskWorktreeListItem(
   const primarySessionKey = primarySession
     ? toSessionKey(primarySession.provider, primarySession.providerSessionId)
     : null;
-  const activeAppSessionId = primarySessionKey
+  const activeRuntimeSessionId = primarySessionKey
     ? activeSessionIdsByKey?.get(primarySessionKey) ?? null
     : null;
 
@@ -259,8 +259,8 @@ function toTaskWorktreeListItem(
       ? {
           ...primarySession,
           providerSessionKey: primarySessionKey,
-          activeAppSessionId,
-          state: activeAppSessionId ? "active" : "inactive",
+          activeRuntimeSessionId,
+          state: activeRuntimeSessionId ? "active" : "inactive",
           preview: primarySessionPreviewsByKey?.get(primarySessionKey) ?? "",
         }
       : undefined,

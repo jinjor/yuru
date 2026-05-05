@@ -142,7 +142,7 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
             provider: "codex",
             providerSessionId: "codex-1",
             providerSessionKey: toSessionKey("codex", "codex-1"),
-            activeAppSessionId: null,
+            activeRuntimeSessionId: null,
             state: "inactive",
             preview: "",
           },
@@ -209,11 +209,11 @@ test("loadRepoList は active session key と一致する primary を active と
   const taskWorktrees = result[0].taskWorktrees;
   assert.equal(taskWorktrees[0].primarySession.state, "active");
   assert.equal(taskWorktrees[0].primarySession.providerSessionKey, toSessionKey("codex", "codex-1"));
-  assert.equal(taskWorktrees[0].primarySession.activeAppSessionId, "runtime-1");
+  assert.equal(taskWorktrees[0].primarySession.activeRuntimeSessionId, "runtime-1");
   assert.equal(taskWorktrees[0].primarySession.preview, "");
   assert.equal(taskWorktrees[1].primarySession.state, "inactive");
   assert.equal(taskWorktrees[1].primarySession.providerSessionKey, toSessionKey("claude", "claude-1"));
-  assert.equal(taskWorktrees[1].primarySession.activeAppSessionId, null);
+  assert.equal(taskWorktrees[1].primarySession.activeRuntimeSessionId, null);
   assert.equal(taskWorktrees[1].primarySession.preview, "");
 });
 

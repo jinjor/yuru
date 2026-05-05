@@ -13,8 +13,8 @@ interface SelectedSession {
   primarySessionKey: string | null;
 }
 
-function appSessionIdForPrimarySession(primarySession: PrimarySessionListItem): string {
-  return primarySession.activeAppSessionId ?? primarySession.providerSessionKey;
+function sessionIdForPrimarySession(primarySession: PrimarySessionListItem): string {
+  return primarySession.activeRuntimeSessionId ?? primarySession.providerSessionKey;
 }
 
 function sessionFromPrimarySession(
@@ -27,7 +27,7 @@ function sessionFromPrimarySession(
   }
 
   return {
-    id: appSessionIdForPrimarySession(primarySession),
+    id: sessionIdForPrimarySession(primarySession),
     provider: primarySession.provider,
     providerSessionId: primarySession.providerSessionId,
     project: taskWorktree.worktreePath,
@@ -54,14 +54,14 @@ function findPrimarySessionByKey(
   return null;
 }
 
-function findPrimarySessionByActiveAppSessionId(
+function findPrimarySessionByRuntimeSessionId(
   repos: readonly RepoListItem[],
-  activeAppSessionId: string,
+  runtimeSessionId: string,
 ): PrimarySessionListItem | null {
   for (const repo of repos) {
     for (const taskWorktree of repo.taskWorktrees) {
       const primarySession = taskWorktree.primarySession;
-      if (primarySession?.activeAppSessionId === activeAppSessionId) {
+      if (primarySession?.activeRuntimeSessionId === runtimeSessionId) {
         return primarySession;
       }
     }
@@ -78,25 +78,22 @@ function reconcileSelectedSession(
   }
 
   if (!selectedSession.primarySessionKey) {
-    const primarySession = findPrimarySessionByActiveAppSessionId(
-      repos,
-      selectedSession.sessionId,
-    );
+    const primarySession = findPrimarySessionByRuntimeSessionId(repos, selectedSession.sessionId);
     return primarySession
       ? {
-          sessionId: appSessionIdForPrimarySession(primarySession),
+          sessionId: sessionIdForPrimarySession(primarySession),
           primarySessionKey: primarySession.providerSessionKey,
         }
       : selectedSession;
   }
 
   const primarySession = findPrimarySessionByKey(repos, selectedSession.primarySessionKey);
-  if (!primarySession || !primarySession.activeAppSessionId) {
+  if (!primarySession || !primarySession.activeRuntimeSessionId) {
     return null;
   }
 
   return {
-    sessionId: primarySession.activeAppSessionId,
+    sessionId: primarySession.activeRuntimeSessionId,
     primarySessionKey: primarySession.providerSessionKey,
   };
 }

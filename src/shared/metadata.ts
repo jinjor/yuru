@@ -23,7 +23,7 @@ export type PrimarySessionState = "active" | "inactive";
 
 export interface PrimarySessionListItem extends PrimarySessionMetadata {
   providerSessionKey: string;
-  activeAppSessionId: string | null;
+  activeRuntimeSessionId: string | null;
   state: PrimarySessionState;
   preview: string;
 }

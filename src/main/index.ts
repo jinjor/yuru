@@ -315,7 +315,7 @@ function launchPendingSession(
     startupOutput: "",
     sessionCwd: request.sessionCwd,
     providerSessionId: null,
-    appSessionId: null,
+    runtimeSessionId: null,
     startedAt: Date.now(),
     existingProviderSessionIds,
     exited: false,
@@ -332,14 +332,14 @@ function launchPendingSession(
     if (!pending.startupSettled) {
       pending.startupOutput = appendStartupOutput(pending.startupOutput, data);
     }
-    if (!pending.appSessionId || !mainWindow || mainWindow.isDestroyed()) {
+    if (!pending.runtimeSessionId || !mainWindow || mainWindow.isDestroyed()) {
       return;
     }
     ptyScrollback.set(
-      pending.appSessionId,
-      appendTerminalOutput(ptyScrollback.get(pending.appSessionId) ?? "", data),
+      pending.runtimeSessionId,
+      appendTerminalOutput(ptyScrollback.get(pending.runtimeSessionId) ?? "", data),
     );
-    const attachment = ptyAttachments.get(pending.appSessionId);
+    const attachment = ptyAttachments.get(pending.runtimeSessionId);
     if (!attachment) {
       return;
     }
@@ -347,7 +347,7 @@ function launchPendingSession(
       attachment.pendingChunks.push(data);
       return;
     }
-    mainWindow.webContents.send("pty:data", pending.appSessionId, data);
+    mainWindow.webContents.send("pty:data", pending.runtimeSessionId, data);
   });
 
   proc.onExit(({ exitCode, signal }) => {
@@ -355,7 +355,7 @@ function launchPendingSession(
     pending.exitCode = exitCode;
     pending.signal = signal;
     console.info("[Yuru] session process exited", {
-      sessionId: pending.appSessionId,
+      sessionId: pending.runtimeSessionId,
       provider: pending.provider,
       providerSessionId: pending.providerSessionId,
       cwd: pending.sessionCwd,
@@ -368,13 +368,13 @@ function launchPendingSession(
       pending.startupFailureReported = true;
       reportError(startupFailureMessage(pending, exitCode, signal));
     }
-    if (!pending.appSessionId) {
+    if (!pending.runtimeSessionId) {
       return;
     }
-    ptyProcesses.delete(pending.appSessionId);
-    ptyAttachments.delete(pending.appSessionId);
-    fileTreeWatcher.clearSession(pending.appSessionId);
-    sessionRuntimeMap.delete(pending.appSessionId);
+    ptyProcesses.delete(pending.runtimeSessionId);
+    ptyAttachments.delete(pending.runtimeSessionId);
+    fileTreeWatcher.clearSession(pending.runtimeSessionId);
+    sessionRuntimeMap.delete(pending.runtimeSessionId);
     void refreshWorktreeWatcher();
     emitSessionsStateChanged();
   });
@@ -410,17 +410,17 @@ async function waitForResumeReady(
 }
 
 function registerSession(
-  appSessionId: string,
+  runtimeSessionId: string,
   pending: PendingSession,
   providerSessionId: string | null,
   taskWorktreeId?: string,
 ): void {
   pending.providerSessionId = providerSessionId;
-  pending.appSessionId = appSessionId;
+  pending.runtimeSessionId = runtimeSessionId;
   pendingProcesses.delete(pending.proc);
-  ptyProcesses.set(appSessionId, pending.proc);
-  ptyScrollback.set(appSessionId, pending.outputBuffer);
-  sessionRuntimeMap.set(appSessionId, {
+  ptyProcesses.set(runtimeSessionId, pending.proc);
+  ptyScrollback.set(runtimeSessionId, pending.outputBuffer);
+  sessionRuntimeMap.set(runtimeSessionId, {
     cwd: pending.sessionCwd,
     provider: pending.provider,
     providerSessionId,
@@ -429,10 +429,10 @@ function registerSession(
   });
 }
 
-function updateRuntimeSessionProviderSessionId(appSessionId: string, providerSessionId: string): void {
-  const runtime = sessionRuntimeMap.get(appSessionId);
+function updateRuntimeSessionProviderSessionId(runtimeSessionId: string, providerSessionId: string): void {
+  const runtime = sessionRuntimeMap.get(runtimeSessionId);
   if (runtime) {
-    sessionRuntimeMap.set(appSessionId, {
+    sessionRuntimeMap.set(runtimeSessionId, {
       ...runtime,
       providerSessionId,
     });
@@ -442,7 +442,7 @@ function updateRuntimeSessionProviderSessionId(appSessionId: string, providerSes
 async function resolveLazySessionId(
   providerAdapter: SessionProviderAdapter,
   pending: PendingSession,
-  appSessionId: string,
+  runtimeSessionId: string,
 ): Promise<void> {
   try {
     const providerSessionId = await providerAdapter.waitForSessionId(pending);
@@ -451,8 +451,8 @@ async function resolveLazySessionId(
     }
     pending.providerSessionId = providerSessionId;
     pending.startupSettled = true;
-    updateRuntimeSessionProviderSessionId(appSessionId, providerSessionId);
-    const taskWorktreeId = sessionRuntimeMap.get(appSessionId)?.taskWorktreeId;
+    updateRuntimeSessionProviderSessionId(runtimeSessionId, providerSessionId);
+    const taskWorktreeId = sessionRuntimeMap.get(runtimeSessionId)?.taskWorktreeId;
     if (taskWorktreeId) {
       attachPrimarySession(taskWorktreeId, {
         provider: pending.provider,

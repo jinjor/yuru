@@ -27,7 +27,7 @@ export interface PendingSession {
   startupOutput: string;
   sessionCwd: string;
   providerSessionId: string | null;
-  appSessionId: string | null;
+  runtimeSessionId: string | null;
   startedAt: number;
   existingProviderSessionIds: ReadonlySet<string>;
   exited: boolean;
