@@ -14,7 +14,11 @@ import {
   removeTaskWorktreeByPath,
   upsertTaskWorktree,
 } from "./metadata.js";
-import { loadSessions, loadStoredSessionPreviews } from "./sessions.js";
+import {
+  loadSessions,
+  loadStoredSessionPreviews,
+  loadSuggestedWorktreeSessions,
+} from "./sessions.js";
 import {
   getGitPathStates,
   getGitDiffDocument,
@@ -624,6 +628,7 @@ app.whenReady().then(() => {
       undefined,
       previewsByKey,
       getActiveRuntimeSessionsByTaskWorktreeId(),
+      loadSuggestedWorktreeSessions,
     );
   });
 

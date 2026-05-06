@@ -23,8 +23,16 @@ fs.writeFileSync(
   })}\n`,
 );
 
-const { loadSessions, loadStoredSessionPreviews } = await import("../../src/main/sessions.ts");
+const {
+  loadSessions,
+  loadStoredSessionPreviews,
+  loadSuggestedWorktreeSessions,
+} = await import("../../src/main/sessions.ts");
 const { toSessionKey } = await import("../../src/shared/session.ts");
+
+function jsonl(...entries) {
+  return `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`;
+}
 
 test.after(() => {
   if (previousHome === undefined) {
@@ -61,4 +69,53 @@ test("loadStoredSessionPreviews は stored session の preview を key で返す
   const previews = await loadStoredSessionPreviews();
 
   assert.equal(previews.get(toSessionKey("claude", "claude-1")), "last message");
+});
+
+test("loadSuggestedWorktreeSessions は suggested session を worktree ごとに dedup して並べる", async () => {
+  const projectsDir = path.join(claudeDir, "projects", "repo");
+  fs.mkdirSync(projectsDir, { recursive: true });
+  const worktreeA = path.join(tempDir, "repo", ".claude", "worktrees", "task-a");
+  const worktreeB = path.join(tempDir, "repo", ".claude", "worktrees", "task-b");
+  fs.writeFileSync(
+    path.join(projectsDir, "b.jsonl"),
+    jsonl({
+      type: "worktree-state",
+      sessionId: "claude-b",
+      worktreeSession: { worktreePath: worktreeA },
+    }),
+  );
+  fs.writeFileSync(
+    path.join(projectsDir, "a.jsonl"),
+    jsonl({
+      type: "worktree-state",
+      sessionId: "claude-a",
+      worktreeSession: { worktreePath: worktreeA },
+    }),
+  );
+  fs.writeFileSync(
+    path.join(projectsDir, "a-duplicate.jsonl"),
+    jsonl({
+      type: "worktree-state",
+      sessionId: "claude-a",
+      worktreeSession: { worktreePath: worktreeA },
+    }),
+  );
+  fs.writeFileSync(
+    path.join(projectsDir, "other-worktree.jsonl"),
+    jsonl({
+      type: "worktree-state",
+      sessionId: "claude-a",
+      worktreeSession: { worktreePath: worktreeB },
+    }),
+  );
+
+  const suggestions = await loadSuggestedWorktreeSessions([worktreeB, worktreeA]);
+
+  assert.deepEqual(suggestions.get(worktreeA), [
+    { provider: "claude", providerSessionId: "claude-a" },
+    { provider: "claude", providerSessionId: "claude-b" },
+  ]);
+  assert.deepEqual(suggestions.get(worktreeB), [
+    { provider: "claude", providerSessionId: "claude-a" },
+  ]);
 });

@@ -10,7 +10,11 @@ export interface PrimarySessionMetadata {
   providerSessionId: string;
 }
 
-export type SuggestedSessionMetadata = PrimarySessionMetadata;
+export interface SuggestedSessionListItem {
+  provider: SessionProvider;
+  providerSessionKey: string;
+  preview: string;
+}
 
 export interface TaskWorktreeMetadata {
   taskWorktreeId: string;
@@ -34,7 +38,7 @@ export interface TaskWorktreeListItem {
   worktreePath: string;
   name: string;
   primarySession?: PrimarySessionListItem;
-  suggestedSessions: SuggestedSessionMetadata[];
+  suggestedSessions: SuggestedSessionListItem[];
 }
 
 export interface RepoListItem extends RepoMetadata {

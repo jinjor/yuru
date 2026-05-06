@@ -5,6 +5,7 @@ import type {
   PrimarySessionMetadata,
   RepoListItem,
   RepoMetadata,
+  SuggestedSessionListItem,
   TaskWorktreeListItem,
   TaskWorktreeMetadata,
   YuruMetadata,
@@ -13,6 +14,9 @@ import { toSessionKey, type RuntimeSessionId, type SessionProvider } from "../sh
 import { listWorktrees, type WorktreeInfo } from "./git.js";
 
 type ListWorktrees = (repoPath: string) => Promise<readonly WorktreeInfo[]>;
+type LoadSuggestedSessions = (
+  worktreePaths: readonly string[],
+) => Promise<ReadonlyMap<string, readonly PrimarySessionMetadata[]>>;
 
 export interface ActiveRuntimeSessionListItem {
   runtimeSessionId: RuntimeSessionId;
@@ -37,9 +41,10 @@ export async function loadRepoList(
   listGitWorktrees: ListWorktrees = listWorktrees,
   primarySessionPreviewsByKey?: ReadonlyMap<string, string>,
   activeRuntimeSessionsByTaskWorktreeId?: ReadonlyMap<string, ActiveRuntimeSessionListItem>,
+  loadSuggestedSessions?: LoadSuggestedSessions,
 ): Promise<RepoListItem[]> {
   const metadata = loadMetadata();
-  return Promise.all(
+  const repoEntries = await Promise.all(
     metadata.repos.map(async (repo) => {
       // TODO: repo の存在確認。存在しない repo は返さない。
       const metadataByPath = new Map(
@@ -48,23 +53,34 @@ export async function loadRepoList(
           .map((taskWorktree) => [toWorktreePathKey(taskWorktree.worktreePath), taskWorktree]),
       );
       const gitWorktrees = await loadGitWorktrees(repo.repoPath, listGitWorktrees);
-      const taskWorktrees = gitWorktrees.map((gitWorktree) =>
-        toTaskWorktreeListItem(
-          repo.id,
-          gitWorktree.path,
-          metadataByPath.get(toWorktreePathKey(gitWorktree.path)),
-          activeRuntimeSessionIdsByKey,
-          primarySessionPreviewsByKey,
-          activeRuntimeSessionsByTaskWorktreeId,
-        ),
-      );
-
-      return {
-        ...repo,
-        taskWorktrees,
-      };
+      return { repo, metadataByPath, gitWorktrees };
     }),
   );
+  const worktreePaths = repoEntries.flatMap((entry) =>
+    entry.gitWorktrees.map((gitWorktree) => gitWorktree.path),
+  );
+  const suggestedSessionsByWorktreePath = loadSuggestedSessions
+    ? await loadSuggestedSessions(worktreePaths)
+    : undefined;
+
+  return repoEntries.map(({ repo, metadataByPath, gitWorktrees }) => {
+    const taskWorktrees = gitWorktrees.map((gitWorktree) =>
+      toTaskWorktreeListItem(
+        repo.id,
+        gitWorktree.path,
+        metadataByPath.get(toWorktreePathKey(gitWorktree.path)),
+        activeRuntimeSessionIdsByKey,
+        primarySessionPreviewsByKey,
+        activeRuntimeSessionsByTaskWorktreeId,
+        suggestedSessionsByWorktreePath?.get(gitWorktree.path) ?? [],
+      ),
+    );
+
+    return {
+      ...repo,
+      taskWorktrees,
+    };
+  });
 }
 
 export function loadTaskWorktrees(): TaskWorktreeMetadata[] {
@@ -251,6 +267,7 @@ function toTaskWorktreeListItem(
   activeRuntimeSessionIdsByKey: ReadonlyMap<string, RuntimeSessionId> | undefined,
   primarySessionPreviewsByKey: ReadonlyMap<string, string> | undefined,
   activeRuntimeSessionsByTaskWorktreeId: ReadonlyMap<string, ActiveRuntimeSessionListItem> | undefined,
+  suggestedSessions: readonly PrimarySessionMetadata[],
 ): TaskWorktreeListItem {
   const taskWorktreeId = metadataEntry?.taskWorktreeId ?? `git:${repoId}:${worktreePath}`;
   const primarySession = metadataEntry?.primarySession;
@@ -264,6 +281,11 @@ function toTaskWorktreeListItem(
   const activeRuntimeSessionKey = activeRuntimeSession?.providerSessionId
     ? toSessionKey(activeRuntimeSession.provider, activeRuntimeSession.providerSessionId)
     : null;
+  const suggestedSessionItems = toSuggestedSessionListItems(
+    suggestedSessions,
+    new Set([primarySessionKey, activeRuntimeSessionKey].filter((key) => key !== null)),
+    primarySessionPreviewsByKey,
+  );
 
   return {
     taskWorktreeId,
@@ -288,8 +310,28 @@ function toTaskWorktreeListItem(
               : "",
           }
       : undefined,
-    suggestedSessions: [],
+    suggestedSessions: suggestedSessionItems,
   };
+}
+
+function toSuggestedSessionListItems(
+  suggestedSessions: readonly PrimarySessionMetadata[],
+  excludedSessionKeys: ReadonlySet<string>,
+  primarySessionPreviewsByKey: ReadonlyMap<string, string> | undefined,
+): SuggestedSessionListItem[] {
+  return suggestedSessions.flatMap((session) => {
+    const providerSessionKey = toSessionKey(session.provider, session.providerSessionId);
+    if (excludedSessionKeys.has(providerSessionKey)) {
+      return [];
+    }
+    return [
+      {
+        provider: session.provider,
+        providerSessionKey,
+        preview: primarySessionPreviewsByKey?.get(providerSessionKey) ?? "",
+      },
+    ];
+  });
 }
 
 function toWorktreePathKey(worktreePath: string): string {

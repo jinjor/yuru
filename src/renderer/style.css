@@ -252,6 +252,15 @@ body,
   background: transparent;
 }
 
+.repo-task-worktree-row.suggested {
+  cursor: default;
+  opacity: 0.82;
+}
+
+.repo-task-worktree-row.suggested:hover {
+  background: transparent;
+}
+
 .repo-task-worktree-row.selected {
   background: rgba(123, 193, 255, 0.1);
   box-shadow: inset 2px 0 0 var(--accent);

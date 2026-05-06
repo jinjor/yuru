@@ -291,6 +291,140 @@ test("loadRepoList は primary session の preview を返す", async () => {
   assert.equal(result[0].taskWorktrees[0].primarySession.preview, "preview text");
 });
 
+test("loadRepoList は suggested worktree session を返す", async () => {
+  seed({
+    repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
+    taskWorktrees: [
+      {
+        taskWorktreeId: "wt-1",
+        repoId: "repo-1",
+        worktreePath: "/tmp/repo-a/.yuru/worktrees/task-a",
+      },
+    ],
+  });
+  const listGitWorktrees = listGitWorktreesFrom(
+    new Map([
+      [
+        "/tmp/repo-a",
+        [{ path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a" }],
+      ],
+    ]),
+  );
+
+  const result = await loadRepoList(
+    undefined,
+    listGitWorktrees,
+    new Map([[toSessionKey("claude", "claude-1"), "suggested preview"]]),
+    undefined,
+    async (worktreePaths) =>
+      new Map([
+        [
+          worktreePaths[0],
+          [
+            {
+              provider: "claude",
+              providerSessionId: "claude-1",
+            },
+          ],
+        ],
+      ]),
+  );
+
+  assert.deepEqual(result[0].taskWorktrees[0].suggestedSessions, [
+    {
+      provider: "claude",
+      providerSessionKey: toSessionKey("claude", "claude-1"),
+      preview: "suggested preview",
+    },
+  ]);
+});
+
+test("loadRepoList は primary と同じ session を suggested から除外する", async () => {
+  seed({
+    repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
+    taskWorktrees: [
+      {
+        taskWorktreeId: "wt-1",
+        repoId: "repo-1",
+        worktreePath: "/tmp/repo-a/.yuru/worktrees/task-a",
+        primarySession: { provider: "claude", providerSessionId: "claude-1" },
+      },
+    ],
+  });
+  const listGitWorktrees = listGitWorktreesFrom(
+    new Map([
+      [
+        "/tmp/repo-a",
+        [{ path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a" }],
+      ],
+    ]),
+  );
+
+  const result = await loadRepoList(
+    undefined,
+    listGitWorktrees,
+    undefined,
+    undefined,
+    async (worktreePaths) =>
+      new Map([
+        [
+          worktreePaths[0],
+          [
+            {
+              provider: "claude",
+              providerSessionId: "claude-1",
+            },
+          ],
+        ],
+      ]),
+  );
+
+  assert.deepEqual(result[0].taskWorktrees[0].suggestedSessions, []);
+});
+
+test("loadRepoList は suggested worktree session を並び替えずに返す", async () => {
+  seed({
+    repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
+    taskWorktrees: [],
+  });
+  const listGitWorktrees = listGitWorktreesFrom(
+    new Map([
+      [
+        "/tmp/repo-a",
+        [{ path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a" }],
+      ],
+    ]),
+  );
+
+  const result = await loadRepoList(
+    undefined,
+    listGitWorktrees,
+    undefined,
+    undefined,
+    async (worktreePaths) =>
+      new Map([
+        [
+          worktreePaths[0],
+          [
+            {
+              provider: "claude",
+              providerSessionId: "claude-b",
+            },
+            {
+              provider: "claude",
+              providerSessionId: "claude-a",
+            },
+          ],
+        ],
+      ]),
+  );
+
+  assert.deepEqual(
+    result[0].taskWorktrees[0].suggestedSessions.map((session) => session.providerSessionKey),
+    [toSessionKey("claude", "claude-b"), toSessionKey("claude", "claude-a")],
+  );
+});
+
 test("upsertTaskWorktree は指定した ID で新規登録する", () => {
   seed({ repos: [{ id: "repo-1", repoPath: "/tmp/repo" }], taskWorktrees: [] });
   upsertTaskWorktree("wt-id-1", "repo-1", "/tmp/wt");

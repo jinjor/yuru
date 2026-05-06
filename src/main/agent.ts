@@ -1,6 +1,7 @@
 import * as pty from "node-pty";
 import type { SessionProvider } from "../shared/session.js";
 import type { AgentDefinition } from "../shared/agent.js";
+import type { WorktreeSessionHint } from "./worktree-session-detection.js";
 
 export interface SessionSnapshot {
   provider: SessionProvider;
@@ -62,6 +63,7 @@ export interface SessionProviderAdapter {
   command: string;
   resolvesSessionIdLazily: boolean;
   loadStoredSessions(): Promise<SessionSnapshot[]>;
+  loadWorktreeSessionHints(worktreePaths: readonly string[]): Promise<WorktreeSessionHint[]>;
   hasStoredSession(providerSessionId: string): Promise<boolean>;
   createNewLaunch(repoPath: string): Promise<LaunchRequest>;
   createResumeLaunch(session: ResumeSessionTarget): Promise<LaunchRequest>;

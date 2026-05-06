@@ -258,7 +258,7 @@ provider ごとの hint は session identity を置き換えるためではな�
    - metadata の primary session と runtime active session を重ねて `repo.taskWorktrees` として渡す
    - metadata にない Git worktree も empty worktree として表示対象に含める
    - suggested worktree session 検出の土台として、provider store を重ねられる形にしておく
-14. [ ] Claude の suggested worktree session を表示できる
+14. [x] Claude の suggested worktree session を表示できる
 15. [ ] サジェストされた worktree session を primary に昇格できる
 16. [ ] Codex の suggested worktree session を表示し、primary に昇格できる
 17. [ ] primary session のアイテムに branch 名が表示されている

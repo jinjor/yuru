@@ -1,5 +1,6 @@
 import { setTimeout } from "node:timers/promises";
 import fs from "fs";
+import path from "path";
 import { branchExists, renameBranch } from "../../git.js";
 import type {
   PendingSession,
@@ -12,6 +13,10 @@ import {
   parseJsonLinesAs,
   readTextFileIfExists,
 } from "../../agent-store-utils.js";
+import {
+  detectClaudeWorktreeSession,
+  type WorktreeSessionHint,
+} from "../../worktree-session-detection.js";
 import {
   claudeBranchName,
   claudeHistoryPath,
@@ -77,6 +82,32 @@ async function loadStoredSessions(): Promise<SessionSnapshot[]> {
   return Array.from(sessionMap.values());
 }
 
+async function loadWorktreeSessionHints(
+  worktreePaths: readonly string[],
+): Promise<WorktreeSessionHint[]> {
+  if (worktreePaths.length === 0) {
+    return [];
+  }
+
+  const worktreePathKeys = new Set(worktreePaths.map((worktreePath) => path.resolve(worktreePath)));
+  const hints: WorktreeSessionHint[] = [];
+  await Promise.all(
+    (await listFilesRecursive(claudeProjectsPath())).map(async (filePath) => {
+      const content = await readTextFileIfExists(filePath);
+      if (!content) {
+        return;
+      }
+      const hint = detectClaudeWorktreeSession(content, worktreePaths);
+      if (!hint || !worktreePathKeys.has(path.resolve(hint.worktreePath))) {
+        return;
+      }
+      hints.push(hint);
+    }),
+  );
+
+  return hints;
+}
+
 async function hasStoredSession(providerSessionId: string): Promise<boolean> {
   if ((await loadStoredSessions()).some((session) => session.providerSessionId === providerSessionId)) {
     return true;
@@ -117,6 +148,7 @@ export const sessionProvider: SessionProviderAdapter = {
   command: "claude",
   resolvesSessionIdLazily: false,
   loadStoredSessions,
+  loadWorktreeSessionHints,
   hasStoredSession,
   async createNewLaunch(repoPath) {
     return {

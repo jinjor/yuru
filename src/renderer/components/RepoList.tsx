@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import type { AgentDefinition } from "../../shared/agent";
 import type { RepoListItem } from "../../shared/metadata";
 import { providerLabel } from "../utils/session";
@@ -45,19 +46,47 @@ export function RepoList({
             <div className="repo-task-worktrees">
               {repo.taskWorktrees.map((taskWorktree) => {
                 const primarySession = taskWorktree.primarySession;
+                const suggestedSessionRows = taskWorktree.suggestedSessions.map(
+                  (suggestedSession) => {
+                    const preview = suggestedSession.preview || "(no messages)";
+                    const providerName = providerLabel(suggestedSession.provider);
+                    return (
+                      <div
+                        key={suggestedSession.providerSessionKey}
+                        className="repo-task-worktree-row suggested"
+                        title={taskWorktree.worktreePath}
+                        aria-label={`${providerName} suggested session for ${taskWorktree.name}`}
+                      >
+                        <span
+                          className={`session-provider-dot provider-${suggestedSession.provider} inactive`}
+                          title={`${providerName} · suggested`}
+                          aria-label={`${providerName} suggested session`}
+                        />
+                        <span className="repo-task-worktree-text">
+                          <span className="repo-task-worktree-name">{providerName}</span>
+                          <span className="repo-task-worktree-preview" title={preview}>
+                            {preview}
+                          </span>
+                        </span>
+                      </div>
+                    );
+                  },
+                );
                 if (!primarySession) {
                   return (
-                    <div
-                      key={taskWorktree.taskWorktreeId}
-                      className="repo-task-worktree-row empty"
-                      title={taskWorktree.worktreePath}
-                      aria-label={`Worktree ${taskWorktree.name}`}
-                    >
-                      <span className="repo-task-worktree-empty-glyph" aria-hidden="true">
-                        +
-                      </span>
-                      <span className="repo-task-worktree-name">{taskWorktree.name}</span>
-                    </div>
+                    <Fragment key={taskWorktree.taskWorktreeId}>
+                      <div
+                        className="repo-task-worktree-row empty"
+                        title={taskWorktree.worktreePath}
+                        aria-label={`Worktree ${taskWorktree.name}`}
+                      >
+                        <span className="repo-task-worktree-empty-glyph" aria-hidden="true">
+                          +
+                        </span>
+                        <span className="repo-task-worktree-name">{taskWorktree.name}</span>
+                      </div>
+                      {suggestedSessionRows}
+                    </Fragment>
                   );
                 }
                 const preview = primarySession.preview || "(no messages)";
@@ -66,37 +95,39 @@ export function RepoList({
                   selectedRuntimeSessionId !== null &&
                   selectedRuntimeSessionId === primarySession.activeRuntimeSessionId;
                 return (
-                  <button
-                    key={taskWorktree.taskWorktreeId}
-                    type="button"
-                    className={`repo-task-worktree-row ${isSelected ? "selected" : ""}`}
-                    onClick={() => {
-                      if (primarySession.activeRuntimeSessionId) {
-                        onSelectRuntimeSession(primarySession.activeRuntimeSessionId);
-                        return;
-                      }
-                      if (primarySession.providerSessionKey) {
-                        onResumePrimarySession(
-                          taskWorktree.taskWorktreeId,
-                          primarySession.providerSessionKey,
-                        );
-                      }
-                    }}
-                    title={taskWorktree.worktreePath}
-                    aria-label={`Resume primary session for ${taskWorktree.name}`}
-                  >
-                    <span
-                      className={`session-provider-dot provider-${primarySession.provider} ${primarySession.state}`}
-                      title={`${providerName} · ${primarySession.state}`}
-                      aria-label={`${providerName} primary session ${primarySession.state}`}
-                    />
-                    <span className="repo-task-worktree-text">
-                      <span className="repo-task-worktree-name">{taskWorktree.name}</span>
-                      <span className="repo-task-worktree-preview" title={preview}>
-                        {preview}
+                  <Fragment key={taskWorktree.taskWorktreeId}>
+                    <button
+                      type="button"
+                      className={`repo-task-worktree-row ${isSelected ? "selected" : ""}`}
+                      onClick={() => {
+                        if (primarySession.activeRuntimeSessionId) {
+                          onSelectRuntimeSession(primarySession.activeRuntimeSessionId);
+                          return;
+                        }
+                        if (primarySession.providerSessionKey) {
+                          onResumePrimarySession(
+                            taskWorktree.taskWorktreeId,
+                            primarySession.providerSessionKey,
+                          );
+                        }
+                      }}
+                      title={taskWorktree.worktreePath}
+                      aria-label={`Resume primary session for ${taskWorktree.name}`}
+                    >
+                      <span
+                        className={`session-provider-dot provider-${primarySession.provider} ${primarySession.state}`}
+                        title={`${providerName} · ${primarySession.state}`}
+                        aria-label={`${providerName} primary session ${primarySession.state}`}
+                      />
+                      <span className="repo-task-worktree-text">
+                        <span className="repo-task-worktree-name">{taskWorktree.name}</span>
+                        <span className="repo-task-worktree-preview" title={preview}>
+                          {preview}
+                        </span>
                       </span>
-                    </span>
-                  </button>
+                    </button>
+                    {suggestedSessionRows}
+                  </Fragment>
                 );
               })}
             </div>

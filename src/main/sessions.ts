@@ -4,6 +4,7 @@ import { getRepoRootForProject, listWorktrees } from "./git.js";
 import { getGitHubPullRequestForBranch } from "./github.js";
 import { sessionProviders } from "./agent-registry.js";
 import type { RuntimeSessionInfo } from "./agent.js";
+import type { PrimarySessionMetadata } from "../shared/metadata.js";
 import { toSessionKey, type Session } from "../shared/session.js";
 
 async function buildWorktreeMap(
@@ -51,6 +52,56 @@ export async function loadStoredSessionPreviews(): Promise<Map<string, string>> 
     previews.set(toSessionKey(snapshot.provider, snapshot.providerSessionId), snapshot.lastMessage);
   }
   return previews;
+}
+
+export async function loadSuggestedWorktreeSessions(
+  worktreePaths: readonly string[],
+): Promise<Map<string, PrimarySessionMetadata[]>> {
+  const worktreePathByKey = new Map(
+    worktreePaths.map((worktreePath) => [path.resolve(worktreePath), worktreePath]),
+  );
+  const suggestionsByWorktreePath = new Map<string, PrimarySessionMetadata[]>();
+  const hints = (
+    await Promise.all(
+      Object.values(sessionProviders).map((provider) => provider.loadWorktreeSessionHints(worktreePaths)),
+    )
+  )
+    .flat()
+    .flatMap((hint) => {
+      const worktreePath = worktreePathByKey.get(path.resolve(hint.worktreePath));
+      return worktreePath ? [{ ...hint, worktreePath }] : [];
+    })
+    .sort((a, b) => {
+      const worktreePathOrder = a.worktreePath.localeCompare(b.worktreePath);
+      if (worktreePathOrder !== 0) {
+        return worktreePathOrder;
+      }
+      const providerOrder = a.provider.localeCompare(b.provider);
+      if (providerOrder !== 0) {
+        return providerOrder;
+      }
+      return a.providerSessionId.localeCompare(b.providerSessionId);
+    });
+
+  const seenSessionKeysByWorktreePath = new Map<string, Set<string>>();
+  for (const hint of hints) {
+    const providerSessionKey = toSessionKey(hint.provider, hint.providerSessionId);
+    const seenSessionKeys = seenSessionKeysByWorktreePath.get(hint.worktreePath) ?? new Set<string>();
+    if (seenSessionKeys.has(providerSessionKey)) {
+      continue;
+    }
+    seenSessionKeys.add(providerSessionKey);
+    seenSessionKeysByWorktreePath.set(hint.worktreePath, seenSessionKeys);
+
+    const suggestions = suggestionsByWorktreePath.get(hint.worktreePath) ?? [];
+    suggestions.push({
+      provider: hint.provider,
+      providerSessionId: hint.providerSessionId,
+    });
+    suggestionsByWorktreePath.set(hint.worktreePath, suggestions);
+  }
+
+  return suggestionsByWorktreePath;
 }
 
 export async function loadSessions(

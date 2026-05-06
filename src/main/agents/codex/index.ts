@@ -200,6 +200,9 @@ export const sessionProvider: SessionProviderAdapter = {
   command: "codex",
   resolvesSessionIdLazily: true,
   loadStoredSessions,
+  async loadWorktreeSessionHints() {
+    return [];
+  },
   hasStoredSession,
   async createNewLaunch(repoPath) {
     return {
