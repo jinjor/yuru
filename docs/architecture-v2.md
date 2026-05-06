@@ -259,11 +259,19 @@ provider ごとの hint は session identity を置き換えるためではな�
    - metadata にない Git worktree も empty worktree として表示対象に含める
    - suggested worktree session 検出の土台として、provider store を重ねられる形にしておく
 14. [x] Claude の suggested worktree session を表示できる
-15. [ ] サジェストされた worktree session を primary に昇格できる
-16. [ ] Codex の suggested worktree session を表示し、primary に昇格できる
-17. [ ] primary session のアイテムに branch 名が表示されている
-18. [ ] V1 の session-first 実装を削除する
-19. [ ] metadata の stale な task worktree を起動時に掃除できる
+15. [ ] worktree lifecycle の UI 構造を整理する
+   - 目標構造は [docs/v2-worktree-design.png](v2-worktree-design.png) （状態遷移図）を参照する
+   - 状態遷移図は inactive / active と has primary / no primary の 2x2 matrix になっている
+   - 重要なのは構造であり、スタイルやアイコンは最適なものをゼロベースで考える（既存と同じでも良いが囚われずに考える）
+   - 図の点線の丸は suggested session を示す（ない場合もある）
+   - repo から worktree を作成した直後は左下からスタート
+   - yuru 経由ではない既存のセッションは右上からスタート
+   - この story では挙動を増やさず、以降の primary 昇格や Codex suggested session 追加が載る UI の土台を作る
+16. [ ] サジェストされた worktree session を primary に昇格できる
+17. [ ] Codex の suggested worktree session を表示し、primary に昇格できる
+18. [ ] primary session のアイテムに branch 名が表示されている
+19. [ ] V1 の session-first 実装を削除する
+20. [ ] metadata の stale な task worktree を起動時に掃除できる
    - `loadRepoList` のような表示経路ではなく、起動時に 1 回だけ走る maintenance 処理として独立させる
    - registered repo ごとに `git worktree list` が成功した時だけ、その repo の `taskWorktrees` のうち成功 list に含まれない record を削除する
    - repo 自体の cleanup はしない（path 不在は missing repo として後続 UX に回す。一時的に読めないだけのケースと区別できないため）
