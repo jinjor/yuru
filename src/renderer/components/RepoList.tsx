@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import type { AgentDefinition } from "../../shared/agent";
 import type {
   PrimarySessionListItem,
@@ -24,12 +25,33 @@ export function RepoList({
   onSelectRuntimeSession,
   onResumePrimarySession,
 }: RepoListProps) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const [openActionWorktreeId, setOpenActionWorktreeId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!openActionWorktreeId) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (listRef.current?.contains(event.target as Node)) {
+        return;
+      }
+      setOpenActionWorktreeId(null);
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [openActionWorktreeId]);
+
   if (repos.length === 0) {
     return <div className="repo-list-empty">No repositories</div>;
   }
 
   return (
-    <div className="repo-list">
+    <div ref={listRef} className="repo-list" onClick={() => setOpenActionWorktreeId(null)}>
       {repos.map((repo) => (
         <div key={repo.id} className="repo-group">
           <div className="repo-row" title={repo.repoPath}>
@@ -52,7 +74,17 @@ export function RepoList({
                 <TaskWorktreeCard
                   key={taskWorktree.taskWorktreeId}
                   taskWorktree={taskWorktree}
+                  providers={providers}
                   selectedRuntimeSessionId={selectedRuntimeSessionId}
+                  isActionSurfaceOpen={openActionWorktreeId === taskWorktree.taskWorktreeId}
+                  onCloseActionSurface={() => setOpenActionWorktreeId(null)}
+                  onToggleActionSurface={() => {
+                    setOpenActionWorktreeId((prev) =>
+                      prev === taskWorktree.taskWorktreeId
+                        ? null
+                        : taskWorktree.taskWorktreeId,
+                    );
+                  }}
                   onSelectRuntimeSession={onSelectRuntimeSession}
                   onResumePrimarySession={onResumePrimarySession}
                 />
@@ -67,142 +99,199 @@ export function RepoList({
 
 interface TaskWorktreeCardProps {
   taskWorktree: TaskWorktreeListItem;
+  providers: AgentDefinition[];
   selectedRuntimeSessionId: string | null;
+  isActionSurfaceOpen: boolean;
+  onCloseActionSurface: () => void;
+  onToggleActionSurface: () => void;
   onSelectRuntimeSession: (runtimeSessionId: string) => void;
   onResumePrimarySession: (taskWorktreeId: string, providerSessionKey: string) => void;
 }
 
 function TaskWorktreeCard({
   taskWorktree,
+  providers,
   selectedRuntimeSessionId,
+  isActionSurfaceOpen,
+  onCloseActionSurface,
+  onToggleActionSurface,
   onSelectRuntimeSession,
   onResumePrimarySession,
 }: TaskWorktreeCardProps) {
   const { primarySession, suggestedSessions } = taskWorktree;
   const isActive = primarySession?.state === "active";
+  const isSelected =
+    primarySession !== undefined &&
+    selectedRuntimeSessionId !== null &&
+    selectedRuntimeSessionId === primarySession.activeRuntimeSessionId;
+
+  const selectPrimarySession = () => {
+    if (!primarySession) {
+      return;
+    }
+    if (primarySession.activeRuntimeSessionId) {
+      onSelectRuntimeSession(primarySession.activeRuntimeSessionId);
+      return;
+    }
+    if (primarySession.providerSessionKey) {
+      onResumePrimarySession(taskWorktree.taskWorktreeId, primarySession.providerSessionKey);
+    }
+  };
+
+  const handleCardClick = (event: MouseEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+    if (primarySession) {
+      onCloseActionSurface();
+      selectPrimarySession();
+      return;
+    }
+    onToggleActionSurface();
+  };
+
+  const handleCardKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+    event.preventDefault();
+    if (primarySession) {
+      onCloseActionSurface();
+      selectPrimarySession();
+      return;
+    }
+    onToggleActionSurface();
+  };
+
   return (
     <div
-      className={`task-worktree-card ${isActive ? "active" : "inactive"}`}
+      className={[
+        "task-worktree-card",
+        primarySession ? "has-primary" : "no-primary",
+        isActive ? "active" : "inactive",
+        isSelected ? "selected" : "",
+        isActionSurfaceOpen ? "action-open" : "",
+      ].join(" ")}
       title={taskWorktree.worktreePath}
+      role="button"
+      tabIndex={0}
+      onClick={handleCardClick}
+      onKeyDown={handleCardKeyDown}
     >
-      <div className="task-worktree-header">
+      <div className="task-worktree-summary">
         <span className="task-worktree-name">{taskWorktree.name}</span>
-      </div>
-      <div className="task-worktree-body">
         {primarySession ? (
-          <PrimarySessionItem
-            taskWorktreeId={taskWorktree.taskWorktreeId}
-            taskWorktreeName={taskWorktree.name}
-            primarySession={primarySession}
-            isSelected={
-              selectedRuntimeSessionId !== null &&
-              selectedRuntimeSessionId === primarySession.activeRuntimeSessionId
-            }
-            onSelectRuntimeSession={onSelectRuntimeSession}
-            onResumePrimarySession={onResumePrimarySession}
-          />
+          <PrimarySessionSummary primarySession={primarySession} />
         ) : (
-          <>
-            {suggestedSessions.map((suggestedSession) => (
-              <SuggestedSessionItem
-                key={suggestedSession.providerSessionKey}
-                taskWorktreeName={taskWorktree.name}
-                suggestedSession={suggestedSession}
-              />
-            ))}
-            <NewSessionItem taskWorktreeName={taskWorktree.name} />
-          </>
+          <span className="task-worktree-hint">{formatExistingSessionCount(suggestedSessions.length)}</span>
         )}
       </div>
+      {!primarySession && isActionSurfaceOpen && (
+        <TaskWorktreeActionSurface
+          providers={providers}
+          suggestedSessions={suggestedSessions}
+          onClick={(event) => event.stopPropagation()}
+        />
+      )}
     </div>
   );
 }
 
-interface PrimarySessionItemProps {
-  taskWorktreeId: string;
-  taskWorktreeName: string;
+interface PrimarySessionSummaryProps {
   primarySession: PrimarySessionListItem;
-  isSelected: boolean;
-  onSelectRuntimeSession: (runtimeSessionId: string) => void;
-  onResumePrimarySession: (taskWorktreeId: string, providerSessionKey: string) => void;
 }
 
-function PrimarySessionItem({
-  taskWorktreeId,
-  taskWorktreeName,
-  primarySession,
-  isSelected,
-  onSelectRuntimeSession,
-  onResumePrimarySession,
-}: PrimarySessionItemProps) {
+function PrimarySessionSummary({ primarySession }: PrimarySessionSummaryProps) {
   const preview = primarySession.preview || "(no messages)";
   const providerName = providerLabel(primarySession.provider);
   return (
-    <button
-      type="button"
-      className={`session-item primary ${isSelected ? "selected" : ""}`}
-      onClick={() => {
-        if (primarySession.activeRuntimeSessionId) {
-          onSelectRuntimeSession(primarySession.activeRuntimeSessionId);
-          return;
-        }
-        if (primarySession.providerSessionKey) {
-          onResumePrimarySession(taskWorktreeId, primarySession.providerSessionKey);
-        }
-      }}
-      aria-label={`Resume primary session for ${taskWorktreeName}`}
-    >
+    <span className="task-worktree-session-row">
       <span
         className={`session-provider-dot provider-${primarySession.provider} ${primarySession.state}`}
         title={`${providerName} · ${primarySession.state}`}
         aria-label={`${providerName} primary session ${primarySession.state}`}
       />
-      <span className="session-item-text" title={preview}>
+      <span className="task-worktree-session-preview" title={preview}>
         {preview}
       </span>
-    </button>
+    </span>
   );
 }
 
-interface SuggestedSessionItemProps {
-  taskWorktreeName: string;
-  suggestedSession: SuggestedSessionListItem;
+interface TaskWorktreeActionSurfaceProps {
+  providers: AgentDefinition[];
+  suggestedSessions: SuggestedSessionListItem[];
+  onClick: (event: MouseEvent<HTMLDivElement>) => void;
 }
 
-interface NewSessionItemProps {
-  taskWorktreeName: string;
-}
-
-function NewSessionItem({ taskWorktreeName }: NewSessionItemProps) {
+function TaskWorktreeActionSurface({
+  providers,
+  suggestedSessions,
+  onClick,
+}: TaskWorktreeActionSurfaceProps) {
   return (
-    <div
-      className="session-item new-session"
-      aria-label={`New session for ${taskWorktreeName}`}
-    >
-      <span className="session-item-glyph" aria-hidden="true">
-        +
-      </span>
-      <span className="session-item-text">New session</span>
+    <div className="task-worktree-action-surface" onClick={onClick}>
+      {suggestedSessions.length > 0 && (
+        <div className="action-surface-section">
+          <div className="action-surface-label">Existing Session</div>
+          {suggestedSessions.map((suggestedSession) => (
+            <SuggestedSessionAction
+              key={suggestedSession.providerSessionKey}
+              suggestedSession={suggestedSession}
+            />
+          ))}
+        </div>
+      )}
+      <div className="action-surface-section">
+        <div className="action-surface-label">New Session</div>
+        <div className="new-session-actions">
+          {providers.map((provider) => (
+            <div
+              key={provider.id}
+              className="action-surface-row new-session-action"
+              aria-disabled="true"
+            >
+              <span
+                className={`session-provider-dot provider-${provider.id}`}
+                aria-hidden="true"
+              />
+              <span className="action-surface-row-main">{provider.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
 
-function SuggestedSessionItem({ taskWorktreeName, suggestedSession }: SuggestedSessionItemProps) {
+interface SuggestedSessionActionProps {
+  suggestedSession: SuggestedSessionListItem;
+}
+
+function SuggestedSessionAction({ suggestedSession }: SuggestedSessionActionProps) {
   const preview = suggestedSession.preview || "(no messages)";
   const providerName = providerLabel(suggestedSession.provider);
   return (
     <div
-      className="session-item suggested"
-      aria-label={`${providerName} suggested session for ${taskWorktreeName}`}
+      className="action-surface-row suggested-session-action"
+      aria-disabled="true"
     >
       <span
         className={`session-provider-dot provider-${suggestedSession.provider} suggested`}
         title={`${providerName} · suggested`}
         aria-label={`${providerName} suggested session`}
       />
-      <span className="session-item-text" title={preview}>
-        {preview}
+      <span className="action-surface-row-text">
+        <span className="action-surface-row-main" title={preview}>
+          {preview}
+        </span>
+        <span className="action-surface-row-meta">{providerName}</span>
       </span>
     </div>
   );
+}
+
+function formatExistingSessionCount(count: number): string {
+  if (count === 0) {
+    return "empty";
+  }
+  return `${count} existing session${count === 1 ? "" : "s"}`;
 }

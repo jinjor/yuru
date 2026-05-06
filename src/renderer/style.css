@@ -134,16 +134,19 @@ body,
 
 /* Sidebar */
 .sidebar {
+  position: relative;
+  z-index: 5;
   background: var(--bg-panel);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .sidebar-section {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: visible;
 }
 
 /* Repo list */
@@ -219,96 +222,190 @@ body,
   display: flex;
   flex-direction: column;
   padding: 0 16px 8px;
-  gap: 6px;
+  gap: 8px;
 }
 
 .task-worktree-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.015);
-  overflow: hidden;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #1b212c 0%, #151a23 100%);
+  cursor: pointer;
+  outline: none;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease;
 }
 
-.task-worktree-header {
-  padding: 5px 10px 3px;
+.task-worktree-card:hover,
+.task-worktree-card.action-open {
+  border-color: var(--border-strong);
+}
+
+.task-worktree-card.selected {
+  border-color: var(--accent);
+  background: linear-gradient(180deg, #27344d 0%, #1f2a3f 100%);
+  box-shadow: 0 0 0 1px rgba(123, 193, 255, 0.12);
+}
+
+.task-worktree-card:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(123, 193, 255, 0.18);
+}
+
+.task-worktree-card.inactive:not(.selected) .task-worktree-session-preview {
+  color: var(--text-subtle);
+}
+
+.task-worktree-summary {
+  min-height: 48px;
+  padding: 9px 12px 8px;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
   min-width: 0;
 }
 
+.task-worktree-card.has-primary .task-worktree-summary {
+  min-height: 60px;
+}
+
 .task-worktree-name {
+  font-size: 13px;
+  line-height: 1.15;
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-worktree-hint {
   font-size: 11px;
+  line-height: 1.15;
+  color: var(--text-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-worktree-session-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.task-worktree-session-preview {
+  min-width: 0;
+  flex: 1;
+  font-size: 12px;
+  line-height: 1.2;
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.task-worktree-body {
+.task-worktree-action-surface {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 10px);
+  width: 272px;
+  z-index: 20;
   display: flex;
   flex-direction: column;
-  padding: 0 4px 4px;
-  gap: 1px;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #3a4863;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #222a38 0%, #1a2030 100%);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.48);
 }
 
-.session-item {
-  width: 100%;
-  min-height: 22px;
+.task-worktree-action-surface::before {
+  content: "";
+  position: absolute;
+  top: 14px;
+  left: -7px;
+  width: 12px;
+  height: 12px;
+  background: #222a38;
+  border-left: 1px solid #3a4863;
+  border-bottom: 1px solid #3a4863;
+  transform: rotate(45deg);
+}
+
+.action-surface-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.action-surface-label {
+  font-size: 10px;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.new-session-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.action-surface-row {
+  min-width: 0;
+  min-height: 36px;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 8px;
-  border-radius: 4px;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
+  padding: 7px 10px;
+  border-radius: 8px;
+  color: var(--text);
 }
 
-.session-item.primary:hover {
-  background: rgba(255, 255, 255, 0.04);
+.suggested-session-action {
+  background: #27344d;
 }
 
-.session-item.suggested {
-  cursor: default;
-  opacity: 0.82;
+.new-session-action {
+  background: rgba(255, 255, 255, 0.02);
 }
 
-.session-item.new-session {
+.action-surface-row[aria-disabled="true"] {
   cursor: default;
 }
 
-.task-worktree-card.inactive .session-item-text,
-.session-item.new-session .session-item-text {
-  color: var(--text-subtle);
-}
-
-.session-item-glyph {
-  width: 9px;
-  flex-shrink: 0;
-  font-size: 12px;
-  line-height: 1;
-  text-align: center;
-  color: var(--text-subtle);
-}
-
-.session-item.selected {
-  background: rgba(123, 193, 255, 0.1);
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-
-.session-item-text {
+.action-surface-row-text {
   min-width: 0;
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.action-surface-row-main {
+  min-width: 0;
   font-size: 12px;
+  line-height: 1.15;
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.action-surface-row-meta {
+  font-size: 11px;
+  line-height: 1.15;
+  color: var(--text-subtle);
 }
 
 .repo-list-empty {
