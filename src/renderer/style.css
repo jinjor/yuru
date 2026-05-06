@@ -218,18 +218,49 @@ body,
 .repo-task-worktrees {
   display: flex;
   flex-direction: column;
-  padding: 0 8px 6px 26px;
+  padding: 0 16px 8px;
+  gap: 6px;
+}
+
+.task-worktree-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.015);
+  overflow: hidden;
+}
+
+.task-worktree-header {
+  padding: 5px 10px 3px;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.task-worktree-name {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-worktree-body {
+  display: flex;
+  flex-direction: column;
+  padding: 0 4px 4px;
   gap: 1px;
 }
 
-.repo-task-worktree-row {
+.session-item {
   width: 100%;
   min-height: 22px;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
   padding: 4px 8px;
-  border-radius: 5px;
+  border-radius: 4px;
   border: 0;
   background: transparent;
   color: inherit;
@@ -238,67 +269,46 @@ body,
   cursor: pointer;
 }
 
-.repo-task-worktree-row:hover {
-  background: rgba(255, 255, 255, 0.03);
+.session-item.primary:hover {
+  background: rgba(255, 255, 255, 0.04);
 }
 
-.repo-task-worktree-row.empty {
-  align-items: center;
-  padding: 2px 8px;
-  cursor: default;
-}
-
-.repo-task-worktree-row.empty:hover {
-  background: transparent;
-}
-
-.repo-task-worktree-row.suggested {
+.session-item.suggested {
   cursor: default;
   opacity: 0.82;
 }
 
-.repo-task-worktree-row.suggested:hover {
-  background: transparent;
+.session-item.new-session {
+  cursor: default;
 }
 
-.repo-task-worktree-row.selected {
+.task-worktree-card.inactive .session-item-text,
+.session-item.new-session .session-item-text {
+  color: var(--text-subtle);
+}
+
+.session-item-glyph {
+  width: 9px;
+  flex-shrink: 0;
+  font-size: 12px;
+  line-height: 1;
+  text-align: center;
+  color: var(--text-subtle);
+}
+
+.session-item.selected {
   background: rgba(123, 193, 255, 0.1);
   box-shadow: inset 2px 0 0 var(--accent);
 }
 
-.repo-task-worktree-empty-glyph {
-  width: 8px;
-  flex-shrink: 0;
-  color: #7f8da3;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1;
-  text-align: center;
-}
-
-.repo-task-worktree-text {
+.session-item-text {
   min-width: 0;
-  display: flex;
   flex: 1;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.repo-task-worktree-name,
-.repo-task-worktree-preview {
-  min-width: 0;
   font-size: 12px;
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.repo-task-worktree-name {
-  color: var(--text-muted);
-}
-
-.repo-task-worktree-preview {
-  color: var(--text);
 }
 
 .repo-list-empty {
@@ -426,6 +436,24 @@ body,
 .session-provider-dot.archived {
   opacity: 0.52;
   filter: saturate(0.72);
+}
+
+.session-provider-dot.suggested {
+  background: transparent;
+}
+
+.session-provider-dot.suggested.provider-claude {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px #d68949;
+}
+
+.session-provider-dot.suggested.provider-codex {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px #64b8f5;
+}
+
+.session-item .session-provider-dot {
+  margin-top: 0;
 }
 
 .session-preview-row,
