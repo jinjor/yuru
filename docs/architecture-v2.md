@@ -259,7 +259,7 @@ provider ごとの hint は session identity を置き換えるためではな�
    - metadata にない Git worktree も empty worktree として表示対象に含める
    - suggested worktree session 検出の土台として、provider store を重ねられる形にしておく
 14. [x] Claude の suggested worktree session を表示できる
-15. [ ] worktree lifecycle の UI 構造を整理する
+15. [x] worktree lifecycle の UI 構造を整理する
    - 目標構造は [docs/v2-worktree-design.png](v2-worktree-design.png) （状態遷移図）を参照する
    - 状態遷移図は inactive / active と has primary / no primary の 2x2 matrix になっている
    - 重要なのは構造であり、スタイルやアイコンは最適なものをゼロベースで考える（既存と同じでも良いが囚われずに考える）
@@ -268,6 +268,7 @@ provider ごとの hint は session identity を置き換えるためではな�
    - yuru 経由ではない既存のセッションは右上からスタート
    - この story では挙動を増やさず、以降の primary 昇格や Codex suggested session 追加が載る UI の土台を作る
 16. [ ] サジェストされた worktree session を primary に昇格できる
+   - クリックすると active になり選択状態になる（resume）+ primary になる
 17. [ ] Codex の suggested worktree session を表示し、primary に昇格できる
 18. [ ] primary session のアイテムに branch 名が表示されている
 19. [ ] V1 の session-first 実装を削除する
