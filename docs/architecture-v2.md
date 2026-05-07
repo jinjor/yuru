@@ -1,6 +1,6 @@
 # Architecture v2
 
-Last updated: 2026-04-28
+Last updated: 2026-05-08
 
 この文書は、task-worktree-first モデルの target architecture をまとめる。
 現行実装の説明は `docs/architecture.md` を参照する。
@@ -270,9 +270,19 @@ provider ごとの hint は session identity を置き換えるためではな�
 16. [ ] サジェストされた worktree session を primary に昇格できる
    - クリックすると active になり選択状態になる（resume）+ primary になる
 17. [ ] Codex の suggested worktree session を表示し、primary に昇格できる
-18. [ ] primary session のアイテムに branch 名が表示されている
-19. [ ] V1 の session-first 実装を削除する
-20. [ ] metadata の stale な task worktree を起動時に掃除できる
+18. [ ] runtime cwd を Files / Changes / Diff の source of truth にしている状態をやめる
+   - PTY は `cd` で任意の場所へ移動できるため、runtime の cwd を task worktree の作業ルートとして扱わない
+   - 右側の Files / Changes / Diff は選択中の task worktree の `worktreePath` を基準にする
+   - runtime が起動時 cwd を持つ場合でも、それは provider resume や表示補助の情報に留める
+19. [ ] active かつ suggested な session を UI 上で表現できる
+   - suggested session がすでに active runtime を持つ場合、それが左ペインで分かる
+   - クリック時は新規 resume ではなく promote + select になる
+20. [ ] suggested session を primary に昇格した時、他 worktree の primary から外れることを確認できる
+   - 1 provider session は同時に複数 task worktree の primary にはならない
+   - ある worktree の primary session が別 worktree の suggested として昇格されたら、元 worktree 側は active のまま primary ではなくなる
+21. [ ] primary session のアイテムに branch 名が表示されている
+22. [ ] V1 の session-first 実装を削除する
+23. [ ] metadata の stale な task worktree を起動時に掃除できる
    - `loadRepoList` のような表示経路ではなく、起動時に 1 回だけ走る maintenance 処理として独立させる
    - registered repo ごとに `git worktree list` が成功した時だけ、その repo の `taskWorktrees` のうち成功 list に含まれない record を削除する
    - repo 自体の cleanup はしない（path 不在は missing repo として後続 UX に回す。一時的に読めないだけのケースと区別できないため）
