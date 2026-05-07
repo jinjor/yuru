@@ -363,17 +363,32 @@ body,
 
 .action-surface-row {
   min-width: 0;
+  width: 100%;
   min-height: 36px;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 7px 10px;
+  border: 0;
   border-radius: 8px;
+  background: transparent;
   color: var(--text);
+  font: inherit;
+  text-align: left;
 }
 
 .suggested-session-action {
   background: #27344d;
+  cursor: pointer;
+}
+
+.suggested-session-action:hover {
+  background: #30405d;
+}
+
+.suggested-session-action:focus-visible {
+  outline: 2px solid rgba(123, 193, 255, 0.42);
+  outline-offset: 2px;
 }
 
 .new-session-action {

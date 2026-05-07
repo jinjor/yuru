@@ -13,8 +13,9 @@ interface RepoListProps {
   providers: AgentDefinition[];
   selectedRuntimeSessionId: string | null;
   onCreateWorktreeSession: (repoPath: string) => void;
-  onSelectRuntimeSession: (runtimeSessionId: string) => void;
-  onResumePrimarySession: (taskWorktreeId: string, providerSessionKey: string) => void;
+  onSelectActiveSession: (runtimeSessionId: string) => void;
+  onResumePrimarySession: (worktreeId: string, providerSessionKey: string) => void;
+  onResumeSuggestedSession: (worktreeId: string, providerSessionKey: string) => void;
 }
 
 export function RepoList({
@@ -22,8 +23,9 @@ export function RepoList({
   providers,
   selectedRuntimeSessionId,
   onCreateWorktreeSession,
-  onSelectRuntimeSession,
+  onSelectActiveSession,
   onResumePrimarySession,
+  onResumeSuggestedSession,
 }: RepoListProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const [openActionWorktreeId, setOpenActionWorktreeId] = useState<string | null>(null);
@@ -72,21 +74,22 @@ export function RepoList({
             <div className="repo-task-worktrees">
               {repo.taskWorktrees.map((taskWorktree) => (
                 <TaskWorktreeCard
-                  key={taskWorktree.taskWorktreeId}
+                  key={taskWorktree.worktreeId}
                   taskWorktree={taskWorktree}
                   providers={providers}
                   selectedRuntimeSessionId={selectedRuntimeSessionId}
-                  isActionSurfaceOpen={openActionWorktreeId === taskWorktree.taskWorktreeId}
+                  isActionSurfaceOpen={openActionWorktreeId === taskWorktree.worktreeId}
                   onCloseActionSurface={() => setOpenActionWorktreeId(null)}
                   onToggleActionSurface={() => {
                     setOpenActionWorktreeId((prev) =>
-                      prev === taskWorktree.taskWorktreeId
+                      prev === taskWorktree.worktreeId
                         ? null
-                        : taskWorktree.taskWorktreeId,
+                        : taskWorktree.worktreeId,
                     );
                   }}
-                  onSelectRuntimeSession={onSelectRuntimeSession}
+                  onSelectActiveSession={onSelectActiveSession}
                   onResumePrimarySession={onResumePrimarySession}
+                  onResumeSuggestedSession={onResumeSuggestedSession}
                 />
               ))}
             </div>
@@ -104,8 +107,9 @@ interface TaskWorktreeCardProps {
   isActionSurfaceOpen: boolean;
   onCloseActionSurface: () => void;
   onToggleActionSurface: () => void;
-  onSelectRuntimeSession: (runtimeSessionId: string) => void;
-  onResumePrimarySession: (taskWorktreeId: string, providerSessionKey: string) => void;
+  onSelectActiveSession: (runtimeSessionId: string) => void;
+  onResumePrimarySession: (worktreeId: string, providerSessionKey: string) => void;
+  onResumeSuggestedSession: (worktreeId: string, providerSessionKey: string) => void;
 }
 
 function TaskWorktreeCard({
@@ -115,8 +119,9 @@ function TaskWorktreeCard({
   isActionSurfaceOpen,
   onCloseActionSurface,
   onToggleActionSurface,
-  onSelectRuntimeSession,
+  onSelectActiveSession,
   onResumePrimarySession,
+  onResumeSuggestedSession,
 }: TaskWorktreeCardProps) {
   const { primarySession, suggestedSessions } = taskWorktree;
   const isActive = primarySession?.state === "active";
@@ -130,11 +135,11 @@ function TaskWorktreeCard({
       return;
     }
     if (primarySession.activeRuntimeSessionId) {
-      onSelectRuntimeSession(primarySession.activeRuntimeSessionId);
+      onSelectActiveSession(primarySession.activeRuntimeSessionId);
       return;
     }
     if (primarySession.providerSessionKey) {
-      onResumePrimarySession(taskWorktree.taskWorktreeId, primarySession.providerSessionKey);
+      onResumePrimarySession(taskWorktree.worktreeId, primarySession.providerSessionKey);
     }
   };
 
@@ -186,8 +191,10 @@ function TaskWorktreeCard({
       </div>
       {!primarySession && isActionSurfaceOpen && (
         <TaskWorktreeActionSurface
+          worktreeId={taskWorktree.worktreeId}
           providers={providers}
           suggestedSessions={suggestedSessions}
+          onResumeSuggestedSession={onResumeSuggestedSession}
           onClick={(event) => event.stopPropagation()}
         />
       )}
@@ -217,14 +224,18 @@ function PrimarySessionSummary({ primarySession }: PrimarySessionSummaryProps) {
 }
 
 interface TaskWorktreeActionSurfaceProps {
+  worktreeId: string;
   providers: AgentDefinition[];
   suggestedSessions: SuggestedSessionListItem[];
+  onResumeSuggestedSession: (worktreeId: string, providerSessionKey: string) => void;
   onClick: (event: MouseEvent<HTMLDivElement>) => void;
 }
 
 function TaskWorktreeActionSurface({
+  worktreeId,
   providers,
   suggestedSessions,
+  onResumeSuggestedSession,
   onClick,
 }: TaskWorktreeActionSurfaceProps) {
   return (
@@ -236,6 +247,9 @@ function TaskWorktreeActionSurface({
             <SuggestedSessionAction
               key={suggestedSession.providerSessionKey}
               suggestedSession={suggestedSession}
+              onSelect={() =>
+                onResumeSuggestedSession(worktreeId, suggestedSession.providerSessionKey)
+              }
             />
           ))}
         </div>
@@ -264,15 +278,18 @@ function TaskWorktreeActionSurface({
 
 interface SuggestedSessionActionProps {
   suggestedSession: SuggestedSessionListItem;
+  onSelect: () => void;
 }
 
-function SuggestedSessionAction({ suggestedSession }: SuggestedSessionActionProps) {
+function SuggestedSessionAction({ suggestedSession, onSelect }: SuggestedSessionActionProps) {
   const preview = suggestedSession.preview || "(no messages)";
   const providerName = providerLabel(suggestedSession.provider);
   return (
-    <div
+    <button
+      type="button"
       className="action-surface-row suggested-session-action"
-      aria-disabled="true"
+      onClick={onSelect}
+      title={`Resume ${providerName}`}
     >
       <span
         className={`session-provider-dot provider-${suggestedSession.provider} suggested`}
@@ -285,7 +302,7 @@ function SuggestedSessionAction({ suggestedSession }: SuggestedSessionActionProp
         </span>
         <span className="action-surface-row-meta">{providerName}</span>
       </span>
-    </div>
+    </button>
   );
 }
 

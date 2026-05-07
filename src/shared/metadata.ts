@@ -17,7 +17,6 @@ export interface SuggestedSessionListItem {
 }
 
 export interface TaskWorktreeMetadata {
-  taskWorktreeId: string;
   repoId: string;
   worktreePath: string;
   primarySession?: PrimarySessionMetadata;
@@ -34,7 +33,7 @@ export interface PrimarySessionListItem {
 }
 
 export interface TaskWorktreeListItem {
-  taskWorktreeId: string;
+  worktreeId: string;
   worktreePath: string;
   name: string;
   primarySession?: PrimarySessionListItem;

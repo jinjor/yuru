@@ -10,13 +10,18 @@ import type {
   TaskWorktreeMetadata,
   YuruMetadata,
 } from "../shared/metadata.js";
-import { toSessionKey, type RuntimeSessionId, type SessionProvider } from "../shared/session.js";
+import {
+  toSessionKey,
+  type RuntimeSessionId,
+  type SessionProvider,
+  type SuggestedWorktreeSession,
+} from "../shared/session.js";
 import { listWorktrees, type WorktreeInfo } from "./git.js";
 
 type ListWorktrees = (repoPath: string) => Promise<readonly WorktreeInfo[]>;
 type LoadSuggestedSessions = (
   worktreePaths: readonly string[],
-) => Promise<ReadonlyMap<string, readonly PrimarySessionMetadata[]>>;
+) => Promise<ReadonlyMap<string, readonly SuggestedWorktreeSession[]>>;
 
 export interface ActiveRuntimeSessionListItem {
   runtimeSessionId: RuntimeSessionId;
@@ -40,7 +45,7 @@ export async function loadRepoList(
   activeRuntimeSessionIdsByKey?: ReadonlyMap<string, RuntimeSessionId>,
   listGitWorktrees: ListWorktrees = listWorktrees,
   primarySessionPreviewsByKey?: ReadonlyMap<string, string>,
-  activeRuntimeSessionsByTaskWorktreeId?: ReadonlyMap<string, ActiveRuntimeSessionListItem>,
+  activeRuntimeSessionsByWorktreePath?: ReadonlyMap<string, ActiveRuntimeSessionListItem>,
   loadSuggestedSessions?: LoadSuggestedSessions,
 ): Promise<RepoListItem[]> {
   const metadata = loadMetadata();
@@ -71,7 +76,7 @@ export async function loadRepoList(
         metadataByPath.get(toWorktreePathKey(gitWorktree.path)),
         activeRuntimeSessionIdsByKey,
         primarySessionPreviewsByKey,
-        activeRuntimeSessionsByTaskWorktreeId,
+        activeRuntimeSessionsByWorktreePath,
         suggestedSessionsByWorktreePath?.get(gitWorktree.path) ?? [],
       ),
     );
@@ -92,27 +97,32 @@ export function findRepoByPath(repoPath: string): RepoMetadata | null {
 }
 
 export function upsertTaskWorktree(
-  taskWorktreeId: string,
   repoId: string,
   worktreePath: string,
 ): void {
   const metadata = loadMetadata();
-  const existing = metadata.taskWorktrees.find((entry) => entry.taskWorktreeId === taskWorktreeId);
+  const worktreePathKey = toWorktreePathKey(worktreePath);
+  const existing = metadata.taskWorktrees.find(
+    (entry) => toWorktreePathKey(entry.worktreePath) === worktreePathKey,
+  );
   if (existing) {
     existing.repoId = repoId;
     existing.worktreePath = worktreePath;
   } else {
-    metadata.taskWorktrees.push({ taskWorktreeId, repoId, worktreePath });
+    metadata.taskWorktrees.push({ repoId, worktreePath });
   }
   saveMetadata(metadata);
 }
 
-export function attachPrimarySession(
-  taskWorktreeId: string,
+export function attachPrimarySessionByPath(
+  worktreePath: string,
   primary: PrimarySessionMetadata,
 ): void {
   const metadata = loadMetadata();
-  const target = metadata.taskWorktrees.find((entry) => entry.taskWorktreeId === taskWorktreeId);
+  const worktreePathKey = toWorktreePathKey(worktreePath);
+  const target = metadata.taskWorktrees.find(
+    (entry) => toWorktreePathKey(entry.worktreePath) === worktreePathKey,
+  );
   if (!target) {
     return;
   }
@@ -135,7 +145,10 @@ export function detachPrimarySessionByPath(
   primary: PrimarySessionMetadata,
 ): void {
   const metadata = loadMetadata();
-  const target = metadata.taskWorktrees.find((entry) => entry.worktreePath === worktreePath);
+  const worktreePathKey = toWorktreePathKey(worktreePath);
+  const target = metadata.taskWorktrees.find(
+    (entry) => toWorktreePathKey(entry.worktreePath) === worktreePathKey,
+  );
   if (
     !target?.primarySession ||
     target.primarySession.provider !== primary.provider ||
@@ -150,7 +163,10 @@ export function detachPrimarySessionByPath(
 
 export function removeTaskWorktreeByPath(worktreePath: string): void {
   const metadata = loadMetadata();
-  const next = metadata.taskWorktrees.filter((entry) => entry.worktreePath !== worktreePath);
+  const worktreePathKey = toWorktreePathKey(worktreePath);
+  const next = metadata.taskWorktrees.filter(
+    (entry) => toWorktreePathKey(entry.worktreePath) !== worktreePathKey,
+  );
   if (next.length === metadata.taskWorktrees.length) {
     return;
   }
@@ -205,22 +221,19 @@ function parseTaskWorktree(value: unknown): TaskWorktreeMetadata {
     throw new Error("Yuru metadata taskWorktree entries must be objects.");
   }
   const maybe = value as {
-    taskWorktreeId?: unknown;
     repoId?: unknown;
     worktreePath?: unknown;
     primarySession?: unknown;
   };
   if (
-    typeof maybe.taskWorktreeId !== "string" ||
     typeof maybe.repoId !== "string" ||
     typeof maybe.worktreePath !== "string"
   ) {
     throw new Error(
-      "Yuru metadata taskWorktree entries must have string taskWorktreeId, repoId, worktreePath.",
+      "Yuru metadata taskWorktree entries must have string repoId and worktreePath.",
     );
   }
   const entry: TaskWorktreeMetadata = {
-    taskWorktreeId: maybe.taskWorktreeId,
     repoId: maybe.repoId,
     worktreePath: maybe.worktreePath,
   };
@@ -266,10 +279,10 @@ function toTaskWorktreeListItem(
   metadataEntry: TaskWorktreeMetadata | undefined,
   activeRuntimeSessionIdsByKey: ReadonlyMap<string, RuntimeSessionId> | undefined,
   primarySessionPreviewsByKey: ReadonlyMap<string, string> | undefined,
-  activeRuntimeSessionsByTaskWorktreeId: ReadonlyMap<string, ActiveRuntimeSessionListItem> | undefined,
-  suggestedSessions: readonly PrimarySessionMetadata[],
+  activeRuntimeSessionsByWorktreePath: ReadonlyMap<string, ActiveRuntimeSessionListItem> | undefined,
+  suggestedSessions: readonly SuggestedWorktreeSession[],
 ): TaskWorktreeListItem {
-  const taskWorktreeId = metadataEntry?.taskWorktreeId ?? `git:${repoId}:${worktreePath}`;
+  const worktreeId = toWorktreeId(repoId, worktreePath);
   const primarySession = metadataEntry?.primarySession;
   const primarySessionKey = primarySession
     ? toSessionKey(primarySession.provider, primarySession.providerSessionId)
@@ -277,7 +290,9 @@ function toTaskWorktreeListItem(
   const activeRuntimeSessionId = primarySessionKey
     ? activeRuntimeSessionIdsByKey?.get(primarySessionKey) ?? null
     : null;
-  const activeRuntimeSession = activeRuntimeSessionsByTaskWorktreeId?.get(taskWorktreeId);
+  const activeRuntimeSession = activeRuntimeSessionsByWorktreePath?.get(
+    toWorktreePathKey(worktreePath),
+  );
   const activeRuntimeSessionKey = activeRuntimeSession?.providerSessionId
     ? toSessionKey(activeRuntimeSession.provider, activeRuntimeSession.providerSessionId)
     : null;
@@ -288,7 +303,7 @@ function toTaskWorktreeListItem(
   );
 
   return {
-    taskWorktreeId,
+    worktreeId,
     worktreePath,
     name: path.basename(worktreePath),
     primarySession: primarySession && primarySessionKey
@@ -315,7 +330,7 @@ function toTaskWorktreeListItem(
 }
 
 function toSuggestedSessionListItems(
-  suggestedSessions: readonly PrimarySessionMetadata[],
+  suggestedSessions: readonly SuggestedWorktreeSession[],
   excludedSessionKeys: ReadonlySet<string>,
   primarySessionPreviewsByKey: ReadonlyMap<string, string> | undefined,
 ): SuggestedSessionListItem[] {
@@ -336,6 +351,10 @@ function toSuggestedSessionListItems(
 
 function toWorktreePathKey(worktreePath: string): string {
   return path.resolve(worktreePath);
+}
+
+export function toWorktreeId(repoId: string, worktreePath: string): string {
+  return `worktree:${repoId}:${worktreePath}`;
 }
 
 function saveMetadata(metadata: YuruMetadata): void {

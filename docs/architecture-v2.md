@@ -25,7 +25,6 @@ Last updated: 2026-05-08
   - `Files`, `Changes`, branch 表示、preview の基準になる
   - repo の子として存在する
   - 現在位置は `worktreePath` で持つ
-  - durable identity が必要な場合は Yuru metadata 上の `taskWorktreeId` を持つ
 - `primary session`
   - task worktree に attach された provider session
   - 1 task worktree に最大 1 つだけ存在する
@@ -50,7 +49,7 @@ Last updated: 2026-05-08
   - provider ごとの path hint
 - Yuru metadata:
   - どの repo を主導線に表示するか
-  - repo と task worktree の durable identity
+  - repo と task worktree の path link
   - task worktree と primary session の strong link
 
 Yuru metadata は source of truth の複製ではない。
@@ -69,7 +68,6 @@ branch や provider session の本文を保存して同期し続けることは�
   ],
   "taskWorktrees": [
     {
-      "taskWorktreeId": "uuid",
       "repoId": "uuid",
       "worktreePath": "/path/to/worktree",
       "primarySession": {
@@ -185,7 +183,7 @@ provider ごとの hint は session identity を置き換えるためではな�
 
 ## Persistence stance
 
-- Yuru が永続化するのは repo 登録、task worktree identity、strong link、補助設定に限る
+- Yuru が永続化するのは repo 登録、task worktree path、strong link、補助設定に限る
 - metadata が壊れても Git と provider store から best-effort で再構成できるようにする
 - 保存先の実装詳細は migration の中で別途詰める
 
@@ -195,7 +193,7 @@ provider ごとの hint は session identity を置き換えるためではな�
 - provider 履歴から触った全 repo を自動で主導線に import すること
 - 1 task worktree に複数 primary sessions を持たせること
 - external rename を metadata から自動追跡すること
-- `cwd` 変更を task worktree identity の source of truth にすること
+- `cwd` 変更を task worktree path の source of truth にすること
 
 ## Migration Plan
 
@@ -267,7 +265,7 @@ provider ごとの hint は session identity を置き換えるためではな�
    - repo から worktree を作成した直後は左下からスタート
    - yuru 経由ではない既存のセッションは右上からスタート
    - この story では挙動を増やさず、以降の primary 昇格や Codex suggested session 追加が載る UI の土台を作る
-16. [ ] サジェストされた worktree session を primary に昇格できる
+16. [x] サジェストされた worktree session を primary に昇格できる
    - クリックすると active になり選択状態になる（resume）+ primary になる
 17. [ ] Codex の suggested worktree session を表示し、primary に昇格できる
 18. [ ] runtime cwd を Files / Changes / Diff の source of truth にしている状態をやめる

@@ -1,6 +1,11 @@
 export type SessionProvider = "claude" | "codex";
 export type RuntimeSessionId = string;
 
+export interface SuggestedWorktreeSession {
+  provider: SessionProvider;
+  providerSessionId: string;
+}
+
 export interface GitHubPullRequest {
   prNumber: number;
   state: "open" | "merged" | "closed";

@@ -90,10 +90,30 @@ export function App() {
   );
 
   const handleResumePrimarySession = useCallback(
-    async (taskWorktreeId: string, providerSessionKey: string): Promise<void> => {
+    async (worktreeId: string, providerSessionKey: string): Promise<void> => {
       const requestId = ++resumeRequestRef.current;
-      const result = await window.electronAPI.selectWorktreeSession(
-        taskWorktreeId,
+      const result = await window.electronAPI.resumePrimarySession(
+        worktreeId,
+        providerSessionKey,
+      );
+      if (resumeRequestRef.current !== requestId) {
+        return;
+      }
+      if (!result.ok) {
+        return;
+      }
+
+      setSelectedRuntimeSessionId(result.data.runtimeSessionId);
+      refreshRepos();
+    },
+    [refreshRepos],
+  );
+
+  const handleResumeSuggestedSession = useCallback(
+    async (worktreeId: string, providerSessionKey: string): Promise<void> => {
+      const requestId = ++resumeRequestRef.current;
+      const result = await window.electronAPI.resumeSuggestedSession(
+        worktreeId,
         providerSessionKey,
       );
       if (resumeRequestRef.current !== requestId) {
@@ -145,8 +165,9 @@ export function App() {
               setWorktreeError(null);
               setWorktreeTarget(repoPath);
             }}
-            onSelectRuntimeSession={setSelectedRuntimeSessionId}
+            onSelectActiveSession={setSelectedRuntimeSessionId}
             onResumePrimarySession={handleResumePrimarySession}
+            onResumeSuggestedSession={handleResumeSuggestedSession}
           />
         </div>
       </aside>

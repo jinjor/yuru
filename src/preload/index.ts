@@ -9,8 +9,10 @@ const electronAPI: ElectronAPI = {
   getErrors: () => ipcRenderer.invoke("errors:list"),
   dismissError: (id: string) => ipcRenderer.invoke("errors:dismiss", id),
   clearErrors: () => ipcRenderer.invoke("errors:clear"),
-  selectWorktreeSession: (taskWorktreeId: string, providerSessionKey: string) =>
-    ipcRenderer.invoke("worktreeSession:select", taskWorktreeId, providerSessionKey),
+  resumePrimarySession: (worktreeId: string, providerSessionKey: string) =>
+    ipcRenderer.invoke("worktreeSession:resumePrimary", worktreeId, providerSessionKey),
+  resumeSuggestedSession: (worktreeId: string, providerSessionKey: string) =>
+    ipcRenderer.invoke("worktreeSession:resumeSuggested", worktreeId, providerSessionKey),
   createSession: (provider: SessionProvider, repoPath: string) =>
     ipcRenderer.invoke("session:create", provider, repoPath),
   createWorktreeSession: (provider: SessionProvider, repoPath: string, branchName: string) =>

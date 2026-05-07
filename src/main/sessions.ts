@@ -4,8 +4,7 @@ import { getRepoRootForProject, listWorktrees } from "./git.js";
 import { getGitHubPullRequestForBranch } from "./github.js";
 import { sessionProviders } from "./agent-registry.js";
 import type { RuntimeSessionInfo } from "./agent.js";
-import type { PrimarySessionMetadata } from "../shared/metadata.js";
-import { toSessionKey, type Session } from "../shared/session.js";
+import { toSessionKey, type Session, type SuggestedWorktreeSession } from "../shared/session.js";
 
 async function buildWorktreeMap(
   projectPaths: string[],
@@ -56,11 +55,11 @@ export async function loadStoredSessionPreviews(): Promise<Map<string, string>> 
 
 export async function loadSuggestedWorktreeSessions(
   worktreePaths: readonly string[],
-): Promise<Map<string, PrimarySessionMetadata[]>> {
+): Promise<Map<string, SuggestedWorktreeSession[]>> {
   const worktreePathByKey = new Map(
     worktreePaths.map((worktreePath) => [path.resolve(worktreePath), worktreePath]),
   );
-  const suggestionsByWorktreePath = new Map<string, PrimarySessionMetadata[]>();
+  const suggestionsByWorktreePath = new Map<string, SuggestedWorktreeSession[]>();
   const hints = (
     await Promise.all(
       Object.values(sessionProviders).map((provider) => provider.loadWorktreeSessionHints(worktreePaths)),

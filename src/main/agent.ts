@@ -16,7 +16,6 @@ export interface RuntimeSessionInfo {
   provider: SessionProvider;
   providerSessionId: string | null;
   startedAt: number;
-  taskWorktreeId?: string;
 }
 
 export interface PendingSession {
