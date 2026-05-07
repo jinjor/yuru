@@ -14,9 +14,9 @@ import {
   readTextFileIfExists,
 } from "../../agent-store-utils.js";
 import {
-  detectClaudeWorktreeSession,
   type WorktreeSessionHint,
 } from "../../worktree-session-detection.js";
+import { detectClaudeWorktreeSession } from "./worktree-session-detection.js";
 import {
   claudeBranchName,
   claudeHistoryPath,

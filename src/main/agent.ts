@@ -54,6 +54,7 @@ export interface WorktreeContext {
 export interface ResumeSessionTarget {
   provider: SessionProvider;
   providerSessionId: string;
+  repoPath: string;
   project: string;
 }
 

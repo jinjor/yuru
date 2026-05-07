@@ -1,4 +1,5 @@
 import { setTimeout } from "node:timers/promises";
+import path from "path";
 import { createWorktree } from "../../git.js";
 import type {
   PendingSession,
@@ -7,11 +8,13 @@ import type {
   WorktreeContext,
 } from "../../agent.js";
 import { listFilesRecursive, parseJsonLinesAs, readTextFileIfExists } from "../../agent-store-utils.js";
+import type { WorktreeSessionHint } from "../../worktree-session-detection.js";
 import {
   codexWorktreeCwd,
   getCodexHistoryPath,
   getCodexSessionsDir,
 } from "./paths.js";
+import { detectCodexWorktreeSession } from "./worktree-session-detection.js";
 
 interface CodexSessionMeta {
   providerSessionId: string;
@@ -157,6 +160,32 @@ async function loadStoredSessions(): Promise<SessionSnapshot[]> {
   });
 }
 
+async function loadWorktreeSessionHints(
+  worktreePaths: readonly string[],
+): Promise<WorktreeSessionHint[]> {
+  if (worktreePaths.length === 0) {
+    return [];
+  }
+
+  const worktreePathKeys = new Set(worktreePaths.map((worktreePath) => path.resolve(worktreePath)));
+  const hints: WorktreeSessionHint[] = [];
+  await Promise.all(
+    (await listFilesRecursive(getCodexSessionsDir())).map(async (filePath) => {
+      const content = await readTextFileIfExists(filePath);
+      if (!content) {
+        return;
+      }
+      const hint = detectCodexWorktreeSession(content, worktreePaths);
+      if (!hint || !worktreePathKeys.has(path.resolve(hint.worktreePath))) {
+        return;
+      }
+      hints.push(hint);
+    }),
+  );
+
+  return hints;
+}
+
 async function findSessionForLaunch(
   cwd: string,
   startedAt: number,
@@ -200,9 +229,7 @@ export const sessionProvider: SessionProviderAdapter = {
   command: "codex",
   resolvesSessionIdLazily: true,
   loadStoredSessions,
-  async loadWorktreeSessionHints() {
-    return [];
-  },
+  loadWorktreeSessionHints,
   hasStoredSession,
   async createNewLaunch(repoPath) {
     return {
@@ -214,9 +241,9 @@ export const sessionProvider: SessionProviderAdapter = {
   },
   async createResumeLaunch(session) {
     return {
-      cwd: session.project,
+      cwd: session.repoPath,
       args: ["resume", session.providerSessionId],
-      sessionCwd: session.project,
+      sessionCwd: session.repoPath,
     };
   },
   async createWorktreeLaunch(context) {

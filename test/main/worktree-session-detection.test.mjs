@@ -1,11 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  detectClaudeWorktreeSession,
-  detectCodexWorktreeSession,
-  resolveContainingWorktreePath,
-} from "../../src/main/worktree-session-detection.ts";
+import { detectClaudeWorktreeSession } from "../../src/main/agents/claude/worktree-session-detection.ts";
+import { detectCodexWorktreeSession } from "../../src/main/agents/codex/worktree-session-detection.ts";
+import { resolveContainingWorktreePath } from "../../src/main/worktree-session-detection.ts";
 
 function jsonl(...entries) {
   return `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`;

@@ -158,9 +158,8 @@ provider ごとの hint は session identity を置き換えるためではな�
     - worktree cwd から plain `--resume <sessionId>` しても同じ worktree session を resume できる
     - repo root から plain `--resume <sessionId>` すると、worktree session を見つけられない
   - Codex:
-    - worktree 専用 option を持たないため、`--cd <worktreePath>` で working root を明示する
-    - worktree cwd で開始した session でも、repo root から plain `resume <sessionId>` すると root 側で作業する
-    - repo root からでも `--cd <worktreePath> resume <sessionId>` すれば worktree 側で作業できる
+    - resume 時は repo root で起動する
+    - task worktree との対応は Yuru metadata の strong link で表し、Codex の cwd を task worktree に寄せない
     - Codex CLI の resume picker は cwd filtering するため、repo root から provider session 一覧を CLI 経由で見る場合は `--all` を付ける
 - attach suggested session:
   - weak candidate を primary に昇格させる
@@ -267,7 +266,7 @@ provider ごとの hint は session identity を置き換えるためではな�
    - この story では挙動を増やさず、以降の primary 昇格や Codex suggested session 追加が載る UI の土台を作る
 16. [x] サジェストされた worktree session を primary に昇格できる
    - クリックすると active になり選択状態になる（resume）+ primary になる
-17. [ ] Codex の suggested worktree session を表示し、primary に昇格できる
+17. [x] Codex の suggested worktree session を表示し、primary に昇格できる
 18. [ ] runtime cwd を Files / Changes / Diff の source of truth にしている状態をやめる
    - PTY は `cd` で任意の場所へ移動できるため、runtime の cwd を task worktree の作業ルートとして扱わない
    - 右側の Files / Changes / Diff は選択中の task worktree の `worktreePath` を基準にする

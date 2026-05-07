@@ -97,6 +97,7 @@ interface StartedSession {
 interface WorktreeSessionResumeTarget {
   provider: SessionProvider;
   providerSessionId: string;
+  repoPath: string;
   project: string;
 }
 
@@ -549,6 +550,7 @@ async function findPrimarySessionResumeTarget(
   return {
     provider: taskWorktree.primarySession.provider,
     providerSessionId: taskWorktree.primarySession.providerSessionId,
+    repoPath: worktree.repoPath,
     project: taskWorktree.worktreePath,
   };
 }
@@ -567,7 +569,7 @@ async function findSuggestedSession(
 
 async function findGitWorktree(
   worktreeId: string,
-): Promise<{ repoId: string; worktreePath: string } | null> {
+): Promise<{ repoId: string; repoPath: string; worktreePath: string } | null> {
   for (const repo of loadRepos()) {
     const worktrees = await listWorktrees(repo.repoPath).catch(() => []);
     const worktree = worktrees.find(
@@ -576,6 +578,7 @@ async function findGitWorktree(
     if (worktree) {
       return {
         repoId: repo.id,
+        repoPath: repo.repoPath,
         worktreePath: worktree.path,
       };
     }
