@@ -3,7 +3,6 @@ import type { MenuItemConstructorOptions } from "electron";
 import path from "path";
 import * as pty from "node-pty";
 import {
-  type ActiveRuntimeSessionListItem,
   attachPrimarySessionByPath,
   detachPrimarySessionByPath,
   findRepoByPath,
@@ -45,12 +44,10 @@ import { WorktreeWatcher } from "./worktree-watcher.js";
 import { FileTreeWatcher } from "./file-tree-watcher.js";
 import fs from "fs";
 import {
-  type ActiveSessionState,
   type AppError,
   type AppErrorNotice,
   type BranchContext,
   type Result,
-  type RuntimeSessionSelection,
 } from "../shared/ipc.js";
 import {
   type SessionProvider,
@@ -162,11 +159,6 @@ function isAppError(error: unknown): error is AppError {
   return typeof maybeError.code === "string" && typeof maybeError.message === "string";
 }
 
-function getWorkingRootForRuntimeSession(runtimeSessionId: string): string | null {
-  const runtime = sessionRuntimeMap.get(runtimeSessionId);
-  return runtime?.cwd ?? null;
-}
-
 function getActiveRuntimeSessionIdsByKey(): Map<string, string> {
   const idsByKey = new Map<string, string>();
   for (const [runtimeSessionId, info] of sessionRuntimeMap) {
@@ -177,16 +169,18 @@ function getActiveRuntimeSessionIdsByKey(): Map<string, string> {
   return idsByKey;
 }
 
-function getActiveRuntimeSessionsByWorktreePath(): Map<string, ActiveRuntimeSessionListItem> {
-  const sessionsByWorktreePath = new Map<string, ActiveRuntimeSessionListItem>();
-  for (const [runtimeSessionId, info] of sessionRuntimeMap) {
-    sessionsByWorktreePath.set(path.resolve(info.cwd), {
-      runtimeSessionId,
-      provider: info.provider,
-      providerSessionId: info.providerSessionId,
-    });
+function hasActivePrimarySessionForWorktree(worktreePath: string): boolean {
+  const worktreePathKey = path.resolve(worktreePath);
+  const taskWorktree = loadTaskWorktrees().find(
+    (entry) => path.resolve(entry.worktreePath) === worktreePathKey,
+  );
+  const primarySession = taskWorktree?.primarySession;
+  if (!primarySession) {
+    return false;
   }
-  return sessionsByWorktreePath;
+  return getActiveRuntimeSessionIdsByKey().has(
+    toSessionKey(primarySession.provider, primarySession.providerSessionId),
+  );
 }
 
 function appendStartupOutput(existing: string, chunk: string): string {
@@ -339,7 +333,7 @@ function launchPendingSession(
     launchLabel,
     outputBuffer: "",
     startupOutput: "",
-    sessionCwd: request.sessionCwd,
+    worktreePath: request.worktreePath,
     providerSessionId: null,
     runtimeSessionId: null,
     startedAt: Date.now(),
@@ -384,7 +378,7 @@ function launchPendingSession(
       runtimeSessionId: pending.runtimeSessionId,
       provider: pending.provider,
       providerSessionId: pending.providerSessionId,
-      cwd: pending.sessionCwd,
+      worktreePath: pending.worktreePath,
       exitCode,
       signal,
       startupSettled: pending.startupSettled,
@@ -446,7 +440,6 @@ function registerRuntimeSession(
   ptyProcesses.set(runtimeSessionId, pending.proc);
   ptyScrollback.set(runtimeSessionId, pending.outputBuffer);
   sessionRuntimeMap.set(runtimeSessionId, {
-    cwd: pending.sessionCwd,
     provider: pending.provider,
     providerSessionId,
     startedAt: pending.startedAt,
@@ -480,13 +473,13 @@ async function resolveLazySessionId(
     pending.providerSessionId = providerSessionId;
     pending.startupSettled = true;
     updateRuntimeSessionProviderSessionId(runtimeSessionId, providerSessionId);
-    const runtime = sessionRuntimeMap.get(runtimeSessionId);
-    if (runtime) {
-      attachPrimarySessionByPath(runtime.cwd, {
-        provider: pending.provider,
-        providerSessionId,
-      });
+    if (!sessionRuntimeMap.has(runtimeSessionId)) {
+      return;
     }
+    attachPrimarySessionByPath(pending.worktreePath, {
+      provider: pending.provider,
+      providerSessionId,
+    });
     await refreshWorktreeWatcher();
     emitSessionsStateChanged();
   } catch {
@@ -511,15 +504,7 @@ function emitSessionsStateChanged(): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return;
   }
-  const activeSessions: ActiveSessionState[] = Array.from(sessionRuntimeMap, ([runtimeSessionId, info]) => ({
-    runtimeSessionId,
-    cwd: info.cwd,
-  }));
-  mainWindow.webContents.send("sessions:stateChanged", activeSessions);
-}
-
-function buildRuntimeSessionSelection(runtimeSessionId: string): RuntimeSessionSelection {
-  return { runtimeSessionId };
+  mainWindow.webContents.send("sessions:stateChanged");
 }
 
 async function findPrimarySessionResumeTarget(
@@ -586,6 +571,11 @@ async function findGitWorktree(
   return null;
 }
 
+async function getWorkingRootForWorktree(worktreeId: string): Promise<string | null> {
+  const worktree = await findGitWorktree(worktreeId);
+  return worktree?.worktreePath ?? null;
+}
+
 function promotePrimarySession(
   worktree: { repoId: string; worktreePath: string },
   session: SuggestedWorktreeSession,
@@ -600,7 +590,7 @@ function promotePrimarySession(
 async function activateWorktreeSession(
   target: WorktreeSessionResumeTarget,
   options: { detachMissingPrimary: boolean },
-): Promise<Result<RuntimeSessionSelection>> {
+): Promise<Result<boolean>> {
   const providerAdapter = getSessionProvider(target.provider);
   let pending: PendingSession | null = null;
   try {
@@ -612,7 +602,7 @@ async function activateWorktreeSession(
         });
         emitSessionsStateChanged();
       }
-      return failAndReport<RuntimeSessionSelection>({
+      return failAndReport<boolean>({
         code: "command_failed",
         message: "This session no longer exists.",
         detail: `${target.provider} session ${target.providerSessionId} was not found in saved conversations.`,
@@ -627,7 +617,7 @@ async function activateWorktreeSession(
     await waitForResumeReady(providerAdapter, pending, target.providerSessionId);
     const runtimeSessionId = createRuntimeSessionId(target.provider, pending);
     registerRuntimeSession(runtimeSessionId, pending, target.providerSessionId);
-    return ok(buildRuntimeSessionSelection(runtimeSessionId));
+    return ok(true);
   } catch (error) {
     if (pending && !pending.exited) {
       pending.proc.kill();
@@ -636,18 +626,18 @@ async function activateWorktreeSession(
       ? error
       : toAppError(error, { command: providerAdapter.command });
     return pending?.startupFailureReported
-      ? fail<RuntimeSessionSelection>(appError)
-      : failAndReport<RuntimeSessionSelection>(appError);
+      ? fail<boolean>(appError)
+      : failAndReport<boolean>(appError);
   }
 }
 
 async function resumePrimaryWorktreeSession(
   worktreeId: string,
   providerSessionKey: string,
-): Promise<Result<RuntimeSessionSelection>> {
+): Promise<Result<boolean>> {
   const target = await findPrimarySessionResumeTarget(worktreeId, providerSessionKey);
   if (!target) {
-    return failAndReport<RuntimeSessionSelection>({
+    return failAndReport<boolean>({
       code: "unknown",
       message: "This primary session no longer exists.",
     });
@@ -655,7 +645,7 @@ async function resumePrimaryWorktreeSession(
 
   const activeRuntimeSessionId = getActiveRuntimeSessionIdsByKey().get(providerSessionKey);
   if (activeRuntimeSessionId && ptyProcesses.has(activeRuntimeSessionId)) {
-    return ok(buildRuntimeSessionSelection(activeRuntimeSessionId));
+    return ok(true);
   }
 
   const result = await activateWorktreeSession(target, { detachMissingPrimary: true });
@@ -668,10 +658,10 @@ async function resumePrimaryWorktreeSession(
 async function resumeSuggestedWorktreeSession(
   worktreeId: string,
   providerSessionKey: string,
-): Promise<Result<RuntimeSessionSelection>> {
+): Promise<Result<boolean>> {
   const worktree = await findGitWorktree(worktreeId);
   if (!worktree) {
-    return failAndReport<RuntimeSessionSelection>({
+    return failAndReport<boolean>({
       code: "unknown",
       message: "This worktree no longer exists.",
     });
@@ -679,7 +669,7 @@ async function resumeSuggestedWorktreeSession(
 
   const suggestedSession = await findSuggestedSession(worktree.worktreePath, providerSessionKey);
   if (!suggestedSession) {
-    return failAndReport<RuntimeSessionSelection>({
+    return failAndReport<boolean>({
       code: "unknown",
       message: "This suggested session no longer exists.",
     });
@@ -739,15 +729,6 @@ app.whenReady().then(() => {
 
   worktreeWatcher = new WorktreeWatcher();
   worktreeWatcher.onChange(() => {
-    for (const [runtimeSessionId, info] of sessionRuntimeMap) {
-      if (fs.existsSync(info.cwd)) {
-        continue;
-      }
-      const proc = ptyProcesses.get(runtimeSessionId);
-      if (proc) {
-        proc.kill();
-      }
-    }
     void refreshWorktreeWatcher();
     emitSessionsStateChanged();
   });
@@ -763,7 +744,6 @@ app.whenReady().then(() => {
       getActiveRuntimeSessionIdsByKey(),
       undefined,
       previewsByKey,
-      getActiveRuntimeSessionsByWorktreePath(),
       loadSuggestedWorktreeSessions,
     );
   });
@@ -842,15 +822,15 @@ app.whenReady().then(() => {
       if (providerSessionId) {
         await refreshWorktreeWatcher();
       }
-      return ok(buildRuntimeSessionSelection(runtimeSessionId));
+      return ok(runtimeSessionId);
     } catch (error) {
       if (pending && !pending.exited) {
         pending.proc.kill();
       }
       const appError = toAppError(error, { command: providerAdapter.command });
       return pending?.startupFailureReported
-        ? fail<RuntimeSessionSelection>(appError)
-        : failAndReport<RuntimeSessionSelection>(appError);
+        ? fail<string>(appError)
+        : failAndReport<string>(appError);
     }
   });
 
@@ -869,13 +849,13 @@ app.whenReady().then(() => {
 
       // Pre-check: worktree directory and branch name must not already exist
       if (fs.existsSync(worktreePath)) {
-        return failAndReport<RuntimeSessionSelection>({
+        return failAndReport<string>({
           code: "filesystem_failed",
           message: `Worktree "${worktreeName}" already exists`,
         });
       }
       if (await branchExists(repoPath, branchName)) {
-        return failAndReport<RuntimeSessionSelection>({
+        return failAndReport<string>({
           code: "git_failed",
           message: `Branch "${branchName}" already exists`,
         });
@@ -883,7 +863,7 @@ app.whenReady().then(() => {
 
       const repo = findRepoByPath(repoPath);
       if (!repo) {
-        return failAndReport<RuntimeSessionSelection>({
+        return failAndReport<string>({
           code: "unknown",
           message: `Repository "${repoPath}" is not registered in Yuru. Run \`yuru add\` first.`,
         });
@@ -899,7 +879,7 @@ app.whenReady().then(() => {
           await providerAdapter.createWorktreeLaunch(worktreeContext),
           "Failed to create worktree session",
         );
-        const { runtimeSessionId, providerSessionId } = await startSession(
+        const { providerSessionId } = await startSession(
           provider,
           providerAdapter,
           pending,
@@ -913,7 +893,7 @@ app.whenReady().then(() => {
         }
         await providerAdapter.finalizeWorktree(worktreeContext);
         await refreshWorktreeWatcher();
-        return ok(buildRuntimeSessionSelection(runtimeSessionId));
+        return ok(toWorktreeId(repo.id, worktreePath));
       } catch (error) {
         if (pending && !pending.exited) {
           pending.proc.kill();
@@ -925,8 +905,8 @@ app.whenReady().then(() => {
         const command = providerAdapter.command === "codex" ? "git" : providerAdapter.command;
         const appError = toAppError(error, { command });
         return pending?.startupFailureReported
-          ? fail<RuntimeSessionSelection>(appError)
-          : failAndReport<RuntimeSessionSelection>(appError);
+          ? fail<string>(appError)
+          : failAndReport<string>(appError);
       }
     },
   );
@@ -934,10 +914,7 @@ app.whenReady().then(() => {
   ipcMain.handle(
     "worktree:remove",
     async (_event, _provider: SessionProvider, repoPath: string, worktreePath: string) => {
-      const activeSessionExists = Array.from(sessionRuntimeMap.values()).some(
-        (runtime) => runtime.cwd === worktreePath,
-      );
-      if (activeSessionExists) {
+      if (hasActivePrimarySessionForWorktree(worktreePath)) {
         return failAndReport<boolean>({
           code: "unknown",
           message: "Stop the session before removing this worktree.",
@@ -971,8 +948,8 @@ app.whenReady().then(() => {
     await shell.openExternal(url);
   });
 
-  ipcMain.handle("git:pathStates", async (_event, runtimeSessionId: string) => {
-    const workingRoot = getWorkingRootForRuntimeSession(runtimeSessionId);
+  ipcMain.handle("git:pathStates", async (_event, worktreeId: string) => {
+    const workingRoot = await getWorkingRootForWorktree(worktreeId);
     if (!workingRoot) {
       return ok([]);
     }
@@ -983,19 +960,19 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle("git:branchContext", async (_event, runtimeSessionId: string) => {
-    const runtime = sessionRuntimeMap.get(runtimeSessionId);
-    if (!runtime) {
+  ipcMain.handle("git:branchContext", async (_event, worktreeId: string) => {
+    const workingRoot = await getWorkingRootForWorktree(worktreeId);
+    if (!workingRoot) {
       return ok({ branch: null, github: null } satisfies BranchContext);
     }
 
     try {
-      const branch = await getCurrentBranch(runtime.cwd);
+      const branch = await getCurrentBranch(workingRoot);
       if (!branch) {
         return ok({ branch: null, github: null } satisfies BranchContext);
       }
 
-      const repoPath = (await getRepoRootForProject(runtime.cwd)) ?? runtime.cwd;
+      const repoPath = (await getRepoRootForProject(workingRoot)) ?? workingRoot;
       const github = await getGitHubPullRequestForBranch(repoPath, branch);
       return ok({ branch, github } satisfies BranchContext);
     } catch (error) {
@@ -1003,8 +980,8 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle("git:diffDocument", async (_event, runtimeSessionId: string, filePath: string) => {
-    const workingRoot = getWorkingRootForRuntimeSession(runtimeSessionId);
+  ipcMain.handle("git:diffDocument", async (_event, worktreeId: string, filePath: string) => {
+    const workingRoot = await getWorkingRootForWorktree(worktreeId);
     if (!workingRoot) {
       return ok(null);
     }
@@ -1015,8 +992,8 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle("files:list", async (_event, runtimeSessionId: string, relativePath?: string) => {
-    const workingRoot = getWorkingRootForRuntimeSession(runtimeSessionId);
+  ipcMain.handle("files:list", async (_event, worktreeId: string, relativePath?: string) => {
+    const workingRoot = await getWorkingRootForWorktree(worktreeId);
     if (!workingRoot) {
       return ok([]);
     }
@@ -1027,8 +1004,8 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle("files:listAll", async (_event, runtimeSessionId: string) => {
-    const workingRoot = getWorkingRootForRuntimeSession(runtimeSessionId);
+  ipcMain.handle("files:listAll", async (_event, worktreeId: string) => {
+    const workingRoot = await getWorkingRootForWorktree(worktreeId);
     if (!workingRoot) {
       return ok([] as string[]);
     }
@@ -1039,22 +1016,22 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle("files:resolveRepoFile", (_event, runtimeSessionId: string, filePath: string) => {
-    const workingRoot = getWorkingRootForRuntimeSession(runtimeSessionId);
+  ipcMain.handle("files:resolveRepoFile", async (_event, worktreeId: string, filePath: string) => {
+    const workingRoot = await getWorkingRootForWorktree(worktreeId);
     if (!workingRoot) {
       return null;
     }
     return resolveRepoFile(workingRoot, filePath);
   });
 
-  ipcMain.handle("files:syncWatchTargets", async (_event, runtimeSessionId: string, relativePaths: string[]) => {
-    const workingRoot = getWorkingRootForRuntimeSession(runtimeSessionId);
+  ipcMain.handle("files:syncWatchTargets", async (_event, worktreeId: string, relativePaths: string[]) => {
+    const workingRoot = await getWorkingRootForWorktree(worktreeId);
     if (!workingRoot) {
-      fileTreeWatcher.clearSession(runtimeSessionId);
+      fileTreeWatcher.clearSession(worktreeId);
       return;
     }
 
-    await fileTreeWatcher.syncSessionTargets(runtimeSessionId, workingRoot, relativePaths);
+    await fileTreeWatcher.syncSessionTargets(worktreeId, workingRoot, relativePaths);
   });
 
   ipcMain.on("pty:write", (_event, runtimeSessionId: string, data: string) => {

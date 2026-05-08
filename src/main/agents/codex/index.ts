@@ -207,7 +207,7 @@ async function findSessionForLaunch(
 async function waitForSessionId(pending: PendingSession): Promise<string> {
   for (;;) {
     const launched = await findSessionForLaunch(
-      pending.sessionCwd,
+      pending.worktreePath,
       pending.startedAt,
       pending.existingProviderSessionIds,
     );
@@ -235,7 +235,7 @@ export const sessionProvider: SessionProviderAdapter = {
     return {
       cwd: repoPath,
       args: [],
-      sessionCwd: repoPath,
+      worktreePath: repoPath,
       existingProviderSessionIds: await listExistingSessionIds(),
     };
   },
@@ -243,14 +243,14 @@ export const sessionProvider: SessionProviderAdapter = {
     return {
       cwd: session.repoPath,
       args: ["resume", session.providerSessionId],
-      sessionCwd: session.repoPath,
+      worktreePath: session.repoPath,
     };
   },
   async createWorktreeLaunch(context) {
     return {
       cwd: context.worktreePath,
       args: [],
-      sessionCwd: context.worktreePath,
+      worktreePath: context.worktreePath,
       existingProviderSessionIds: await listExistingSessionIds(),
     };
   },

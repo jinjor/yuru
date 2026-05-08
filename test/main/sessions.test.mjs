@@ -11,10 +11,8 @@ process.env.HOME = tempDir;
 const claudeDir = path.join(tempDir, ".claude");
 const codexDir = path.join(tempDir, ".codex");
 const staleProject = path.join(tempDir, "missing-worktree");
-const runtimeProject = path.join(tempDir, "live-worktree");
 fs.mkdirSync(claudeDir, { recursive: true });
 fs.mkdirSync(codexDir, { recursive: true });
-fs.mkdirSync(runtimeProject, { recursive: true });
 fs.writeFileSync(
   path.join(claudeDir, "history.jsonl"),
   `${JSON.stringify({
@@ -46,14 +44,13 @@ test.after(() => {
   fs.rmSync(tempDir, { recursive: true, force: true });
 });
 
-test("loadSessions は active runtime の cwd を snapshot project より優先する", async () => {
+test("loadSessions は active runtime を provider session key で snapshot に重ねる", async () => {
   const sessionKey = toSessionKey("claude", "claude-1");
   const sessions = await loadSessions(
     new Map([
       [
         sessionKey,
         {
-          cwd: runtimeProject,
           provider: "claude",
           providerSessionId: "claude-1",
           startedAt: 2000,
@@ -65,7 +62,7 @@ test("loadSessions は active runtime の cwd を snapshot project より優先�
   assert.equal(sessions.length, 1);
   assert.equal(sessions[0].id, sessionKey);
   assert.equal(sessions[0].state, "active");
-  assert.equal(sessions[0].project, runtimeProject);
+  assert.equal(sessions[0].project, staleProject);
 });
 
 test("loadStoredSessionPreviews は stored session の preview を key で返す", async () => {
@@ -88,7 +85,7 @@ test("Codex resume launch は repo root で起動する", async () => {
     {
       cwd: repoRoot,
       args: ["resume", "codex-resume"],
-      sessionCwd: repoRoot,
+      worktreePath: repoRoot,
     },
   );
 });

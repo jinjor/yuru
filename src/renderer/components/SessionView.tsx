@@ -16,6 +16,7 @@ interface SessionViewProps {
   refreshRepos: () => void;
   runtimeSessionId: string;
   sidebarWidth: number;
+  worktreeId: string;
 }
 
 function isPathChanged(states: readonly GitPathState[], path: string): boolean {
@@ -31,6 +32,7 @@ export function SessionView({
   refreshRepos,
   runtimeSessionId,
   sidebarWidth,
+  worktreeId,
 }: SessionViewProps) {
   const sessionViewColumnRef = useRef<HTMLDivElement>(null);
   const [previewSelection, setPreviewSelection] = useState<PreviewSelection | null>(null);
@@ -45,9 +47,8 @@ export function SessionView({
     sidebarWidth,
     sessionViewColumnRef,
   });
-  const previewPathChanged = previewSelection
-    ? isPathChanged(gitPathStates, previewSelection.path)
-    : false;
+  const previewPath = previewSelection?.path ?? null;
+  const previewPathChanged = previewPath ? isPathChanged(gitPathStates, previewPath) : false;
 
   const resetPreviewState = useCallback((): void => {
     setPreviewSelection(null);
@@ -55,10 +56,18 @@ export function SessionView({
     setIsLoadingDiff(false);
   }, []);
 
+  const handleFileLinkActivate = useCallback(
+    async (filePath: string, line?: number): Promise<void> => {
+      const repoRelativePath = await window.electronAPI.resolveRepoFile(worktreeId, filePath);
+      if (!repoRelativePath) {
+        return;
+      }
+      setPreviewSelection({ path: repoRelativePath, line });
+    },
+    [worktreeId],
+  );
+
   useEffect(() => {
-    if (!runtimeSessionId) {
-      return;
-    }
     const handleKeyDown = (event: KeyboardEvent): void => {
       const isPaletteShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "p";
       if (!isPaletteShortcut) {
@@ -72,19 +81,15 @@ export function SessionView({
     return () => {
       window.removeEventListener("keydown", handleKeyDown, true);
     };
-  }, [runtimeSessionId]);
+  }, []);
 
   useEffect(() => {
-    if (!runtimeSessionId) {
-      return;
-    }
-
     let cancelled = false;
 
     const fetchStatus = async (): Promise<void> => {
       const [pathStatesResult, branchContextResult] = await Promise.all([
-        window.electronAPI.getGitPathStates(runtimeSessionId),
-        window.electronAPI.getGitBranchContext(runtimeSessionId),
+        window.electronAPI.getGitPathStates(worktreeId),
+        window.electronAPI.getGitBranchContext(worktreeId),
       ]);
       if (cancelled) {
         return;
@@ -106,10 +111,10 @@ export function SessionView({
       cancelled = true;
       clearInterval(interval);
     };
-  }, [refreshRepos, runtimeSessionId]);
+  }, [refreshRepos, worktreeId]);
 
   useEffect(() => {
-    if (!runtimeSessionId || !previewSelection) {
+    if (!previewPath) {
       setDiffDocument(null);
       setIsLoadingDiff(false);
       return;
@@ -120,8 +125,8 @@ export function SessionView({
 
     const fetchDiff = async (showLoader: boolean): Promise<void> => {
       const result = await window.electronAPI.getGitDiffDocument(
-        runtimeSessionId,
-        previewSelection.path,
+        worktreeId,
+        previewPath,
       );
       if (cancelled) {
         return;
@@ -149,7 +154,7 @@ export function SessionView({
       cancelled = true;
       clearInterval(interval);
     };
-  }, [previewPathChanged, previewSelection, runtimeSessionId]);
+  }, [previewPath, previewPathChanged, worktreeId]);
 
   return (
     <>
@@ -179,17 +184,15 @@ export function SessionView({
           />
         )}
         <TerminalPanel
+          changesPanelWidth={paneLayout.changesPanelWidth}
           currentBranch={currentBranch}
           currentGitHub={currentGitHub}
-          fitDependencies={[
-            paneLayout.changesPanelWidth,
-            paneLayout.previewRatio,
-            previewSelection,
-          ]}
+          isPreviewOpen={previewSelection !== null}
           onFileLinkActivate={(filePath, line) => {
-            setPreviewSelection({ path: filePath, line });
+            void handleFileLinkActivate(filePath, line);
           }}
           onOpenExternal={onOpenExternal}
+          previewRatio={paneLayout.previewRatio}
           runtimeSessionId={runtimeSessionId}
         />
       </div>
@@ -204,8 +207,8 @@ export function SessionView({
             gitPathStates={gitPathStates}
             onPreviewSelectionChange={setPreviewSelection}
             previewSelection={previewSelection}
-            runtimeSessionId={runtimeSessionId}
             width={paneLayout.changesPanelWidth}
+            worktreeId={worktreeId}
           />
         </>
       )}
@@ -213,7 +216,7 @@ export function SessionView({
         <FileSearch
           onClose={() => setIsFileSearchOpen(false)}
           onSelectFile={(path) => setPreviewSelection({ path })}
-          runtimeSessionId={runtimeSessionId}
+          worktreeId={worktreeId}
         />
       )}
     </>

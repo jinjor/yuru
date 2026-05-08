@@ -108,32 +108,25 @@ export async function loadSessions(
 ): Promise<Session[]> {
   const activeSessions = runtimeActiveSessions ?? new Map<string, RuntimeSessionInfo>();
   const snapshots = await loadStoredSessionSnapshots();
-  const runtimeSessions = Array.from(activeSessions, ([id, info]) => ({
-    id,
-    ...info,
-  }));
   const projectPaths = Array.from(
-    new Set([
-      ...snapshots.map((snapshot) => snapshot.project),
-      ...runtimeSessions.map((runtime) => runtime.cwd),
-    ]),
+    new Set(snapshots.map((snapshot) => snapshot.project)),
   );
   const worktreeMap = await buildWorktreeMap(projectPaths);
   const repoPathMap = await buildRepoPathMap(projectPaths);
-  const runtimeByProviderSessionKey = new Map<string, { id: string; info: RuntimeSessionInfo }>();
+  const runtimeIdByProviderSessionKey = new Map<string, string>();
   for (const [id, info] of activeSessions) {
     if (!info.providerSessionId) {
       continue;
     }
-    runtimeByProviderSessionKey.set(toSessionKey(info.provider, info.providerSessionId), { id, info });
+    runtimeIdByProviderSessionKey.set(toSessionKey(info.provider, info.providerSessionId), id);
   }
 
   const sessions: Session[] = snapshots.map((snapshot) => {
     const providerSessionKey = toSessionKey(snapshot.provider, snapshot.providerSessionId);
-    const runtime = runtimeByProviderSessionKey.get(providerSessionKey);
-    const id = runtime?.id ?? providerSessionKey;
-    const project = runtime?.info.cwd ?? snapshot.project;
-    const state: Session["state"] = runtime
+    const runtimeSessionId = runtimeIdByProviderSessionKey.get(providerSessionKey);
+    const id = runtimeSessionId ?? providerSessionKey;
+    const project = snapshot.project;
+    const state: Session["state"] = runtimeSessionId
       ? "active"
       : fs.existsSync(snapshot.project)
         ? "inactive"
@@ -152,28 +145,6 @@ export async function loadSessions(
       worktree: worktreeMap.get(project),
     } satisfies Session;
   });
-
-  for (const [id, info] of activeSessions) {
-    if (info.providerSessionId) {
-      const providerSessionKey = toSessionKey(info.provider, info.providerSessionId);
-      if (snapshots.some((snapshot) => toSessionKey(snapshot.provider, snapshot.providerSessionId) === providerSessionKey)) {
-        continue;
-      }
-    }
-
-    sessions.push({
-      id,
-      provider: info.provider,
-      providerSessionId: info.providerSessionId,
-      project: info.cwd,
-      projectName: path.basename(info.cwd),
-      repoPath: repoPathMap.get(info.cwd) ?? info.cwd,
-      lastMessage: "",
-      timestamp: info.startedAt,
-      state: "active",
-      worktree: worktreeMap.get(info.cwd),
-    } satisfies Session);
-  }
 
   const worktreeQueries = new Map<string, Promise<Session["github"]>>();
   for (const session of sessions) {

@@ -25,7 +25,7 @@ interface FilesPaneProps {
   height: number;
   onPreviewSelectionChange: (selection: PreviewSelection | null) => void;
   previewSelection: PreviewSelection | null;
-  runtimeSessionId: string;
+  worktreeId: string;
 }
 
 interface FilesState {
@@ -50,7 +50,7 @@ export function FilesPane({
   height,
   onPreviewSelectionChange,
   previewSelection,
-  runtimeSessionId,
+  worktreeId,
 }: FilesPaneProps) {
   const [filesState, setFilesState] = useState<FilesState>(() => createEmptyFilesState());
   const filesStateRef = useRef<FilesState>(filesState);
@@ -77,9 +77,9 @@ export function FilesPane({
 
   const syncWatchTargets = useCallback(
     (relativePaths: ReadonlySet<string>): void => {
-      void window.electronAPI.syncFileWatchTargets(runtimeSessionId, buildWatchTargets(relativePaths));
+      void window.electronAPI.syncFileWatchTargets(worktreeId, buildWatchTargets(relativePaths));
     },
-    [runtimeSessionId],
+    [worktreeId],
   );
 
   const applyTreeUpdate = useCallback((relativePath: string, nextNodes: FileTreeNode[]): void => {
@@ -129,7 +129,7 @@ export function FilesPane({
           ...prev,
           loadingDirectories: new Set(prev.loadingDirectories).add(relativePath),
         }));
-        const result = await window.electronAPI.listFiles(runtimeSessionId, relativePath);
+        const result = await window.electronAPI.listFiles(worktreeId, relativePath);
         if (sessionGenerationRef.current !== generation) {
           return;
         }
@@ -157,7 +157,7 @@ export function FilesPane({
       inFlightLoadsRef.current.set(relativePath, request);
       return request;
     },
-    [applyTreeUpdate, runtimeSessionId, updateFilesState],
+    [applyTreeUpdate, updateFilesState, worktreeId],
   );
 
   const toggleDirectory = useCallback(
@@ -213,25 +213,25 @@ export function FilesPane({
     pendingForcedReloadsRef.current = new Set();
     replaceFilesState(createEmptyFilesState());
     void loadDirectory(ROOT_DIRECTORY_PATH);
-  }, [loadDirectory, replaceFilesState, runtimeSessionId]);
+  }, [loadDirectory, replaceFilesState]);
 
   useEffect(() => {
-    const dispose = window.electronAPI.onFileTreeChanged((changedRuntimeSessionId, relativePath) => {
-      if (changedRuntimeSessionId !== runtimeSessionId) {
+    const dispose = window.electronAPI.onFileTreeChanged((changedWorktreeId, relativePath) => {
+      if (changedWorktreeId !== worktreeId) {
         return;
       }
       void loadDirectory(relativePath, true);
     });
 
     return dispose;
-  }, [loadDirectory, runtimeSessionId]);
+  }, [loadDirectory, worktreeId]);
 
   useEffect(() => {
     return () => {
       sessionGenerationRef.current += 1;
-      void window.electronAPI.syncFileWatchTargets(runtimeSessionId, []);
+      void window.electronAPI.syncFileWatchTargets(worktreeId, []);
     };
-  }, [runtimeSessionId]);
+  }, [worktreeId]);
 
   return (
     <>

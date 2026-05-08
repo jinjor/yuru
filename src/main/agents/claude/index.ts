@@ -154,21 +154,21 @@ export const sessionProvider: SessionProviderAdapter = {
     return {
       cwd: repoPath,
       args: [],
-      sessionCwd: repoPath,
+      worktreePath: repoPath,
     };
   },
   async createResumeLaunch(session) {
     return {
       cwd: session.project,
       args: ["--resume", session.providerSessionId],
-      sessionCwd: session.project,
+      worktreePath: session.project,
     };
   },
   async createWorktreeLaunch(context) {
     return {
       cwd: context.repoPath,
       args: ["--worktree", context.worktreeName],
-      sessionCwd: context.worktreePath,
+      worktreePath: context.worktreePath,
     };
   },
   async prepareWorktree() {

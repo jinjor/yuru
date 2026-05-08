@@ -267,10 +267,10 @@ provider ごとの hint は session identity を置き換えるためではな�
 16. [x] サジェストされた worktree session を primary に昇格できる
    - クリックすると active になり選択状態になる（resume）+ primary になる
 17. [x] Codex の suggested worktree session を表示し、primary に昇格できる
-18. [ ] runtime cwd を Files / Changes / Diff の source of truth にしている状態をやめる
+18. [x] runtime cwd を Files / Changes / Diff の source of truth にしている状態をやめる
    - PTY は `cd` で任意の場所へ移動できるため、runtime の cwd を task worktree の作業ルートとして扱わない
    - 右側の Files / Changes / Diff は選択中の task worktree の `worktreePath` を基準にする
-   - runtime が起動時 cwd を持つ場合でも、それは provider resume や表示補助の情報に留める
+   - runtime は task worktree path を持たず、metadata の primary session と provider session key で active runtime を重ねる
 19. [ ] active かつ suggested な session を UI 上で表現できる
    - suggested session がすでに active runtime を持つ場合、それが左ペインで分かる
    - クリック時は新規 resume ではなく promote + select になる

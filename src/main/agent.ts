@@ -12,7 +12,6 @@ export interface SessionSnapshot {
 }
 
 export interface RuntimeSessionInfo {
-  cwd: string;
   provider: SessionProvider;
   providerSessionId: string | null;
   startedAt: number;
@@ -25,7 +24,7 @@ export interface PendingSession {
   launchLabel: string;
   outputBuffer: string;
   startupOutput: string;
-  sessionCwd: string;
+  worktreePath: string;
   providerSessionId: string | null;
   runtimeSessionId: string | null;
   startedAt: number;
@@ -40,7 +39,7 @@ export interface PendingSession {
 export interface LaunchRequest {
   cwd: string;
   args: string[];
-  sessionCwd: string;
+  worktreePath: string;
   existingProviderSessionIds?: ReadonlySet<string>;
 }
 

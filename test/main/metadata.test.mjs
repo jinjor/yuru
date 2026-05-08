@@ -210,7 +210,7 @@ test("loadRepoList は active session key と一致する primary を active と
   assert.equal(taskWorktrees[1].primarySession.preview, "");
 });
 
-test("loadRepoList は metadata primary がなくても active runtime session を primary として返す", async () => {
+test("loadRepoList は metadata primary がない worktree に active runtime session を合成しない", async () => {
   seed({
     repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
     taskWorktrees: [
@@ -230,28 +230,11 @@ test("loadRepoList は metadata primary がなくても active runtime session �
   );
 
   const result = await loadRepoList(
-    undefined,
+    new Map([[toSessionKey("codex", "codex-1"), "runtime-1"]]),
     listGitWorktrees,
-    undefined,
-    new Map([
-      [
-        path.resolve("/tmp/repo-a/.yuru/worktrees/task-a"),
-        {
-          runtimeSessionId: "runtime-1",
-          provider: "codex",
-          providerSessionId: null,
-        },
-      ],
-    ]),
   );
 
-  assert.deepEqual(result[0].taskWorktrees[0].primarySession, {
-    provider: "codex",
-    providerSessionKey: null,
-    activeRuntimeSessionId: "runtime-1",
-    state: "active",
-    preview: "",
-  });
+  assert.equal(result[0].taskWorktrees[0].primarySession, undefined);
 });
 
 test("loadRepoList は primary session の preview を返す", async () => {
@@ -306,7 +289,6 @@ test("loadRepoList は suggested worktree session を返す", async () => {
     undefined,
     listGitWorktrees,
     new Map([[toSessionKey("claude", "claude-1"), "suggested preview"]]),
-    undefined,
     async (worktreePaths) =>
       new Map([
         [
@@ -354,7 +336,6 @@ test("loadRepoList は primary と同じ session を suggested から除外す�
     undefined,
     listGitWorktrees,
     undefined,
-    undefined,
     async (worktreePaths) =>
       new Map([
         [
@@ -389,7 +370,6 @@ test("loadRepoList は suggested worktree session を並び替えずに返す", 
   const result = await loadRepoList(
     undefined,
     listGitWorktrees,
-    undefined,
     undefined,
     async (worktreePaths) =>
       new Map([

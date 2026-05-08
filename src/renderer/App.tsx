@@ -1,7 +1,7 @@
 import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
 import type { AgentDefinition } from "../shared/agent";
-import type { RepoListItem } from "../shared/metadata";
+import type { RepoListItem, TaskWorktreeListItem } from "../shared/metadata";
 import { type SessionProvider } from "../shared/session";
 import { BranchNameInput } from "./components/BranchNameInput";
 import { RepoList } from "./components/RepoList";
@@ -13,20 +13,22 @@ export function App() {
   const resumeRequestRef = useRef(0);
   const [repos, setRepos] = useState<RepoListItem[]>([]);
   const [availableProviders, setAvailableProviders] = useState<AgentDefinition[]>([]);
-  const [selectedRuntimeSessionId, setSelectedRuntimeSessionId] = useState<string | null>(null);
+  const [selectedWorktreeId, setSelectedWorktreeId] = useState<string | null>(null);
   const [worktreeTarget, setWorktreeTarget] = useState<string | null>(null);
   const [worktreeError, setWorktreeError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(260);
+  const selectedWorktree = findTaskWorktree(repos, selectedWorktreeId);
+  const selectedRuntimeSessionId = selectedWorktree?.primarySession?.activeRuntimeSessionId ?? null;
 
-  const refreshRepos = useCallback((): void => {
-    window.electronAPI
-      .getRepos()
-      .then((nextRepos) => {
-        setRepos(nextRepos);
-      })
-      .catch((error) => {
-        console.error("Failed to load repos.", error);
-      });
+  const refreshRepos = useCallback(async (): Promise<RepoListItem[]> => {
+    try {
+      const nextRepos = await window.electronAPI.getRepos();
+      setRepos(nextRepos);
+      return nextRepos;
+    } catch (error) {
+      console.error("Failed to load repos.", error);
+      return [];
+    }
   }, []);
 
   const openExternal = useCallback((url: string): void => {
@@ -43,15 +45,14 @@ export function App() {
         console.error("Failed to load session providers.", error);
       });
 
-    refreshRepos();
-    window.electronAPI.onSessionsStateChanged((activeSessions) => {
-      const activeRuntimeSessionIds = new Set(
-        activeSessions.map((session) => session.runtimeSessionId),
-      );
-      setSelectedRuntimeSessionId((prev) =>
-        prev && !activeRuntimeSessionIds.has(prev) ? null : prev,
-      );
-      refreshRepos();
+    void refreshRepos();
+    window.electronAPI.onSessionsStateChanged(() => {
+      void refreshRepos().then((nextRepos) => {
+        setSelectedWorktreeId((prev) => {
+          const selected = findTaskWorktree(nextRepos, prev);
+          return selected?.primarySession?.activeRuntimeSessionId ? prev : null;
+        });
+      });
     });
   }, [refreshRepos]);
 
@@ -103,8 +104,11 @@ export function App() {
         return;
       }
 
-      setSelectedRuntimeSessionId(result.data.runtimeSessionId);
-      refreshRepos();
+      await refreshRepos();
+      if (resumeRequestRef.current !== requestId) {
+        return;
+      }
+      setSelectedWorktreeId(worktreeId);
     },
     [refreshRepos],
   );
@@ -123,8 +127,11 @@ export function App() {
         return;
       }
 
-      setSelectedRuntimeSessionId(result.data.runtimeSessionId);
-      refreshRepos();
+      await refreshRepos();
+      if (resumeRequestRef.current !== requestId) {
+        return;
+      }
+      setSelectedWorktreeId(worktreeId);
     },
     [refreshRepos],
   );
@@ -143,9 +150,9 @@ export function App() {
         return;
       }
 
-      setSelectedRuntimeSessionId(result.data.runtimeSessionId);
+      await refreshRepos();
+      setSelectedWorktreeId(result.data);
       setWorktreeTarget(null);
-      refreshRepos();
     },
     [refreshRepos, worktreeTarget],
   );
@@ -160,12 +167,12 @@ export function App() {
           <RepoList
             repos={repos}
             providers={availableProviders}
-            selectedRuntimeSessionId={selectedRuntimeSessionId}
+            selectedWorktreeId={selectedWorktreeId}
             onCreateWorktreeSession={(repoPath) => {
               setWorktreeError(null);
               setWorktreeTarget(repoPath);
             }}
-            onSelectActiveSession={setSelectedRuntimeSessionId}
+            onSelectActiveSession={setSelectedWorktreeId}
             onResumePrimarySession={handleResumePrimarySession}
             onResumeSuggestedSession={handleResumeSuggestedSession}
           />
@@ -176,14 +183,15 @@ export function App() {
         onMouseDown={handleSidebarResizeStart}
         aria-hidden="true"
       />
-      {selectedRuntimeSessionId ? (
+      {selectedWorktreeId && selectedRuntimeSessionId ? (
         <SessionView
-          key={selectedRuntimeSessionId}
+          key={`${selectedWorktreeId}:${selectedRuntimeSessionId}`}
           appRef={appRef}
           onOpenExternal={openExternal}
           refreshRepos={refreshRepos}
           runtimeSessionId={selectedRuntimeSessionId}
           sidebarWidth={sidebarWidth}
+          worktreeId={selectedWorktreeId}
         />
       ) : (
         <SessionPlaceholder />
@@ -202,6 +210,22 @@ export function App() {
       )}
     </div>
   );
+}
+
+function findTaskWorktree(
+  repos: RepoListItem[],
+  worktreeId: string | null,
+): TaskWorktreeListItem | null {
+  if (!worktreeId) {
+    return null;
+  }
+  for (const repo of repos) {
+    const taskWorktree = repo.taskWorktrees.find((entry) => entry.worktreeId === worktreeId);
+    if (taskWorktree) {
+      return taskWorktree;
+    }
+  }
+  return null;
 }
 
 function SessionPlaceholder() {

@@ -10,16 +10,16 @@ interface ExplorerPanelProps {
   gitPathStates: readonly GitPathState[];
   onPreviewSelectionChange: (selection: PreviewSelection | null) => void;
   previewSelection: PreviewSelection | null;
-  runtimeSessionId: string;
   width: number;
+  worktreeId: string;
 }
 
 export function ExplorerPanel({
   gitPathStates,
   onPreviewSelectionChange,
   previewSelection,
-  runtimeSessionId,
   width,
+  worktreeId,
 }: ExplorerPanelProps) {
   const [panelRef, panelSize] = useElementSize<HTMLDivElement>();
   const [headerRef, headerSize] = useElementSize<HTMLDivElement>();
@@ -64,7 +64,7 @@ export function ExplorerPanel({
           height={contentHeight || 400}
           onPreviewSelectionChange={onPreviewSelectionChange}
           previewSelection={previewSelection}
-          runtimeSessionId={runtimeSessionId}
+          worktreeId={worktreeId}
         />
       )}
     </aside>

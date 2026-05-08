@@ -39,7 +39,7 @@ const electronAPI: ElectronAPI = {
   onErrorsCleared: (callback) =>
     ipcRenderer.on("errors:cleared", () => callback()),
   onSessionsStateChanged: (callback) =>
-    ipcRenderer.on("sessions:stateChanged", (_event, active) => callback(active)),
+    ipcRenderer.on("sessions:stateChanged", () => callback()),
   onFileTreeChanged: (callback) => {
     const listener = (
       _event: Electron.IpcRendererEvent,

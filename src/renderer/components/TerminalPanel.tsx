@@ -6,11 +6,13 @@ import type { GitHubPullRequest } from "../../shared/session";
 import { GitHubBadge } from "./GitHubBadge";
 
 interface TerminalPanelProps {
+  changesPanelWidth: number;
   currentBranch: string | null;
   currentGitHub: GitHubPullRequest | null;
-  fitDependencies: readonly unknown[];
+  isPreviewOpen: boolean;
   onFileLinkActivate: (filePath: string, line?: number) => void;
   onOpenExternal: (url: string) => void;
+  previewRatio: number;
   runtimeSessionId: string;
 }
 
@@ -21,11 +23,13 @@ interface TerminalInstance {
 }
 
 export function TerminalPanel({
+  changesPanelWidth,
   currentBranch,
   currentGitHub,
-  fitDependencies,
+  isPreviewOpen,
   onFileLinkActivate,
   onOpenExternal,
+  previewRatio,
   runtimeSessionId,
 }: TerminalPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -99,36 +103,24 @@ export function TerminalPanel({
           return;
         }
 
-        Promise.all(
-          matches.map(async (entry): Promise<ILink | null> => {
-            const repoRelativePath = await window.electronAPI.resolveRepoFile(
-              runtimeSessionId,
-              entry.filePath,
-            );
-            if (!repoRelativePath) {
-              return null;
-            }
+        const links = matches.map((entry): ILink => {
+          const cellStart = stringIndexToCellIndex(line, entry.startIndex);
+          const cellEnd = stringIndexToCellIndex(line, entry.startIndex + entry.text.length);
+          const range: IBufferRange = {
+            start: { x: cellStart + 1, y: bufferLineNumber },
+            end: { x: cellEnd, y: bufferLineNumber },
+          };
 
-            const cellStart = stringIndexToCellIndex(line, entry.startIndex);
-            const cellEnd = stringIndexToCellIndex(line, entry.startIndex + entry.text.length);
-            const range: IBufferRange = {
-              start: { x: cellStart + 1, y: bufferLineNumber },
-              end: { x: cellEnd, y: bufferLineNumber },
-            };
-
-            return {
-              range,
-              text: entry.text,
-              decorations: { pointerCursor: true, underline: true },
-              activate(): void {
-                onFileLinkActivateRef.current(repoRelativePath, entry.fileLine);
-              },
-            } satisfies ILink;
-          }),
-        ).then((results) => {
-          const links = results.filter((result): result is ILink => result !== null);
-          callback(links.length > 0 ? links : undefined);
+          return {
+            range,
+            text: entry.text,
+            decorations: { pointerCursor: true, underline: true },
+            activate(): void {
+              onFileLinkActivateRef.current(entry.filePath, entry.fileLine);
+            },
+          };
         });
+        callback(links);
       },
     } satisfies ILinkProvider);
 
@@ -214,7 +206,7 @@ export function TerminalPanel({
     requestAnimationFrame(() => {
       fitTerminal();
     });
-  }, [fitTerminal, runtimeSessionId, ...fitDependencies]);
+  }, [changesPanelWidth, fitTerminal, isPreviewOpen, previewRatio]);
 
   useEffect(() => {
     const handleResize = (): void => {

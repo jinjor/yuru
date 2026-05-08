@@ -11,9 +11,9 @@ import { providerLabel } from "../utils/session";
 interface RepoListProps {
   repos: RepoListItem[];
   providers: AgentDefinition[];
-  selectedRuntimeSessionId: string | null;
+  selectedWorktreeId: string | null;
   onCreateWorktreeSession: (repoPath: string) => void;
-  onSelectActiveSession: (runtimeSessionId: string) => void;
+  onSelectActiveSession: (worktreeId: string) => void;
   onResumePrimarySession: (worktreeId: string, providerSessionKey: string) => void;
   onResumeSuggestedSession: (worktreeId: string, providerSessionKey: string) => void;
 }
@@ -21,7 +21,7 @@ interface RepoListProps {
 export function RepoList({
   repos,
   providers,
-  selectedRuntimeSessionId,
+  selectedWorktreeId,
   onCreateWorktreeSession,
   onSelectActiveSession,
   onResumePrimarySession,
@@ -77,7 +77,7 @@ export function RepoList({
                   key={taskWorktree.worktreeId}
                   taskWorktree={taskWorktree}
                   providers={providers}
-                  selectedRuntimeSessionId={selectedRuntimeSessionId}
+                  selectedWorktreeId={selectedWorktreeId}
                   isActionSurfaceOpen={openActionWorktreeId === taskWorktree.worktreeId}
                   onCloseActionSurface={() => setOpenActionWorktreeId(null)}
                   onToggleActionSurface={() => {
@@ -103,11 +103,11 @@ export function RepoList({
 interface TaskWorktreeCardProps {
   taskWorktree: TaskWorktreeListItem;
   providers: AgentDefinition[];
-  selectedRuntimeSessionId: string | null;
+  selectedWorktreeId: string | null;
   isActionSurfaceOpen: boolean;
   onCloseActionSurface: () => void;
   onToggleActionSurface: () => void;
-  onSelectActiveSession: (runtimeSessionId: string) => void;
+  onSelectActiveSession: (worktreeId: string) => void;
   onResumePrimarySession: (worktreeId: string, providerSessionKey: string) => void;
   onResumeSuggestedSession: (worktreeId: string, providerSessionKey: string) => void;
 }
@@ -115,7 +115,7 @@ interface TaskWorktreeCardProps {
 function TaskWorktreeCard({
   taskWorktree,
   providers,
-  selectedRuntimeSessionId,
+  selectedWorktreeId,
   isActionSurfaceOpen,
   onCloseActionSurface,
   onToggleActionSurface,
@@ -124,18 +124,15 @@ function TaskWorktreeCard({
   onResumeSuggestedSession,
 }: TaskWorktreeCardProps) {
   const { primarySession, suggestedSessions } = taskWorktree;
-  const isActive = primarySession?.state === "active";
-  const isSelected =
-    primarySession !== undefined &&
-    selectedRuntimeSessionId !== null &&
-    selectedRuntimeSessionId === primarySession.activeRuntimeSessionId;
+  const isSelected = selectedWorktreeId === taskWorktree.worktreeId;
+  const isPrimarySessionActive = isSelected || primarySession?.state === "active";
 
   const selectPrimarySession = () => {
     if (!primarySession) {
       return;
     }
     if (primarySession.activeRuntimeSessionId) {
-      onSelectActiveSession(primarySession.activeRuntimeSessionId);
+      onSelectActiveSession(taskWorktree.worktreeId);
       return;
     }
     if (primarySession.providerSessionKey) {
@@ -171,7 +168,7 @@ function TaskWorktreeCard({
       className={[
         "task-worktree-card",
         primarySession ? "has-primary" : "no-primary",
-        isActive ? "active" : "inactive",
+        isPrimarySessionActive ? "active" : "inactive",
         isSelected ? "selected" : "",
         isActionSurfaceOpen ? "action-open" : "",
       ].join(" ")}
@@ -184,7 +181,10 @@ function TaskWorktreeCard({
       <div className="task-worktree-summary">
         <span className="task-worktree-name">{taskWorktree.name}</span>
         {primarySession ? (
-          <PrimarySessionSummary primarySession={primarySession} />
+          <PrimarySessionSummary
+            isActive={isPrimarySessionActive}
+            primarySession={primarySession}
+          />
         ) : (
           <span className="task-worktree-hint">{formatExistingSessionCount(suggestedSessions.length)}</span>
         )}
@@ -203,18 +203,20 @@ function TaskWorktreeCard({
 }
 
 interface PrimarySessionSummaryProps {
+  isActive: boolean;
   primarySession: PrimarySessionListItem;
 }
 
-function PrimarySessionSummary({ primarySession }: PrimarySessionSummaryProps) {
+function PrimarySessionSummary({ isActive, primarySession }: PrimarySessionSummaryProps) {
   const preview = primarySession.preview || "(no messages)";
   const providerName = providerLabel(primarySession.provider);
+  const state = isActive ? "active" : primarySession.state;
   return (
     <span className="task-worktree-session-row">
       <span
-        className={`session-provider-dot provider-${primarySession.provider} ${primarySession.state}`}
-        title={`${providerName} · ${primarySession.state}`}
-        aria-label={`${providerName} primary session ${primarySession.state}`}
+        className={`session-provider-dot provider-${primarySession.provider} ${state}`}
+        title={`${providerName} · ${state}`}
+        aria-label={`${providerName} primary session ${state}`}
       />
       <span className="task-worktree-session-preview" title={preview}>
         {preview}

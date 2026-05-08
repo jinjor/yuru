@@ -69,15 +69,6 @@ export interface BranchContext {
   github: GitHubPullRequest | null;
 }
 
-export interface ActiveSessionState {
-  runtimeSessionId: RuntimeSessionId;
-  cwd: string;
-}
-
-export interface RuntimeSessionSelection {
-  runtimeSessionId: RuntimeSessionId;
-}
-
 export interface ElectronAPI {
   getSessions: () => Promise<Session[]>;
   getRepos: () => Promise<RepoListItem[]>;
@@ -88,17 +79,17 @@ export interface ElectronAPI {
   resumePrimarySession: (
     worktreeId: string,
     providerSessionKey: string,
-  ) => Promise<Result<RuntimeSessionSelection>>;
+  ) => Promise<Result<boolean>>;
   resumeSuggestedSession: (
     worktreeId: string,
     providerSessionKey: string,
-  ) => Promise<Result<RuntimeSessionSelection>>;
-  createSession: (provider: SessionProvider, repoPath: string) => Promise<Result<RuntimeSessionSelection>>;
+  ) => Promise<Result<boolean>>;
+  createSession: (provider: SessionProvider, repoPath: string) => Promise<Result<string>>;
   createWorktreeSession: (
     provider: SessionProvider,
     repoPath: string,
     branchName: string,
-  ) => Promise<Result<RuntimeSessionSelection>>;
+  ) => Promise<Result<string>>;
   removeWorktree: (
     provider: SessionProvider,
     repoPath: string,
@@ -116,7 +107,7 @@ export interface ElectronAPI {
   onErrorAdded: (callback: (error: AppErrorNotice) => void) => void;
   onErrorRemoved: (callback: (id: string) => void) => void;
   onErrorsCleared: (callback: () => void) => void;
-  onSessionsStateChanged: (callback: (active: ActiveSessionState[]) => void) => void;
+  onSessionsStateChanged: (callback: () => void) => void;
   onFileTreeChanged: (callback: (runtimeSessionId: RuntimeSessionId, relativePath: string) => void) => () => void;
   attachPty: (runtimeSessionId: RuntimeSessionId) => Promise<string>;
   readyPty: (runtimeSessionId: RuntimeSessionId) => Promise<void>;
