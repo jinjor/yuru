@@ -14,6 +14,7 @@ export interface SessionSnapshot {
 export interface RuntimeSessionInfo {
   provider: SessionProvider;
   providerSessionId: string | null;
+  worktreePath: string;
   startedAt: number;
 }
 

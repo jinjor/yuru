@@ -48,6 +48,7 @@ import {
   type AppErrorNotice,
   type BranchContext,
   type Result,
+  type WorktreeSessionSelection,
 } from "../shared/ipc.js";
 import {
   type SessionProvider,
@@ -167,6 +168,23 @@ function getActiveRuntimeSessionIdsByKey(): Map<string, string> {
     }
   }
   return idsByKey;
+}
+
+function getActiveRuntimeSessionsByWorktreePath(): Map<
+  string,
+  { provider: SessionProvider; runtimeSessionId: string }
+> {
+  const sessionsByWorktreePath = new Map<
+    string,
+    { provider: SessionProvider; runtimeSessionId: string }
+  >();
+  for (const [runtimeSessionId, info] of sessionRuntimeMap) {
+    sessionsByWorktreePath.set(path.resolve(info.worktreePath), {
+      provider: info.provider,
+      runtimeSessionId,
+    });
+  }
+  return sessionsByWorktreePath;
 }
 
 function hasActivePrimarySessionForWorktree(worktreePath: string): boolean {
@@ -442,6 +460,7 @@ function registerRuntimeSession(
   sessionRuntimeMap.set(runtimeSessionId, {
     provider: pending.provider,
     providerSessionId,
+    worktreePath: pending.worktreePath,
     startedAt: pending.startedAt,
   });
 }
@@ -590,7 +609,7 @@ function promotePrimarySession(
 async function activateWorktreeSession(
   target: WorktreeSessionResumeTarget,
   options: { detachMissingPrimary: boolean },
-): Promise<Result<boolean>> {
+): Promise<Result<string>> {
   const providerAdapter = getSessionProvider(target.provider);
   let pending: PendingSession | null = null;
   try {
@@ -602,7 +621,7 @@ async function activateWorktreeSession(
         });
         emitSessionsStateChanged();
       }
-      return failAndReport<boolean>({
+      return failAndReport<string>({
         code: "command_failed",
         message: "This session no longer exists.",
         detail: `${target.provider} session ${target.providerSessionId} was not found in saved conversations.`,
@@ -617,7 +636,7 @@ async function activateWorktreeSession(
     await waitForResumeReady(providerAdapter, pending, target.providerSessionId);
     const runtimeSessionId = createRuntimeSessionId(target.provider, pending);
     registerRuntimeSession(runtimeSessionId, pending, target.providerSessionId);
-    return ok(true);
+    return ok(runtimeSessionId);
   } catch (error) {
     if (pending && !pending.exited) {
       pending.proc.kill();
@@ -626,18 +645,18 @@ async function activateWorktreeSession(
       ? error
       : toAppError(error, { command: providerAdapter.command });
     return pending?.startupFailureReported
-      ? fail<boolean>(appError)
-      : failAndReport<boolean>(appError);
+      ? fail<string>(appError)
+      : failAndReport<string>(appError);
   }
 }
 
 async function resumePrimaryWorktreeSession(
   worktreeId: string,
   providerSessionKey: string,
-): Promise<Result<boolean>> {
+): Promise<Result<WorktreeSessionSelection>> {
   const target = await findPrimarySessionResumeTarget(worktreeId, providerSessionKey);
   if (!target) {
-    return failAndReport<boolean>({
+    return failAndReport<WorktreeSessionSelection>({
       code: "unknown",
       message: "This primary session no longer exists.",
     });
@@ -645,12 +664,12 @@ async function resumePrimaryWorktreeSession(
 
   const activeRuntimeSessionId = getActiveRuntimeSessionIdsByKey().get(providerSessionKey);
   if (activeRuntimeSessionId && ptyProcesses.has(activeRuntimeSessionId)) {
-    return ok(true);
+    return ok({ worktreeId, runtimeSessionId: activeRuntimeSessionId });
   }
 
   const result = await activateWorktreeSession(target, { detachMissingPrimary: true });
   if (result.ok) {
-    emitSessionsStateChanged();
+    return ok({ worktreeId, runtimeSessionId: result.data });
   }
   return result;
 }
@@ -658,10 +677,10 @@ async function resumePrimaryWorktreeSession(
 async function resumeSuggestedWorktreeSession(
   worktreeId: string,
   providerSessionKey: string,
-): Promise<Result<boolean>> {
+): Promise<Result<WorktreeSessionSelection>> {
   const worktree = await findGitWorktree(worktreeId);
   if (!worktree) {
-    return failAndReport<boolean>({
+    return failAndReport<WorktreeSessionSelection>({
       code: "unknown",
       message: "This worktree no longer exists.",
     });
@@ -669,14 +688,13 @@ async function resumeSuggestedWorktreeSession(
 
   const suggestedSession = await findSuggestedSession(worktree.worktreePath, providerSessionKey);
   if (!suggestedSession) {
-    return failAndReport<boolean>({
+    return failAndReport<WorktreeSessionSelection>({
       code: "unknown",
       message: "This suggested session no longer exists.",
     });
   }
 
   promotePrimarySession(worktree, suggestedSession);
-  emitSessionsStateChanged();
   return resumePrimaryWorktreeSession(worktreeId, providerSessionKey);
 }
 
@@ -745,6 +763,7 @@ app.whenReady().then(() => {
       undefined,
       previewsByKey,
       loadSuggestedWorktreeSessions,
+      getActiveRuntimeSessionsByWorktreePath(),
     );
   });
 
@@ -849,13 +868,13 @@ app.whenReady().then(() => {
 
       // Pre-check: worktree directory and branch name must not already exist
       if (fs.existsSync(worktreePath)) {
-        return failAndReport<string>({
+        return failAndReport<WorktreeSessionSelection>({
           code: "filesystem_failed",
           message: `Worktree "${worktreeName}" already exists`,
         });
       }
       if (await branchExists(repoPath, branchName)) {
-        return failAndReport<string>({
+        return failAndReport<WorktreeSessionSelection>({
           code: "git_failed",
           message: `Branch "${branchName}" already exists`,
         });
@@ -863,7 +882,7 @@ app.whenReady().then(() => {
 
       const repo = findRepoByPath(repoPath);
       if (!repo) {
-        return failAndReport<string>({
+        return failAndReport<WorktreeSessionSelection>({
           code: "unknown",
           message: `Repository "${repoPath}" is not registered in Yuru. Run \`yuru add\` first.`,
         });
@@ -879,7 +898,7 @@ app.whenReady().then(() => {
           await providerAdapter.createWorktreeLaunch(worktreeContext),
           "Failed to create worktree session",
         );
-        const { providerSessionId } = await startSession(
+        const { runtimeSessionId, providerSessionId } = await startSession(
           provider,
           providerAdapter,
           pending,
@@ -892,8 +911,11 @@ app.whenReady().then(() => {
           });
         }
         await providerAdapter.finalizeWorktree(worktreeContext);
-        await refreshWorktreeWatcher();
-        return ok(toWorktreeId(repo.id, worktreePath));
+        worktreeWatcher?.addRepo(repoPath);
+        return ok({
+          worktreeId: toWorktreeId(repo.id, worktreePath),
+          runtimeSessionId,
+        });
       } catch (error) {
         if (pending && !pending.exited) {
           pending.proc.kill();
@@ -905,8 +927,8 @@ app.whenReady().then(() => {
         const command = providerAdapter.command === "codex" ? "git" : providerAdapter.command;
         const appError = toAppError(error, { command });
         return pending?.startupFailureReported
-          ? fail<string>(appError)
-          : failAndReport<string>(appError);
+          ? fail<WorktreeSessionSelection>(appError)
+          : failAndReport<WorktreeSessionSelection>(appError);
       }
     },
   );

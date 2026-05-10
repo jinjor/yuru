@@ -23,6 +23,11 @@ type LoadSuggestedSessions = (
   worktreePaths: readonly string[],
 ) => Promise<ReadonlyMap<string, readonly SuggestedWorktreeSession[]>>;
 
+interface ActiveRuntimeWorktreeSession {
+  provider: SessionProvider;
+  runtimeSessionId: RuntimeSessionId;
+}
+
 export function loadMetadata(): YuruMetadata {
   const metadataPath = getMetadataPath();
   if (!fs.existsSync(metadataPath)) {
@@ -40,6 +45,7 @@ export async function loadRepoList(
   listGitWorktrees: ListWorktrees = listWorktrees,
   primarySessionPreviewsByKey?: ReadonlyMap<string, string>,
   loadSuggestedSessions?: LoadSuggestedSessions,
+  activeRuntimeSessionsByWorktreePath?: ReadonlyMap<string, ActiveRuntimeWorktreeSession>,
 ): Promise<RepoListItem[]> {
   const metadata = loadMetadata();
   const repoEntries = await Promise.all(
@@ -68,6 +74,7 @@ export async function loadRepoList(
         gitWorktree.path,
         metadataByPath.get(toWorktreePathKey(gitWorktree.path)),
         activeRuntimeSessionIdsByKey,
+        activeRuntimeSessionsByWorktreePath,
         primarySessionPreviewsByKey,
         suggestedSessionsByWorktreePath?.get(gitWorktree.path) ?? [],
       ),
@@ -270,6 +277,9 @@ function toTaskWorktreeListItem(
   worktreePath: string,
   metadataEntry: TaskWorktreeMetadata | undefined,
   activeRuntimeSessionIdsByKey: ReadonlyMap<string, RuntimeSessionId> | undefined,
+  activeRuntimeSessionsByWorktreePath:
+    | ReadonlyMap<string, ActiveRuntimeWorktreeSession>
+    | undefined,
   primarySessionPreviewsByKey: ReadonlyMap<string, string> | undefined,
   suggestedSessions: readonly SuggestedWorktreeSession[],
 ): TaskWorktreeListItem {
@@ -281,9 +291,14 @@ function toTaskWorktreeListItem(
   const activeRuntimeSessionId = primarySessionKey
     ? activeRuntimeSessionIdsByKey?.get(primarySessionKey) ?? null
     : null;
+  const activeRuntimeSession =
+    primarySession
+      ? null
+      : activeRuntimeSessionsByWorktreePath?.get(toWorktreePathKey(worktreePath)) ?? null;
   const suggestedSessionItems = toSuggestedSessionListItems(
     suggestedSessions,
     new Set([primarySessionKey].filter((key) => key !== null)),
+    activeRuntimeSessionIdsByKey,
     primarySessionPreviewsByKey,
   );
 
@@ -299,6 +314,14 @@ function toTaskWorktreeListItem(
           state: activeRuntimeSessionId ? "active" : "inactive",
           preview: primarySessionPreviewsByKey?.get(primarySessionKey) ?? "",
         }
+      : activeRuntimeSession
+        ? {
+            provider: activeRuntimeSession.provider,
+            providerSessionKey: null,
+            activeRuntimeSessionId: activeRuntimeSession.runtimeSessionId,
+            state: "active",
+            preview: "",
+          }
       : undefined,
     suggestedSessions: suggestedSessionItems,
   };
@@ -307,6 +330,7 @@ function toTaskWorktreeListItem(
 function toSuggestedSessionListItems(
   suggestedSessions: readonly SuggestedWorktreeSession[],
   excludedSessionKeys: ReadonlySet<string>,
+  activeRuntimeSessionIdsByKey: ReadonlyMap<string, RuntimeSessionId> | undefined,
   primarySessionPreviewsByKey: ReadonlyMap<string, string> | undefined,
 ): SuggestedSessionListItem[] {
   return suggestedSessions.flatMap((session) => {
@@ -314,11 +338,15 @@ function toSuggestedSessionListItems(
     if (excludedSessionKeys.has(providerSessionKey)) {
       return [];
     }
+    const activeRuntimeSessionId = activeRuntimeSessionIdsByKey?.get(providerSessionKey) ?? null;
     return [
       {
         provider: session.provider,
         providerSessionKey,
+        activeRuntimeSessionId,
+        state: activeRuntimeSessionId ? "active" : "inactive",
         preview: primarySessionPreviewsByKey?.get(providerSessionKey) ?? "",
+        timestamp: session.timestamp ?? 0,
       },
     ];
   });

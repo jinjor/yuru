@@ -42,7 +42,7 @@ function parseClaudeWorktreeStateHint(entry: unknown): WorktreeSessionHint | nul
     provider: "claude",
     providerSessionId,
     worktreePath: maybeEntry.worktreeSession.worktreePath,
-    source: "claude-worktree-state",
+    worktreeRank: 0,
   };
 }
 
@@ -82,7 +82,7 @@ export function detectClaudeWorktreeSession(
         provider: "claude",
         providerSessionId: entry.sessionId,
         worktreePath,
-        source: "claude-cwd",
+        worktreeRank: 0,
       };
     }
   }

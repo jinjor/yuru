@@ -2,7 +2,7 @@ import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useRef, use
 import "@xterm/xterm/css/xterm.css";
 import type { AgentDefinition } from "../shared/agent";
 import type { RepoListItem, TaskWorktreeListItem } from "../shared/metadata";
-import { type SessionProvider } from "../shared/session";
+import { type RuntimeSessionId, type SessionProvider } from "../shared/session";
 import { BranchNameInput } from "./components/BranchNameInput";
 import { RepoList } from "./components/RepoList";
 import { SessionView } from "./components/SessionView";
@@ -13,12 +13,15 @@ export function App() {
   const resumeRequestRef = useRef(0);
   const [repos, setRepos] = useState<RepoListItem[]>([]);
   const [availableProviders, setAvailableProviders] = useState<AgentDefinition[]>([]);
-  const [selectedWorktreeId, setSelectedWorktreeId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<{
+    worktreeId: string;
+    runtimeSessionId: RuntimeSessionId;
+  } | null>(null);
   const [worktreeTarget, setWorktreeTarget] = useState<string | null>(null);
   const [worktreeError, setWorktreeError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(260);
-  const selectedWorktree = findTaskWorktree(repos, selectedWorktreeId);
-  const selectedRuntimeSessionId = selectedWorktree?.primarySession?.activeRuntimeSessionId ?? null;
+  const selectedWorktreeId = selection?.worktreeId ?? null;
+  const selectedRuntimeSessionId = selection?.runtimeSessionId ?? null;
 
   const refreshRepos = useCallback(async (): Promise<RepoListItem[]> => {
     try {
@@ -48,9 +51,12 @@ export function App() {
     void refreshRepos();
     window.electronAPI.onSessionsStateChanged(() => {
       void refreshRepos().then((nextRepos) => {
-        setSelectedWorktreeId((prev) => {
-          const selected = findTaskWorktree(nextRepos, prev);
-          return selected?.primarySession?.activeRuntimeSessionId ? prev : null;
+        setSelection((prev) => {
+          if (!prev) {
+            return null;
+          }
+          const runtimeSessionId = findActiveRuntimeSessionId(nextRepos, prev.worktreeId);
+          return runtimeSessionId ? { worktreeId: prev.worktreeId, runtimeSessionId } : null;
         });
       });
     });
@@ -104,11 +110,8 @@ export function App() {
         return;
       }
 
-      await refreshRepos();
-      if (resumeRequestRef.current !== requestId) {
-        return;
-      }
-      setSelectedWorktreeId(worktreeId);
+      setSelection(result.data);
+      void refreshRepos();
     },
     [refreshRepos],
   );
@@ -127,11 +130,8 @@ export function App() {
         return;
       }
 
-      await refreshRepos();
-      if (resumeRequestRef.current !== requestId) {
-        return;
-      }
-      setSelectedWorktreeId(worktreeId);
+      setSelection(result.data);
+      void refreshRepos();
     },
     [refreshRepos],
   );
@@ -150,9 +150,17 @@ export function App() {
         return;
       }
 
-      await refreshRepos();
-      setSelectedWorktreeId(result.data);
+      setSelection(result.data);
       setWorktreeTarget(null);
+      void refreshRepos().then((nextRepos) => {
+        setSelection((prev) => {
+          if (prev?.worktreeId !== result.data.worktreeId) {
+            return prev;
+          }
+          const runtimeSessionId = findActiveRuntimeSessionId(nextRepos, prev.worktreeId);
+          return runtimeSessionId ? { worktreeId: prev.worktreeId, runtimeSessionId } : prev;
+        });
+      });
     },
     [refreshRepos, worktreeTarget],
   );
@@ -172,7 +180,9 @@ export function App() {
               setWorktreeError(null);
               setWorktreeTarget(repoPath);
             }}
-            onSelectActiveSession={setSelectedWorktreeId}
+            onSelectActiveSession={(worktreeId, runtimeSessionId) =>
+              setSelection({ worktreeId, runtimeSessionId })
+            }
             onResumePrimarySession={handleResumePrimarySession}
             onResumeSuggestedSession={handleResumeSuggestedSession}
           />
@@ -188,7 +198,6 @@ export function App() {
           key={`${selectedWorktreeId}:${selectedRuntimeSessionId}`}
           appRef={appRef}
           onOpenExternal={openExternal}
-          refreshRepos={refreshRepos}
           runtimeSessionId={selectedRuntimeSessionId}
           sidebarWidth={sidebarWidth}
           worktreeId={selectedWorktreeId}
@@ -226,6 +235,19 @@ function findTaskWorktree(
     }
   }
   return null;
+}
+
+function findActiveRuntimeSessionId(
+  repos: RepoListItem[],
+  worktreeId: string,
+): RuntimeSessionId | null {
+  const taskWorktree = findTaskWorktree(repos, worktreeId);
+  return (
+    taskWorktree?.primarySession?.activeRuntimeSessionId ??
+    taskWorktree?.suggestedSessions.find((session) => session.activeRuntimeSessionId)
+      ?.activeRuntimeSessionId ??
+    null
+  );
 }
 
 function SessionPlaceholder() {

@@ -162,12 +162,170 @@ test("loadSuggestedWorktreeSessions は suggested session を worktree ごとに
   const suggestions = await loadSuggestedWorktreeSessions([worktreeB, worktreeA]);
 
   assert.deepEqual(suggestions.get(worktreeA), [
-    { provider: "claude", providerSessionId: "claude-a" },
-    { provider: "claude", providerSessionId: "claude-b" },
-    { provider: "codex", providerSessionId: "codex-a" },
+    { provider: "claude", providerSessionId: "claude-a", timestamp: 0 },
+    { provider: "claude", providerSessionId: "claude-b", timestamp: 0 },
+    { provider: "codex", providerSessionId: "codex-a", timestamp: 0 },
   ]);
   assert.deepEqual(suggestions.get(worktreeB), [
-    { provider: "claude", providerSessionId: "claude-a" },
-    { provider: "codex", providerSessionId: "codex-b" },
+    { provider: "claude", providerSessionId: "claude-a", timestamp: 0 },
+    { provider: "codex", providerSessionId: "codex-b", timestamp: 0 },
   ]);
+});
+
+test("loadSuggestedWorktreeSessions は同じ worktreeRank なら session id で安定して並べる", async () => {
+  const worktreePath = path.join(tempDir, "repo", ".yuru", "worktrees", "ranked");
+  const codexSessionsDir = path.join(codexDir, "sessions", "2026", "05", "09");
+  fs.mkdirSync(codexSessionsDir, { recursive: true });
+
+  fs.writeFileSync(
+    path.join(codexSessionsDir, "rank-weak.jsonl"),
+    jsonl(
+      {
+        type: "session_meta",
+        payload: {
+          id: "codex-weak",
+          cwd: path.join(tempDir, "repo"),
+        },
+      },
+      {
+        type: "response_item",
+        payload: {
+          type: "message",
+          content: [{ type: "output_text", text: `Created ${worktreePath}` }],
+        },
+      },
+    ),
+  );
+  fs.writeFileSync(
+    path.join(codexSessionsDir, "rank-patch.jsonl"),
+    jsonl(
+      {
+        type: "session_meta",
+        payload: {
+          id: "codex-patch",
+          cwd: path.join(tempDir, "repo"),
+        },
+      },
+      {
+        type: "event_msg",
+        payload: {
+          type: "patch_apply_end",
+          changes: {
+            [path.join(worktreePath, "file.txt")]: { type: "add" },
+          },
+        },
+      },
+    ),
+  );
+  fs.writeFileSync(
+    path.join(codexSessionsDir, "rank-workdir.jsonl"),
+    jsonl(
+      {
+        type: "session_meta",
+        payload: {
+          id: "codex-workdir",
+          cwd: path.join(tempDir, "repo"),
+        },
+      },
+      {
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          name: "exec_command",
+          arguments: JSON.stringify({ cmd: "pwd", workdir: worktreePath }),
+        },
+      },
+    ),
+  );
+  fs.writeFileSync(
+    path.join(codexSessionsDir, "rank-meta.jsonl"),
+    jsonl({
+      type: "session_meta",
+      payload: {
+        id: "codex-meta",
+        cwd: worktreePath,
+      },
+    }),
+  );
+
+  const suggestions = await loadSuggestedWorktreeSessions([worktreePath]);
+
+  assert.deepEqual(suggestions.get(worktreePath), [
+    { provider: "codex", providerSessionId: "codex-meta", timestamp: 0 },
+    { provider: "codex", providerSessionId: "codex-patch", timestamp: 0 },
+    { provider: "codex", providerSessionId: "codex-weak", timestamp: 0 },
+    { provider: "codex", providerSessionId: "codex-workdir", timestamp: 0 },
+  ]);
+});
+
+test("loadSuggestedWorktreeSessions は session 内で対象 worktree の順位が高い session を先に返す", async () => {
+  const repoPath = path.join(tempDir, "repo-focus");
+  const targetWorktree = path.join(repoPath, ".yuru", "worktrees", "target");
+  const sideWorktree = path.join(repoPath, ".yuru", "worktrees", "side");
+  const codexSessionsDir = path.join(codexDir, "sessions", "2026", "05", "10");
+  fs.mkdirSync(codexSessionsDir, { recursive: true });
+
+  fs.writeFileSync(
+    path.join(codexSessionsDir, "focus-shared.jsonl"),
+    jsonl(
+      {
+        type: "session_meta",
+        payload: {
+          id: "codex-shared",
+          cwd: repoPath,
+          timestamp: "2026-05-10T00:00:01.000Z",
+        },
+      },
+      {
+        type: "event_msg",
+        payload: {
+          type: "patch_apply_end",
+          changes: {
+            [path.join(sideWorktree, "file.txt")]: { type: "add" },
+          },
+        },
+      },
+      {
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          name: "exec_command",
+          arguments: JSON.stringify({ cmd: "git status", workdir: targetWorktree }),
+        },
+      },
+    ),
+  );
+  fs.writeFileSync(
+    path.join(codexSessionsDir, "focus-target.jsonl"),
+    jsonl(
+      {
+        type: "session_meta",
+        payload: {
+          id: "codex-target",
+          cwd: repoPath,
+          timestamp: "2026-05-10T00:00:02.000Z",
+        },
+      },
+      {
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          name: "exec_command",
+          arguments: JSON.stringify({ cmd: "git status", workdir: targetWorktree }),
+        },
+      },
+    ),
+  );
+
+  const suggestions = await loadSuggestedWorktreeSessions([targetWorktree, sideWorktree]);
+
+  assert.deepEqual(
+    suggestions.get(targetWorktree)?.map((session) => session.providerSessionId),
+    ["codex-target", "codex-shared"],
+  );
+  assert.deepEqual(suggestions.get(targetWorktree)?.[0], {
+    provider: "codex",
+    providerSessionId: "codex-target",
+    timestamp: Date.parse("2026-05-10T00:00:02.000Z"),
+  });
 });

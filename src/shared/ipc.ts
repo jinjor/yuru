@@ -69,6 +69,11 @@ export interface BranchContext {
   github: GitHubPullRequest | null;
 }
 
+export interface WorktreeSessionSelection {
+  worktreeId: string;
+  runtimeSessionId: RuntimeSessionId;
+}
+
 export interface ElectronAPI {
   getSessions: () => Promise<Session[]>;
   getRepos: () => Promise<RepoListItem[]>;
@@ -79,17 +84,17 @@ export interface ElectronAPI {
   resumePrimarySession: (
     worktreeId: string,
     providerSessionKey: string,
-  ) => Promise<Result<boolean>>;
+  ) => Promise<Result<WorktreeSessionSelection>>;
   resumeSuggestedSession: (
     worktreeId: string,
     providerSessionKey: string,
-  ) => Promise<Result<boolean>>;
+  ) => Promise<Result<WorktreeSessionSelection>>;
   createSession: (provider: SessionProvider, repoPath: string) => Promise<Result<string>>;
   createWorktreeSession: (
     provider: SessionProvider,
     repoPath: string,
     branchName: string,
-  ) => Promise<Result<string>>;
+  ) => Promise<Result<WorktreeSessionSelection>>;
   removeWorktree: (
     provider: SessionProvider,
     repoPath: string,

@@ -12,6 +12,10 @@ export class WorktreeWatcher {
     this.callbacks.push(callback);
   }
 
+  addRepo(repoPath: string): void {
+    this.watchRepo(repoPath);
+  }
+
   setRepos(repoPaths: string[]): void {
     const nextRepos = new Set(repoPaths);
 
@@ -24,28 +28,7 @@ export class WorktreeWatcher {
     }
 
     for (const repoPath of nextRepos) {
-      if (this.watchers.has(repoPath)) {
-        continue;
-      }
-
-      const worktreesPath = path.join(repoPath, ".git", "worktrees");
-      if (!fs.existsSync(worktreesPath)) {
-        continue;
-      }
-
-      try {
-        const watcher = fs.watch(worktreesPath, () => {
-          this.scheduleEmit();
-        });
-        watcher.on("error", () => {
-          watcher.close();
-          this.watchers.delete(repoPath);
-          this.scheduleEmit();
-        });
-        this.watchers.set(repoPath, watcher);
-      } catch {
-        // Ignore repos whose worktree metadata directories cannot be watched.
-      }
+      this.watchRepo(repoPath);
     }
   }
 
@@ -71,5 +54,30 @@ export class WorktreeWatcher {
         callback();
       }
     }, 200);
+  }
+
+  private watchRepo(repoPath: string): void {
+    if (this.watchers.has(repoPath)) {
+      return;
+    }
+
+    const worktreesPath = path.join(repoPath, ".git", "worktrees");
+    if (!fs.existsSync(worktreesPath)) {
+      return;
+    }
+
+    try {
+      const watcher = fs.watch(worktreesPath, () => {
+        this.scheduleEmit();
+      });
+      watcher.on("error", () => {
+        watcher.close();
+        this.watchers.delete(repoPath);
+        this.scheduleEmit();
+      });
+      this.watchers.set(repoPath, watcher);
+    } catch {
+      // Ignore repos whose worktree metadata directories cannot be watched.
+    }
   }
 }

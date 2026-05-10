@@ -13,7 +13,6 @@ import { resultDataOrNull } from "../utils/result";
 interface SessionViewProps {
   appRef: RefObject<HTMLDivElement | null>;
   onOpenExternal: (url: string) => void;
-  refreshRepos: () => void;
   runtimeSessionId: string;
   sidebarWidth: number;
   worktreeId: string;
@@ -29,7 +28,6 @@ function isPathChanged(states: readonly GitPathState[], path: string): boolean {
 export function SessionView({
   appRef,
   onOpenExternal,
-  refreshRepos,
   runtimeSessionId,
   sidebarWidth,
   worktreeId,
@@ -99,7 +97,6 @@ export function SessionView({
       const branchContext = resultDataOrNull(branchContextResult);
       setCurrentBranch(branchContext?.branch ?? null);
       setCurrentGitHub(branchContext?.github ?? null);
-      refreshRepos();
     };
 
     void fetchStatus();
@@ -111,7 +108,7 @@ export function SessionView({
       cancelled = true;
       clearInterval(interval);
     };
-  }, [refreshRepos, worktreeId]);
+  }, [worktreeId]);
 
   useEffect(() => {
     if (!previewPath) {

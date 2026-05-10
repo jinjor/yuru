@@ -237,6 +237,51 @@ test("loadRepoList は metadata primary がない worktree に active runtime se
   assert.equal(result[0].taskWorktrees[0].primarySession, undefined);
 });
 
+test("loadRepoList は primary 未確定の active runtime session を worktree に重ねる", async () => {
+  const worktreePath = "/tmp/repo-a/.yuru/worktrees/task-a";
+  seed({
+    repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
+    taskWorktrees: [
+      {
+        repoId: "repo-1",
+        worktreePath,
+      },
+    ],
+  });
+  const listGitWorktrees = listGitWorktreesFrom(
+    new Map([
+      [
+        "/tmp/repo-a",
+        [{ path: worktreePath, branch: "task-a" }],
+      ],
+    ]),
+  );
+
+  const result = await loadRepoList(
+    undefined,
+    listGitWorktrees,
+    undefined,
+    undefined,
+    new Map([
+      [
+        path.resolve(worktreePath),
+        {
+          provider: "codex",
+          runtimeSessionId: "runtime-1",
+        },
+      ],
+    ]),
+  );
+
+  assert.deepEqual(result[0].taskWorktrees[0].primarySession, {
+    provider: "codex",
+    providerSessionKey: null,
+    activeRuntimeSessionId: "runtime-1",
+    state: "active",
+    preview: "",
+  });
+});
+
 test("loadRepoList は primary session の preview を返す", async () => {
   seed({
     repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
@@ -307,7 +352,59 @@ test("loadRepoList は suggested worktree session を返す", async () => {
     {
       provider: "claude",
       providerSessionKey: toSessionKey("claude", "claude-1"),
+      activeRuntimeSessionId: null,
+      state: "inactive",
       preview: "suggested preview",
+      timestamp: 0,
+    },
+  ]);
+});
+
+test("loadRepoList は active session key と一致する suggested を active として返す", async () => {
+  seed({
+    repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
+    taskWorktrees: [
+      {
+        repoId: "repo-1",
+        worktreePath: "/tmp/repo-a/.yuru/worktrees/task-a",
+      },
+    ],
+  });
+  const listGitWorktrees = listGitWorktreesFrom(
+    new Map([
+      [
+        "/tmp/repo-a",
+        [{ path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a" }],
+      ],
+    ]),
+  );
+
+  const result = await loadRepoList(
+    new Map([[toSessionKey("claude", "claude-1"), "runtime-1"]]),
+    listGitWorktrees,
+    new Map([[toSessionKey("claude", "claude-1"), "suggested preview"]]),
+    async (worktreePaths) =>
+      new Map([
+        [
+          worktreePaths[0],
+          [
+            {
+              provider: "claude",
+              providerSessionId: "claude-1",
+            },
+          ],
+        ],
+      ]),
+  );
+
+  assert.deepEqual(result[0].taskWorktrees[0].suggestedSessions, [
+    {
+      provider: "claude",
+      providerSessionKey: toSessionKey("claude", "claude-1"),
+      activeRuntimeSessionId: "runtime-1",
+      state: "active",
+      preview: "suggested preview",
+      timestamp: 0,
     },
   ]);
 });

@@ -4,7 +4,21 @@ import { getRepoRootForProject, listWorktrees } from "./git.js";
 import { getGitHubPullRequestForBranch } from "./github.js";
 import { sessionProviders } from "./agent-registry.js";
 import type { RuntimeSessionInfo } from "./agent.js";
-import { toSessionKey, type Session, type SuggestedWorktreeSession } from "../shared/session.js";
+import type { WorktreeSessionHint } from "./worktree-session-detection.js";
+import {
+  toSessionKey,
+  type Session,
+  type SessionProvider,
+  type SuggestedWorktreeSession,
+} from "../shared/session.js";
+
+interface WorktreeSessionScore {
+  provider: SessionProvider;
+  providerSessionId: string;
+  worktreePath: string;
+  worktreeRank: number;
+  timestamp: number;
+}
 
 async function buildWorktreeMap(
   projectPaths: string[],
@@ -60,6 +74,12 @@ export async function loadSuggestedWorktreeSessions(
     worktreePaths.map((worktreePath) => [path.resolve(worktreePath), worktreePath]),
   );
   const suggestionsByWorktreePath = new Map<string, SuggestedWorktreeSession[]>();
+  const timestampsBySessionKey = new Map(
+    (await loadStoredSessionSnapshots()).map((snapshot) => [
+      toSessionKey(snapshot.provider, snapshot.providerSessionId),
+      snapshot.timestamp,
+    ]),
+  );
   const hints = (
     await Promise.all(
       Object.values(sessionProviders).map((provider) => provider.loadWorktreeSessionHints(worktreePaths)),
@@ -69,38 +89,60 @@ export async function loadSuggestedWorktreeSessions(
     .flatMap((hint) => {
       const worktreePath = worktreePathByKey.get(path.resolve(hint.worktreePath));
       return worktreePath ? [{ ...hint, worktreePath }] : [];
-    })
-    .sort((a, b) => {
-      const worktreePathOrder = a.worktreePath.localeCompare(b.worktreePath);
-      if (worktreePathOrder !== 0) {
-        return worktreePathOrder;
-      }
-      const providerOrder = a.provider.localeCompare(b.provider);
-      if (providerOrder !== 0) {
-        return providerOrder;
-      }
-      return a.providerSessionId.localeCompare(b.providerSessionId);
     });
 
-  const seenSessionKeysByWorktreePath = new Map<string, Set<string>>();
-  for (const hint of hints) {
-    const providerSessionKey = toSessionKey(hint.provider, hint.providerSessionId);
-    const seenSessionKeys = seenSessionKeysByWorktreePath.get(hint.worktreePath) ?? new Set<string>();
-    if (seenSessionKeys.has(providerSessionKey)) {
-      continue;
-    }
-    seenSessionKeys.add(providerSessionKey);
-    seenSessionKeysByWorktreePath.set(hint.worktreePath, seenSessionKeys);
-
-    const suggestions = suggestionsByWorktreePath.get(hint.worktreePath) ?? [];
+  for (const score of rankWorktreeSessionScores(hints, timestampsBySessionKey)) {
+    const suggestions = suggestionsByWorktreePath.get(score.worktreePath) ?? [];
     suggestions.push({
-      provider: hint.provider,
-      providerSessionId: hint.providerSessionId,
+      provider: score.provider,
+      providerSessionId: score.providerSessionId,
+      timestamp: score.timestamp,
     });
-    suggestionsByWorktreePath.set(hint.worktreePath, suggestions);
+    suggestionsByWorktreePath.set(score.worktreePath, suggestions);
   }
 
   return suggestionsByWorktreePath;
+}
+
+function rankWorktreeSessionScores(
+  hints: readonly WorktreeSessionHint[],
+  timestampsBySessionKey: ReadonlyMap<string, number>,
+): WorktreeSessionScore[] {
+  const scoresByKey = new Map<string, WorktreeSessionScore>();
+
+  for (const hint of hints) {
+    const sessionKey = toSessionKey(hint.provider, hint.providerSessionId);
+    const scoreKey = `${sessionKey}:${hint.worktreePath}`;
+    const nextScore: WorktreeSessionScore = {
+      provider: hint.provider,
+      providerSessionId: hint.providerSessionId,
+      worktreePath: hint.worktreePath,
+      worktreeRank: hint.worktreeRank,
+      timestamp: timestampsBySessionKey.get(sessionKey) ?? 0,
+    };
+    const existingScore = scoresByKey.get(scoreKey);
+    if (!existingScore || compareWorktreeSessionScores(nextScore, existingScore) < 0) {
+      scoresByKey.set(scoreKey, nextScore);
+    }
+  }
+
+  return Array.from(scoresByKey.values()).sort(compareWorktreeSessionScores);
+}
+
+function compareWorktreeSessionScores(a: WorktreeSessionScore, b: WorktreeSessionScore): number {
+  const worktreePathOrder = a.worktreePath.localeCompare(b.worktreePath);
+  if (worktreePathOrder !== 0) {
+    return worktreePathOrder;
+  }
+  const worktreeRankOrder = a.worktreeRank - b.worktreeRank;
+  if (worktreeRankOrder !== 0) {
+    return worktreeRankOrder;
+  }
+  const providerOrder = a.provider.localeCompare(b.provider);
+  if (providerOrder !== 0) {
+    return providerOrder;
+  }
+  return a.providerSessionId.localeCompare(b.providerSessionId);
 }
 
 export async function loadSessions(

@@ -271,7 +271,7 @@ provider ごとの hint は session identity を置き換えるためではな�
    - PTY は `cd` で任意の場所へ移動できるため、runtime の cwd を task worktree の作業ルートとして扱わない
    - 右側の Files / Changes / Diff は選択中の task worktree の `worktreePath` を基準にする
    - runtime は task worktree path を持たず、metadata の primary session と provider session key で active runtime を重ねる
-19. [ ] active かつ suggested な session を UI 上で表現できる
+19. [x] active かつ suggested な session を UI 上で表現できる
    - suggested session がすでに active runtime を持つ場合、それが左ペインで分かる
    - クリック時は新規 resume ではなく promote + select になる
 20. [ ] suggested session を primary に昇格した時、他 worktree の primary から外れることを確認できる

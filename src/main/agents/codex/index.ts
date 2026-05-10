@@ -1,6 +1,9 @@
 import { setTimeout } from "node:timers/promises";
+import fs from "fs";
 import path from "path";
+import readline from "readline";
 import { createWorktree } from "../../git.js";
+import { exec } from "../../exec.js";
 import type {
   PendingSession,
   SessionProviderAdapter,
@@ -14,7 +17,10 @@ import {
   getCodexHistoryPath,
   getCodexSessionsDir,
 } from "./paths.js";
-import { detectCodexWorktreeSession } from "./worktree-session-detection.js";
+import {
+  detectCodexWorktreeSessionLines,
+  type CodexSessionLine,
+} from "./worktree-session-detection.js";
 
 interface CodexSessionMeta {
   providerSessionId: string;
@@ -110,13 +116,9 @@ async function readCodexSessionMetas(): Promise<Map<string, CodexSessionMeta>> {
 
   await Promise.all(
     filePaths.map(async (filePath) => {
-      const content = await readTextFileIfExists(filePath);
-      if (!content) {
-        return;
-      }
-      for (const entry of parseJsonLinesAs(content, parseCodexSessionMetaEntry)) {
-        metas.set(entry.providerSessionId, entry);
-        break;
+      const meta = await readCodexSessionMeta(filePath);
+      if (meta) {
+        metas.set(meta.providerSessionId, meta);
       }
     }),
   );
@@ -170,20 +172,186 @@ async function loadWorktreeSessionHints(
   const worktreePathKeys = new Set(worktreePaths.map((worktreePath) => path.resolve(worktreePath)));
   const hints: WorktreeSessionHint[] = [];
   await Promise.all(
+    Array.from(await listCodexSessionLineMatches(worktreePaths)).map(async ([filePath, lines]) => {
+      const meta = await readCodexSessionMeta(filePath);
+      if (!meta) {
+        return;
+      }
+      hints.push(
+        ...detectCodexWorktreeSessionLines(
+          { providerSessionId: meta.providerSessionId, cwd: meta.project },
+          lines,
+          worktreePaths,
+        ).filter((hint) =>
+          worktreePathKeys.has(path.resolve(hint.worktreePath)),
+        ),
+      );
+    }),
+  );
+
+  return hints;
+}
+
+async function readCodexSessionMeta(filePath: string): Promise<CodexSessionMeta | null> {
+  if (!fs.existsSync(filePath)) {
+    return null;
+  }
+
+  const stream = fs.createReadStream(filePath, { encoding: "utf-8" });
+  const lines = readline.createInterface({ input: stream, crlfDelay: Infinity });
+  try {
+    for await (const line of lines) {
+      if (!line) {
+        continue;
+      }
+      try {
+        const meta = parseCodexSessionMetaEntry(JSON.parse(line) as unknown);
+        if (meta) {
+          return meta;
+        }
+      } catch {
+        // Ignore malformed JSONL rows.
+      }
+    }
+  } finally {
+    lines.close();
+    stream.destroy();
+  }
+
+  return null;
+}
+
+async function listCodexSessionLineMatches(
+  worktreePaths: readonly string[],
+): Promise<Map<string, CodexSessionLine[]>> {
+  const sessionsDir = getCodexSessionsDir();
+  if (!fs.existsSync(sessionsDir)) {
+    return new Map();
+  }
+
+  const worktreeNames = Array.from(
+    new Set(
+      worktreePaths
+        .map((worktreePath) => path.basename(path.resolve(worktreePath)))
+        .filter((name) => name.length > 0),
+    ),
+  );
+  if (worktreeNames.length === 0) {
+    return new Map();
+  }
+
+  const args = [
+    "--json",
+    "--fixed-strings",
+    "--hidden",
+    ...worktreeNames.flatMap((name) => ["--regexp", name]),
+    "--",
+    sessionsDir,
+  ];
+
+  try {
+    const output = await exec("rg", args, sessionsDir);
+    return parseRipgrepJsonLineMatches(output);
+  } catch (error) {
+    const code = (error as { code?: string | number }).code;
+    if (code === 1) {
+      return new Map();
+    }
+    if (code === "ENOENT") {
+      return loadCodexSessionLineMatchesWithoutRipgrep(worktreePaths);
+    }
+    throw error;
+  }
+}
+
+async function loadCodexSessionLineMatchesWithoutRipgrep(
+  worktreePaths: readonly string[],
+): Promise<Map<string, CodexSessionLine[]>> {
+  const worktreeNames = new Set(
+    worktreePaths
+      .map((worktreePath) => path.basename(path.resolve(worktreePath)))
+      .filter((name) => name.length > 0),
+  );
+  const matchesByFilePath = new Map<string, CodexSessionLine[]>();
+
+  await Promise.all(
     (await listFilesRecursive(getCodexSessionsDir())).map(async (filePath) => {
       const content = await readTextFileIfExists(filePath);
       if (!content) {
         return;
       }
-      const hint = detectCodexWorktreeSession(content, worktreePaths);
-      if (!hint || !worktreePathKeys.has(path.resolve(hint.worktreePath))) {
-        return;
+      const lines = content
+        .split("\n")
+        .flatMap((line, index) =>
+          Array.from(worktreeNames).some((name) => line.includes(name))
+            ? [{ text: line, lineIndex: index }]
+            : [],
+        );
+      if (lines.length > 0) {
+        matchesByFilePath.set(filePath, lines);
       }
-      hints.push(hint);
     }),
   );
 
-  return hints;
+  return matchesByFilePath;
+}
+
+function parseRipgrepJsonLineMatches(output: string): Map<string, CodexSessionLine[]> {
+  const matchesByFilePath = new Map<string, CodexSessionLine[]>();
+
+  for (const line of output.split("\n")) {
+    if (!line) {
+      continue;
+    }
+
+    let message: unknown;
+    try {
+      message = JSON.parse(line) as unknown;
+    } catch {
+      continue;
+    }
+
+    if (typeof message !== "object" || message === null) {
+      continue;
+    }
+
+    const match = message as {
+      type?: unknown;
+      data?: {
+        path?: { text?: unknown };
+        lines?: { text?: unknown };
+        line_number?: unknown;
+      };
+    };
+    if (match.type !== "match") {
+      continue;
+    }
+    if (
+      typeof match.data?.path?.text !== "string" ||
+      typeof match.data?.lines?.text !== "string" ||
+      typeof match.data?.line_number !== "number"
+    ) {
+      continue;
+    }
+
+    const filePath = match.data.path.text;
+    const lines = matchesByFilePath.get(filePath) ?? [];
+    lines.push({
+      text: stripTrailingLineBreak(match.data.lines.text),
+      lineIndex: match.data.line_number - 1,
+    });
+    matchesByFilePath.set(filePath, lines);
+  }
+
+  for (const lines of matchesByFilePath.values()) {
+    lines.sort((a, b) => a.lineIndex - b.lineIndex);
+  }
+
+  return matchesByFilePath;
+}
+
+function stripTrailingLineBreak(line: string): string {
+  return line.replace(/\r?\n$/, "");
 }
 
 async function findSessionForLaunch(
@@ -251,7 +419,6 @@ export const sessionProvider: SessionProviderAdapter = {
       cwd: context.worktreePath,
       args: [],
       worktreePath: context.worktreePath,
-      existingProviderSessionIds: await listExistingSessionIds(),
     };
   },
   async prepareWorktree(context: WorktreeContext) {

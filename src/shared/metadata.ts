@@ -13,7 +13,10 @@ export interface PrimarySessionMetadata {
 export interface SuggestedSessionListItem {
   provider: SessionProvider;
   providerSessionKey: string;
+  activeRuntimeSessionId: string | null;
+  state: WorktreeSessionState;
   preview: string;
+  timestamp: number;
 }
 
 export interface TaskWorktreeMetadata {
@@ -22,7 +25,8 @@ export interface TaskWorktreeMetadata {
   primarySession?: PrimarySessionMetadata;
 }
 
-export type PrimarySessionState = "active" | "inactive";
+export type WorktreeSessionState = "active" | "inactive";
+export type PrimarySessionState = WorktreeSessionState;
 
 export interface PrimarySessionListItem {
   provider: SessionProvider;

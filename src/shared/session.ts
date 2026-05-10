@@ -4,6 +4,7 @@ export type RuntimeSessionId = string;
 export interface SuggestedWorktreeSession {
   provider: SessionProvider;
   providerSessionId: string;
+  timestamp: number;
 }
 
 export interface GitHubPullRequest {

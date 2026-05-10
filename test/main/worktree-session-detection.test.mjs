@@ -2,8 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { detectClaudeWorktreeSession } from "../../src/main/agents/claude/worktree-session-detection.ts";
-import { detectCodexWorktreeSession } from "../../src/main/agents/codex/worktree-session-detection.ts";
-import { resolveContainingWorktreePath } from "../../src/main/worktree-session-detection.ts";
+import {
+  detectCodexWorktreeSession,
+  detectCodexWorktreeSessions,
+} from "../../src/main/agents/codex/worktree-session-detection.ts";
+import {
+  resolveContainingWorktreePath,
+  resolveMentionedWorktreePaths,
+} from "../../src/main/worktree-session-detection.ts";
 
 function jsonl(...entries) {
   return `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`;
@@ -25,6 +31,22 @@ test("resolveContainingWorktreePath は path boundary を守って最も深い w
   );
 });
 
+test("resolveMentionedWorktreePaths は path boundary を守って絶対 path の言及を返す", () => {
+  assert.deepEqual(
+    resolveMentionedWorktreePaths("updated /repo/.yuru/worktrees/task-a/src/file.ts", [
+      "/repo/.yuru/worktrees/task",
+      "/repo/.yuru/worktrees/task-a",
+    ]),
+    ["/repo/.yuru/worktrees/task-a"],
+  );
+  assert.deepEqual(
+    resolveMentionedWorktreePaths("updated /repo/.yuru/worktrees/task-a-sibling/file.ts", [
+      "/repo/.yuru/worktrees/task-a",
+    ]),
+    [],
+  );
+});
+
 test("detectClaudeWorktreeSession は worktree-state の worktreePath を強い hint として読む", () => {
   const hint = detectClaudeWorktreeSession(
     jsonl({
@@ -41,7 +63,7 @@ test("detectClaudeWorktreeSession は worktree-state の worktreePath を強い 
     provider: "claude",
     providerSessionId: "claude-session",
     worktreePath: "/repo/.claude/worktrees/task-a",
-    source: "claude-worktree-state",
+    worktreeRank: 0,
   });
 });
 
@@ -59,7 +81,7 @@ test("detectClaudeWorktreeSession は cwd が既知 worktree 配下なら fallba
     provider: "claude",
     providerSessionId: "claude-session",
     worktreePath: "/repo/.claude/worktrees/task-a",
-    source: "claude-cwd",
+    worktreeRank: 0,
   });
 });
 
@@ -79,7 +101,7 @@ test("detectCodexWorktreeSession は session_meta.cwd を primary hint として
     provider: "codex",
     providerSessionId: "codex-session",
     worktreePath: "/repo/.yuru/worktrees/task-a",
-    source: "codex-session-meta",
+    worktreeRank: 0,
   });
 });
 
@@ -114,6 +136,185 @@ test("detectCodexWorktreeSession は exec_command_end.cwd を fallback hint と�
     provider: "codex",
     providerSessionId: "codex-session",
     worktreePath: "/repo/.yuru/worktrees/task-a",
-    source: "codex-exec-command-end",
+    worktreeRank: 0,
   });
+});
+
+test("detectCodexWorktreeSessions は 0.130 の function_call.arguments.workdir を読む", () => {
+  const hints = detectCodexWorktreeSessions(
+    jsonl(
+      {
+        type: "session_meta",
+        payload: {
+          id: "codex-session",
+          cwd: "/repo",
+        },
+      },
+      {
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          name: "exec_command",
+          arguments: JSON.stringify({
+            cmd: "pwd",
+            workdir: "/repo/.yuru/worktrees/task-a",
+          }),
+        },
+      },
+    ),
+    ["/repo/.yuru/worktrees/task-a"],
+  );
+
+  assert.deepEqual(hints, [
+    {
+      provider: "codex",
+      providerSessionId: "codex-session",
+      worktreePath: "/repo/.yuru/worktrees/task-a",
+      worktreeRank: 0,
+    },
+  ]);
+});
+
+test("detectCodexWorktreeSessions は patch_apply_end.changes を読む", () => {
+  const hints = detectCodexWorktreeSessions(
+    jsonl(
+      {
+        type: "session_meta",
+        payload: {
+          id: "codex-session",
+          cwd: "/repo",
+        },
+      },
+      {
+        type: "event_msg",
+        payload: {
+          type: "patch_apply_end",
+          changes: {
+            "/repo/.yuru/worktrees/task-a/src/file.ts": {
+              type: "add",
+            },
+          },
+        },
+      },
+    ),
+    ["/repo/.yuru/worktrees/task-a"],
+  );
+
+  assert.deepEqual(hints, [
+    {
+      provider: "codex",
+      providerSessionId: "codex-session",
+      worktreePath: "/repo/.yuru/worktrees/task-a",
+      worktreeRank: 0,
+    },
+  ]);
+});
+
+test("detectCodexWorktreeSessions は session 内の worktreeRank を provider 側で決める", () => {
+  const metaWorktree = "/repo/.yuru/worktrees/meta";
+  const patchWorktree = "/repo/.yuru/worktrees/patch";
+  const oldCwdWorktree = "/repo/.yuru/worktrees/old-cwd";
+  const newCwdWorktree = "/repo/.yuru/worktrees/new-cwd";
+  const textWorktree = "/repo/.yuru/worktrees/text";
+  const hints = detectCodexWorktreeSessions(
+    jsonl(
+      {
+        type: "session_meta",
+        payload: {
+          id: "codex-session",
+          cwd: metaWorktree,
+        },
+      },
+      {
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          name: "exec_command",
+          arguments: JSON.stringify({ cmd: "pwd", workdir: oldCwdWorktree }),
+        },
+      },
+      {
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          name: "exec_command",
+          arguments: JSON.stringify({ cmd: "pwd", workdir: newCwdWorktree }),
+        },
+      },
+      {
+        type: "event_msg",
+        payload: {
+          type: "patch_apply_end",
+          changes: {
+            [`${patchWorktree}/src/file.ts`]: { type: "add" },
+          },
+        },
+      },
+      {
+        type: "response_item",
+        payload: {
+          type: "message",
+          content: [{ type: "output_text", text: `Created ${textWorktree}` }],
+        },
+      },
+    ),
+    [metaWorktree, patchWorktree, oldCwdWorktree, newCwdWorktree, textWorktree],
+  );
+
+  assert.deepEqual(
+    hints.map((hint) => ({
+      worktreePath: hint.worktreePath,
+      worktreeRank: hint.worktreeRank,
+    })),
+    [
+      { worktreePath: metaWorktree, worktreeRank: 0 },
+      { worktreePath: patchWorktree, worktreeRank: 1 },
+      { worktreePath: newCwdWorktree, worktreeRank: 2 },
+      { worktreePath: oldCwdWorktree, worktreeRank: 3 },
+      { worktreePath: textWorktree, worktreeRank: 4 },
+    ],
+  );
+});
+
+test("detectCodexWorktreeSessions は既知 worktree の絶対 path 文字列を弱い hint として読む", () => {
+  const hints = detectCodexWorktreeSessions(
+    jsonl(
+      {
+        type: "session_meta",
+        payload: {
+          id: "codex-session",
+          cwd: "/repo",
+        },
+      },
+      {
+        type: "response_item",
+        payload: {
+          type: "message",
+          content: [
+            {
+              type: "output_text",
+              text: "Created /repo/.yuru/worktrees/task-a",
+            },
+          ],
+        },
+      },
+    ),
+    ["/repo/.yuru/worktrees/task-a"],
+  );
+
+  assert.equal(hints.length, 1);
+  assert.deepEqual(
+    {
+      provider: hints[0].provider,
+      providerSessionId: hints[0].providerSessionId,
+      worktreePath: hints[0].worktreePath,
+      worktreeRank: hints[0].worktreeRank,
+    },
+    {
+      provider: "codex",
+      providerSessionId: "codex-session",
+      worktreePath: "/repo/.yuru/worktrees/task-a",
+      worktreeRank: 0,
+    },
+  );
 });

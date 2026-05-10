@@ -6,6 +6,7 @@ import type {
   SuggestedSessionListItem,
   TaskWorktreeListItem,
 } from "../../shared/metadata";
+import type { RuntimeSessionId } from "../../shared/session";
 import { providerLabel } from "../utils/session";
 
 interface RepoListProps {
@@ -13,7 +14,7 @@ interface RepoListProps {
   providers: AgentDefinition[];
   selectedWorktreeId: string | null;
   onCreateWorktreeSession: (repoPath: string) => void;
-  onSelectActiveSession: (worktreeId: string) => void;
+  onSelectActiveSession: (worktreeId: string, runtimeSessionId: RuntimeSessionId) => void;
   onResumePrimarySession: (worktreeId: string, providerSessionKey: string) => void;
   onResumeSuggestedSession: (worktreeId: string, providerSessionKey: string) => void;
 }
@@ -107,7 +108,7 @@ interface TaskWorktreeCardProps {
   isActionSurfaceOpen: boolean;
   onCloseActionSurface: () => void;
   onToggleActionSurface: () => void;
-  onSelectActiveSession: (worktreeId: string) => void;
+  onSelectActiveSession: (worktreeId: string, runtimeSessionId: RuntimeSessionId) => void;
   onResumePrimarySession: (worktreeId: string, providerSessionKey: string) => void;
   onResumeSuggestedSession: (worktreeId: string, providerSessionKey: string) => void;
 }
@@ -132,7 +133,7 @@ function TaskWorktreeCard({
       return;
     }
     if (primarySession.activeRuntimeSessionId) {
-      onSelectActiveSession(taskWorktree.worktreeId);
+      onSelectActiveSession(taskWorktree.worktreeId, primarySession.activeRuntimeSessionId);
       return;
     }
     if (primarySession.providerSessionKey) {
@@ -286,26 +287,45 @@ interface SuggestedSessionActionProps {
 function SuggestedSessionAction({ suggestedSession, onSelect }: SuggestedSessionActionProps) {
   const preview = suggestedSession.preview || "(no messages)";
   const providerName = providerLabel(suggestedSession.provider);
+  const isActive = suggestedSession.state === "active";
+  const timestamp = formatSessionTimestamp(suggestedSession.timestamp);
+  const meta = [
+    providerName,
+    isActive ? "active" : null,
+    timestamp,
+  ].filter((value) => value !== null && value !== "").join(" · ");
   return (
     <button
       type="button"
-      className="action-surface-row suggested-session-action"
+      className={`action-surface-row suggested-session-action ${suggestedSession.state}`}
       onClick={onSelect}
-      title={`Resume ${providerName}`}
+      title={isActive ? `Promote active ${providerName} session` : `Resume ${providerName}`}
     >
       <span
-        className={`session-provider-dot provider-${suggestedSession.provider} suggested`}
-        title={`${providerName} · suggested`}
-        aria-label={`${providerName} suggested session`}
+        className={`session-provider-dot provider-${suggestedSession.provider} suggested ${suggestedSession.state}`}
+        title={`${providerName} · suggested · ${suggestedSession.state}`}
+        aria-label={`${providerName} suggested session ${suggestedSession.state}`}
       />
       <span className="action-surface-row-text">
         <span className="action-surface-row-main" title={preview}>
           {preview}
         </span>
-        <span className="action-surface-row-meta">{providerName}</span>
+        <span className="action-surface-row-meta">{meta}</span>
       </span>
     </button>
   );
+}
+
+function formatSessionTimestamp(timestamp: number): string {
+  if (!timestamp) {
+    return "";
+  }
+  return new Intl.DateTimeFormat(undefined, {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(timestamp));
 }
 
 function formatExistingSessionCount(count: number): string {
