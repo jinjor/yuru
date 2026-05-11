@@ -274,7 +274,7 @@ provider ごとの hint は session identity を置き換えるためではな�
 19. [x] active かつ suggested な session を UI 上で表現できる
    - suggested session がすでに active runtime を持つ場合、それが左ペインで分かる
    - クリック時は新規 resume ではなく promote + select になる
-20. [ ] suggested session を primary に昇格した時、他 worktree の primary から外れることを確認できる
+20. [x] suggested session を primary に昇格した時、他 worktree の primary から外れることを確認できる
    - 1 provider session は同時に複数 task worktree の primary にはならない
    - ある worktree の primary session が別 worktree の suggested として昇格されたら、元 worktree 側は active のまま primary ではなくなる
 21. [ ] primary session のアイテムに branch 名が表示されている
