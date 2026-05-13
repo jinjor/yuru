@@ -40,6 +40,8 @@ export interface TaskWorktreeListItem {
   worktreeId: string;
   worktreePath: string;
   name: string;
+  branch: string | null;
+  headSha: string;
   primarySession?: PrimarySessionListItem;
   suggestedSessions: SuggestedSessionListItem[];
 }

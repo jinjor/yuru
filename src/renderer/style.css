@@ -284,6 +284,12 @@ body,
   white-space: nowrap;
 }
 
+.task-worktree-branch-icon {
+  vertical-align: -2px;
+  margin-right: 5px;
+  color: var(--text-subtle);
+}
+
 .task-worktree-hint {
   font-size: 11px;
   line-height: 1.15;
@@ -512,7 +518,6 @@ body,
   border-radius: 999px;
   display: inline-block;
   flex-shrink: 0;
-  margin-top: 4px;
   background: #59677e;
   transition:
     opacity 120ms ease,

@@ -116,9 +116,9 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
       [
         "/tmp/repo-a",
         [
-          { path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a" },
-          { path: "/tmp/repo-a/.yuru/worktrees/task-b", branch: "task-b" },
-          { path: "/tmp/repo-a/.yuru/worktrees/git-only", branch: "git-only" },
+          { path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" },
+          { path: "/tmp/repo-a/.yuru/worktrees/task-b", branch: "task-b", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" },
+          { path: "/tmp/repo-a/.yuru/worktrees/git-only", branch: "git-only", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" },
         ],
       ],
       ["/tmp/repo-b", []],
@@ -134,6 +134,8 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
           worktreeId: toWorktreeId("repo-1", "/tmp/repo-a/.yuru/worktrees/task-a"),
           worktreePath: "/tmp/repo-a/.yuru/worktrees/task-a",
           name: "task-a",
+          branch: "task-a",
+          headSha: "abc1234abc1234abc1234abc1234abc1234abc12",
           primarySession: {
             provider: "codex",
             providerSessionKey: toSessionKey("codex", "codex-1"),
@@ -147,6 +149,8 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
           worktreeId: toWorktreeId("repo-1", "/tmp/repo-a/.yuru/worktrees/task-b"),
           worktreePath: "/tmp/repo-a/.yuru/worktrees/task-b",
           name: "task-b",
+          branch: "task-b",
+          headSha: "abc1234abc1234abc1234abc1234abc1234abc12",
           primarySession: undefined,
           suggestedSessions: [],
         },
@@ -154,6 +158,8 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
           worktreeId: toWorktreeId("repo-1", "/tmp/repo-a/.yuru/worktrees/git-only"),
           worktreePath: "/tmp/repo-a/.yuru/worktrees/git-only",
           name: "git-only",
+          branch: "git-only",
+          headSha: "abc1234abc1234abc1234abc1234abc1234abc12",
           primarySession: undefined,
           suggestedSessions: [],
         },
@@ -188,8 +194,8 @@ test("loadRepoList は active session key と一致する primary を active と
       [
         "/tmp/repo-a",
         [
-          { path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a" },
-          { path: "/tmp/repo-a/.yuru/worktrees/task-b", branch: "task-b" },
+          { path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" },
+          { path: "/tmp/repo-a/.yuru/worktrees/task-b", branch: "task-b", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" },
         ],
       ],
     ]),
@@ -224,7 +230,7 @@ test("loadRepoList は metadata primary がない worktree に active runtime se
     new Map([
       [
         "/tmp/repo-a",
-        [{ path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a" }],
+        [{ path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" }],
       ],
     ]),
   );
@@ -252,7 +258,7 @@ test("loadRepoList は primary 未確定の active runtime session を worktree 
     new Map([
       [
         "/tmp/repo-a",
-        [{ path: worktreePath, branch: "task-a" }],
+        [{ path: worktreePath, branch: "task-a", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" }],
       ],
     ]),
   );
@@ -297,7 +303,7 @@ test("loadRepoList は primary session の preview を返す", async () => {
     new Map([
       [
         "/tmp/repo-a",
-        [{ path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a" }],
+        [{ path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" }],
       ],
     ]),
   );
@@ -325,7 +331,7 @@ test("loadRepoList は suggested worktree session を返す", async () => {
     new Map([
       [
         "/tmp/repo-a",
-        [{ path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a" }],
+        [{ path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" }],
       ],
     ]),
   );
@@ -374,7 +380,7 @@ test("loadRepoList は active session key と一致する suggested を active �
     new Map([
       [
         "/tmp/repo-a",
-        [{ path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a" }],
+        [{ path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" }],
       ],
     ]),
   );
@@ -424,7 +430,7 @@ test("loadRepoList は primary と同じ session を suggested から除外す�
     new Map([
       [
         "/tmp/repo-a",
-        [{ path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a" }],
+        [{ path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" }],
       ],
     ]),
   );
@@ -459,7 +465,7 @@ test("loadRepoList は suggested worktree session を並び替えずに返す", 
     new Map([
       [
         "/tmp/repo-a",
-        [{ path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a" }],
+        [{ path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" }],
       ],
     ]),
   );

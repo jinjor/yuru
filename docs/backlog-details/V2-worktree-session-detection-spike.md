@@ -1,45 +1,56 @@
 # V2 Worktree Session Detection Spike
 
-Date: 2026-04-26
+Date: 2026-04-26 (revised 2026-05-13)
 
-## Result
+## Approach
 
-Claude / Codex ともに、provider store から task worktree に属する session を検出できる見込みがある。
-
-この spike では UI にはまだ接続せず、後続 story の suggested session 判定で使える最小の抽出ロジックだけを追加した。
+Provider store の log を直近期間に絞って `ripgrep` で worktree 言及を grep し、マッチ行を parse する。Claude / Codex とも同じ方針。
 
 実装: `src/main/worktree-session-detection.ts`
-テスト: `test/main/worktree-session-detection.test.mjs`
 
-## Claude
+## Hints
 
-成立する。
+### Claude
 
-- `~/.claude/projects/.../*.jsonl` に `type: "worktree-state"` の entry があり、`worktreeSession.worktreePath` を直接読める
-- `worktree-state` がない場合でも、通常の user / assistant / attachment entry に `cwd` がある
-- `cwd` が既知 Git worktree path の配下なら weak candidate として扱える
+採用:
+- 強: message entry の `cwd` が worktree 配下（全 user / assistant / attachment entry に乗っている）
+- 弱: tool_use（Edit / Write / Read 等）の絶対 `file_path` が worktree 配下（false positive が出やすいので rank を下げる）
 
-優先順:
+採用しない:
+- `worktree-state` entry — Yuru は `--worktree` を使わない方針（step 22）。外部 `--worktree` session も `cwd` で拾える
+- `gitBranch` — worktree 内で branch は事後に変わるため、一致は証拠にならず不一致は反証にもならない
 
-1. `worktree-state.worktreeSession.worktreePath`
-2. entry の `cwd` が既知 worktree 配下かどうか
+### Codex
 
-## Codex
+採用:
+- 強: `session_meta.payload.cwd`
+- 強: `event_msg.payload.type === "exec_command_end"` の `payload.cwd`
 
-成立する。
+採用しない:
+- `turn_context.cwd` — 実行 root と混ざりやすい
 
-- `~/.codex/sessions/.../*.jsonl` に `type: "session_meta"` の entry があり、`payload.id` と `payload.cwd` を読める
-- command 実行結果は top-level `exec_command_end` ではなく、`type: "event_msg"` かつ `payload.type: "exec_command_end"` として保存される
-- `event_msg.payload.cwd` が既知 Git worktree path の配下なら weak candidate として扱える
-- `turn_context.cwd` は実行 root と混ざりやすいので candidate 判定には使わない
+## Storage layout
 
-優先順:
+**Claude**: `~/.claude/projects/<encoded-cwd>/<sessionId>.jsonl`
+- dir 名は元 cwd を encode したもの（`/` → `-`）
+- 非可逆 encoding なので **既知 worktree path を同じルールで文字列化して dir 名と forward match する**。dir 名 → path の逆引きはしない
 
-1. `session_meta.payload.cwd`
-2. `event_msg.payload.type === "exec_command_end"` の `payload.cwd`
+**Codex**: `~/.codex/sessions/YYYY/MM/DD/<sessionId>.jsonl`
+- dir 階層に日付が入る
 
-## Notes
+## 性能設計
 
-- path 判定は false positive を避けるため、単純な prefix match ではなく path boundary を見る
-- 複数 worktree に一致しうる場合は、最も深い worktree path を採用する
-- この段階では provider session を primary に昇格しない。昇格は後続 story の明示操作で扱う
+検出を 2 段階で絞り込む:
+
+1. **期間絞り（直近 30 日）**
+   - Codex: dir 名から日付を計算して 30 日分の path を生成
+   - Claude: `find <root> -mtime -30 -name '*.jsonl'`
+2. **content prefilter**
+   - `ripgrep` で worktree path / 名前を grep し、マッチ行 + session 開始メタだけを parse する（全 entry parse はしない）
+   - rg 無し環境は文字列 includes でフォールバック
+
+## False positive guards
+
+- path 判定は prefix match ではなく path boundary（worktree path の dir 境界）で行う
+- 複数 worktree に一致する場合は最も深い worktree path を採用
+- session 内に複数 worktree への言及があれば、最も多く / 深く言及された worktree を選ぶ

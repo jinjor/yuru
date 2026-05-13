@@ -277,9 +277,13 @@ provider ごとの hint は session identity を置き換えるためではな�
 20. [x] suggested session を primary に昇格した時、他 worktree の primary から外れることを確認できる
    - 1 provider session は同時に複数 task worktree の primary にはならない
    - ある worktree の primary session が別 worktree の suggested として昇格されたら、元 worktree 側は active のまま primary ではなくなる
-21. [ ] primary session のアイテムに branch 名が表示されている
-22. [ ] V1 の session-first 実装を削除する
-23. [ ] metadata の stale な task worktree を起動時に掃除できる
+21. [x] primary session のアイテムに branch 名が表示されている
+22. [ ] Claude の起動形式を repo root 一本に統一する
+   - Yuru は Claude を `--worktree` 無し / cwd = repo root で起動する（create / resume とも）
+   - session ↔ worktree の strong link は Yuru metadata 単独で表現する（Codex と同じ流儀）
+   - hint detection の再整理が必要。詳細は [docs/backlog-details/V2-worktree-session-detection-spike.md](backlog-details/V2-worktree-session-detection-spike.md)
+23. [ ] V1 の session-first 実装を削除する
+24. [ ] metadata の stale な task worktree を起動時に掃除できる
    - `loadRepoList` のような表示経路ではなく、起動時に 1 回だけ走る maintenance 処理として独立させる
    - registered repo ごとに `git worktree list` が成功した時だけ、その repo の `taskWorktrees` のうち成功 list に含まれない record を削除する
    - repo 自体の cleanup はしない（path 不在は missing repo として後続 UX に回す。一時的に読めないだけのケースと区別できないため）

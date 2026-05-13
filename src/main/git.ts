@@ -7,6 +7,7 @@ import { parsePorcelainLine } from "./git-status.js";
 export interface WorktreeInfo {
   path: string;
   branch: string | null;
+  headSha: string;
 }
 
 export async function getCurrentBranch(cwd: string): Promise<string | null> {
@@ -136,15 +137,18 @@ export function parseWorktreeListPorcelain(
     const lines = block.split("\n");
     let wtPath: string | null = null;
     let branch: string | null = null;
+    let headSha: string | null = null;
     for (const line of lines) {
       if (line.startsWith("worktree ")) {
         wtPath = line.substring("worktree ".length);
       } else if (line.startsWith("branch ")) {
         branch = parseWorktreeBranch(line.substring("branch ".length));
+      } else if (line.startsWith("HEAD ")) {
+        headSha = line.substring("HEAD ".length).trim() || null;
       }
     }
-    if (wtPath && toWorktreePathKey(wtPath) !== mainWorktreePathKey) {
-      worktrees.push({ path: wtPath, branch });
+    if (wtPath && headSha && toWorktreePathKey(wtPath) !== mainWorktreePathKey) {
+      worktrees.push({ path: wtPath, branch, headSha });
     }
   }
   return worktrees;

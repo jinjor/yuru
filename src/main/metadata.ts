@@ -71,7 +71,7 @@ export async function loadRepoList(
     const taskWorktrees = gitWorktrees.map((gitWorktree) =>
       toTaskWorktreeListItem(
         repo.id,
-        gitWorktree.path,
+        gitWorktree,
         metadataByPath.get(toWorktreePathKey(gitWorktree.path)),
         activeRuntimeSessionIdsByKey,
         activeRuntimeSessionsByWorktreePath,
@@ -274,7 +274,7 @@ async function loadGitWorktrees(
 
 function toTaskWorktreeListItem(
   repoId: string,
-  worktreePath: string,
+  gitWorktree: WorktreeInfo,
   metadataEntry: TaskWorktreeMetadata | undefined,
   activeRuntimeSessionIdsByKey: ReadonlyMap<string, RuntimeSessionId> | undefined,
   activeRuntimeSessionsByWorktreePath:
@@ -283,6 +283,7 @@ function toTaskWorktreeListItem(
   primarySessionPreviewsByKey: ReadonlyMap<string, string> | undefined,
   suggestedSessions: readonly SuggestedWorktreeSession[],
 ): TaskWorktreeListItem {
+  const worktreePath = gitWorktree.path;
   const worktreeId = toWorktreeId(repoId, worktreePath);
   const primarySession = metadataEntry?.primarySession;
   const primarySessionKey = primarySession
@@ -306,6 +307,8 @@ function toTaskWorktreeListItem(
     worktreeId,
     worktreePath,
     name: path.basename(worktreePath),
+    branch: gitWorktree.branch,
+    headSha: gitWorktree.headSha,
     primarySession: primarySession && primarySessionKey
       ? {
           provider: primarySession.provider,

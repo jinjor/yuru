@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { GitBranch } from "lucide-react";
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import type { AgentDefinition } from "../../shared/agent";
 import type {
   PrimarySessionListItem,
@@ -180,7 +181,9 @@ function TaskWorktreeCard({
       onKeyDown={handleCardKeyDown}
     >
       <div className="task-worktree-summary">
-        <span className="task-worktree-name">{taskWorktree.name}</span>
+        <span className="task-worktree-name" title={worktreeLabelText(taskWorktree)}>
+          {renderWorktreeLabel(taskWorktree)}
+        </span>
         {primarySession ? (
           <PrimarySessionSummary
             isActive={isPrimarySessionActive}
@@ -313,6 +316,26 @@ function SuggestedSessionAction({ suggestedSession, onSelect }: SuggestedSession
         <span className="action-surface-row-meta">{meta}</span>
       </span>
     </button>
+  );
+}
+
+function worktreeLabelText(taskWorktree: TaskWorktreeListItem): string {
+  if (taskWorktree.branch) {
+    return taskWorktree.branch;
+  }
+  return `(detached @ ${taskWorktree.headSha.slice(0, 7)})`;
+}
+
+function renderWorktreeLabel(taskWorktree: TaskWorktreeListItem): ReactNode {
+  const text = worktreeLabelText(taskWorktree);
+  if (!taskWorktree.branch) {
+    return text;
+  }
+  return (
+    <>
+      <GitBranch className="task-worktree-branch-icon" size={12} strokeWidth={2} aria-hidden="true" />
+      {text}
+    </>
   );
 }
 

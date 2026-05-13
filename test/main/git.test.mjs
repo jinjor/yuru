@@ -74,8 +74,20 @@ test("parseWorktreeListPorcelain は main worktree を除外し detached worktre
   ].join("\n");
 
   assert.deepEqual(parseWorktreeListPorcelain(output, "/repo"), [
-    { path: "/repo/.yuru/worktrees/task-a", branch: "task-a" },
-    { path: "/repo/.yuru/worktrees/detached-task", branch: null },
-    { path: "/repo/.yuru/worktrees/locked-task", branch: null },
+    {
+      path: "/repo/.yuru/worktrees/task-a",
+      branch: "task-a",
+      headSha: "2222222222222222222222222222222222222222",
+    },
+    {
+      path: "/repo/.yuru/worktrees/detached-task",
+      branch: null,
+      headSha: "3333333333333333333333333333333333333333",
+    },
+    {
+      path: "/repo/.yuru/worktrees/locked-task",
+      branch: null,
+      headSha: "4444444444444444444444444444444444444444",
+    },
   ]);
 });
