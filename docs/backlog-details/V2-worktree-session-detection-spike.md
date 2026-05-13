@@ -38,6 +38,37 @@ Provider store の log を直近期間に絞って `ripgrep` で worktree 言及
 **Codex**: `~/.codex/sessions/YYYY/MM/DD/<sessionId>.jsonl`
 - dir 階層に日付が入る
 
+## Initial context injection
+
+step 22 で両 provider を cwd = repo root で起動するため、初回 create 時に「ここが worktree です」を agent に伝える手段が要る。両 provider に hidden な session-level 注入機構があることを実機検証で確認した。
+
+**Claude**: `claude --append-system-prompt <prompt>`
+- system prompt（`system` role）に追記される。default 能力は維持
+- 会話履歴に visible message としては現れない
+- 動作確認: 渡した invocation でだけ system prompt に反映される。session に永続化はされない（resume 時は再構成）
+
+**Codex**: `codex -c developer_instructions=<prompt>`
+- `developer` role の message として turn 1 の session log に注入される
+- 会話履歴に visible な user message としては現れない
+- 動作確認: create 時に渡すと developer message として永続。resume 時に渡しても turn_context のメタにのみ載り、新しい developer message としては再投入されず model にも届かない（behavior probe で確認）
+
+**運用ルール（両 provider 共通）**
+
+- **create 時のみ** 注入する。Resume 時は注入しない
+- Claude も Codex に合わせて create-only に統一する（Claude も resume 時に渡せば一見効くが、毎回明示的に渡す挙動を避けて pattern を揃える）
+- Claude resume 時は system prompt に worktree 情報が乗らないが、conversation history に前 turn の振る舞いが残るので、model は文脈から worktree を継続認識する
+
+**注入 template の例**
+
+```
+This session was opened via Yuru with the initial task worktree '<name>' (branch <branch>) at <worktree-path>.
+```
+
+書き方の方針:
+- **「初期の作業場所」だと分かる wording**（`initial` / `was opened with` 等）。session 開始時点の context であって永続拘束ではない
+- 命令形（"Use this path"）や強い指示は入れない。data として提示し、ユーザ発話との整合は model に任せる
+- template は `~/.yuru/` 以下の設定ファイルに切り出してユーザが差し替えられるようにする。default を Yuru が組み込みで提供し、設定ファイルが無ければそれを使う
+
 ## 性能設計
 
 検出を 2 段階で絞り込む:

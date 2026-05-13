@@ -118,19 +118,10 @@ provider の path hint があっても、task worktree と primary session の s
 
 ## Provider hints
 
-- Claude:
-  - `worktree-state` に worktree path があれば強い候補
-  - session log の `cwd` が worktree 配下なら候補
-- Codex:
-  - `session_meta.payload.cwd` や `exec_command_end` の `cwd` が worktree 配下なら候補
-  - 現在の store では `exec_command_end` は top-level type ではなく `event_msg.payload.type` として記録される
-  - `turn_context.cwd` は使わない
-  - `turn_context.cwd` は実行 root と混ざって紛らわしく、candidate 判定にノイズを入れやすい
+provider session log の cwd 言及から worktree との対応を推測する。
+hint は session identity を置き換えるためではなく、candidate を推測するために使う。
 
-provider ごとの hint は session identity を置き換えるためではなく、candidate を推測するために使う。
-
-2026-04-26 の spike で、Claude / Codex ともに上記 hint で worktree session 検出が成立することを確認した。
-詳細は `docs/backlog-details/V2-worktree-session-detection-spike.md` を参照する。
+詳細な採用 hint・対象外 hint・性能設計は [docs/backlog-details/V2-worktree-session-detection-spike.md](backlog-details/V2-worktree-session-detection-spike.md) を参照する。
 
 ## UI structure
 
@@ -149,18 +140,12 @@ provider ごとの hint は session identity を置き換えるためではな�
   - Git repository として有効かは `repoPath` で検証する
 - create workspace:
   - repo 配下で `git worktree add` を実行して task worktree を作る
-  - その場で provider session を開始し、その task worktree の primary にする
+  - その場で provider session を repo root cwd で開始し、その task worktree の primary にする
+  - 初回起動時に provider 固有の hidden 注入機構（Claude: `--append-system-prompt`、Codex: `-c developer_instructions=`）で worktree context を渡す。Resume では渡さない
 - resume primary session:
   - Yuru の操作単位は task worktree であり、provider-specific な cwd / option は UI の裏側で吸収する
-  - Claude:
-    - `--worktree <name>` でどの worktree session を使うかを指定できる
-    - `--worktree <name> --resume <sessionId>` なら repo root からでも該当 worktree session を resume できる
-    - worktree cwd から plain `--resume <sessionId>` しても同じ worktree session を resume できる
-    - repo root から plain `--resume <sessionId>` すると、worktree session を見つけられない
-  - Codex:
-    - resume 時は repo root で起動する
-    - task worktree との対応は Yuru metadata の strong link で表し、Codex の cwd を task worktree に寄せない
-    - Codex CLI の resume picker は cwd filtering するため、repo root から provider session 一覧を CLI 経由で見る場合は `--all` を付ける
+  - Claude / Codex とも cwd = repo root で起動し、worktree との対応は Yuru metadata の strong link で表す
+  - Codex CLI の resume picker は cwd filtering するため、repo root から provider session 一覧を CLI 経由で見る場合は `--all` を付ける
 - attach suggested session:
   - weak candidate を primary に昇格させる
   - 実体は metadata の strong link 追加
@@ -278,9 +263,13 @@ provider ごとの hint は session identity を置き換えるためではな�
    - 1 provider session は同時に複数 task worktree の primary にはならない
    - ある worktree の primary session が別 worktree の suggested として昇格されたら、元 worktree 側は active のまま primary ではなくなる
 21. [x] primary session のアイテムに branch 名が表示されている
-22. [ ] Claude の起動形式を repo root 一本に統一する
-   - Yuru は Claude を `--worktree` 無し / cwd = repo root で起動する（create / resume とも）
-   - session ↔ worktree の strong link は Yuru metadata 単独で表現する（Codex と同じ流儀）
+22. [ ] provider session の起動形式を統一する
+   - 満たしたい性質は [docs/design-properties.md](design-properties.md) の `Provider session と worktree の対応` を参照
+   - Claude / Codex とも cwd = repo root で起動する（create / resume とも）。`--worktree` や `-C <worktreePath>` のような worktree 固有の起動 option は使わない
+   - 初回 create 時に worktree context を hidden に注入する。Claude は `--append-system-prompt`、Codex は `-c developer_instructions=`
+   - Resume 時には注入しない（両 provider 共通）
+   - 注入する prompt template は `~/.yuru/` 以下の設定ファイルから読み、ユーザが差し替えられる形にする。default は Yuru が組み込みで提供
+   - session ↔ worktree の strong link は Yuru metadata 単独で表現する
    - hint detection の再整理が必要。詳細は [docs/backlog-details/V2-worktree-session-detection-spike.md](backlog-details/V2-worktree-session-detection-spike.md)
 23. [ ] V1 の session-first 実装を削除する
 24. [ ] metadata の stale な task worktree を起動時に掃除できる

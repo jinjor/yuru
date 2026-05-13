@@ -31,6 +31,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 
 | ID | Type | Area | Item | Why now |
 |---|---|---|---|---|
+| F38 | feature | Tests | provider 挙動の integration / e2e テスト基盤 | `design-properties.md` の性質（resume prompt 出ない、context 注入が hidden、etc.）を回帰検出したい。今は spike の手動検証のみ |
 | F15 | feature | Search | コード検索 | repo 全体を横断してすぐ探したい |
 | F20 | feature | App | アプリのアイコンを付ける | テンションとプロダクト感を上げたい |
 | I9 | investigate | App Runtime | build/restart 後にたまに白画面になる原因を調べる | 開発中の再起動ループで不安になる |
