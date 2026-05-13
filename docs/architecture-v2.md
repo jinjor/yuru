@@ -263,7 +263,7 @@ hint は session identity を置き換えるためではなく、candidate を�
    - 1 provider session は同時に複数 task worktree の primary にはならない
    - ある worktree の primary session が別 worktree の suggested として昇格されたら、元 worktree 側は active のまま primary ではなくなる
 21. [x] primary session のアイテムに branch 名が表示されている
-22. [ ] provider session の起動形式を統一する
+22. [x] provider session の起動形式を統一する
    - 満たしたい性質は [docs/design-properties.md](design-properties.md) の `Provider session と worktree の対応` を参照
    - Claude / Codex とも cwd = repo root で起動する（create / resume とも）。`--worktree` や `-C <worktreePath>` のような worktree 固有の起動 option は使わない
    - 初回 create 時に worktree context を hidden に注入する。Claude は `--append-system-prompt`、Codex は `-c developer_instructions=`

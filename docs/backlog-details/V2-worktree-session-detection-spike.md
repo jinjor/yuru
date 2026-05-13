@@ -28,6 +28,7 @@ Provider store の log を直近期間に絞って `ripgrep` で worktree 言及
 
 採用しない:
 - `turn_context.cwd` — 実行 root と混ざりやすい
+- 通常 text 内の絶対 worktree path 言及 — hidden context prompt の worktree path だけで suggested session になるため
 
 ## Storage layout
 
@@ -67,7 +68,7 @@ This session was opened via Yuru with the initial task worktree '<name>' (branch
 書き方の方針:
 - **「初期の作業場所」だと分かる wording**（`initial` / `was opened with` 等）。session 開始時点の context であって永続拘束ではない
 - 命令形（"Use this path"）や強い指示は入れない。data として提示し、ユーザ発話との整合は model に任せる
-- template は `~/.yuru/` 以下の設定ファイルに切り出してユーザが差し替えられるようにする。default を Yuru が組み込みで提供し、設定ファイルが無ければそれを使う
+- template は `~/.yuru/worktree-context-prompt.txt` に置けば差し替えられる。default を Yuru が組み込みで提供し、設定ファイルが無ければそれを使う
 
 ## 性能設計
 
@@ -78,7 +79,7 @@ This session was opened via Yuru with the initial task worktree '<name>' (branch
    - Claude: `find <root> -mtime -30 -name '*.jsonl'`
 2. **content prefilter**
    - `ripgrep` で worktree path / 名前を grep し、マッチ行 + session 開始メタだけを parse する（全 entry parse はしない）
-   - rg 無し環境は文字列 includes でフォールバック
+   - rg が無い環境では provider store 検出を失敗させる
 
 ## False positive guards
 

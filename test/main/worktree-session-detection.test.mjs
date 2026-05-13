@@ -47,7 +47,7 @@ test("resolveMentionedWorktreePaths は path boundary を守って絶対 path �
   );
 });
 
-test("detectClaudeWorktreeSession は worktree-state の worktreePath を強い hint として読む", () => {
+test("detectClaudeWorktreeSession は worktree-state を hint として読まない", () => {
   const hint = detectClaudeWorktreeSession(
     jsonl({
       type: "worktree-state",
@@ -56,7 +56,20 @@ test("detectClaudeWorktreeSession は worktree-state の worktreePath を強い 
         worktreePath: "/repo/.claude/worktrees/task-a",
       },
     }),
-    [],
+    ["/repo/.claude/worktrees/task-a"],
+  );
+
+  assert.equal(hint, null);
+});
+
+test("detectClaudeWorktreeSession は cwd が既知 worktree 配下なら hint として読む", () => {
+  const hint = detectClaudeWorktreeSession(
+    jsonl({
+      type: "user",
+      sessionId: "claude-session",
+      cwd: "/repo/.claude/worktrees/task-a/src",
+    }),
+    ["/repo/.claude/worktrees/task-a"],
   );
 
   assert.deepEqual(hint, {
@@ -67,12 +80,22 @@ test("detectClaudeWorktreeSession は worktree-state の worktreePath を強い 
   });
 });
 
-test("detectClaudeWorktreeSession は cwd が既知 worktree 配下なら fallback hint として読む", () => {
+test("detectClaudeWorktreeSession は tool_use の file_path を弱い hint として読む", () => {
   const hint = detectClaudeWorktreeSession(
     jsonl({
-      type: "user",
+      type: "assistant",
       sessionId: "claude-session",
-      cwd: "/repo/.claude/worktrees/task-a/src",
+      message: {
+        content: [
+          {
+            type: "tool_use",
+            name: "Edit",
+            input: {
+              file_path: "/repo/.claude/worktrees/task-a/src/file.ts",
+            },
+          },
+        ],
+      },
     }),
     ["/repo/.claude/worktrees/task-a"],
   );
@@ -271,12 +294,11 @@ test("detectCodexWorktreeSessions は session 内の worktreeRank を provider �
       { worktreePath: patchWorktree, worktreeRank: 1 },
       { worktreePath: newCwdWorktree, worktreeRank: 2 },
       { worktreePath: oldCwdWorktree, worktreeRank: 3 },
-      { worktreePath: textWorktree, worktreeRank: 4 },
     ],
   );
 });
 
-test("detectCodexWorktreeSessions は既知 worktree の絶対 path 文字列を弱い hint として読む", () => {
+test("detectCodexWorktreeSessions は既知 worktree の絶対 path 文字列だけでは hint にしない", () => {
   const hints = detectCodexWorktreeSessions(
     jsonl(
       {
@@ -302,19 +324,5 @@ test("detectCodexWorktreeSessions は既知 worktree の絶対 path 文字列を
     ["/repo/.yuru/worktrees/task-a"],
   );
 
-  assert.equal(hints.length, 1);
-  assert.deepEqual(
-    {
-      provider: hints[0].provider,
-      providerSessionId: hints[0].providerSessionId,
-      worktreePath: hints[0].worktreePath,
-      worktreeRank: hints[0].worktreeRank,
-    },
-    {
-      provider: "codex",
-      providerSessionId: "codex-session",
-      worktreePath: "/repo/.yuru/worktrees/task-a",
-      worktreeRank: 0,
-    },
-  );
+  assert.deepEqual(hints, []);
 });

@@ -17,6 +17,7 @@ import {
   getCodexHistoryPath,
   getCodexSessionsDir,
 } from "./paths.js";
+import { loadWorktreeContextPrompt } from "../../worktree-context-prompt.js";
 import {
   detectCodexWorktreeSessionLines,
   type CodexSessionLine,
@@ -257,43 +258,8 @@ async function listCodexSessionLineMatches(
     if (code === 1) {
       return new Map();
     }
-    if (code === "ENOENT") {
-      return loadCodexSessionLineMatchesWithoutRipgrep(worktreePaths);
-    }
     throw error;
   }
-}
-
-async function loadCodexSessionLineMatchesWithoutRipgrep(
-  worktreePaths: readonly string[],
-): Promise<Map<string, CodexSessionLine[]>> {
-  const worktreeNames = new Set(
-    worktreePaths
-      .map((worktreePath) => path.basename(path.resolve(worktreePath)))
-      .filter((name) => name.length > 0),
-  );
-  const matchesByFilePath = new Map<string, CodexSessionLine[]>();
-
-  await Promise.all(
-    (await listFilesRecursive(getCodexSessionsDir())).map(async (filePath) => {
-      const content = await readTextFileIfExists(filePath);
-      if (!content) {
-        return;
-      }
-      const lines = content
-        .split("\n")
-        .flatMap((line, index) =>
-          Array.from(worktreeNames).some((name) => line.includes(name))
-            ? [{ text: line, lineIndex: index }]
-            : [],
-        );
-      if (lines.length > 0) {
-        matchesByFilePath.set(filePath, lines);
-      }
-    }),
-  );
-
-  return matchesByFilePath;
 }
 
 function parseRipgrepJsonLineMatches(output: string): Map<string, CodexSessionLine[]> {
@@ -375,7 +341,7 @@ async function findSessionForLaunch(
 async function waitForSessionId(pending: PendingSession): Promise<string> {
   for (;;) {
     const launched = await findSessionForLaunch(
-      pending.worktreePath,
+      pending.launchCwd,
       pending.startedAt,
       pending.existingProviderSessionIds,
     );
@@ -410,15 +376,17 @@ export const sessionProvider: SessionProviderAdapter = {
   async createResumeLaunch(session) {
     return {
       cwd: session.repoPath,
-      args: ["resume", session.providerSessionId],
-      worktreePath: session.repoPath,
+      args: ["resume", "--all", session.providerSessionId],
+      worktreePath: session.project,
     };
   },
   async createWorktreeLaunch(context) {
+    const prompt = await loadWorktreeContextPrompt(context);
     return {
-      cwd: context.worktreePath,
-      args: [],
+      cwd: context.repoPath,
+      args: ["-c", `developer_instructions=${JSON.stringify(prompt)}`],
       worktreePath: context.worktreePath,
+      existingProviderSessionIds: await listExistingSessionIds(),
     };
   },
   async prepareWorktree(context: WorktreeContext) {

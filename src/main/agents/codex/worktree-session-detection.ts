@@ -1,4 +1,3 @@
-import path from "path";
 import { parseJsonLinesAs } from "../../agent-store-utils.js";
 import {
   resolveContainingWorktreePath,
@@ -38,16 +37,10 @@ interface CodexWorktreeEvidence {
   sequence: number;
 }
 
-interface CodexWorktreePathMention {
-  worktreePath: string;
-  sequence: number;
-}
-
 const CODEX_EVIDENCE_RANK = {
   primary: 0,
   patch: 1,
   cwd: 2,
-  text: 3,
 } as const;
 
 function parseCodexSessionMetaCwd(entry: unknown): CodexSessionMetaCwd | null {
@@ -205,7 +198,6 @@ export function detectCodexWorktreeSessions(
   return detectCodexWorktreeSessionEntries(
     sessionMeta,
     parseJsonLineEntries(parseContentLines(content)),
-    resolveMentionedWorktreePathMentions(content, worktreePaths),
     worktreePaths,
   );
 }
@@ -218,7 +210,6 @@ export function detectCodexWorktreeSessionLines(
   return detectCodexWorktreeSessionEntries(
     sessionMeta,
     parseJsonLineEntries(lines),
-    resolveMentionedWorktreePathLineMentions(lines, worktreePaths),
     worktreePaths,
   );
 }
@@ -226,7 +217,6 @@ export function detectCodexWorktreeSessionLines(
 function detectCodexWorktreeSessionEntries(
   sessionMeta: CodexSessionMetaCwd,
   entries: readonly JsonLineEntry[],
-  textMentions: readonly CodexWorktreePathMention[],
   worktreePaths: readonly string[],
 ): WorktreeSessionHint[] {
   const evidencesByWorktreePath = new Map<string, CodexWorktreeEvidence>();
@@ -284,12 +274,6 @@ function detectCodexWorktreeSessionEntries(
     }
   }
 
-  for (const mention of textMentions) {
-    if (!evidencesByWorktreePath.has(mention.worktreePath)) {
-      addEvidence(mention.worktreePath, CODEX_EVIDENCE_RANK.text, mention.sequence);
-    }
-  }
-
   return Array.from(evidencesByWorktreePath.values())
     .sort(compareCodexWorktreeEvidence)
     .map(
@@ -316,75 +300,4 @@ function compareCodexWorktreeEvidence(
     return recencyOrder;
   }
   return a.worktreePath.localeCompare(b.worktreePath);
-}
-
-function resolveMentionedWorktreePathMentions(
-  content: string,
-  worktreePaths: readonly string[],
-): CodexWorktreePathMention[] {
-  return worktreePaths
-    .map((worktreePath) => ({
-      original: worktreePath,
-      resolved: path.resolve(worktreePath),
-    }))
-    .sort((a, b) => b.resolved.length - a.resolved.length)
-    .flatMap((worktree) => {
-      const index = findLastPathMentionIndex(content, worktree.resolved);
-      return index === null ? [] : [{ worktreePath: worktree.original, sequence: index }];
-    });
-}
-
-function resolveMentionedWorktreePathLineMentions(
-  lines: readonly CodexSessionLine[],
-  worktreePaths: readonly string[],
-): CodexWorktreePathMention[] {
-  return worktreePaths
-    .map((worktreePath) => ({
-      original: worktreePath,
-      resolved: path.resolve(worktreePath),
-    }))
-    .sort((a, b) => b.resolved.length - a.resolved.length)
-    .flatMap((worktree) => {
-      const mention = findLastPathLineMention(lines, worktree.resolved);
-      return mention === null ? [] : [{ worktreePath: worktree.original, sequence: mention }];
-    });
-}
-
-function findLastPathLineMention(
-  lines: readonly CodexSessionLine[],
-  resolvedPath: string,
-): number | null {
-  let lastLineIndex: number | null = null;
-  for (const line of lines) {
-    if (findLastPathMentionIndex(line.text, resolvedPath) !== null) {
-      lastLineIndex = line.lineIndex;
-    }
-  }
-  return lastLineIndex;
-}
-
-function findLastPathMentionIndex(content: string, resolvedPath: string): number | null {
-  let lastIndex: number | null = null;
-  let index = content.indexOf(resolvedPath);
-  while (index !== -1) {
-    const before = content[index - 1];
-    const after = content[index + resolvedPath.length];
-    if (isPathMentionStartBoundary(before) && isPathMentionEndBoundary(after)) {
-      lastIndex = index;
-    }
-    index = content.indexOf(resolvedPath, index + 1);
-  }
-  return lastIndex;
-}
-
-function isPathMentionStartBoundary(char: string | undefined): boolean {
-  return char === undefined || !isPathSegmentChar(char);
-}
-
-function isPathMentionEndBoundary(char: string | undefined): boolean {
-  return char === undefined || char === path.sep || !isPathSegmentChar(char);
-}
-
-function isPathSegmentChar(char: string): boolean {
-  return /[A-Za-z0-9._-]/.test(char);
 }

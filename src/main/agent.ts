@@ -22,6 +22,7 @@ export interface PendingSession {
   proc: pty.IPty;
   provider: SessionProvider;
   command: string;
+  launchCwd: string;
   launchLabel: string;
   outputBuffer: string;
   startupOutput: string;

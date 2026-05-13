@@ -1,5 +1,4 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import type {
   PrimarySessionMetadata,
@@ -17,6 +16,7 @@ import {
   type SuggestedWorktreeSession,
 } from "../shared/session.js";
 import { listWorktrees, type WorktreeInfo } from "./git.js";
+import { getYuruHome } from "./yuru-home.js";
 
 type ListWorktrees = (repoPath: string) => Promise<readonly WorktreeInfo[]>;
 type LoadSuggestedSessions = (
@@ -367,10 +367,6 @@ function saveMetadata(metadata: YuruMetadata): void {
   const metadataPath = getMetadataPath();
   fs.mkdirSync(path.dirname(metadataPath), { recursive: true });
   fs.writeFileSync(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`);
-}
-
-function getYuruHome(): string {
-  return process.env.YURU_HOME ?? path.join(os.homedir(), ".yuru");
 }
 
 function getMetadataPath(): string {

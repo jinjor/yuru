@@ -1,4 +1,3 @@
-import { parseJsonLinesAs } from "../../agent-store-utils.js";
 import {
   resolveContainingWorktreePath,
   type WorktreeSessionHint,
@@ -9,41 +8,21 @@ interface ClaudeCwdEntry {
   cwd: string;
 }
 
-function parseClaudeWorktreeStateHint(entry: unknown): WorktreeSessionHint | null {
-  if (typeof entry !== "object" || entry === null) {
-    return null;
-  }
+interface JsonLineEntry {
+  entry: unknown;
+  lineIndex: number;
+}
 
-  const maybeEntry = entry as {
-    type?: unknown;
-    sessionId?: unknown;
-    worktreeSession?: {
-      sessionId?: unknown;
-      worktreePath?: unknown;
-    };
-  };
+export interface ClaudeSessionLine {
+  text: string;
+  lineIndex: number;
+}
 
-  if (maybeEntry.type !== "worktree-state") {
-    return null;
-  }
-
-  const providerSessionId =
-    typeof maybeEntry.sessionId === "string"
-      ? maybeEntry.sessionId
-      : maybeEntry.worktreeSession && typeof maybeEntry.worktreeSession.sessionId === "string"
-        ? maybeEntry.worktreeSession.sessionId
-        : null;
-
-  if (!providerSessionId || typeof maybeEntry.worktreeSession?.worktreePath !== "string") {
-    return null;
-  }
-
-  return {
-    provider: "claude",
-    providerSessionId,
-    worktreePath: maybeEntry.worktreeSession.worktreePath,
-    worktreeRank: 0,
-  };
+interface ClaudeWorktreeEvidence {
+  providerSessionId: string;
+  worktreePath: string;
+  evidenceRank: number;
+  sequence: number;
 }
 
 function parseClaudeCwdEntry(entry: unknown): ClaudeCwdEntry | null {
@@ -66,26 +45,146 @@ function parseClaudeCwdEntry(entry: unknown): ClaudeCwdEntry | null {
   };
 }
 
+function parseJsonLineEntries(lines: readonly ClaudeSessionLine[]): JsonLineEntry[] {
+  return lines
+    .flatMap((line) => {
+      if (!line.text) {
+        return [];
+      }
+      try {
+        return [{ entry: JSON.parse(line.text) as unknown, lineIndex: line.lineIndex }];
+      } catch {
+        return [];
+      }
+    });
+}
+
+function parseContentLines(content: string): ClaudeSessionLine[] {
+  return content
+    .split("\n")
+    .flatMap((line, index) => (line ? [{ text: line, lineIndex: index }] : []));
+}
+
+function readSessionId(entry: unknown): string | null {
+  if (typeof entry !== "object" || entry === null) {
+    return null;
+  }
+  const maybeEntry = entry as { sessionId?: unknown };
+  return typeof maybeEntry.sessionId === "string" ? maybeEntry.sessionId : null;
+}
+
+function readToolUseFilePaths(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap(readToolUseFilePaths);
+  }
+  if (typeof value !== "object" || value === null) {
+    return [];
+  }
+
+  const maybeToolUse = value as {
+    type?: unknown;
+    input?: {
+      file_path?: unknown;
+    };
+  };
+  const ownFilePath =
+    maybeToolUse.type === "tool_use" && typeof maybeToolUse.input?.file_path === "string"
+      ? [maybeToolUse.input.file_path]
+      : [];
+  return [
+    ...ownFilePath,
+    ...Object.values(value as Record<string, unknown>).flatMap(readToolUseFilePaths),
+  ];
+}
+
 export function detectClaudeWorktreeSession(
   content: string,
   worktreePaths: readonly string[],
 ): WorktreeSessionHint | null {
-  const worktreeStateHint = parseJsonLinesAs(content, parseClaudeWorktreeStateHint)[0];
-  if (worktreeStateHint) {
-    return worktreeStateHint;
-  }
+  return detectClaudeWorktreeSessions(content, worktreePaths)[0] ?? null;
+}
 
-  for (const entry of parseJsonLinesAs(content, parseClaudeCwdEntry)) {
+export function detectClaudeWorktreeSessions(
+  content: string,
+  worktreePaths: readonly string[],
+): WorktreeSessionHint[] {
+  return detectClaudeWorktreeSessionLines(parseContentLines(content), worktreePaths);
+}
+
+export function detectClaudeWorktreeSessionLines(
+  lines: readonly ClaudeSessionLine[],
+  worktreePaths: readonly string[],
+): WorktreeSessionHint[] {
+  const evidencesByKey = new Map<string, ClaudeWorktreeEvidence>();
+  const entries = parseJsonLineEntries(lines);
+
+  const addEvidence = (
+    providerSessionId: string,
+    worktreePath: string,
+    evidenceRank: number,
+    sequence: number,
+  ): void => {
+    const evidence = { providerSessionId, worktreePath, evidenceRank, sequence };
+    const key = `${providerSessionId}:${worktreePath}`;
+    const existing = evidencesByKey.get(key);
+    if (existing && compareClaudeWorktreeEvidence(evidence, existing) >= 0) {
+      return;
+    }
+    evidencesByKey.set(key, evidence);
+  };
+
+  for (const line of entries) {
+    const entry = parseClaudeCwdEntry(line.entry);
+    if (!entry) {
+      continue;
+    }
     const worktreePath = resolveContainingWorktreePath(entry.cwd, worktreePaths);
     if (worktreePath) {
-      return {
-        provider: "claude",
-        providerSessionId: entry.sessionId,
-        worktreePath,
-        worktreeRank: 0,
-      };
+      addEvidence(entry.sessionId, worktreePath, 0, line.lineIndex);
     }
   }
 
-  return null;
+  for (const line of entries) {
+    const sessionId = readSessionId(line.entry);
+    if (!sessionId) {
+      continue;
+    }
+    for (const filePath of readToolUseFilePaths(line.entry)) {
+      const worktreePath = resolveContainingWorktreePath(filePath, worktreePaths);
+      if (worktreePath) {
+        addEvidence(sessionId, worktreePath, 1, line.lineIndex);
+      }
+    }
+  }
+
+  return Array.from(evidencesByKey.values())
+    .sort(compareClaudeWorktreeEvidence)
+    .map(
+      (evidence, worktreeRank) =>
+        ({
+          provider: "claude",
+          providerSessionId: evidence.providerSessionId,
+          worktreePath: evidence.worktreePath,
+          worktreeRank,
+        }) satisfies WorktreeSessionHint,
+    );
+}
+
+function compareClaudeWorktreeEvidence(
+  a: ClaudeWorktreeEvidence,
+  b: ClaudeWorktreeEvidence,
+): number {
+  const evidenceOrder = a.evidenceRank - b.evidenceRank;
+  if (evidenceOrder !== 0) {
+    return evidenceOrder;
+  }
+  const recencyOrder = b.sequence - a.sequence;
+  if (recencyOrder !== 0) {
+    return recencyOrder;
+  }
+  const sessionOrder = a.providerSessionId.localeCompare(b.providerSessionId);
+  if (sessionOrder !== 0) {
+    return sessionOrder;
+  }
+  return a.worktreePath.localeCompare(b.worktreePath);
 }

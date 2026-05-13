@@ -29,6 +29,7 @@ const {
   loadSuggestedWorktreeSessions,
 } = await import("../../src/main/sessions.ts");
 const { sessionProvider: codexProvider } = await import("../../src/main/agents/codex/index.ts");
+const { sessionProvider: claudeProvider } = await import("../../src/main/agents/claude/index.ts");
 const { toSessionKey } = await import("../../src/shared/session.ts");
 
 function jsonl(...entries) {
@@ -71,10 +72,23 @@ test("loadStoredSessionPreviews は stored session の preview を key で返す
   assert.equal(previews.get(toSessionKey("claude", "claude-1")), "last message");
 });
 
-test("Codex resume launch は repo root で起動する", async () => {
+test("provider resume launch は repo root で起動する", async () => {
   const repoRoot = path.join(tempDir, "repo");
   const worktreePath = path.join(repoRoot, ".yuru", "worktrees", "task-a");
 
+  assert.deepEqual(
+    await claudeProvider.createResumeLaunch({
+      provider: "claude",
+      providerSessionId: "claude-resume",
+      repoPath: repoRoot,
+      project: worktreePath,
+    }),
+    {
+      cwd: repoRoot,
+      args: ["--resume", "claude-resume"],
+      worktreePath,
+    },
+  );
   assert.deepEqual(
     await codexProvider.createResumeLaunch({
       provider: "codex",
@@ -84,10 +98,39 @@ test("Codex resume launch は repo root で起動する", async () => {
     }),
     {
       cwd: repoRoot,
-      args: ["resume", "codex-resume"],
-      worktreePath: repoRoot,
+      args: ["resume", "--all", "codex-resume"],
+      worktreePath,
     },
   );
+});
+
+test("provider worktree launch は repo root で起動して hidden context を注入する", async () => {
+  const repoPath = path.join(tempDir, "launch-repo");
+  const worktreePath = path.join(repoPath, ".yuru", "worktrees", "task-a");
+  const context = {
+    repoPath,
+    worktreePath,
+    worktreeName: "task-a",
+    branchName: "feature/task-a",
+  };
+  const prompt =
+    "This session was opened via Yuru with the initial task worktree 'task-a' (branch 'feature/task-a') at " +
+    `${worktreePath}. The repository root is ${repoPath}.`;
+
+  assert.deepEqual(await claudeProvider.createWorktreeLaunch(context), {
+    cwd: repoPath,
+    args: ["--append-system-prompt", prompt],
+    worktreePath,
+  });
+
+  const codexLaunch = await codexProvider.createWorktreeLaunch(context);
+  assert.equal(codexLaunch.cwd, repoPath);
+  assert.deepEqual(codexLaunch.args, [
+    "-c",
+    `developer_instructions=${JSON.stringify(prompt)}`,
+  ]);
+  assert.equal(codexLaunch.worktreePath, worktreePath);
+  assert.ok(codexLaunch.existingProviderSessionIds instanceof Set);
 });
 
 test("loadSuggestedWorktreeSessions は suggested session を worktree ごとに dedup して並べる", async () => {
@@ -98,33 +141,33 @@ test("loadSuggestedWorktreeSessions は suggested session を worktree ごとに
   fs.writeFileSync(
     path.join(projectsDir, "b.jsonl"),
     jsonl({
-      type: "worktree-state",
+      type: "user",
       sessionId: "claude-b",
-      worktreeSession: { worktreePath: worktreeA },
+      cwd: path.join(worktreeA, "src"),
     }),
   );
   fs.writeFileSync(
     path.join(projectsDir, "a.jsonl"),
     jsonl({
-      type: "worktree-state",
+      type: "user",
       sessionId: "claude-a",
-      worktreeSession: { worktreePath: worktreeA },
+      cwd: worktreeA,
     }),
   );
   fs.writeFileSync(
     path.join(projectsDir, "a-duplicate.jsonl"),
     jsonl({
-      type: "worktree-state",
+      type: "assistant",
       sessionId: "claude-a",
-      worktreeSession: { worktreePath: worktreeA },
+      cwd: worktreeA,
     }),
   );
   fs.writeFileSync(
     path.join(projectsDir, "other-worktree.jsonl"),
     jsonl({
-      type: "worktree-state",
+      type: "user",
       sessionId: "claude-a",
-      worktreeSession: { worktreePath: worktreeB },
+      cwd: worktreeB,
     }),
   );
   const codexSessionsDir = path.join(codexDir, "sessions", "2026", "05", "08");
@@ -170,6 +213,27 @@ test("loadSuggestedWorktreeSessions は suggested session を worktree ごとに
     { provider: "claude", providerSessionId: "claude-a", timestamp: 0 },
     { provider: "codex", providerSessionId: "codex-b", timestamp: 0 },
   ]);
+});
+
+test("loadSuggestedWorktreeSessions は rg が無ければ失敗する", async () => {
+  const previousPath = process.env.PATH;
+  const emptyBinDir = path.join(tempDir, "empty-bin");
+  const worktreePath = path.join(tempDir, "repo-rg-required", ".yuru", "worktrees", "task-a");
+  fs.mkdirSync(emptyBinDir, { recursive: true });
+  fs.mkdirSync(path.join(claudeDir, "projects", "rg-required"), { recursive: true });
+
+  process.env.PATH = emptyBinDir;
+  try {
+    await assert.rejects(() => loadSuggestedWorktreeSessions([worktreePath]), {
+      code: "ENOENT",
+    });
+  } finally {
+    if (previousPath === undefined) {
+      delete process.env.PATH;
+    } else {
+      process.env.PATH = previousPath;
+    }
+  }
 });
 
 test("loadSuggestedWorktreeSessions は同じ worktreeRank なら session id で安定して並べる", async () => {
@@ -253,7 +317,6 @@ test("loadSuggestedWorktreeSessions は同じ worktreeRank なら session id で
   assert.deepEqual(suggestions.get(worktreePath), [
     { provider: "codex", providerSessionId: "codex-meta", timestamp: 0 },
     { provider: "codex", providerSessionId: "codex-patch", timestamp: 0 },
-    { provider: "codex", providerSessionId: "codex-weak", timestamp: 0 },
     { provider: "codex", providerSessionId: "codex-workdir", timestamp: 0 },
   ]);
 });
