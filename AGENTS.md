@@ -16,6 +16,13 @@ This is for checking behavior changes. Documentation-only edits do not need a re
 - Product backlog: `docs/backlog.md`
 - Architecture notes: `docs/architecture.md`
 - Coding guidelines: `docs/coding-guidelines.md`
+- 継続的にメンテする前提で最新情報として読んでよいのは上の 3 つだけ
+  - **ただし V2 移行中は以下の例外あり**
+  - `docs/architecture-v2.md` も V2 移行中は現行の設計メモとして扱う
+  - `docs/architecture.md` の内容も一部古くなっている（移行後に整理する）
+- それ以外の docs は、基本的に書いた時点での調査・設計・検討の記録であり、最新情報が書かれていることを期待して読んではいけない。
+  - 実装や現在の設計とズレていても、それだけを理由に更新しないこと。
+  - 現在の設計として残すべき内容は architecture など、メンテ対象のドキュメントに書くこと。
 
 ## Communication
 
@@ -34,7 +41,14 @@ This is for checking behavior changes. Documentation-only edits do not need a re
   - やむをえず実装が汚くなる場合は、そのまま進めずに何が汚くなるのか、なぜ避けられないのかを説明して事前に相談すること。
   - 将来の可能性を考えて余計なコードを書かないこと（YAGNI）。
   - 限りなく可能性の低い状況に対応するために大量のコードを書かないこと。
-  - 余計なフォールバック処理を書いてデバッグを困難にしないこと。
+
+- 失敗時のフォールバックを勝手に実装しないこと。
+  - 失敗した時にどういう挙動をするかは重要な設計判断である。
+  - 失敗する具体的な条件が分かっており、現実的に十分起こりうる場合、どのような例外処理をするかをまず相談すること。
+  - 余計なフォールバックは失敗（ほとんどプログラムのミス）に気づくのを遅らせるだけである。
+  - catch を使う場合は、 try する範囲をなるべく狭め、ハンドリング出来ない例外は投げ直すこと。
+  - 勝手に「空配列にしておこう」「空文字にしておこう」などと考えないこと。
+  - 滅多に起こり得ない `| null` なども分岐を増やしてプログラムを複雑にするのでやめること。
 
 - 状態の居場所を考えること。
   - single source of truth を重視すること。
