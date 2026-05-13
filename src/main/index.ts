@@ -422,33 +422,6 @@ function launchPendingSession(
   return pending;
 }
 
-async function waitForResumeReady(
-  providerAdapter: SessionProviderAdapter,
-  pending: PendingSession,
-  expectedProviderSessionId: string,
-): Promise<void> {
-  if (providerAdapter.resolvesSessionIdLazily) {
-    return;
-  }
-
-  try {
-    const providerSessionId = await providerAdapter.waitForSessionId(pending);
-    pending.startupSettled = true;
-    if (providerSessionId !== expectedProviderSessionId) {
-      throw {
-        code: "command_failed",
-        message: `${pending.launchLabel}. ${pending.command} resumed a different session.`,
-        detail: `Expected ${expectedProviderSessionId}, got ${providerSessionId}.`,
-      } satisfies AppError;
-    }
-  } catch (error) {
-    if (pending.exited) {
-      throw startupFailureMessage(pending, pending.exitCode ?? 1, pending.signal);
-    }
-    throw error;
-  }
-}
-
 function registerRuntimeSession(
   runtimeSessionId: string,
   pending: PendingSession,
@@ -635,7 +608,6 @@ async function activateWorktreeSession(
       await providerAdapter.createResumeLaunch(target),
       "Failed to resume session",
     );
-    await waitForResumeReady(providerAdapter, pending, target.providerSessionId);
     const runtimeSessionId = createRuntimeSessionId(target.provider, pending);
     registerRuntimeSession(runtimeSessionId, pending, target.providerSessionId);
     return ok(runtimeSessionId);
