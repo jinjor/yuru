@@ -4,6 +4,7 @@ import path from "path";
 import * as pty from "node-pty";
 import {
   attachPrimarySessionByPath,
+  cleanupStaleTaskWorktrees,
   detachPrimarySessionByPath,
   findRepoByPath,
   loadRepoList,
@@ -139,6 +140,10 @@ function logAppError(error: AppError): void {
     return;
   }
   console.error(`[Yuru] ${error.message}`);
+}
+
+function logStartupMaintenanceError(repoPath: string, error: unknown): void {
+  console.warn(`[Yuru] Skipped stale task worktree cleanup for ${repoPath}.`, error);
 }
 
 function reportError(error: AppError): AppError {
@@ -702,11 +707,15 @@ async function refreshWorktreeWatcher(): Promise<void> {
   worktreeWatcher.setRepos(loadRepos().map((repo) => repo.repoPath));
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   app.setAboutPanelOptions({
     applicationName: APP_NAME,
     applicationVersion: app.getVersion(),
   });
+  const cleanupResult = await cleanupStaleTaskWorktrees();
+  for (const skippedRepo of cleanupResult.skippedRepos) {
+    logStartupMaintenanceError(skippedRepo.repoPath, skippedRepo.error);
+  }
   installApplicationMenu();
   createWindow();
 

@@ -272,7 +272,7 @@ hint は session identity を置き換えるためではなく、candidate を�
    - session ↔ worktree の strong link は Yuru metadata 単独で表現する
    - hint detection の再整理が必要。詳細は [docs/backlog-details/V2-worktree-session-detection-spike.md](backlog-details/V2-worktree-session-detection-spike.md)
 23. [x] V1 の session-first 実装を削除する
-24. [ ] metadata の stale な task worktree を起動時に掃除できる
+24. [x] metadata の stale な task worktree を起動時に掃除できる
    - `loadRepoList` のような表示経路ではなく、起動時に 1 回だけ走る maintenance 処理として独立させる
    - registered repo ごとに `git worktree list` が成功した時だけ、その repo の `taskWorktrees` のうち成功 list に含まれない record を削除する
    - repo 自体の cleanup はしない（path 不在は missing repo として後続 UX に回す。一時的に読めないだけのケースと区別できないため）

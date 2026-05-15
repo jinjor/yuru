@@ -28,6 +28,17 @@ interface ActiveRuntimeWorktreeSession {
   runtimeSessionId: RuntimeSessionId;
 }
 
+export interface CleanupStaleTaskWorktreesResult {
+  removedTaskWorktreeCount: number;
+  skippedRepos: CleanupSkippedRepo[];
+}
+
+export interface CleanupSkippedRepo {
+  repoId: string;
+  repoPath: string;
+  error: unknown;
+}
+
 export function loadMetadata(): YuruMetadata {
   const metadataPath = getMetadataPath();
   if (!fs.existsSync(metadataPath)) {
@@ -89,6 +100,43 @@ export async function loadRepoList(
 
 export function loadTaskWorktrees(): TaskWorktreeMetadata[] {
   return loadMetadata().taskWorktrees;
+}
+
+export async function cleanupStaleTaskWorktrees(
+  listGitWorktrees: ListWorktrees = listWorktrees,
+): Promise<CleanupStaleTaskWorktreesResult> {
+  const metadata = loadMetadata();
+  const listedPathKeysByRepoId = new Map<string, Set<string>>();
+  const skippedRepos: CleanupSkippedRepo[] = [];
+
+  for (const repo of metadata.repos) {
+    try {
+      const gitWorktrees = await listGitWorktrees(repo.repoPath);
+      listedPathKeysByRepoId.set(
+        repo.id,
+        new Set(gitWorktrees.map((worktree) => toWorktreePathKey(worktree.path))),
+      );
+    } catch (error) {
+      skippedRepos.push({ repoId: repo.id, repoPath: repo.repoPath, error });
+      continue;
+    }
+  }
+
+  const nextTaskWorktrees = metadata.taskWorktrees.filter((entry) => {
+    const listedPathKeys = listedPathKeysByRepoId.get(entry.repoId);
+    if (!listedPathKeys) {
+      return true;
+    }
+    return listedPathKeys.has(toWorktreePathKey(entry.worktreePath));
+  });
+  const removedTaskWorktreeCount = metadata.taskWorktrees.length - nextTaskWorktrees.length;
+  if (nextTaskWorktrees.length === metadata.taskWorktrees.length) {
+    return { removedTaskWorktreeCount, skippedRepos };
+  }
+
+  metadata.taskWorktrees = nextTaskWorktrees;
+  saveMetadata(metadata);
+  return { removedTaskWorktreeCount, skippedRepos };
 }
 
 export function findRepoByPath(repoPath: string): RepoMetadata | null {

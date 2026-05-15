@@ -11,6 +11,7 @@ process.env.YURU_HOME = tempDir;
 
 const {
   attachPrimarySessionByPath,
+  cleanupStaleTaskWorktrees,
   findRepoByPath,
   loadMetadata,
   loadRepoList,
@@ -496,6 +497,105 @@ test("loadRepoList は suggested worktree session を並び替えずに返す", 
     result[0].taskWorktrees[0].suggestedSessions.map((session) => session.providerSessionKey),
     [toSessionKey("claude", "claude-b"), toSessionKey("claude", "claude-a")],
   );
+});
+
+test("cleanupStaleTaskWorktrees は list に成功した repo の stale task worktree を削除する", async () => {
+  seed({
+    repos: [
+      { id: "repo-1", repoPath: "/tmp/repo-a" },
+      { id: "repo-2", repoPath: "/tmp/repo-b" },
+    ],
+    taskWorktrees: [
+      {
+        repoId: "repo-1",
+        worktreePath: "/tmp/repo-a/worktrees/keep/.",
+        primarySession: { provider: "codex", providerSessionId: "codex-1" },
+      },
+      {
+        repoId: "repo-1",
+        worktreePath: "/tmp/repo-a/worktrees/stale",
+        primarySession: { provider: "claude", providerSessionId: "claude-1" },
+      },
+      {
+        repoId: "repo-2",
+        worktreePath: "/tmp/repo-b/worktrees/stale",
+      },
+      {
+        repoId: "unknown-repo",
+        worktreePath: "/tmp/unknown/worktrees/stale",
+      },
+    ],
+  });
+
+  const result = await cleanupStaleTaskWorktrees(async (repoPath) => {
+    if (repoPath === "/tmp/repo-a") {
+      return [
+        {
+          path: "/tmp/repo-a/worktrees/keep",
+          branch: "keep",
+          headSha: "abc1234abc1234abc1234abc1234abc1234abc12",
+        },
+      ];
+    }
+    throw new Error("cannot list worktrees");
+  });
+
+  assert.equal(result.removedTaskWorktreeCount, 1);
+  assert.deepEqual(result.skippedRepos.map(({ repoId, repoPath }) => ({ repoId, repoPath })), [
+    { repoId: "repo-2", repoPath: "/tmp/repo-b" },
+  ]);
+  assert.equal(result.skippedRepos[0].error instanceof Error, true);
+  assert.deepEqual(loadMetadata(), {
+    repos: [
+      { id: "repo-1", repoPath: "/tmp/repo-a" },
+      { id: "repo-2", repoPath: "/tmp/repo-b" },
+    ],
+    taskWorktrees: [
+      {
+        repoId: "repo-1",
+        worktreePath: "/tmp/repo-a/worktrees/keep/.",
+        primarySession: { provider: "codex", providerSessionId: "codex-1" },
+      },
+      {
+        repoId: "repo-2",
+        worktreePath: "/tmp/repo-b/worktrees/stale",
+      },
+      {
+        repoId: "unknown-repo",
+        worktreePath: "/tmp/unknown/worktrees/stale",
+      },
+    ],
+  });
+});
+
+test("cleanupStaleTaskWorktrees は list に失敗した repo の metadata を変更しない", async () => {
+  seed({
+    repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
+    taskWorktrees: [
+      {
+        repoId: "repo-1",
+        worktreePath: "/tmp/repo-a/worktrees/stale",
+        primarySession: { provider: "claude", providerSessionId: "claude-1" },
+      },
+    ],
+  });
+
+  const result = await cleanupStaleTaskWorktrees(async () => {
+    throw new Error("cannot list worktrees");
+  });
+
+  assert.equal(result.removedTaskWorktreeCount, 0);
+  assert.deepEqual(result.skippedRepos.map(({ repoId, repoPath }) => ({ repoId, repoPath })), [
+    { repoId: "repo-1", repoPath: "/tmp/repo-a" },
+  ]);
+  assert.equal(result.skippedRepos[0].error instanceof Error, true);
+  assert.deepEqual(loadMetadata().taskWorktrees, [
+    {
+      repoId: "repo-1",
+      worktreePath: "/tmp/repo-a/worktrees/stale",
+      primarySession: { provider: "claude", providerSessionId: "claude-1" },
+    },
+  ]);
 });
 
 test("upsertTaskWorktree は新規登録する", () => {
