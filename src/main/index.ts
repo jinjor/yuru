@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, Menu, ipcMain, shell } from "electron";
 import type { MenuItemConstructorOptions } from "electron";
 import path from "path";
 import * as pty from "node-pty";
@@ -14,7 +14,6 @@ import {
   upsertTaskWorktree,
 } from "./metadata.js";
 import {
-  loadSessions,
   loadStoredSessionPreviews,
   loadSuggestedWorktreeSessions,
 } from "./sessions.js";
@@ -700,15 +699,7 @@ async function refreshWorktreeWatcher(): Promise<void> {
   if (!worktreeWatcher) {
     return;
   }
-  const sessions = await loadSessions(sessionRuntimeMap);
-  const repos = new Set(loadRepos().map((repo) => repo.repoPath));
-  const sessionRepoPaths = sessions
-    .filter((session) => session.worktree && session.state !== "archived")
-    .map((session) => session.repoPath);
-  for (const repoPath of sessionRepoPaths) {
-    repos.add(repoPath);
-  }
-  worktreeWatcher.setRepos(Array.from(repos));
+  worktreeWatcher.setRepos(loadRepos().map((repo) => repo.repoPath));
 }
 
 app.whenReady().then(() => {
@@ -725,10 +716,6 @@ app.whenReady().then(() => {
     emitSessionsStateChanged();
   });
   void refreshWorktreeWatcher();
-
-  ipcMain.handle("sessions:list", () => {
-    return loadSessions(sessionRuntimeMap);
-  });
 
   ipcMain.handle("metadata:listRepos", async () => {
     const previewsByKey = await loadStoredSessionPreviews();
@@ -800,32 +787,6 @@ app.whenReady().then(() => {
       return resumeSuggestedWorktreeSession(worktreeId, providerSessionKey);
     },
   );
-
-  ipcMain.handle("session:create", async (_event, provider: SessionProvider, repoPath: string) => {
-    const providerAdapter = getSessionProvider(provider);
-    let pending: PendingSession | null = null;
-    try {
-      pending = launchPendingSession(
-        providerAdapter,
-        await providerAdapter.createNewLaunch(repoPath),
-        "Failed to start session",
-      );
-      const { runtimeSessionId, providerSessionId } = await startSession(provider, providerAdapter, pending);
-      pending.startupSettled = true;
-      if (providerSessionId) {
-        await refreshWorktreeWatcher();
-      }
-      return ok(runtimeSessionId);
-    } catch (error) {
-      if (pending && !pending.exited) {
-        pending.proc.kill();
-      }
-      const appError = toAppError(error, { command: providerAdapter.command });
-      return pending?.startupFailureReported
-        ? fail<string>(appError)
-        : failAndReport<string>(appError);
-    }
-  });
 
   ipcMain.handle(
     "session:createWorktree",
@@ -909,7 +870,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle(
     "worktree:remove",
-    async (_event, _provider: SessionProvider, repoPath: string, worktreePath: string) => {
+    async (_event, repoPath: string, worktreePath: string) => {
       if (hasActivePrimarySessionForWorktree(worktreePath)) {
         return failAndReport<boolean>({
           code: "unknown",
@@ -925,20 +886,6 @@ app.whenReady().then(() => {
       }
     },
   );
-
-  ipcMain.handle("dialog:selectFolder", async () => {
-    if (!mainWindow) {
-      return null;
-    }
-    const result = await dialog.showOpenDialog(mainWindow, {
-      properties: ["openDirectory"],
-      title: "Select Repository",
-    });
-    if (result.canceled || result.filePaths.length === 0) {
-      return null;
-    }
-    return result.filePaths[0];
-  });
 
   ipcMain.handle("shell:openExternal", async (_event, url: string) => {
     await shell.openExternal(url);

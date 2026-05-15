@@ -66,7 +66,6 @@ export interface SessionProviderAdapter {
   loadStoredSessions(): Promise<SessionSnapshot[]>;
   loadWorktreeSessionHints(worktreePaths: readonly string[]): Promise<WorktreeSessionHint[]>;
   hasStoredSession(providerSessionId: string): Promise<boolean>;
-  createNewLaunch(repoPath: string): Promise<LaunchRequest>;
   createResumeLaunch(session: ResumeSessionTarget): Promise<LaunchRequest>;
   createWorktreeLaunch(context: WorktreeContext): Promise<LaunchRequest>;
   prepareWorktree(context: WorktreeContext): Promise<void>;

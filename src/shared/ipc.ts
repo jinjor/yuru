@@ -3,7 +3,6 @@ import type { RepoListItem } from "./metadata.js";
 import type {
   GitHubPullRequest,
   RuntimeSessionId,
-  Session,
   SessionProvider,
 } from "./session.js";
 
@@ -75,7 +74,6 @@ export interface WorktreeSessionSelection {
 }
 
 export interface ElectronAPI {
-  getSessions: () => Promise<Session[]>;
   getRepos: () => Promise<RepoListItem[]>;
   getSessionProviders: () => Promise<AgentDefinition[]>;
   getErrors: () => Promise<AppErrorNotice[]>;
@@ -89,18 +87,12 @@ export interface ElectronAPI {
     worktreeId: string,
     providerSessionKey: string,
   ) => Promise<Result<WorktreeSessionSelection>>;
-  createSession: (provider: SessionProvider, repoPath: string) => Promise<Result<string>>;
   createWorktreeSession: (
     provider: SessionProvider,
     repoPath: string,
     branchName: string,
   ) => Promise<Result<WorktreeSessionSelection>>;
-  removeWorktree: (
-    provider: SessionProvider,
-    repoPath: string,
-    worktreePath: string,
-  ) => Promise<Result<boolean>>;
-  selectFolder: () => Promise<string | null>;
+  removeWorktree: (repoPath: string, worktreePath: string) => Promise<Result<boolean>>;
   openExternal: (url: string) => Promise<void>;
   getGitPathStates: (runtimeSessionId: RuntimeSessionId) => Promise<Result<GitPathState[]>>;
   getGitBranchContext: (runtimeSessionId: RuntimeSessionId) => Promise<Result<BranchContext>>;

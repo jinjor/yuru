@@ -3,7 +3,6 @@ import type { ElectronAPI } from "../shared/ipc.js";
 import type { SessionProvider } from "../shared/session.js";
 
 const electronAPI: ElectronAPI = {
-  getSessions: () => ipcRenderer.invoke("sessions:list"),
   getRepos: () => ipcRenderer.invoke("metadata:listRepos"),
   getSessionProviders: () => ipcRenderer.invoke("providers:list"),
   getErrors: () => ipcRenderer.invoke("errors:list"),
@@ -13,13 +12,10 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke("worktreeSession:resumePrimary", worktreeId, providerSessionKey),
   resumeSuggestedSession: (worktreeId: string, providerSessionKey: string) =>
     ipcRenderer.invoke("worktreeSession:resumeSuggested", worktreeId, providerSessionKey),
-  createSession: (provider: SessionProvider, repoPath: string) =>
-    ipcRenderer.invoke("session:create", provider, repoPath),
   createWorktreeSession: (provider: SessionProvider, repoPath: string, branchName: string) =>
     ipcRenderer.invoke("session:createWorktree", provider, repoPath, branchName),
-  removeWorktree: (provider: SessionProvider, repoPath: string, worktreePath: string) =>
-    ipcRenderer.invoke("worktree:remove", provider, repoPath, worktreePath),
-  selectFolder: () => ipcRenderer.invoke("dialog:selectFolder"),
+  removeWorktree: (repoPath: string, worktreePath: string) =>
+    ipcRenderer.invoke("worktree:remove", repoPath, worktreePath),
   openExternal: (url: string) => ipcRenderer.invoke("shell:openExternal", url),
   getGitPathStates: (runtimeSessionId: string) => ipcRenderer.invoke("git:pathStates", runtimeSessionId),
   getGitBranchContext: (runtimeSessionId: string) => ipcRenderer.invoke("git:branchContext", runtimeSessionId),

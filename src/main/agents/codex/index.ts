@@ -365,14 +365,6 @@ export const sessionProvider: SessionProviderAdapter = {
   loadStoredSessions,
   loadWorktreeSessionHints,
   hasStoredSession,
-  async createNewLaunch(repoPath) {
-    return {
-      cwd: repoPath,
-      args: [],
-      worktreePath: repoPath,
-      existingProviderSessionIds: await listExistingSessionIds(),
-    };
-  },
   async createResumeLaunch(session) {
     return {
       cwd: session.repoPath,

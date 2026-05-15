@@ -1,6 +1,6 @@
 # Architecture v2
 
-Last updated: 2026-05-08
+Last updated: 2026-05-16
 
 この文書は、task-worktree-first モデルの target architecture をまとめる。
 現行実装の説明は `docs/architecture.md` を参照する。
@@ -271,7 +271,7 @@ hint は session identity を置き換えるためではなく、candidate を�
    - 注入する prompt template は `~/.yuru/` 以下の設定ファイルから読み、ユーザが差し替えられる形にする。default は Yuru が組み込みで提供
    - session ↔ worktree の strong link は Yuru metadata 単独で表現する
    - hint detection の再整理が必要。詳細は [docs/backlog-details/V2-worktree-session-detection-spike.md](backlog-details/V2-worktree-session-detection-spike.md)
-23. [ ] V1 の session-first 実装を削除する
+23. [x] V1 の session-first 実装を削除する
 24. [ ] metadata の stale な task worktree を起動時に掃除できる
    - `loadRepoList` のような表示経路ではなく、起動時に 1 回だけ走る maintenance 処理として独立させる
    - registered repo ごとに `git worktree list` が成功した時だけ、その repo の `taskWorktrees` のうち成功 list に含まれない record を削除する

@@ -24,7 +24,6 @@ fs.writeFileSync(
 );
 
 const {
-  loadSessions,
   loadStoredSessionPreviews,
   loadSuggestedWorktreeSessions,
 } = await import("../../src/main/sessions.ts");
@@ -43,27 +42,6 @@ test.after(() => {
     process.env.HOME = previousHome;
   }
   fs.rmSync(tempDir, { recursive: true, force: true });
-});
-
-test("loadSessions は active runtime を provider session key で snapshot に重ねる", async () => {
-  const sessionKey = toSessionKey("claude", "claude-1");
-  const sessions = await loadSessions(
-    new Map([
-      [
-        sessionKey,
-        {
-          provider: "claude",
-          providerSessionId: "claude-1",
-          startedAt: 2000,
-        },
-      ],
-    ]),
-  );
-
-  assert.equal(sessions.length, 1);
-  assert.equal(sessions[0].id, sessionKey);
-  assert.equal(sessions[0].state, "active");
-  assert.equal(sessions[0].project, staleProject);
 });
 
 test("loadStoredSessionPreviews は stored session の preview を key で返す", async () => {
