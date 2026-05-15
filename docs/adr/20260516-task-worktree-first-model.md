@@ -1,3 +1,14 @@
+# Task-worktree-first model
+
+Last updated: 2026-05-16
+
+この ADR は、Yuru が session-first の画面構造から、`repo > task worktree` を主な作業単位にする task-worktree-first モデルへ移行したときの設計記録である。
+以下の区切り以降は、移行中に `docs/architecture-v2.md` として使っていた文書を内容変更せずに転記している。
+文中の `V2` は、この task-worktree-first モデルへの移行後の姿を指す。
+リンクや表現も当時のまま残す。
+
+----------
+
 # Architecture v2
 
 Last updated: 2026-05-16

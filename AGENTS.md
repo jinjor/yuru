@@ -13,16 +13,15 @@ This is for checking behavior changes. Documentation-only edits do not need a re
 
 ## Docs
 
+- Purpose: `docs/purpose.md`
 - Product backlog: `docs/backlog.md`
 - Architecture notes: `docs/architecture.md`
 - Coding guidelines: `docs/coding-guidelines.md`
-- 継続的にメンテする前提で最新情報として読んでよいのは上の 3 つだけ
-  - **ただし V2 移行中は以下の例外あり**
-  - `docs/architecture-v2.md` も V2 移行中は現行の設計メモとして扱う
-  - `docs/architecture.md` の内容も一部古くなっている（移行後に整理する）
-- それ以外の docs は、基本的に書いた時点での調査・設計・検討の記録であり、最新情報が書かれていることを期待して読んではいけない。
-  - 実装や現在の設計とズレていても、それだけを理由に更新しないこと。
+- 継続的にメンテする前提で最新情報として読んでよいのは上の 4 つだけ
+- それ以外の docs は、書いた時点での調査・設計・検討の記録であり、最新情報が書かれていることを期待して読んではいけない。
+  - 実装や現在の設計とズレていても、更新しないこと。
   - 現在の設計として残すべき内容は architecture など、メンテ対象のドキュメントに書くこと。
+  - ADR は過去の大きな設計判断の記録として読むこと。
 
 ## Communication
 

@@ -1,60 +1,169 @@
 # Architecture Notes
 
-Last updated: 2026-04-24
+Last updated: 2026-05-16
 
-この文書は 2026-04-24 時点のアーキテクチャである。
-`I13` で採用した target architecture は `docs/architecture-v2.md` を参照する。
+この文書は現在の Yuru のアーキテクチャをまとめる。
 実装の細部、型定義、処理手順の正確な姿はコードを正とする。
 
-## Product shape
+## Core entities
 
-- Yuru はセッション中心のエディタ
-- リポジトリや worktree は主役ではなく、セッションに紐づく属性として扱う
-- 1 ウィンドウで複数リポジトリのセッションを横断して扱えることを重視する
+- `repo`
+  - Yuru が左ペインの主導線に表示する単位
+  - task worktree 群の親になる
+- `task worktree`
+  - `repo` の main worktree を除いた Git worktree
+  - Yuru の中心的な作業単位
+  - `Files`, `Changes`, diff, preview の基準になる
+  - 現在位置は `worktreePath` で表す
+- `primary session`
+  - task worktree に attach された session
+  - 1 task worktree に最大 1 つだけ存在する
+  - 1 provider session は同時に複数 task worktree の primary にはならない // これは緩めてもいいかも
+- `suggested session`
+  - Yuru 外で作られ、task worktree に紐づいていると推測される session
+  - provider store から推測した weak candidate
+  - 明示的な昇格操作までは primary として扱わない
+- `runtime session`
+  - Yuru が現在起動している PTY process
+  - active / inactive 表示は runtime session の有無から導出する
+  - runtime session 自体は永続化しない
 
 ## Source of truth
 
-- セッションやリポジトリの情報は、できる限り各 provider の状態ディレクトリと git の状態から導出する
-- 現状は provider ごとに別の保存先と規約を持つことを前提にする
-  - Claude: `~/.claude/`
-  - Codex: `~/.codex/`
-- Yuru 側で同じ情報を二重管理しない
-- Yuru 独自の永続化は、将来必要になっても UI 状態のような補助情報に限定する
+- Git
+  - repo が実在する Git repository かどうか
+  - worktree path
+  - current branch / detached HEAD
+  - status, diff, file content
+- provider store
+  - Claude / Codex の保存済み session
+  - provider session id
+  - last message や timestamp
+  - worktree session detection 用の path hint
+- Yuru metadata
+  - どの repo を主導線に表示するか
+  - repo と task worktree の path link
+  - task worktree と primary session の strong link
+- process memory
+  - active runtime session
+  - PTY process と scrollback
+  - file watcher の購読状態
 
-## Session semantics
+Yuru metadata は source of truth の複製ではない。
+Git や provider store が持っている状態を丸ごとコピーせず、Yuru 自身が主導線を組み立てるために必要な最小限の情報だけを持つ。
+branch、diff、provider session の本文、runtime process は metadata に保存しない。
 
-- セッション状態は `active / inactive / archived` の 3 つで考える
-- これらは保存されたフラグではなく、ランタイム状態とファイルシステム状態から導出されるものとして扱う
-- archived は「読めるが再開できない」状態として扱う
+metadata は通常 `~/.yuru/metadata.json` に置く。
+テストや開発用に `YURU_METADATA_PATH` で保存先を差し替えられる。
 
-## Worktree stance
+最小 schema は次の形である。
 
-- worktree は必須ではなく、セッション作成時のオプション
-- worktree ありのセッションは単一タスク向け、worktree なしは雑多な作業向け
-- worktree の存在や削除は Git / 各 provider 側の現実を尊重し、Yuru が独自ルールを増やしすぎない
-- provider ごとに worktree の置き場所や命名規約が違っても吸収できるようにする
-- destructive な操作は、速さよりも誤操作しにくさを優先する
+```json
+{
+  "repos": [
+    {
+      "id": "uuid",
+      "repoPath": "/path/to/repo"
+    }
+  ],
+  "taskWorktrees": [
+    {
+      "repoId": "uuid",
+      "worktreePath": "/path/to/worktree",
+      "primarySession": {
+        "provider": "codex",
+        "providerSessionId": "..."
+      }
+    }
+  ]
+}
+```
 
-## Resume policy
+`primarySession` は必須ではない。
+Git 上には存在するが、まだ Yuru metadata に strong link を持たない worktree もありうる。
 
-- セッション再開は「session ID を指定して戻る」という考え方を優先する
-- resume 時の作業ディレクトリは重要で、必要なら Yuru 側で補正する
-- どのセッションに戻るかを UI から明確に選べることを重視する
+## Repo assembly
 
-## Multi-repo policy
+左ペインの repo 一覧は、まず Yuru metadata の `repos` から組み立てる。
+これにより、worktree が 0 件の repo でも Yuru 上で作業開始の起点にできる。
 
-- リポジトリの手動登録を前提にしない
-- 過去に触ったリポジトリやセッションが自然に見えてくる体験を優先する
-- 一覧はリポ単位よりも、直近の作業文脈を追いやすい並びを優先する
+各 repo の task worktree 一覧は、その repo に対して Git から worktree 群を読んで組み立てる。
+main worktree は task worktree として表示しない。
+その上に Yuru metadata、provider store、active runtime session を重ねる。
+
+- metadata の `primarySession` が有効なら、その session を task worktree の primary として表示する
+- provider store の hint から worktree 配下の session を推測できる場合は suggested session として表示する
+- active runtime session があれば active として表示する
+- metadata にない Git worktree も、primary なしの task worktree として表示する
+
+provider の path hint は candidate 推測にだけ使う。
+task worktree と primary session の strong link は、作成または昇格の明示操作でだけ変わる。
+
+worktree の外部 rename は自動追跡しない。
+古い path の strong link は起動時 maintenance で削除され、新しい path は primary なしの Git worktree として再発見される。
+
+## Provider sessions
+
+対応 provider は Claude と Codex である。
+provider ごとの session store や resume command の違いは adapter に閉じ込める。
+
+worktree session の create / resume は、Claude / Codex とも cwd = repo root で起動する。
+PTY 内で `cd` しても、`Files`, `Changes`, diff の作業ルートは runtime cwd ではなく選択中 task worktree の `worktreePath` で決まる。
+
+新規 worktree session 作成時は、まず Git worktree を作り、その場で provider session を開始する。
+provider session id が起動時に取れる場合はその場で primary に attach し、遅れて分かる provider は session id 解決後に attach する。
+初回起動時だけ worktree context を hidden prompt として注入する。
+
+- Claude: `--append-system-prompt`
+- Codex: `-c developer_instructions=...`
+
+resume 時には worktree context を再注入しない。
+Codex は repo root から保存済み session を再開するため、resume command に `--all` を付ける。
+
+worktree context prompt は `~/.yuru/worktree-context-prompt.txt` で差し替えられる。
+ファイルがない場合は Yuru 組み込みの default template を使う。
+
+## Operations
+
+- `yuru add`
+  - 現在の cwd から Git repo root を解決し、Yuru metadata に repo を登録する
+  - すでに登録済みなら重複登録しない
+- create worktree session
+  - repo row から branch name と provider を選ぶ
+  - branch name の `/` は worktree name では `-` に置き換える
+  - worktree path は provider adapter が決める
+    - Claude: `<repo>/.claude/worktrees/<worktreeName>`
+    - Codex: `<repo>/.yuru/worktrees/<worktreeName>`
+  - 既存 directory や既存 branch がある場合は作成しない
+  - Git worktree 作成、provider 起動、primary attach を 1 つの作成フローとして扱う
+- resume primary session
+  - primary session がすでに active runtime を持つ場合は、その runtime を選択する
+  - inactive の場合は provider store の session を確認してから resume する
+  - provider store から消えている primary は detach する
+- promote suggested session
+  - suggested session を primary に昇格し、resume / select する
+  - 同じ provider session が別 task worktree の primary だった場合は、元の strong link を外す
+- remove worktree
+  - active primary session がある worktree は削除しない
+  - `git worktree remove` が成功したら metadata の task worktree record も削除する
+- startup maintenance
+  - app 起動時に registered repo ごとに `git worktree list` を実行する
+  - list に成功した repo だけ、metadata に残った stale task worktree record を削除する
+  - repo 自体の cleanup はしない
 
 ## UI structure
 
-- 基本は左から右に詳細化するドリルダウン
-- セッション選択を起点に、会話、変更一覧、コード表示が連動する
-- 画面構造そのものよりも、「いまどのセッションの、どのファイルを見ているか」が迷子にならないことを優先する
+左カラムは `repo > task worktree` を基本構造にする。
+repo row は task worktree が 0 件でも表示し、新規 worktree session の起点になる。
 
-## Documentation policy
+task worktree row は branch、primary session の状態、provider、preview、suggested session の存在を表示する。
+primary session が active なら選択し、inactive なら resume する。
+primary がない task worktree では suggested session を表示し、ユーザー操作で primary に昇格できる。
 
-- backlog は「これからやること」を管理する
-- この文書は「コードからは読み取りづらい判断」を残す
-- 実装の正確な説明が必要なら、文書を増やす前にコードを読む
+右側の `Terminal`, `Files`, `Changes`, preview は選択中の task worktree に連動する。
+どの runtime session の terminal を見ているかと、どの task worktree のファイルを見ているかがずれないように、UI の選択状態は `worktreeId` と `runtimeSessionId` の組み合わせで持つ。
+
+## Appendix
+
+2026-05-16 までアーキテクチャ刷新を行なっていたため、このドキュメントに沿わない古い実装が残っている可能性がある。
+移行時の判断と checklist は [task-worktree-first ADR](adr/20260516-task-worktree-first-model.md) に残す。
