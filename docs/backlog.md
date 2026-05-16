@@ -29,22 +29,15 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F38 | feature | Tests | provider 挙動の integration / e2e テスト基盤 | `design-properties.md` の性質（resume prompt 出ない、context 注入が hidden、etc.）を回帰検出したい。今は spike の手動検証のみ |
 | F15 | feature | Search | コード検索 | repo 全体を横断してすぐ探したい |
 | F20 | feature | App | アプリのアイコンを付ける | テンションとプロダクト感を上げたい |
-| I9 | investigate | App Runtime | build/restart 後にたまに白画面になる原因を調べる | 開発中の再起動ループで不安になる |
-| I1 | investigate | Sessions | worktree を安全に削除できる条件と UX を決める | squash merge 運用でも作業済み worktree を迷わず片付けたい |
-| B3 | bug | Sessions | 古いセッション選択時の `No conversation found with ID: ...` のちらつきを消す | 誤解を生む |
-| B6 | bug | Diff | `loading diff...` のちらつきを消す | 差分を見るたびにノイズになる |
 | P11 | polish | Sessions | 最新会話プレビューが一覧に同期されない問題を直す | 一覧の情報鮮度が低い |
-| B5 | bug | New Session | hover ハイライトが `WT` の手前で不自然に切れる問題を直す | 明確な UI バグ |
+| F16 | feature | GitHub | セッションカードに PR の有無と状態を表示する | GitHub 連携として早めに価値が出そう |
+| F17 | feature | GitHub | PR へのリンクを出す | そこそこ早めに欲しくなりそう |
 
 ## Next
 
 | ID | Type | Area | Item | Notes |
 |---|---|---|---|---|
-| F16 | feature | GitHub | セッションカードに PR の有無と状態を表示する | GitHub 連携として早めに価値が出そう |
-| F17 | feature | GitHub | PR へのリンクを出す | そこそこ早めに欲しくなりそう |
 | F1 | feature | Notifications | 並列実行セッションの完了通知を出す | 完了に気づけない |
-| P7 | polish | New Session | `WT` 表示を置き換える | 文言かアイコンかを再検討 |
-| P8 | polish | New Session | Claude / Codex のアイコンを出す | Sessions 側とトーンを揃えたい |
 | P9 | polish | New Session | 長い repo path の省略ルールを見直す | 折りたたみが不自然 |
 | P13 | polish | Files | Files タブのアクション UI を整える | 階層感が弱く見た目もまだ野暮ったい |
 | F3 | feature | Changes | 変更行数も出す | diff 集計で対応したい |
@@ -71,6 +64,9 @@ UI 改善も機能追加も同じ土俵で扱う。
 
 | ID | Type | Area | Item | Notes |
 |---|---|---|---|---|
+| I9 | investigate | App Runtime | build/restart 後にたまに白画面になる原因を調べる | 開発中の再起動ループで不安になる |
+| I1 | investigate | Sessions | worktree を安全に削除できる条件と UX を決める | squash merge 運用でも作業済み worktree を迷わず片付けたい |
+| B3 | bug | Sessions | 古いセッション選択時の `No conversation found with ID: ...` のちらつきを消す | 誤解を生む |
 | F10 | feature | Terminal | ターミナル内文字列検索 | 独立機能として実装したい |
 | F11 | feature | Diff | ファイル単位の既読管理 | 状態設計が必要 |
 | F12 | feature | Diff | Split mode | 面積と複雑さが増える |
