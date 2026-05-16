@@ -21,6 +21,10 @@ export function DiffPreviewPanel({
   path,
 }: DiffPreviewPanelProps) {
   const [lines, setLines] = useState<SourceLine[]>([]);
+  // While a new file's diff is being fetched, `diffDocument` still holds the
+  // previously shown file. Render it (with its own path) until the new diff
+  // arrives so switching files does not flash a "Loading..." screen.
+  const displayPath = diffDocument?.path ?? path;
   const originalContent = diffDocument?.originalContent ?? null;
   const currentContent = diffDocument?.currentContent ?? null;
   const fileSize = diffDocument?.size ?? null;
@@ -39,8 +43,8 @@ export function DiffPreviewPanel({
     const current = currentContent ?? "";
 
     Promise.all([
-      tokenizeCode(original, path, fileSize),
-      tokenizeCode(current, path, fileSize),
+      tokenizeCode(original, displayPath, fileSize),
+      tokenizeCode(current, displayPath, fileSize),
     ]).then(([originalTokenized, currentTokenized]) => {
       if (cancelled) {
         return;
@@ -54,35 +58,23 @@ export function DiffPreviewPanel({
     return () => {
       cancelled = true;
     };
-  }, [currentContent, fileSize, originalContent, path]);
+  }, [currentContent, fileSize, originalContent, displayPath]);
 
   return (
-    <PreviewPanel title="Code" path={path} onClose={onClose}>
-      {isLoading && (
+    <PreviewPanel title="Code" path={displayPath} onClose={onClose}>
+      {diffDocument === null ? (
         <div className="code-panel-empty">
-          <p>Loading...</p>
+          <p>{isLoading ? "Loading..." : "Preview is not available"}</p>
         </div>
-      )}
-      {!isLoading && !path && (
-        <div className="code-panel-empty">
-          <p>Select a file to preview</p>
-        </div>
-      )}
-      {!isLoading && path && originalContent === null && currentContent === null && (
-        <div className="code-panel-empty">
-          <p>Preview is not available</p>
-        </div>
-      )}
-      {!isLoading && path && isBinary && (
+      ) : isBinary ? (
         <div className="code-panel-empty">
           <p>Binary preview is not available</p>
         </div>
-      )}
-      {!isLoading && path && !isBinary && (originalContent !== null || currentContent !== null) && (
+      ) : (
         <SourceViewer
           lines={lines}
           className={hasChanges ? "diff-viewer" : ""}
-          scrollToLine={line}
+          scrollToLine={diffDocument.path === path ? line : undefined}
         />
       )}
     </PreviewPanel>
