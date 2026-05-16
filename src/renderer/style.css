@@ -965,6 +965,14 @@ button.github-badge {
 }
 
 /* Source Viewer (shared base for code + diff) */
+.source-viewer-wrap {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  position: relative;
+}
+
 .source-viewer {
   flex: 1;
   min-width: 0;
@@ -1032,6 +1040,32 @@ button.github-badge {
 
 .source-line.diff-deleted .source-gutter {
   background: color-mix(in srgb, var(--viewer-remove) 52%, var(--viewer-gutter));
+}
+
+/* Diff overview ruler (minimap-style change markers) */
+.diff-overview-ruler {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 10px;
+  pointer-events: none;
+}
+
+.diff-overview-mark {
+  position: absolute;
+  right: 0;
+  width: 100%;
+  min-height: 2px;
+  opacity: 0.4;
+}
+
+.diff-overview-mark.diff-added {
+  background: var(--success);
+}
+
+.diff-overview-mark.diff-deleted {
+  background: var(--danger);
 }
 
 /* Text selection */

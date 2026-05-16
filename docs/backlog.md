@@ -50,7 +50,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F3 | feature | Changes | 変更行数も出す | diff 集計で対応したい |
 | F4 | feature | Diff | 各ファイルの変更行数表示 | Changes と整合させたい |
 | F37 | feature | Diff | ブランチの base からの差分を表示する | 複数コミットある時に全体の差分をエディタ上で確認したい |
-| F5 | feature | Diff | 右端スクロール領域に差分位置マーカーを出す | minimap 的な把握用 |
 | F7 | feature | Terminal | ファイル名が改行を跨いでもリンクできるようにする | linkifier 改善 |
 | F8 | feature | Terminal | ファイルクリック時にツリー側も開く | navigation の連動 |
 | F9 | feature | Terminal | ウィンドウを広げた時に 1 行の文字数を増やす | xterm fit を調整 |
