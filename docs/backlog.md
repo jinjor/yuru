@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-05-16
+Last updated: 2026-05-17
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -27,7 +27,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | ID | Type | Area | Item | Why now |
 |---|---|---|---|---|
 | F38 | feature | Tests | provider 挙動の integration / e2e テスト基盤 | `design-properties.md` の性質（resume prompt 出ない、context 注入が hidden、etc.）を回帰検出したい。今は spike の手動検証のみ |
-| F15 | feature | Search | コード検索 | repo 全体を横断してすぐ探したい |
+| F15 | feature | Search | コード検索 | 選択中 task worktree 全体を横断してすぐ探したい。詳細: docs/backlog-details/F15-code-search.md |
 | F20 | feature | App | アプリのアイコンを付ける | テンションとプロダクト感を上げたい |
 | P11 | polish | Sessions | 最新会話プレビューが一覧に同期されない問題を直す | 一覧の情報鮮度が低い |
 | F16 | feature | GitHub | セッションカードに PR の有無と状態を表示する | GitHub 連携として早めに価値が出そう |
@@ -73,6 +73,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F13 | feature | Files / Code | 選択範囲をターミナルに貼り付ける | editor と terminal の連携が必要 |
 | F18 | feature | GitHub | PR マージ時に worktree を自動整理する | 自動 archived までつなげたい |
 | F24 | feature | Empty state | 空画面から新規セッションを始められるようにする | あると親切だが、今すぐではない |
+| F39 | feature | Search | 検索結果を streaming 表示する | F15 初期実装では検索完了後にまとめて表示する。巨大 repo で初回結果の待ち時間が気になったら欲しい |
 | I6 | investigate | Sessions / Terminal | セッション終了時メッセージの表示保持を見直す | 終了直前の案内や要約をその場で読めないと戸惑いやすい |
 | I7 | investigate | Sessions / Persistence | セッション終了メッセージの再到達性をどう担保するか決める | あとから確認できる保証がないと次の操作で迷いやすい |
 | I8 | investigate | Dependencies | 依存更新の安全運用を決める | minimum release age や通知方針を整理したい |
