@@ -12,7 +12,13 @@ interface BranchNameInputProps {
   onSubmit: (branchName: string, provider: SessionProvider) => void;
 }
 
-export function BranchNameInput({ error, providers, onCancel, onChange, onSubmit }: BranchNameInputProps) {
+export function BranchNameInput({
+  error,
+  providers,
+  onCancel,
+  onChange,
+  onSubmit,
+}: BranchNameInputProps) {
   const [name, setName] = useState(generateDefaultBranch);
   const [provider, setProvider] = useState<SessionProvider | null>(providers[0]?.id ?? null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -75,7 +81,9 @@ export function BranchNameInput({ error, providers, onCancel, onChange, onSubmit
           </button>
         </div>
         {name.trim() && !isValid && (
-          <div className="worktree-error">Letters, digits, dots, underscores, slashes, dashes only</div>
+          <div className="worktree-error">
+            Letters, digits, dots, underscores, slashes, dashes only
+          </div>
         )}
         {error && <div className="worktree-error">{error}</div>}
       </div>

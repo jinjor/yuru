@@ -1,10 +1,6 @@
 import type { AgentDefinition } from "./agent.js";
 import type { RepoListItem } from "./metadata.js";
-import type {
-  GitHubPullRequest,
-  RuntimeSessionId,
-  SessionProvider,
-} from "./session.js";
+import type { GitHubPullRequest, RuntimeSessionId, SessionProvider } from "./session.js";
 
 export interface AppError {
   code:
@@ -124,18 +120,32 @@ export interface ElectronAPI {
   openExternal: (url: string) => Promise<void>;
   getGitPathStates: (runtimeSessionId: RuntimeSessionId) => Promise<Result<GitPathState[]>>;
   getGitBranchContext: (runtimeSessionId: RuntimeSessionId) => Promise<Result<BranchContext>>;
-  getGitDiffDocument: (runtimeSessionId: RuntimeSessionId, filePath: string) => Promise<Result<GitDiffDocument | null>>;
-  listFiles: (runtimeSessionId: RuntimeSessionId, relativePath?: string) => Promise<Result<FileTreeNode[]>>;
+  getGitDiffDocument: (
+    runtimeSessionId: RuntimeSessionId,
+    filePath: string,
+  ) => Promise<Result<GitDiffDocument | null>>;
+  listFiles: (
+    runtimeSessionId: RuntimeSessionId,
+    relativePath?: string,
+  ) => Promise<Result<FileTreeNode[]>>;
   listAllFiles: (runtimeSessionId: RuntimeSessionId) => Promise<Result<string[]>>;
   resolveRepoFile: (runtimeSessionId: RuntimeSessionId, filePath: string) => Promise<string | null>;
-  syncFileWatchTargets: (runtimeSessionId: RuntimeSessionId, relativePaths: string[]) => Promise<void>;
-  searchCode: (runtimeSessionId: RuntimeSessionId, query: string) => Promise<Result<CodeSearchResult>>;
+  syncFileWatchTargets: (
+    runtimeSessionId: RuntimeSessionId,
+    relativePaths: string[],
+  ) => Promise<void>;
+  searchCode: (
+    runtimeSessionId: RuntimeSessionId,
+    query: string,
+  ) => Promise<Result<CodeSearchResult>>;
   cancelCodeSearch: (runtimeSessionId: RuntimeSessionId) => Promise<void>;
   onErrorAdded: (callback: (error: AppErrorNotice) => void) => void;
   onErrorRemoved: (callback: (id: string) => void) => void;
   onErrorsCleared: (callback: () => void) => void;
   onSessionsStateChanged: (callback: () => void) => void;
-  onFileTreeChanged: (callback: (runtimeSessionId: RuntimeSessionId, relativePath: string) => void) => () => void;
+  onFileTreeChanged: (
+    callback: (runtimeSessionId: RuntimeSessionId, relativePath: string) => void,
+  ) => () => void;
   attachPty: (runtimeSessionId: RuntimeSessionId) => Promise<string>;
   readyPty: (runtimeSessionId: RuntimeSessionId) => Promise<void>;
   detachPty: (runtimeSessionId: RuntimeSessionId) => Promise<void>;

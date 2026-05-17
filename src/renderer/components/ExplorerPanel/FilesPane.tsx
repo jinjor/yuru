@@ -2,11 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { FileTreeNode, GitFileStatus, GitPathState } from "../../../shared/ipc";
 import type { PreviewSelection } from "../../types";
-import {
-  buildIgnoredPathSet,
-  buildTreeStatusMap,
-  treeStatusClass,
-} from "../../utils/git";
+import { buildIgnoredPathSet, buildTreeStatusMap, treeStatusClass } from "../../utils/git";
 import { resultDataOrNull } from "../../utils/result";
 import {
   buildWatchTargets,
@@ -82,24 +78,27 @@ export function FilesPane({
     [worktreeId],
   );
 
-  const applyTreeUpdate = useCallback((relativePath: string, nextNodes: FileTreeNode[]): void => {
-    updateFilesState((prev) => {
-      const nextTreeData =
-        relativePath === ROOT_DIRECTORY_PATH
-          ? nextNodes
-          : replaceNodeChildren(prev.treeData, relativePath, nextNodes);
+  const applyTreeUpdate = useCallback(
+    (relativePath: string, nextNodes: FileTreeNode[]): void => {
+      updateFilesState((prev) => {
+        const nextTreeData =
+          relativePath === ROOT_DIRECTORY_PATH
+            ? nextNodes
+            : replaceNodeChildren(prev.treeData, relativePath, nextNodes);
 
-      return {
-        ...prev,
-        treeData: nextTreeData,
-        loadedDirectories: retainLoadedDirectories(
-          new Set(prev.loadedDirectories).add(relativePath),
-          nextTreeData,
-        ),
-        expandedDirectories: normalizeExpandedDirectories(prev.expandedDirectories, nextTreeData),
-      };
-    });
-  }, [updateFilesState]);
+        return {
+          ...prev,
+          treeData: nextTreeData,
+          loadedDirectories: retainLoadedDirectories(
+            new Set(prev.loadedDirectories).add(relativePath),
+            nextTreeData,
+          ),
+          expandedDirectories: normalizeExpandedDirectories(prev.expandedDirectories, nextTreeData),
+        };
+      });
+    },
+    [updateFilesState],
+  );
 
   const loadDirectory = useCallback(
     async (relativePath = ROOT_DIRECTORY_PATH, force = false): Promise<void> => {
@@ -325,9 +324,7 @@ function FileTreeRow({
           )
         ) : null}
       </span>
-      <span
-        className={`file-tree-name ${node.kind} ${statusClass} ${isIgnored ? "ignored" : ""}`}
-      >
+      <span className={`file-tree-name ${node.kind} ${statusClass} ${isIgnored ? "ignored" : ""}`}>
         {node.name}
         {isLoading ? "..." : ""}
       </span>

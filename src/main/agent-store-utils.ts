@@ -21,10 +21,7 @@ function parseJsonLines(content: string): unknown[] {
     });
 }
 
-export function parseJsonLinesAs<T>(
-  content: string,
-  parser: (entry: unknown) => T | null,
-): T[] {
+export function parseJsonLinesAs<T>(content: string, parser: (entry: unknown) => T | null): T[] {
   return parseJsonLines(content).flatMap((entry) => {
     const parsed = parser(entry);
     return parsed ? [parsed] : [];

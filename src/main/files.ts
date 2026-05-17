@@ -86,10 +86,7 @@ function splitNulSeparated(text: string): string[] {
   return parts;
 }
 
-export async function listFiles(
-  workingRoot: string,
-  relativePath = "",
-): Promise<FileTreeNode[]> {
+export async function listFiles(workingRoot: string, relativePath = ""): Promise<FileTreeNode[]> {
   const targetPath = resolveSessionPath(workingRoot, relativePath);
   const entries = await fs.promises.readdir(targetPath, { withFileTypes: true });
 

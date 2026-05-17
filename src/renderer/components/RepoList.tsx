@@ -1,5 +1,12 @@
 import { GitBranch } from "lucide-react";
-import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 import type { AgentDefinition } from "../../shared/agent";
 import type {
   PrimarySessionListItem,
@@ -87,9 +94,7 @@ export function RepoList({
                   onCloseActionSurface={() => setOpenActionWorktreeId(null)}
                   onToggleActionSurface={() => {
                     setOpenActionWorktreeId((prev) =>
-                      prev === taskWorktree.worktreeId
-                        ? null
-                        : taskWorktree.worktreeId,
+                      prev === taskWorktree.worktreeId ? null : taskWorktree.worktreeId,
                     );
                   }}
                   onSelectActiveSession={onSelectActiveSession}
@@ -201,7 +206,9 @@ function TaskWorktreeCard({
             primarySession={primarySession}
           />
         ) : (
-          <span className="task-worktree-hint">{formatExistingSessionCount(suggestedSessions.length)}</span>
+          <span className="task-worktree-hint">
+            {formatExistingSessionCount(suggestedSessions.length)}
+          </span>
         )}
       </div>
       {!primarySession && isActionSurfaceOpen && (
@@ -285,10 +292,7 @@ function TaskWorktreeActionSurface({
               onClick={() => onCreateSessionForWorktree(worktreeId, provider.id)}
               title={`Start new ${provider.label} session`}
             >
-              <span
-                className={`session-provider-dot provider-${provider.id}`}
-                aria-hidden="true"
-              />
+              <span className={`session-provider-dot provider-${provider.id}`} aria-hidden="true" />
               <span className="action-surface-row-main">{provider.label}</span>
             </button>
           ))}
@@ -308,11 +312,9 @@ function SuggestedSessionAction({ suggestedSession, onSelect }: SuggestedSession
   const providerName = providerLabel(suggestedSession.provider);
   const isActive = suggestedSession.state === "active";
   const timestamp = formatSessionTimestamp(suggestedSession.timestamp);
-  const meta = [
-    providerName,
-    isActive ? "active" : null,
-    timestamp,
-  ].filter((value) => value !== null && value !== "").join(" · ");
+  const meta = [providerName, isActive ? "active" : null, timestamp]
+    .filter((value) => value !== null && value !== "")
+    .join(" · ");
   return (
     <button
       type="button"
@@ -349,7 +351,12 @@ function renderWorktreeLabel(taskWorktree: TaskWorktreeListItem): ReactNode {
   }
   return (
     <>
-      <GitBranch className="task-worktree-branch-icon" size={12} strokeWidth={2} aria-hidden="true" />
+      <GitBranch
+        className="task-worktree-branch-icon"
+        size={12}
+        strokeWidth={2}
+        aria-hidden="true"
+      />
       {text}
     </>
   );

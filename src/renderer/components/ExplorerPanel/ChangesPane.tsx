@@ -19,7 +19,11 @@ export function ChangesPane({
   const sections = buildChangeSections({ stagedFiles, unstagedFiles });
 
   if (sections.length === 0) {
-    return <div className="changes-list"><div className="empty-changes">No changes</div></div>;
+    return (
+      <div className="changes-list">
+        <div className="empty-changes">No changes</div>
+      </div>
+    );
   }
 
   return (

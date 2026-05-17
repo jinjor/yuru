@@ -20,8 +20,7 @@ interface SessionViewProps {
 
 function isPathChanged(states: readonly GitPathState[], path: string): boolean {
   return states.some(
-    (entry) =>
-      !entry.ignored && (entry.indexStatus || entry.worktreeStatus) && entry.path === path,
+    (entry) => !entry.ignored && (entry.indexStatus || entry.worktreeStatus) && entry.path === path,
   );
 }
 
@@ -130,10 +129,7 @@ export function SessionView({
     setIsLoadingDiff(true);
 
     const fetchDiff = async (showLoader: boolean): Promise<void> => {
-      const result = await window.electronAPI.getGitDiffDocument(
-        worktreeId,
-        previewPath,
-      );
+      const result = await window.electronAPI.getGitDiffDocument(worktreeId, previewPath);
       if (cancelled) {
         return;
       }

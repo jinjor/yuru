@@ -103,10 +103,13 @@ async function loadGitHubPullRequests(
 ): Promise<Map<string, GitHubPullRequest | null>> {
   const entries = await Promise.all(
     repoEntries.flatMap(({ repo, gitWorktrees }) =>
-      gitWorktrees.map(async (gitWorktree) => [
-        gitWorktree.path,
-        await loadGitHubPullRequest(repo.repoPath, gitWorktree.branch),
-      ] as const),
+      gitWorktrees.map(
+        async (gitWorktree) =>
+          [
+            gitWorktree.path,
+            await loadGitHubPullRequest(repo.repoPath, gitWorktree.branch),
+          ] as const,
+      ),
     ),
   );
   return new Map(entries);
@@ -131,12 +134,11 @@ function toTaskWorktreeListItem(
     ? toSessionKey(primarySession.provider, primarySession.providerSessionId)
     : null;
   const activeRuntimeSessionId = primarySessionKey
-    ? activeRuntimeSessionIdsByKey?.get(primarySessionKey) ?? null
+    ? (activeRuntimeSessionIdsByKey?.get(primarySessionKey) ?? null)
     : null;
-  const activeRuntimeSession =
-    primarySession
-      ? null
-      : activeRuntimeSessionsByWorktreePath?.get(toWorktreePathKey(worktreePath)) ?? null;
+  const activeRuntimeSession = primarySession
+    ? null
+    : (activeRuntimeSessionsByWorktreePath?.get(toWorktreePathKey(worktreePath)) ?? null);
   const suggestedSessionItems = toSuggestedSessionListItems(
     suggestedSessions,
     new Set([primarySessionKey].filter((key) => key !== null)),
@@ -150,23 +152,24 @@ function toTaskWorktreeListItem(
     name: path.basename(worktreePath),
     branch: gitWorktree.branch,
     headSha: gitWorktree.headSha,
-    primarySession: primarySession && primarySessionKey
-      ? {
-          provider: primarySession.provider,
-          providerSessionKey: primarySessionKey,
-          activeRuntimeSessionId,
-          state: activeRuntimeSessionId ? "active" : "inactive",
-          preview: primarySessionPreviewsByKey?.get(primarySessionKey) ?? "",
-        }
-      : activeRuntimeSession
+    primarySession:
+      primarySession && primarySessionKey
         ? {
-            provider: activeRuntimeSession.provider,
-            providerSessionKey: null,
-            activeRuntimeSessionId: activeRuntimeSession.runtimeSessionId,
-            state: "active",
-            preview: "",
+            provider: primarySession.provider,
+            providerSessionKey: primarySessionKey,
+            activeRuntimeSessionId,
+            state: activeRuntimeSessionId ? "active" : "inactive",
+            preview: primarySessionPreviewsByKey?.get(primarySessionKey) ?? "",
           }
-        : undefined,
+        : activeRuntimeSession
+          ? {
+              provider: activeRuntimeSession.provider,
+              providerSessionKey: null,
+              activeRuntimeSessionId: activeRuntimeSession.runtimeSessionId,
+              state: "active",
+              preview: "",
+            }
+          : undefined,
     suggestedSessions: suggestedSessionItems,
   };
 

@@ -17,7 +17,9 @@ interface WorktreeSessionScore {
 
 async function loadStoredSessionSnapshots() {
   return (
-    await Promise.all(Object.values(sessionProviders).map((provider) => provider.loadStoredSessions()))
+    await Promise.all(
+      Object.values(sessionProviders).map((provider) => provider.loadStoredSessions()),
+    )
   ).flat();
 }
 
@@ -44,7 +46,9 @@ export async function loadSuggestedWorktreeSessions(
   );
   const hints = (
     await Promise.all(
-      Object.values(sessionProviders).map((provider) => provider.loadWorktreeSessionHints(worktreePaths)),
+      Object.values(sessionProviders).map((provider) =>
+        provider.loadWorktreeSessionHints(worktreePaths),
+      ),
     )
   )
     .flat()

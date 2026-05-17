@@ -10,13 +10,13 @@ import type {
   SessionSnapshot,
   WorktreeContext,
 } from "../../agent.js";
-import { listFilesRecursive, parseJsonLinesAs, readTextFileIfExists } from "../../agent-store-utils.js";
-import type { WorktreeSessionHint } from "../../worktree-session-detection.js";
 import {
-  codexWorktreeCwd,
-  getCodexHistoryPath,
-  getCodexSessionsDir,
-} from "./paths.js";
+  listFilesRecursive,
+  parseJsonLinesAs,
+  readTextFileIfExists,
+} from "../../agent-store-utils.js";
+import type { WorktreeSessionHint } from "../../worktree-session-detection.js";
+import { codexWorktreeCwd, getCodexHistoryPath, getCodexSessionsDir } from "./paths.js";
 import { loadWorktreeContextPrompt } from "../../worktree-context-prompt.js";
 import {
   detectCodexWorktreeSessionLines,
@@ -183,9 +183,7 @@ async function loadWorktreeSessionHints(
           { providerSessionId: meta.providerSessionId, cwd: meta.project },
           lines,
           worktreePaths,
-        ).filter((hint) =>
-          worktreePathKeys.has(path.resolve(hint.worktreePath)),
-        ),
+        ).filter((hint) => worktreePathKeys.has(path.resolve(hint.worktreePath))),
       );
     }),
   );

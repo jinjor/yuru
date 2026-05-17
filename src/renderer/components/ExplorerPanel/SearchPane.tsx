@@ -285,8 +285,7 @@ function SearchFileGroup({
         <button
           key={`${file.path}:${match.lineNumber}:${index}`}
           className={`code-search-match-row ${selectedIndex === index ? "selected" : ""} ${
-            previewSelection?.path === file.path &&
-            previewSelection?.line === match.lineNumber
+            previewSelection?.path === file.path && previewSelection?.line === match.lineNumber
               ? "previewed"
               : ""
           }`}
@@ -304,10 +303,7 @@ function SearchFileGroup({
   );
 }
 
-function renderHighlightedLine(
-  line: string,
-  ranges: CodeSearchRange[],
-): React.ReactNode {
+function renderHighlightedLine(line: string, ranges: CodeSearchRange[]): React.ReactNode {
   if (ranges.length === 0) {
     return line || " ";
   }

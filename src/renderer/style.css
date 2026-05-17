@@ -775,7 +775,9 @@ button.github-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: background 120ms ease, color 120ms ease;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
 }
 
 .panel-tab:hover {

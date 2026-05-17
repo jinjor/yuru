@@ -99,9 +99,7 @@ async function loadOriginalBuffer(cwd: string, filePath: string): Promise<Buffer
 
 export async function getGitDiffDocument(cwd: string, filePath: string): Promise<GitDiffDocument> {
   const currentPath = path.join(cwd, filePath);
-  const currentBuffer = fs.existsSync(currentPath)
-    ? await fs.promises.readFile(currentPath)
-    : null;
+  const currentBuffer = fs.existsSync(currentPath) ? await fs.promises.readFile(currentPath) : null;
   const changed = await isPathChanged(cwd, filePath);
   const originalBuffer = changed ? await loadOriginalBuffer(cwd, filePath) : currentBuffer;
   const isBinary = [originalBuffer, currentBuffer].some((buffer) => buffer?.includes(0));

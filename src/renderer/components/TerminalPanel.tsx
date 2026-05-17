@@ -85,7 +85,8 @@ export function TerminalPanel({
         }
 
         const lineText = line.translateToString();
-        const matches: { text: string; filePath: string; startIndex: number; fileLine?: number }[] = [];
+        const matches: { text: string; filePath: string; startIndex: number; fileLine?: number }[] =
+          [];
         let match: RegExpExecArray | null;
         filePathPattern.lastIndex = 0;
         while ((match = filePathPattern.exec(lineText)) !== null) {

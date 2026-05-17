@@ -30,10 +30,7 @@ export function findRepoByPath(repoPath: string): RepoMetadata | null {
   return loadRepos().find((repo) => repo.repoPath === repoPath) ?? null;
 }
 
-export function upsertTaskWorktree(
-  repoId: string,
-  worktreePath: string,
-): void {
+export function upsertTaskWorktree(repoId: string, worktreePath: string): void {
   const metadata = loadMetadata();
   const worktreePathKey = toWorktreePathKey(worktreePath);
   const existing = metadata.taskWorktrees.find(
@@ -159,13 +156,8 @@ function parseTaskWorktree(value: unknown): TaskWorktreeMetadata {
     worktreePath?: unknown;
     primarySession?: unknown;
   };
-  if (
-    typeof maybe.repoId !== "string" ||
-    typeof maybe.worktreePath !== "string"
-  ) {
-    throw new Error(
-      "Yuru metadata taskWorktree entries must have string repoId and worktreePath.",
-    );
+  if (typeof maybe.repoId !== "string" || typeof maybe.worktreePath !== "string") {
+    throw new Error("Yuru metadata taskWorktree entries must have string repoId and worktreePath.");
   }
   const entry: TaskWorktreeMetadata = {
     repoId: maybe.repoId,

@@ -14,19 +14,12 @@ import {
   parseJsonLinesAs,
   readTextFileIfExists,
 } from "../../agent-store-utils.js";
-import {
-  type WorktreeSessionHint,
-} from "../../worktree-session-detection.js";
+import { type WorktreeSessionHint } from "../../worktree-session-detection.js";
 import {
   detectClaudeWorktreeSessionLines,
   type ClaudeSessionLine,
 } from "./worktree-session-detection.js";
-import {
-  claudeHistoryPath,
-  claudeProjectsPath,
-  claudeWorktreeCwd,
-  pidFilePath,
-} from "./paths.js";
+import { claudeHistoryPath, claudeProjectsPath, claudeWorktreeCwd, pidFilePath } from "./paths.js";
 import { loadWorktreeContextPrompt } from "../../worktree-context-prompt.js";
 
 interface ClaudeHistoryEntry {
@@ -96,13 +89,15 @@ async function loadWorktreeSessionHints(
   const worktreePathKeys = new Set(worktreePaths.map((worktreePath) => path.resolve(worktreePath)));
   const hints: WorktreeSessionHint[] = [];
   await Promise.all(
-    Array.from(await listClaudeSessionLineMatches(worktreePaths)).map(async ([_filePath, lines]) => {
-      hints.push(
-        ...detectClaudeWorktreeSessionLines(lines, worktreePaths).filter((hint) =>
-          worktreePathKeys.has(path.resolve(hint.worktreePath)),
-        ),
-      );
-    }),
+    Array.from(await listClaudeSessionLineMatches(worktreePaths)).map(
+      async ([_filePath, lines]) => {
+        hints.push(
+          ...detectClaudeWorktreeSessionLines(lines, worktreePaths).filter((hint) =>
+            worktreePathKeys.has(path.resolve(hint.worktreePath)),
+          ),
+        );
+      },
+    ),
   );
 
   return hints;
@@ -124,7 +119,13 @@ async function listClaudeSessionLineMatches(
   try {
     const output = await exec(
       "rg",
-      ["--json", "--hidden", ...patterns.flatMap((pattern) => ["--regexp", pattern]), "--", projectsDir],
+      [
+        "--json",
+        "--hidden",
+        ...patterns.flatMap((pattern) => ["--regexp", pattern]),
+        "--",
+        projectsDir,
+      ],
       projectsDir,
     );
     return parseRipgrepJsonLineMatches(output);
@@ -206,13 +207,15 @@ function stripTrailingLineBreak(line: string): string {
 }
 
 async function hasStoredSession(providerSessionId: string): Promise<boolean> {
-  if ((await loadStoredSessions()).some((session) => session.providerSessionId === providerSessionId)) {
+  if (
+    (await loadStoredSessions()).some((session) => session.providerSessionId === providerSessionId)
+  ) {
     return true;
   }
 
   const sessionFileName = `${providerSessionId}.jsonl`;
-  return (await listFilesRecursive(claudeProjectsPath())).some(
-    (filePath) => filePath.endsWith(`/${sessionFileName}`),
+  return (await listFilesRecursive(claudeProjectsPath())).some((filePath) =>
+    filePath.endsWith(`/${sessionFileName}`),
   );
 }
 

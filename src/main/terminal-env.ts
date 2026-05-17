@@ -5,7 +5,9 @@ export function createTerminalEnv(
   provider?: SessionProvider,
 ): Record<string, string> {
   const env = Object.fromEntries(
-    Object.entries(baseEnv).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+    Object.entries(baseEnv).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    ),
   );
 
   // The embedded terminal is color-capable even if the parent shell opted out.

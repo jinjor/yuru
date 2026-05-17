@@ -46,17 +46,16 @@ function parseClaudeCwdEntry(entry: unknown): ClaudeCwdEntry | null {
 }
 
 function parseJsonLineEntries(lines: readonly ClaudeSessionLine[]): JsonLineEntry[] {
-  return lines
-    .flatMap((line) => {
-      if (!line.text) {
-        return [];
-      }
-      try {
-        return [{ entry: JSON.parse(line.text) as unknown, lineIndex: line.lineIndex }];
-      } catch {
-        return [];
-      }
-    });
+  return lines.flatMap((line) => {
+    if (!line.text) {
+      return [];
+    }
+    try {
+      return [{ entry: JSON.parse(line.text) as unknown, lineIndex: line.lineIndex }];
+    } catch {
+      return [];
+    }
+  });
 }
 
 function parseContentLines(content: string): ClaudeSessionLine[] {

@@ -178,9 +178,7 @@ export function createEmptyCodeSearchResult(query: string, limit: number): CodeS
   };
 }
 
-function parseJsonLine(
-  line: string,
-): ParsedCodeSearchMatch | null {
+function parseJsonLine(line: string): ParsedCodeSearchMatch | null {
   if (line.trim().length === 0) {
     return null;
   }

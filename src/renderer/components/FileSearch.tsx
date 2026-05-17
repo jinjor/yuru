@@ -36,15 +36,13 @@ export function FileSearch({ onClose, onSelectFile, worktreeId }: FileSearchProp
 
   useEffect(() => {
     let cancelled = false;
-    window.electronAPI
-      .listAllFiles(worktreeId)
-      .then((result) => {
-        if (cancelled) {
-          return;
-        }
-        const paths = resultDataOrNull(result) ?? [];
-        setCandidates(paths.map(toCandidate));
-      });
+    window.electronAPI.listAllFiles(worktreeId).then((result) => {
+      if (cancelled) {
+        return;
+      }
+      const paths = resultDataOrNull(result) ?? [];
+      setCandidates(paths.map(toCandidate));
+    });
     return () => {
       cancelled = true;
     };
@@ -207,7 +205,10 @@ function toCandidate(filePath: string): FileCandidate {
 }
 
 function scoreCandidates(candidates: FileCandidate[], query: string): ScoredResult[] {
-  const terms = query.toLowerCase().split(/\s+/).filter((term) => term.length > 0);
+  const terms = query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((term) => term.length > 0);
   if (terms.length === 0) {
     return [];
   }

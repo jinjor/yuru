@@ -160,17 +160,16 @@ function parseCodexPatchApplyChanges(entry: unknown): CodexPatchApplyChanges | n
 }
 
 function parseJsonLineEntries(lines: readonly CodexSessionLine[]): JsonLineEntry[] {
-  return lines
-    .flatMap((line) => {
-      if (!line.text) {
-        return [];
-      }
-      try {
-        return [{ entry: JSON.parse(line.text) as unknown, lineIndex: line.lineIndex }];
-      } catch {
-        return [];
-      }
-    });
+  return lines.flatMap((line) => {
+    if (!line.text) {
+      return [];
+    }
+    try {
+      return [{ entry: JSON.parse(line.text) as unknown, lineIndex: line.lineIndex }];
+    } catch {
+      return [];
+    }
+  });
 }
 
 function parseContentLines(content: string): CodexSessionLine[] {
@@ -207,11 +206,7 @@ export function detectCodexWorktreeSessionLines(
   lines: readonly CodexSessionLine[],
   worktreePaths: readonly string[],
 ): WorktreeSessionHint[] {
-  return detectCodexWorktreeSessionEntries(
-    sessionMeta,
-    parseJsonLineEntries(lines),
-    worktreePaths,
-  );
+  return detectCodexWorktreeSessionEntries(sessionMeta, parseJsonLineEntries(lines), worktreePaths);
 }
 
 function detectCodexWorktreeSessionEntries(
@@ -221,11 +216,7 @@ function detectCodexWorktreeSessionEntries(
 ): WorktreeSessionHint[] {
   const evidencesByWorktreePath = new Map<string, CodexWorktreeEvidence>();
 
-  const addEvidence = (
-    worktreePath: string,
-    evidenceRank: number,
-    sequence: number,
-  ): void => {
+  const addEvidence = (worktreePath: string, evidenceRank: number, sequence: number): void => {
     const nextEvidence = { worktreePath, evidenceRank, sequence };
     const existing = evidencesByWorktreePath.get(worktreePath);
     if (existing && compareCodexWorktreeEvidence(nextEvidence, existing) >= 0) {
@@ -287,10 +278,7 @@ function detectCodexWorktreeSessionEntries(
     );
 }
 
-function compareCodexWorktreeEvidence(
-  a: CodexWorktreeEvidence,
-  b: CodexWorktreeEvidence,
-): number {
+function compareCodexWorktreeEvidence(a: CodexWorktreeEvidence, b: CodexWorktreeEvidence): number {
   const evidenceOrder = a.evidenceRank - b.evidenceRank;
   if (evidenceOrder !== 0) {
     return evidenceOrder;

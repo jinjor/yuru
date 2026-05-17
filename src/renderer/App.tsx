@@ -1,4 +1,10 @@
-import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useRef, useState } from "react";
+import {
+  type MouseEvent as ReactMouseEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import "@xterm/xterm/css/xterm.css";
 import type { AgentDefinition } from "../shared/agent";
 import type { RepoListItem, TaskWorktreeListItem } from "../shared/metadata";
@@ -99,10 +105,7 @@ export function App() {
   const handleResumePrimarySession = useCallback(
     async (worktreeId: string, providerSessionKey: string): Promise<void> => {
       const requestId = ++resumeRequestRef.current;
-      const result = await window.electronAPI.resumePrimarySession(
-        worktreeId,
-        providerSessionKey,
-      );
+      const result = await window.electronAPI.resumePrimarySession(worktreeId, providerSessionKey);
       if (resumeRequestRef.current !== requestId) {
         return;
       }
