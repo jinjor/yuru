@@ -10,9 +10,16 @@ const cliPath = path.resolve("scripts/yuru-cli.mjs");
 function read(command, args, cwd) {
   return execFileSync(command, args, {
     cwd,
+    env: cleanGitEnv(process.env),
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   }).trim();
+}
+
+function cleanGitEnv(env) {
+  const next = { ...env };
+  delete next.GIT_DIR;
+  return next;
 }
 
 test("yuru add registers the current Git repository once", (t) => {
@@ -25,9 +32,17 @@ test("yuru add registers the current Git repository once", (t) => {
   const nestedDir = path.join(repoDir, "src");
   const yuruHome = path.join(tempDir, "home");
   fs.mkdirSync(nestedDir, { recursive: true });
-  execFileSync("git", ["init"], { cwd: repoDir, stdio: "ignore" });
+  execFileSync("git", ["init"], {
+    cwd: repoDir,
+    env: cleanGitEnv(process.env),
+    stdio: "ignore",
+  });
 
-  const env = { ...process.env, YURU_HOME: yuruHome };
+  const env = {
+    ...process.env,
+    GIT_DIR: "/nonexistent-yuru-test-git-dir",
+    YURU_HOME: yuruHome,
+  };
   const firstOutput = execFileSync(process.execPath, [cliPath, "add"], {
     cwd: nestedDir,
     env,

@@ -23,6 +23,12 @@ const allowedRemotes = new Set([
 // It helps catch accidental remote drift, such as a forgotten fork origin.
 // Anyone who can edit this file or the managed checkout can also bypass this check.
 
+function withoutGitDir(env) {
+  const next = { ...env };
+  delete next.GIT_DIR;
+  return next;
+}
+
 function printHelp() {
   console.log(`Usage: yuru [command]
 
@@ -35,23 +41,25 @@ Commands:
 }
 
 function run(command, args, options = {}) {
+  const { env = process.env, ...rest } = options;
   const result = execFileSync(command, args, {
     cwd: repoDir,
     stdio: "inherit",
-    env: process.env,
-    ...options,
+    ...rest,
+    env: withoutGitDir(env),
   });
 
   return result;
 }
 
 function read(command, args, options = {}) {
+  const { env = process.env, ...rest } = options;
   return execFileSync(command, args, {
     cwd: repoDir,
     encoding: "utf8",
-    env: process.env,
     stdio: ["ignore", "pipe", "pipe"],
-    ...options,
+    ...rest,
+    env: withoutGitDir(env),
   }).trim();
 }
 
