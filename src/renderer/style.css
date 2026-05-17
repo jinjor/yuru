@@ -274,7 +274,17 @@ body,
   min-height: 60px;
 }
 
+.task-worktree-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .task-worktree-name {
+  display: block;
+  flex: 1;
+  min-width: 0;
   font-size: 13px;
   line-height: 1.15;
   font-weight: 700;
@@ -288,6 +298,10 @@ body,
   vertical-align: -2px;
   margin-right: 5px;
   color: var(--text-subtle);
+}
+
+.task-worktree-heading .github-badge {
+  flex-shrink: 0;
 }
 
 .task-worktree-hint {

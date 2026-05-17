@@ -10,7 +10,7 @@ export interface SuggestedWorktreeSession {
 export interface GitHubPullRequest {
   prNumber: number;
   state: "open" | "merged" | "closed";
-  url?: string;
+  url: string;
 }
 
 export function toSessionKey(provider: SessionProvider, providerSessionId: string): string {

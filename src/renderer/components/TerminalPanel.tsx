@@ -232,9 +232,7 @@ export function TerminalPanel({
             <GitHubBadge
               github={currentGitHub}
               onClick={() => {
-                if (currentGitHub.url) {
-                  onOpenExternal(currentGitHub.url);
-                }
+                onOpenExternal(currentGitHub.url);
               }}
             />
           )}

@@ -8,7 +8,7 @@ interface GitHubBadgeProps {
 }
 
 export function GitHubBadge({ github, onClick }: GitHubBadgeProps) {
-  if (github.url) {
+  if (onClick) {
     return (
       <button
         type="button"
@@ -16,7 +16,7 @@ export function GitHubBadge({ github, onClick }: GitHubBadgeProps) {
         onClick={onClick}
         title={github.url}
       >
-        <GitPullRequest size={11} strokeWidth={2} />
+        <GitPullRequest size={11} strokeWidth={2} aria-hidden="true" />
         {gitHubBadgeLabel(github)}
       </button>
     );
@@ -24,7 +24,7 @@ export function GitHubBadge({ github, onClick }: GitHubBadgeProps) {
 
   return (
     <span className={gitHubBadgeClass(github)} title={github.url}>
-      <GitPullRequest size={11} strokeWidth={2} />
+      <GitPullRequest size={11} strokeWidth={2} aria-hidden="true" />
       {gitHubBadgeLabel(github)}
     </span>
   );

@@ -1,4 +1,4 @@
-import type { SessionProvider } from "./session.js";
+import type { GitHubPullRequest, SessionProvider } from "./session.js";
 
 export interface RepoMetadata {
   id: string;
@@ -42,6 +42,7 @@ export interface TaskWorktreeListItem {
   name: string;
   branch: string | null;
   headSha: string;
+  githubPullRequest?: GitHubPullRequest | null;
   primarySession?: PrimarySessionListItem;
   suggestedSessions: SuggestedSessionListItem[];
 }

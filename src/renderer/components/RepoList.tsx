@@ -9,6 +9,7 @@ import type {
 } from "../../shared/metadata";
 import type { RuntimeSessionId, SessionProvider } from "../../shared/session";
 import { providerLabel } from "../utils/session";
+import { GitHubBadge } from "./GitHubBadge";
 
 interface RepoListProps {
   repos: RepoListItem[];
@@ -186,8 +187,13 @@ function TaskWorktreeCard({
       onKeyDown={handleCardKeyDown}
     >
       <div className="task-worktree-summary">
-        <span className="task-worktree-name" title={worktreeLabelText(taskWorktree)}>
-          {renderWorktreeLabel(taskWorktree)}
+        <span className="task-worktree-heading">
+          <span className="task-worktree-name" title={worktreeLabelText(taskWorktree)}>
+            {renderWorktreeLabel(taskWorktree)}
+          </span>
+          {taskWorktree.githubPullRequest && (
+            <GitHubBadge github={taskWorktree.githubPullRequest} />
+          )}
         </span>
         {primarySession ? (
           <PrimarySessionSummary
