@@ -11,15 +11,15 @@ process.env.YURU_HOME = tempDir;
 
 const {
   attachPrimarySessionByPath,
-  cleanupStaleTaskWorktrees,
   findRepoByPath,
   loadMetadata,
-  loadRepoList,
   parseMetadata,
   removeTaskWorktreeByPath,
-  toWorktreeId,
   upsertTaskWorktree,
 } = await import("../../src/main/metadata.ts");
+const { loadRepoList } = await import("../../src/main/repo-list.ts");
+const { cleanupStaleTaskWorktrees } = await import("../../src/main/task-worktree-maintenance.ts");
+const { toWorktreeId } = await import("../../src/main/worktree-identity.ts");
 const { toSessionKey } = await import("../../src/shared/session.ts");
 
 function reset() {

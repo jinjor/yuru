@@ -4,16 +4,16 @@ import path from "path";
 import * as pty from "node-pty";
 import {
   attachPrimarySessionByPath,
-  cleanupStaleTaskWorktrees,
   detachPrimarySessionByPath,
   findRepoByPath,
-  loadRepoList,
   loadRepos,
   loadTaskWorktrees,
   removeTaskWorktreeByPath,
-  toWorktreeId,
   upsertTaskWorktree,
 } from "./metadata.js";
+import { loadRepoList } from "./repo-list.js";
+import { cleanupStaleTaskWorktrees } from "./task-worktree-maintenance.js";
+import { toWorktreeId } from "./worktree-identity.js";
 import {
   loadStoredSessionPreviews,
   loadSuggestedWorktreeSessions,
