@@ -63,6 +63,30 @@ export interface GitDiffDocument {
   size: number;
 }
 
+export interface CodeSearchRange {
+  start: number;
+  end: number;
+}
+
+export interface CodeSearchMatch {
+  lineNumber: number;
+  line: string;
+  ranges: CodeSearchRange[];
+}
+
+export interface CodeSearchFileResult {
+  path: string;
+  matches: CodeSearchMatch[];
+}
+
+export interface CodeSearchResult {
+  query: string;
+  files: CodeSearchFileResult[];
+  matchCount: number;
+  limit: number;
+  truncated: boolean;
+}
+
 export interface BranchContext {
   branch: string | null;
   github: GitHubPullRequest | null;
@@ -101,6 +125,8 @@ export interface ElectronAPI {
   listAllFiles: (runtimeSessionId: RuntimeSessionId) => Promise<Result<string[]>>;
   resolveRepoFile: (runtimeSessionId: RuntimeSessionId, filePath: string) => Promise<string | null>;
   syncFileWatchTargets: (runtimeSessionId: RuntimeSessionId, relativePaths: string[]) => Promise<void>;
+  searchCode: (runtimeSessionId: RuntimeSessionId, query: string) => Promise<Result<CodeSearchResult>>;
+  cancelCodeSearch: (runtimeSessionId: RuntimeSessionId) => Promise<void>;
   onErrorAdded: (callback: (error: AppErrorNotice) => void) => void;
   onErrorRemoved: (callback: (id: string) => void) => void;
   onErrorsCleared: (callback: () => void) => void;

@@ -27,7 +27,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | ID | Type | Area | Item | Why now |
 |---|---|---|---|---|
 | F38 | feature | Tests | provider 挙動の integration / e2e テスト基盤 | `design-properties.md` の性質（resume prompt 出ない、context 注入が hidden、etc.）を回帰検出したい。今は spike の手動検証のみ |
-| F15 | feature | Search | コード検索 | 選択中 task worktree 全体を横断してすぐ探したい。詳細: docs/backlog-details/F15-code-search.md |
 | F20 | feature | App | アプリのアイコンを付ける | テンションとプロダクト感を上げたい |
 | P11 | polish | Sessions | 最新会話プレビューが一覧に同期されない問題を直す | 一覧の情報鮮度が低い |
 | F16 | feature | GitHub | セッションカードに PR の有無と状態を表示する | GitHub 連携として早めに価値が出そう |

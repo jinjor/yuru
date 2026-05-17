@@ -3,7 +3,7 @@ import { type CSSProperties, useCallback, useEffect, useRef, useState } from "re
 import type { GitDiffDocument, GitPathState } from "../../shared/ipc";
 import type { GitHubPullRequest } from "../../shared/session";
 import { DiffPreviewPanel } from "./DiffPreviewPanel";
-import { ExplorerPanel } from "./ExplorerPanel";
+import { ExplorerPanel, type ExplorerTab } from "./ExplorerPanel";
 import { FileSearch } from "./FileSearch";
 import { TerminalPanel } from "./TerminalPanel";
 import { usePaneLayout } from "../hooks/usePaneLayout";
@@ -40,6 +40,8 @@ export function SessionView({
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
   const [currentGitHub, setCurrentGitHub] = useState<GitHubPullRequest | null>(null);
   const [isFileSearchOpen, setIsFileSearchOpen] = useState(false);
+  const [explorerTab, setExplorerTab] = useState<ExplorerTab>("changes");
+  const [searchFocusRequest, setSearchFocusRequest] = useState(0);
   const paneLayout = usePaneLayout({
     appRef,
     sidebarWidth,
@@ -68,12 +70,19 @@ export function SessionView({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
       const isPaletteShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "p";
-      if (!isPaletteShortcut) {
+      const isCodeSearchShortcut =
+        (event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "f";
+      if (!isPaletteShortcut && !isCodeSearchShortcut) {
         return;
       }
       event.preventDefault();
       event.stopPropagation();
-      setIsFileSearchOpen((prev) => !prev);
+      if (isPaletteShortcut) {
+        setIsFileSearchOpen((prev) => !prev);
+        return;
+      }
+      setExplorerTab("search");
+      setSearchFocusRequest((prev) => prev + 1);
     };
     window.addEventListener("keydown", handleKeyDown, true);
     return () => {
@@ -201,9 +210,17 @@ export function SessionView({
             aria-hidden="true"
           />
           <ExplorerPanel
+            activeTab={explorerTab}
             gitPathStates={gitPathStates}
             onPreviewSelectionChange={setPreviewSelection}
+            onTabChange={(tab) => {
+              setExplorerTab(tab);
+              if (tab === "search") {
+                setSearchFocusRequest((prev) => prev + 1);
+              }
+            }}
             previewSelection={previewSelection}
+            searchFocusRequest={searchFocusRequest}
             width={paneLayout.changesPanelWidth}
             worktreeId={worktreeId}
           />

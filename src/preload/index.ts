@@ -28,6 +28,10 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke("files:resolveRepoFile", runtimeSessionId, filePath),
   syncFileWatchTargets: (runtimeSessionId: string, relativePaths: string[]) =>
     ipcRenderer.invoke("files:syncWatchTargets", runtimeSessionId, relativePaths),
+  searchCode: (runtimeSessionId: string, query: string) =>
+    ipcRenderer.invoke("search:code", runtimeSessionId, query),
+  cancelCodeSearch: (runtimeSessionId: string) =>
+    ipcRenderer.invoke("search:cancelCode", runtimeSessionId),
   onErrorAdded: (callback) =>
     ipcRenderer.on("errors:added", (_event, error) => callback(error)),
   onErrorRemoved: (callback) =>

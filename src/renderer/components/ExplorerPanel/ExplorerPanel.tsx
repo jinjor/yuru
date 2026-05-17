@@ -1,29 +1,36 @@
-import { useState } from "react";
 import type { GitPathState } from "../../../shared/ipc";
 import { useElementSize } from "../../hooks/useElementSize";
 import type { PreviewSelection } from "../../types";
 import { buildChangedFiles, buildStagedFiles, buildUnstagedFiles } from "../../utils/git";
 import { ChangesPane } from "./ChangesPane";
 import { FilesPane } from "./FilesPane";
+import { SearchPane } from "./SearchPane";
+
+export type ExplorerTab = "changes" | "files" | "search";
 
 interface ExplorerPanelProps {
+  activeTab: ExplorerTab;
   gitPathStates: readonly GitPathState[];
   onPreviewSelectionChange: (selection: PreviewSelection | null) => void;
+  onTabChange: (tab: ExplorerTab) => void;
   previewSelection: PreviewSelection | null;
+  searchFocusRequest: number;
   width: number;
   worktreeId: string;
 }
 
 export function ExplorerPanel({
+  activeTab,
   gitPathStates,
   onPreviewSelectionChange,
+  onTabChange,
   previewSelection,
+  searchFocusRequest,
   width,
   worktreeId,
 }: ExplorerPanelProps) {
   const [panelRef, panelSize] = useElementSize<HTMLDivElement>();
   const [headerRef, headerSize] = useElementSize<HTMLDivElement>();
-  const [activeTab, setActiveTab] = useState<"changes" | "files">("changes");
   const contentHeight = Math.max(panelSize.height - headerSize.height, 0);
   const changedFiles = buildChangedFiles(gitPathStates);
   const stagedFiles = buildStagedFiles(gitPathStates);
@@ -35,7 +42,7 @@ export function ExplorerPanel({
         <div className="panel-tabs">
           <button
             className={`panel-tab ${activeTab === "changes" ? "active" : ""}`}
-            onClick={() => setActiveTab("changes")}
+            onClick={() => onTabChange("changes")}
           >
             Changes
             <span className="panel-tab-count" aria-label={`${changedFiles.length} changed files`}>
@@ -44,9 +51,15 @@ export function ExplorerPanel({
           </button>
           <button
             className={`panel-tab ${activeTab === "files" ? "active" : ""}`}
-            onClick={() => setActiveTab("files")}
+            onClick={() => onTabChange("files")}
           >
             Files
+          </button>
+          <button
+            className={`panel-tab ${activeTab === "search" ? "active" : ""}`}
+            onClick={() => onTabChange("search")}
+          >
+            Search
           </button>
         </div>
       </div>
@@ -56,6 +69,13 @@ export function ExplorerPanel({
           previewSelection={previewSelection}
           stagedFiles={stagedFiles}
           unstagedFiles={unstagedFiles}
+        />
+      ) : activeTab === "search" ? (
+        <SearchPane
+          focusRequest={searchFocusRequest}
+          onPreviewSelectionChange={onPreviewSelectionChange}
+          previewSelection={previewSelection}
+          worktreeId={worktreeId}
         />
       ) : (
         <FilesPane

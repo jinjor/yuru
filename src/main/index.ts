@@ -34,6 +34,12 @@ import {
   listSessionProviderDefinitions,
 } from "./agent-registry.js";
 import {
+  CODE_SEARCH_RESULT_LIMIT,
+  createEmptyCodeSearchResult,
+  isCodeSearchCancelledError,
+  searchCode,
+} from "./code-search.js";
+import {
   type LaunchRequest,
   type PendingSession,
   type RuntimeSessionInfo,
@@ -72,6 +78,7 @@ const ptyScrollback = new Map<string, string>();
 const ptyAttachments = new Map<string, { ready: boolean; pendingChunks: string[] }>();
 const pendingProcesses = new Set<pty.IPty>();
 const sessionRuntimeMap = new Map<string, RuntimeSessionInfo>();
+const activeCodeSearches = new Map<string, AbortController>();
 let worktreeWatcher: WorktreeWatcher | null = null;
 const fileTreeWatcher = new FileTreeWatcher((runtimeSessionId, relativePath) => {
   if (!mainWindow || mainWindow.isDestroyed()) {
@@ -162,6 +169,15 @@ function isAppError(error: unknown): error is AppError {
   }
   const maybeError = error as { code?: unknown; message?: unknown };
   return typeof maybeError.code === "string" && typeof maybeError.message === "string";
+}
+
+function cancelActiveCodeSearch(worktreeId: string): void {
+  const activeSearch = activeCodeSearches.get(worktreeId);
+  if (!activeSearch) {
+    return;
+  }
+  activeSearch.abort();
+  activeCodeSearches.delete(worktreeId);
 }
 
 function getActiveRuntimeSessionIdsByKey(): Map<string, string> {
@@ -984,6 +1000,42 @@ app.whenReady().then(async () => {
     }
 
     await fileTreeWatcher.syncSessionTargets(worktreeId, workingRoot, relativePaths);
+  });
+
+  ipcMain.handle("search:code", async (_event, worktreeId: string, query: string) => {
+    cancelActiveCodeSearch(worktreeId);
+
+    const workingRoot = await getWorkingRootForWorktree(worktreeId);
+    if (!workingRoot) {
+      return fail({
+        code: "invalid_path",
+        message: "Selected worktree is no longer available.",
+      });
+    }
+
+    const controller = new AbortController();
+    activeCodeSearches.set(worktreeId, controller);
+    try {
+      return ok(
+        await searchCode(workingRoot, query, {
+          signal: controller.signal,
+          limit: CODE_SEARCH_RESULT_LIMIT,
+        }),
+      );
+    } catch (error) {
+      if (isCodeSearchCancelledError(error)) {
+        return ok(createEmptyCodeSearchResult(query, CODE_SEARCH_RESULT_LIMIT));
+      }
+      return fail(toAppError(error, { command: "rg" }));
+    } finally {
+      if (activeCodeSearches.get(worktreeId) === controller) {
+        activeCodeSearches.delete(worktreeId);
+      }
+    }
+  });
+
+  ipcMain.handle("search:cancelCode", (_event, worktreeId: string) => {
+    cancelActiveCodeSearch(worktreeId);
   });
 
   ipcMain.on("pty:write", (_event, runtimeSessionId: string, data: string) => {

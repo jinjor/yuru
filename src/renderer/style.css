@@ -904,6 +904,147 @@ button.github-badge {
   color: #566275;
 }
 
+/* Code search */
+.code-search-pane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.code-search-input-wrap {
+  padding: 10px 12px 8px;
+}
+
+.code-search-input {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 7px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-app);
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+}
+
+.code-search-input:focus {
+  border-color: var(--accent);
+}
+
+.code-search-status {
+  min-height: 28px;
+  padding: 0 14px 8px;
+  color: var(--text-subtle);
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+}
+
+.code-search-status.error {
+  color: var(--danger);
+}
+
+.code-search-results {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border-top: 1px solid var(--border);
+}
+
+.code-search-file-group + .code-search-file-group {
+  border-top: 1px solid var(--border);
+}
+
+.code-search-file-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  min-height: 30px;
+  padding: 7px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-panel);
+}
+
+.code-search-file-name {
+  min-width: 0;
+  max-width: 58%;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.code-search-file-dir {
+  min-width: 0;
+  flex: 1;
+  color: var(--text-subtle);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.code-search-file-count {
+  flex-shrink: 0;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  background: #222b39;
+}
+
+.code-search-match-row {
+  width: 100%;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.code-search-match-row:hover,
+.code-search-match-row.selected {
+  background: var(--bg-hover);
+}
+
+.code-search-match-row.previewed {
+  background: var(--bg-selected);
+}
+
+.code-search-line {
+  min-width: 0;
+  flex: 1;
+  color: #c4cddd;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre;
+}
+
+.code-search-highlight {
+  color: #ffe08a;
+  background: #4c3916;
+  border-radius: 3px;
+}
+
 /* Preview panel */
 .preview-panel {
   min-width: 0;
