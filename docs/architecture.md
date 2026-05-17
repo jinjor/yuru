@@ -113,6 +113,7 @@ PTY 内で `cd` しても、`Files`, `Changes`, diff の作業ルートは runti
 新規 worktree session 作成時は、まず Git worktree を作り、その場で provider session を開始する。
 provider session id が起動時に取れる場合はその場で primary に attach し、遅れて分かる provider は session id 解決後に attach する。
 初回起動時だけ worktree context を hidden prompt として注入する。
+この prompt は「provider session は repo root で起動しているが、実際の作業場所は task worktree である」ことを明示し、ファイル操作・コマンド実行・build/test は `worktreePath` で行うよう指示する。
 
 - Claude: `--append-system-prompt`
 - Codex: `-c developer_instructions=...`

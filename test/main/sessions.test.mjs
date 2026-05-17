@@ -92,8 +92,10 @@ test("provider worktree launch は repo root で起動して hidden context を�
     branchName: "feature/task-a",
   };
   const prompt =
-    "This session was opened via Yuru with the initial task worktree 'task-a' (branch 'feature/task-a') at " +
-    `${worktreePath}. The repository root is ${repoPath}.`;
+    "Yuru opened this session for the task worktree 'task-a' on branch 'feature/task-a'. " +
+    `Use ${worktreePath} as the working directory for this task. ` +
+    `When reading files, editing files, applying patches, running commands, building, or testing, operate in ${worktreePath}. ` +
+    `The repository root ${repoPath} is only the parent repository that Yuru used to launch this provider session; do not treat it as the task workspace unless the user explicitly asks you to.`;
 
   assert.deepEqual(await claudeProvider.createWorktreeLaunch(context), {
     cwd: repoPath,
