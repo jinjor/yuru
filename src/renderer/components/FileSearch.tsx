@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { resultDataOrNull } from "../utils/result";
+import { Modal } from "./Modal";
 
 interface FileSearchProps {
   onClose: () => void;
@@ -101,8 +102,8 @@ export function FileSearch({ onClose, onSelectFile, worktreeId }: FileSearchProp
   };
 
   return (
-    <div className="file-search-overlay" onClick={onClose}>
-      <div className="file-search" onClick={(event) => event.stopPropagation()}>
+    <Modal onClose={onClose} topOffset={100}>
+      <div className="file-search">
         <div className="file-search-input-wrap">
           <input
             autoFocus
@@ -129,7 +130,7 @@ export function FileSearch({ onClose, onSelectFile, worktreeId }: FileSearchProp
           ))}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 

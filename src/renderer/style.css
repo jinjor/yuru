@@ -1235,15 +1235,23 @@ button.github-badge {
 }
 
 /* Worktree Dialog */
-.repo-picker-overlay {
+.modal {
   position: fixed;
   inset: 0;
-  background: rgba(4, 7, 12, 0.56);
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding-top: 120px;
   z-index: 100;
+}
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(4, 7, 12, 0.56);
+}
+
+.modal-content {
+  position: relative;
 }
 
 .repo-picker {
@@ -1339,17 +1347,6 @@ button.github-badge {
 }
 
 /* File Search */
-.file-search-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(4, 7, 12, 0.56);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding-top: 100px;
-  z-index: 100;
-}
-
 .file-search {
   background: var(--bg-panel);
   border: 1px solid var(--border-strong);

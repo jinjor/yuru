@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { AgentDefinition } from "../../shared/agent";
 import type { SessionProvider } from "../../shared/session";
 import { generateDefaultBranch } from "../utils/branch";
+import { Modal } from "./Modal";
 
 interface BranchNameInputProps {
   error: string | null;
@@ -32,8 +33,8 @@ export function BranchNameInput({ error, providers, onCancel, onChange, onSubmit
   };
 
   return (
-    <div className="repo-picker-overlay" onClick={onCancel}>
-      <div className="repo-picker" onClick={(event) => event.stopPropagation()}>
+    <Modal onClose={onCancel} topOffset={120}>
+      <div className="repo-picker">
         <div className="repo-picker-header">Create Worktree</div>
         <div className="provider-picker">
           {providers.map((p) => (
@@ -78,6 +79,6 @@ export function BranchNameInput({ error, providers, onCancel, onChange, onSubmit
         )}
         {error && <div className="worktree-error">{error}</div>}
       </div>
-    </div>
+    </Modal>
   );
 }
