@@ -136,6 +136,31 @@ export function App() {
     [refreshRepos],
   );
 
+  const handleCreateSessionForWorktree = useCallback(
+    async (worktreeId: string, provider: SessionProvider): Promise<void> => {
+      const requestId = ++resumeRequestRef.current;
+      const result = await window.electronAPI.createSessionForWorktree(worktreeId, provider);
+      if (resumeRequestRef.current !== requestId) {
+        return;
+      }
+      if (!result.ok) {
+        return;
+      }
+
+      setSelection(result.data);
+      void refreshRepos().then((nextRepos) => {
+        setSelection((prev) => {
+          if (prev?.worktreeId !== result.data.worktreeId) {
+            return prev;
+          }
+          const runtimeSessionId = findActiveRuntimeSessionId(nextRepos, prev.worktreeId);
+          return runtimeSessionId ? { worktreeId: prev.worktreeId, runtimeSessionId } : prev;
+        });
+      });
+    },
+    [refreshRepos],
+  );
+
   const handleCreateWorktreeSession = useCallback(
     async (branchName: string, provider: SessionProvider): Promise<void> => {
       if (!worktreeTarget) {
@@ -185,6 +210,7 @@ export function App() {
             }
             onResumePrimarySession={handleResumePrimarySession}
             onResumeSuggestedSession={handleResumeSuggestedSession}
+            onCreateSessionForWorktree={handleCreateSessionForWorktree}
           />
         </div>
       </aside>

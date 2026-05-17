@@ -568,7 +568,13 @@ async function findSuggestedSession(
 
 async function findGitWorktree(
   worktreeId: string,
-): Promise<{ repoId: string; repoPath: string; worktreePath: string } | null> {
+): Promise<{
+  repoId: string;
+  repoPath: string;
+  worktreePath: string;
+  branch: string | null;
+  headSha: string;
+} | null> {
   for (const repo of loadRepos()) {
     const worktrees = await listWorktrees(repo.repoPath).catch(() => []);
     const worktree = worktrees.find(
@@ -579,10 +585,28 @@ async function findGitWorktree(
         repoId: repo.id,
         repoPath: repo.repoPath,
         worktreePath: worktree.path,
+        branch: worktree.branch,
+        headSha: worktree.headSha,
       };
     }
   }
   return null;
+}
+
+function createContextForExistingWorktree(
+  worktree: {
+    repoPath: string;
+    worktreePath: string;
+    branch: string | null;
+    headSha: string;
+  },
+): WorktreeContext {
+  return {
+    repoPath: worktree.repoPath,
+    worktreePath: worktree.worktreePath,
+    worktreeName: path.basename(worktree.worktreePath),
+    branchName: worktree.branch ?? `detached @ ${worktree.headSha.slice(0, 7)}`,
+  };
 }
 
 async function getWorkingRootForWorktree(worktreeId: string): Promise<string | null> {
@@ -690,6 +714,51 @@ async function resumeSuggestedWorktreeSession(
 
   promotePrimarySession(worktree, suggestedSession);
   return resumePrimaryWorktreeSession(worktreeId, providerSessionKey);
+}
+
+async function createSessionForWorktree(
+  worktreeId: string,
+  provider: SessionProvider,
+): Promise<Result<WorktreeSessionSelection>> {
+  const worktree = await findGitWorktree(worktreeId);
+  if (!worktree) {
+    return failAndReport<WorktreeSessionSelection>({
+      code: "unknown",
+      message: "This worktree no longer exists.",
+    });
+  }
+
+  const providerAdapter = getSessionProvider(provider);
+  let pending: PendingSession | null = null;
+  try {
+    upsertTaskWorktree(worktree.repoId, worktree.worktreePath);
+    pending = launchPendingSession(
+      providerAdapter,
+      await providerAdapter.createWorktreeLaunch(createContextForExistingWorktree(worktree)),
+      "Failed to create worktree session",
+    );
+    const { runtimeSessionId, providerSessionId } = await startSession(
+      provider,
+      providerAdapter,
+      pending,
+    );
+    pending.startupSettled = true;
+    if (providerSessionId) {
+      attachPrimarySessionByPath(worktree.worktreePath, {
+        provider,
+        providerSessionId,
+      });
+    }
+    return ok({ worktreeId, runtimeSessionId });
+  } catch (error) {
+    if (pending && !pending.exited) {
+      pending.proc.kill();
+    }
+    const appError = toAppError(error, { command: providerAdapter.command });
+    return pending?.startupFailureReported
+      ? fail<WorktreeSessionSelection>(appError)
+      : failAndReport<WorktreeSessionSelection>(appError);
+  }
 }
 
 async function startSession(
@@ -810,6 +879,13 @@ app.whenReady().then(async () => {
     "worktreeSession:resumeSuggested",
     async (_event, worktreeId: string, providerSessionKey: string) => {
       return resumeSuggestedWorktreeSession(worktreeId, providerSessionKey);
+    },
+  );
+
+  ipcMain.handle(
+    "worktreeSession:create",
+    async (_event, worktreeId: string, provider: SessionProvider) => {
+      return createSessionForWorktree(worktreeId, provider);
     },
   );
 
