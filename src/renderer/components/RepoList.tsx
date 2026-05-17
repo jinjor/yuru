@@ -7,7 +7,7 @@ import type {
   SuggestedSessionListItem,
   TaskWorktreeListItem,
 } from "../../shared/metadata";
-import type { RuntimeSessionId } from "../../shared/session";
+import type { RuntimeSessionId, SessionProvider } from "../../shared/session";
 import { providerLabel } from "../utils/session";
 
 interface RepoListProps {
@@ -18,6 +18,7 @@ interface RepoListProps {
   onSelectActiveSession: (worktreeId: string, runtimeSessionId: RuntimeSessionId) => void;
   onResumePrimarySession: (worktreeId: string, providerSessionKey: string) => void;
   onResumeSuggestedSession: (worktreeId: string, providerSessionKey: string) => void;
+  onCreateSessionForWorktree: (worktreeId: string, provider: SessionProvider) => void;
 }
 
 export function RepoList({
@@ -28,6 +29,7 @@ export function RepoList({
   onSelectActiveSession,
   onResumePrimarySession,
   onResumeSuggestedSession,
+  onCreateSessionForWorktree,
 }: RepoListProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const [openActionWorktreeId, setOpenActionWorktreeId] = useState<string | null>(null);
@@ -92,6 +94,7 @@ export function RepoList({
                   onSelectActiveSession={onSelectActiveSession}
                   onResumePrimarySession={onResumePrimarySession}
                   onResumeSuggestedSession={onResumeSuggestedSession}
+                  onCreateSessionForWorktree={onCreateSessionForWorktree}
                 />
               ))}
             </div>
@@ -112,6 +115,7 @@ interface TaskWorktreeCardProps {
   onSelectActiveSession: (worktreeId: string, runtimeSessionId: RuntimeSessionId) => void;
   onResumePrimarySession: (worktreeId: string, providerSessionKey: string) => void;
   onResumeSuggestedSession: (worktreeId: string, providerSessionKey: string) => void;
+  onCreateSessionForWorktree: (worktreeId: string, provider: SessionProvider) => void;
 }
 
 function TaskWorktreeCard({
@@ -124,6 +128,7 @@ function TaskWorktreeCard({
   onSelectActiveSession,
   onResumePrimarySession,
   onResumeSuggestedSession,
+  onCreateSessionForWorktree,
 }: TaskWorktreeCardProps) {
   const { primarySession, suggestedSessions } = taskWorktree;
   const isSelected = selectedWorktreeId === taskWorktree.worktreeId;
@@ -199,6 +204,7 @@ function TaskWorktreeCard({
           providers={providers}
           suggestedSessions={suggestedSessions}
           onResumeSuggestedSession={onResumeSuggestedSession}
+          onCreateSessionForWorktree={onCreateSessionForWorktree}
           onClick={(event) => event.stopPropagation()}
         />
       )}
@@ -234,6 +240,7 @@ interface TaskWorktreeActionSurfaceProps {
   providers: AgentDefinition[];
   suggestedSessions: SuggestedSessionListItem[];
   onResumeSuggestedSession: (worktreeId: string, providerSessionKey: string) => void;
+  onCreateSessionForWorktree: (worktreeId: string, provider: SessionProvider) => void;
   onClick: (event: MouseEvent<HTMLDivElement>) => void;
 }
 
@@ -242,6 +249,7 @@ function TaskWorktreeActionSurface({
   providers,
   suggestedSessions,
   onResumeSuggestedSession,
+  onCreateSessionForWorktree,
   onClick,
 }: TaskWorktreeActionSurfaceProps) {
   return (
@@ -264,17 +272,19 @@ function TaskWorktreeActionSurface({
         <div className="action-surface-label">New Session</div>
         <div className="new-session-actions">
           {providers.map((provider) => (
-            <div
+            <button
+              type="button"
               key={provider.id}
               className="action-surface-row new-session-action"
-              aria-disabled="true"
+              onClick={() => onCreateSessionForWorktree(worktreeId, provider.id)}
+              title={`Start new ${provider.label} session`}
             >
               <span
                 className={`session-provider-dot provider-${provider.id}`}
                 aria-hidden="true"
               />
               <span className="action-surface-row-main">{provider.label}</span>
-            </div>
+            </button>
           ))}
         </div>
       </div>

@@ -399,10 +399,16 @@ body,
 
 .new-session-action {
   background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
 }
 
-.action-surface-row[aria-disabled="true"] {
-  cursor: default;
+.new-session-action:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.new-session-action:focus-visible {
+  outline: 2px solid rgba(123, 193, 255, 0.42);
+  outline-offset: 2px;
 }
 
 .action-surface-row-text {

@@ -12,6 +12,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke("worktreeSession:resumePrimary", worktreeId, providerSessionKey),
   resumeSuggestedSession: (worktreeId: string, providerSessionKey: string) =>
     ipcRenderer.invoke("worktreeSession:resumeSuggested", worktreeId, providerSessionKey),
+  createSessionForWorktree: (worktreeId: string, provider: SessionProvider) =>
+    ipcRenderer.invoke("worktreeSession:create", worktreeId, provider),
   createWorktreeSession: (provider: SessionProvider, repoPath: string, branchName: string) =>
     ipcRenderer.invoke("session:createWorktree", provider, repoPath, branchName),
   removeWorktree: (repoPath: string, worktreePath: string) =>
