@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-05-17
+Last updated: 2026-05-18
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -29,7 +29,10 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F38 | feature | Tests | provider 挙動の integration / e2e テスト基盤 | `design-properties.md` の性質（resume prompt 出ない、context 注入が hidden、etc.）を回帰検出したい。今は spike の手動検証のみ |
 | F20 | feature | App | アプリのアイコンを付ける | テンションとプロダクト感を上げたい |
 | P11 | polish | Sessions | 最新会話プレビューが一覧に同期されない問題を直す | 一覧の情報鮮度が低い |
-| F16 | feature | GitHub | セッションカードに PR の有無と状態を表示する | GitHub 連携として早めに価値が出そう |
+| F41 | feature | Files / Code | ファイル内検索 | 開いているファイル内で目的の箇所へすばやく移動したい |
+| F37 | feature | Diff | ブランチの任意のコミット間で diff を表示できるようにする | 複数コミットある作業で差分の範囲を切り替えて確認したい |
+| F40 | feature | Terminal | ターミナル内の URL をクリックで開く | 出力された issue / PR / docs への移動を速くしたい |
+| F32 | feature | Terminal | task worktree 外の作業を standalone terminal として分離する | task worktree list に混ぜない補助導線として欲しい |
 
 ## Next
 
@@ -40,7 +43,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | P13 | polish | Files | Files タブのアクション UI を整える | 階層感が弱く見た目もまだ野暮ったい |
 | F3 | feature | Changes | 変更行数も出す | diff 集計で対応したい |
 | F4 | feature | Diff | 各ファイルの変更行数表示 | Changes と整合させたい |
-| F37 | feature | Diff | ブランチの base からの差分を表示する | 複数コミットある時に全体の差分をエディタ上で確認したい |
 | F7 | feature | Terminal | ファイル名が改行を跨いでもリンクできるようにする | linkifier 改善 |
 | F8 | feature | Terminal | ファイルクリック時にツリー側も開く | navigation の連動 |
 | F9 | feature | Terminal | ウィンドウを広げた時に 1 行の文字数を増やす | xterm fit を調整 |
@@ -49,7 +51,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F36 | feature | Repos | `yuru add` の結果を実行中の画面に反映する | 詳細: docs/backlog-details/F36-yuru-add-refresh.md |
 | B7 | bug | Worktrees | repo 内の `.yuru` ディレクトリをやめる | 既存プロダクトは `.yuru` を ignore していないため、Yuru 利用だけで未追跡ファイルが出る |
 | B8 | bug | Sessions | claude で `/clear` するとセッションが迷子になる | 詳細: docs/backlog-details/B8-clear-session-lost.md |
-| F32 | feature | Terminal | task worktree 外の作業を standalone terminal として分離する | task worktree list に混ぜない補助導線として欲しい |
 | I10 | investigate | Files | 自前 tree で大量のファイルを表示した時の重さ対策を考える | 切り替え後に実測して判断したい |
 | I14 | investigate | Persistence | metadata が壊れていた時の救済を考える | 単一ファイルの一部破損で全体が読めなくなるため |
 | I15 | investigate | IPC | `electronAPI` と IPC channel の対応を追いやすくする | renderer / preload / main で名前がズレていて読みにくいため、channel 名を露出するか shared RPC wrapper に寄せるか決めたい |
