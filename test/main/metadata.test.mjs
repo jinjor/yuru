@@ -318,6 +318,41 @@ test("loadRepoList は primary session の preview を返す", async () => {
   assert.equal(result[0].taskWorktrees[0].primarySession.preview, "preview text");
 });
 
+test("loadRepoList は worktree branch の GitHub PR を返す", async () => {
+  seed({
+    repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
+    taskWorktrees: [],
+  });
+  const listGitWorktrees = listGitWorktreesFrom(
+    new Map([
+      [
+        "/tmp/repo-a",
+        [
+          { path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" },
+          { path: "/tmp/repo-a/.yuru/worktrees/task-b", branch: "task-b", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" },
+        ],
+      ],
+    ]),
+  );
+  const pullRequest = {
+    prNumber: 42,
+    state: "open",
+    url: "https://github.com/jinjor/yuru/pull/42",
+  };
+
+  const result = await loadRepoList(
+    undefined,
+    listGitWorktrees,
+    undefined,
+    undefined,
+    undefined,
+    async (_repoPath, branch) => branch === "task-a" ? pullRequest : null,
+  );
+
+  assert.deepEqual(result[0].taskWorktrees[0].githubPullRequest, pullRequest);
+  assert.equal(result[0].taskWorktrees[1].githubPullRequest, null);
+});
+
 test("loadRepoList は suggested worktree session を返す", async () => {
   seed({
     repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],

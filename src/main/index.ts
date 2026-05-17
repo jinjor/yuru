@@ -819,6 +819,7 @@ app.whenReady().then(async () => {
       previewsByKey,
       loadSuggestedWorktreeSessions,
       getActiveRuntimeSessionsByWorktreePath(),
+      getGitHubPullRequestForBranch,
     );
   });
 

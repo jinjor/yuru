@@ -11,6 +11,7 @@ import type {
 } from "../shared/metadata.js";
 import {
   toSessionKey,
+  type GitHubPullRequest,
   type RuntimeSessionId,
   type SessionProvider,
   type SuggestedWorktreeSession,
@@ -22,6 +23,10 @@ type ListWorktrees = (repoPath: string) => Promise<readonly WorktreeInfo[]>;
 type LoadSuggestedSessions = (
   worktreePaths: readonly string[],
 ) => Promise<ReadonlyMap<string, readonly SuggestedWorktreeSession[]>>;
+type LoadGitHubPullRequest = (
+  repoPath: string,
+  branch: string | null,
+) => Promise<GitHubPullRequest | null>;
 
 interface ActiveRuntimeWorktreeSession {
   provider: SessionProvider;
@@ -57,6 +62,7 @@ export async function loadRepoList(
   primarySessionPreviewsByKey?: ReadonlyMap<string, string>,
   loadSuggestedSessions?: LoadSuggestedSessions,
   activeRuntimeSessionsByWorktreePath?: ReadonlyMap<string, ActiveRuntimeWorktreeSession>,
+  loadGitHubPullRequest?: LoadGitHubPullRequest,
 ): Promise<RepoListItem[]> {
   const metadata = loadMetadata();
   const repoEntries = await Promise.all(
@@ -77,6 +83,9 @@ export async function loadRepoList(
   const suggestedSessionsByWorktreePath = loadSuggestedSessions
     ? await loadSuggestedSessions(worktreePaths)
     : undefined;
+  const githubPullRequestsByWorktreePath = loadGitHubPullRequest
+    ? await loadGitHubPullRequests(repoEntries, loadGitHubPullRequest)
+    : undefined;
 
   return repoEntries.map(({ repo, metadataByPath, gitWorktrees }) => {
     const taskWorktrees = gitWorktrees.map((gitWorktree) =>
@@ -88,6 +97,7 @@ export async function loadRepoList(
         activeRuntimeSessionsByWorktreePath,
         primarySessionPreviewsByKey,
         suggestedSessionsByWorktreePath?.get(gitWorktree.path) ?? [],
+        githubPullRequestsByWorktreePath?.get(gitWorktree.path),
       ),
     );
 
@@ -320,6 +330,24 @@ async function loadGitWorktrees(
   }
 }
 
+async function loadGitHubPullRequests(
+  repoEntries: readonly {
+    repo: RepoMetadata;
+    gitWorktrees: readonly WorktreeInfo[];
+  }[],
+  loadGitHubPullRequest: LoadGitHubPullRequest,
+): Promise<Map<string, GitHubPullRequest | null>> {
+  const entries = await Promise.all(
+    repoEntries.flatMap(({ repo, gitWorktrees }) =>
+      gitWorktrees.map(async (gitWorktree) => [
+        gitWorktree.path,
+        await loadGitHubPullRequest(repo.repoPath, gitWorktree.branch),
+      ] as const),
+    ),
+  );
+  return new Map(entries);
+}
+
 function toTaskWorktreeListItem(
   repoId: string,
   gitWorktree: WorktreeInfo,
@@ -330,6 +358,7 @@ function toTaskWorktreeListItem(
     | undefined,
   primarySessionPreviewsByKey: ReadonlyMap<string, string> | undefined,
   suggestedSessions: readonly SuggestedWorktreeSession[],
+  githubPullRequest: GitHubPullRequest | null | undefined,
 ): TaskWorktreeListItem {
   const worktreePath = gitWorktree.path;
   const worktreeId = toWorktreeId(repoId, worktreePath);
@@ -351,7 +380,7 @@ function toTaskWorktreeListItem(
     primarySessionPreviewsByKey,
   );
 
-  return {
+  const item: TaskWorktreeListItem = {
     worktreeId,
     worktreePath,
     name: path.basename(worktreePath),
@@ -376,6 +405,12 @@ function toTaskWorktreeListItem(
       : undefined,
     suggestedSessions: suggestedSessionItems,
   };
+
+  if (githubPullRequest !== undefined) {
+    item.githubPullRequest = githubPullRequest;
+  }
+
+  return item;
 }
 
 function toSuggestedSessionListItems(

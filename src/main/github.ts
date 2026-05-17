@@ -122,10 +122,10 @@ function parsePullRequest(raw: string): GitHubPullRequest | null {
     number?: unknown;
     state?: unknown;
     mergedAt?: unknown;
-    url?: unknown;
+    url: unknown;
   };
 
-  if (typeof first.number !== "number") {
+  if (typeof first.number !== "number" || typeof first.url !== "string") {
     return null;
   }
 
@@ -146,7 +146,7 @@ function parsePullRequest(raw: string): GitHubPullRequest | null {
   return {
     prNumber: first.number,
     state,
-    url: typeof first.url === "string" ? first.url : undefined,
+    url: first.url,
   };
 }
 
