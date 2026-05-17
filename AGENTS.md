@@ -9,6 +9,8 @@ npm run build
 npm run app:restart
 ```
 
+Run these commands from the active task worktree, not from the repository root.
+
 This is for checking behavior changes. Documentation-only edits do not need a rebuild or restart.
 
 ## Docs
