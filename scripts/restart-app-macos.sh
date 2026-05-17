@@ -3,7 +3,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_BUNDLE="$ROOT_DIR/node_modules/electron/dist/Electron.app"
+ELECTRON_PACKAGE_DIR="$(cd "$ROOT_DIR" && node -p 'require("node:path").dirname(require.resolve("electron/package.json"))')"
+APP_BUNDLE="$ELECTRON_PACKAGE_DIR/dist/Electron.app"
 APP_PATTERN="Electron\\.app/Contents/MacOS/Electron $ROOT_DIR"
 
 require_macos() {

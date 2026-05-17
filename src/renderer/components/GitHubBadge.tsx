@@ -33,7 +33,7 @@ export function GitHubBadge({ github, onClick }: GitHubBadgeProps) {
 function gitHubBadgeLabel(github: GitHubPullRequest): string {
   switch (github.state) {
     case "open":
-      return `PR #${github.prNumber}`;
+      return `Open #${github.prNumber}`;
     case "merged":
       return `Merged #${github.prNumber}`;
     case "closed":
