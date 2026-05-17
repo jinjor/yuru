@@ -10,7 +10,8 @@
     "app:restart": "./scripts/restart-app-macos.sh",
     "test": "node --test --experimental-strip-types --import ./scripts/register-test-loader.mjs test/**/*.test.mjs",
     "lint": "oxlint --react-plugin --deny-warnings src/",
-    "format": "oxfmt src/"
+    "format": "oxfmt src/",
+    "format:check": "oxfmt --check src/"
   },
   "keywords": [],
   "author": "",
