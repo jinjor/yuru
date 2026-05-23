@@ -228,14 +228,14 @@ async function listCodexSessionLineMatches(
     return new Map();
   }
 
-  const worktreeNames = Array.from(
+  const worktreePathPatterns = Array.from(
     new Set(
       worktreePaths
-        .map((worktreePath) => path.basename(path.resolve(worktreePath)))
-        .filter((name) => name.length > 0),
+        .map((worktreePath) => path.resolve(worktreePath))
+        .filter((worktreePath) => worktreePath.length > 0),
     ),
   );
-  if (worktreeNames.length === 0) {
+  if (worktreePathPatterns.length === 0) {
     return new Map();
   }
 
@@ -243,7 +243,7 @@ async function listCodexSessionLineMatches(
     "--json",
     "--fixed-strings",
     "--hidden",
-    ...worktreeNames.flatMap((name) => ["--regexp", name]),
+    ...worktreePathPatterns.flatMap((worktreePath) => ["--regexp", worktreePath]),
     "--",
     sessionsDir,
   ];

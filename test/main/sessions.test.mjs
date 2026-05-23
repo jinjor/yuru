@@ -301,6 +301,38 @@ test("loadSuggestedWorktreeSessions は同じ worktreeRank なら session id で
   ]);
 });
 
+test("loadSuggestedWorktreeSessions は短い worktree 名でも Codex ログの大量一致で落ちない", async (t) => {
+  const repoPath = path.join(tempDir, "repo-short-noise");
+  const worktreePath = path.join(repoPath, ".yuru", "worktrees", "f40");
+  const codexSessionsDir = path.join(codexDir, "sessions", "2026", "05", "short-noise");
+  fs.mkdirSync(codexSessionsDir, { recursive: true });
+  t.after(() => {
+    fs.rmSync(codexSessionsDir, { recursive: true, force: true });
+  });
+
+  const noiseLine = JSON.stringify({
+    type: "response_item",
+    payload: {
+      type: "message",
+      content: [{ type: "output_text", text: "f40 ".repeat(1024) }],
+    },
+  });
+  fs.writeFileSync(
+    path.join(codexSessionsDir, "short-name-noise.jsonl"),
+    `${JSON.stringify({
+      type: "session_meta",
+      payload: {
+        id: "codex-noise",
+        cwd: repoPath,
+      },
+    })}\n${`${noiseLine}\n`.repeat(3000)}`,
+  );
+
+  const suggestions = await loadSuggestedWorktreeSessions([worktreePath]);
+
+  assert.equal(suggestions.get(worktreePath), undefined);
+});
+
 test("loadSuggestedWorktreeSessions は session 内で対象 worktree の順位が高い session を先に返す", async () => {
   const repoPath = path.join(tempDir, "repo-focus");
   const targetWorktree = path.join(repoPath, ".yuru", "worktrees", "target");
