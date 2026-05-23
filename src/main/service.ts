@@ -421,7 +421,12 @@ export class YuruService {
   }
 
   async openExternal(url: string): Promise<void> {
-    await shell.openExternal(url);
+    const parsedUrl = new URL(url);
+    if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+      throw new Error("Unsupported external URL protocol.");
+    }
+
+    await shell.openExternal(parsedUrl.toString());
   }
 
   async getGitPathStates(worktreeId: string) {

@@ -4,6 +4,7 @@ import { GitBranch } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
 import type { GitHubPullRequest } from "../../shared/session";
 import { GitHubBadge } from "./GitHubBadge";
+import { findTerminalLinks } from "./terminalLinks";
 
 interface TerminalPanelProps {
   changesPanelWidth: number;
@@ -35,7 +36,9 @@ export function TerminalPanel({
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<TerminalInstance | null>(null);
   const onFileLinkActivateRef = useRef(onFileLinkActivate);
+  const onOpenExternalRef = useRef(onOpenExternal);
   onFileLinkActivateRef.current = onFileLinkActivate;
+  onOpenExternalRef.current = onOpenExternal;
 
   const fitTerminal = useCallback((): void => {
     if (!terminalRef.current) {
@@ -74,8 +77,6 @@ export function TerminalPanel({
     containerRef.current.appendChild(container);
     term.open(container);
 
-    const filePathPattern = /[\w./-][\w./-]*\.\w+(?::(\d+)(?::(\d+))?)?/g;
-
     term.registerLinkProvider({
       provideLinks(bufferLineNumber: number, callback: (links: ILink[] | undefined) => void): void {
         const line = term.buffer.active.getLine(bufferLineNumber - 1);
@@ -85,19 +86,7 @@ export function TerminalPanel({
         }
 
         const lineText = line.translateToString();
-        const matches: { text: string; filePath: string; startIndex: number; fileLine?: number }[] =
-          [];
-        let match: RegExpExecArray | null;
-        filePathPattern.lastIndex = 0;
-        while ((match = filePathPattern.exec(lineText)) !== null) {
-          const text = match[0];
-          const filePath = text.replace(/:\d+(?::\d+)?$/, "");
-          const lineMatch = text.match(/:(\d+)(?::\d+)?$/);
-          const fileLine = lineMatch ? parseInt(lineMatch[1], 10) : undefined;
-          if (filePath.includes("/") || filePath.includes(".")) {
-            matches.push({ text, filePath, startIndex: match.index, fileLine });
-          }
-        }
+        const matches = findTerminalLinks(lineText);
 
         if (matches.length === 0) {
           callback(undefined);
@@ -117,6 +106,11 @@ export function TerminalPanel({
             text: entry.text,
             decorations: { pointerCursor: true, underline: true },
             activate(): void {
+              if (entry.kind === "url") {
+                onOpenExternalRef.current(entry.url);
+                return;
+              }
+
               onFileLinkActivateRef.current(entry.filePath, entry.fileLine);
             },
           };
