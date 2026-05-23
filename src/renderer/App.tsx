@@ -41,7 +41,9 @@ export function App() {
   }, []);
 
   const openExternal = useCallback((url: string): void => {
-    void window.electronAPI.openExternal(url);
+    void window.electronAPI.openExternal(url).catch((error) => {
+      console.error("Failed to open external URL.", error);
+    });
   }, []);
 
   useEffect(() => {
