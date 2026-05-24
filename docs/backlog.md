@@ -32,7 +32,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | I19 | investigate | Worktrees | main worktree の情報も Yuru で見られるようにする | 詳細: docs/backlog-details/I19-main-worktree-visibility.md |
 | F41 | feature | Files / Code | ファイル内検索 | 開いているファイル内で目的の箇所へすばやく移動したい |
 | F37 | feature | Diff | ブランチの任意のコミット間で diff を表示できるようにする | 複数コミットある作業で差分の範囲を切り替えて確認したい |
-| F40 | feature | Terminal | ターミナル内の URL をクリックで開く | 出力された issue / PR / docs への移動を速くしたい |
 | F32 | feature | Terminal | task worktree 外の作業を standalone terminal として分離する | task worktree list に混ぜない補助導線として欲しい |
 
 ## Next
