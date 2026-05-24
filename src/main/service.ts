@@ -72,11 +72,10 @@ import {
 } from "./error-center.js";
 import { createTerminalEnv } from "./terminal-env.js";
 import { createShellLaunchCommand } from "./shell-launch.js";
+import { RuntimeSessionRefreshScheduler } from "./runtime-session-refresh-scheduler.js";
 
 const STARTUP_OUTPUT_LIMIT = 4000;
 const TERMINAL_SCROLLBACK_LIMIT = 200000;
-const RUNTIME_SESSION_OUTPUT_SETTLED_DELAY_MS = 1200;
-const RUNTIME_SESSION_REFRESH_BACKOFF_MS = [15_000, 30_000, 60_000, 120_000, 300_000, 600_000];
 const ESCAPE_CHARACTER = String.fromCharCode(0x1b);
 const ANSI_ESCAPE_PATTERN = new RegExp(`${ESCAPE_CHARACTER}\\[[0-9;]*[A-Za-z]`, "g");
 
@@ -90,13 +89,6 @@ interface WorktreeSessionResumeTarget {
   providerSessionId: string;
   repoPath: string;
   project: string;
-}
-
-interface RuntimeSessionRefreshState {
-  outputSettledTimer: ReturnType<typeof setTimeout> | null;
-  backoffTimer: ReturnType<typeof setTimeout> | null;
-  backoffIndex: number;
-  generation: number;
 }
 
 export interface YuruServiceEvents {
@@ -218,7 +210,7 @@ export class YuruService {
   private readonly ptyProcesses = new Map<string, pty.IPty>();
   private readonly ptyScrollback = new Map<string, string>();
   private readonly ptyAttachments = new Map<string, { ready: boolean; pendingChunks: string[] }>();
-  private readonly runtimeSessionRefreshes = new Map<string, RuntimeSessionRefreshState>();
+  private readonly runtimeSessionRefreshScheduler: RuntimeSessionRefreshScheduler;
   private readonly worktreeDisplayUpdateFingerprints = new Map<string, string>();
   private readonly pendingProcesses = new Set<pty.IPty>();
   private readonly sessionRuntimeMap = new Map<string, RuntimeSessionInfo>();
@@ -226,6 +218,9 @@ export class YuruService {
   private readonly fileTreeWatcher: FileTreeWatcher;
 
   constructor(private readonly events: YuruServiceEvents) {
+    this.runtimeSessionRefreshScheduler = new RuntimeSessionRefreshScheduler({
+      onRefreshDue: (runtimeSessionId) => this.handleRuntimeSessionRefreshDue(runtimeSessionId),
+    });
     this.fileTreeWatcher = new FileTreeWatcher((runtimeSessionId, relativePath) => {
       this.events.fileTreeChanged(runtimeSessionId, relativePath);
     });
@@ -697,7 +692,7 @@ export class YuruService {
       if (!pending.runtimeSessionId) {
         return;
       }
-      this.recordRuntimeSessionOutput(pending.runtimeSessionId);
+      this.runtimeSessionRefreshScheduler.recordActivity(pending.runtimeSessionId);
       this.ptyScrollback.set(
         pending.runtimeSessionId,
         appendTerminalOutput(this.ptyScrollback.get(pending.runtimeSessionId) ?? "", data),
@@ -783,65 +778,11 @@ export class YuruService {
     }
   }
 
-  private recordRuntimeSessionOutput(runtimeSessionId: string): void {
-    const state = this.getRuntimeSessionRefreshState(runtimeSessionId);
-    state.generation += 1;
-    state.backoffIndex = 0;
-    this.clearRuntimeSessionRefreshTimers(state);
-
-    const generation = state.generation;
-    state.outputSettledTimer = setTimeout(() => {
-      state.outputSettledTimer = null;
-      void this.handleRuntimeSessionOutputSettled(runtimeSessionId, generation);
-    }, RUNTIME_SESSION_OUTPUT_SETTLED_DELAY_MS);
-  }
-
-  private async handleRuntimeSessionOutputSettled(
-    runtimeSessionId: string,
-    generation: number,
-  ): Promise<void> {
-    if (!this.isRuntimeSessionRefreshCurrent(runtimeSessionId, generation)) {
+  private async handleRuntimeSessionRefreshDue(runtimeSessionId: string): Promise<void> {
+    if (!this.ptyProcesses.has(runtimeSessionId)) {
       return;
     }
     await this.refreshRuntimeSessionWorktreeDisplay(runtimeSessionId);
-    if (!this.isRuntimeSessionRefreshCurrent(runtimeSessionId, generation)) {
-      return;
-    }
-    this.scheduleRuntimeSessionBackoffRefresh(runtimeSessionId, generation);
-  }
-
-  private scheduleRuntimeSessionBackoffRefresh(runtimeSessionId: string, generation: number): void {
-    const state = this.runtimeSessionRefreshes.get(runtimeSessionId);
-    if (!state) {
-      return;
-    }
-
-    const delay = RUNTIME_SESSION_REFRESH_BACKOFF_MS[state.backoffIndex];
-    state.backoffTimer = setTimeout(() => {
-      state.backoffTimer = null;
-      void this.handleRuntimeSessionBackoffRefresh(runtimeSessionId, generation);
-    }, delay);
-  }
-
-  private async handleRuntimeSessionBackoffRefresh(
-    runtimeSessionId: string,
-    generation: number,
-  ): Promise<void> {
-    if (!this.isRuntimeSessionRefreshCurrent(runtimeSessionId, generation)) {
-      return;
-    }
-    await this.refreshRuntimeSessionWorktreeDisplay(runtimeSessionId);
-
-    const state = this.runtimeSessionRefreshes.get(runtimeSessionId);
-    if (!state || state.generation !== generation || !this.ptyProcesses.has(runtimeSessionId)) {
-      return;
-    }
-
-    state.backoffIndex = Math.min(
-      state.backoffIndex + 1,
-      RUNTIME_SESSION_REFRESH_BACKOFF_MS.length - 1,
-    );
-    this.scheduleRuntimeSessionBackoffRefresh(runtimeSessionId, generation);
   }
 
   private async refreshRuntimeSessionWorktreeDisplay(runtimeSessionId: string): Promise<void> {
@@ -894,54 +835,13 @@ export class YuruService {
     this.events.worktreeDisplayChanged(update);
   }
 
-  private getRuntimeSessionRefreshState(runtimeSessionId: string): RuntimeSessionRefreshState {
-    const existing = this.runtimeSessionRefreshes.get(runtimeSessionId);
-    if (existing) {
-      return existing;
-    }
-
-    const state: RuntimeSessionRefreshState = {
-      outputSettledTimer: null,
-      backoffTimer: null,
-      backoffIndex: 0,
-      generation: 0,
-    };
-    this.runtimeSessionRefreshes.set(runtimeSessionId, state);
-    return state;
-  }
-
-  private isRuntimeSessionRefreshCurrent(runtimeSessionId: string, generation: number): boolean {
-    const state = this.runtimeSessionRefreshes.get(runtimeSessionId);
-    return Boolean(
-      state && state.generation === generation && this.ptyProcesses.has(runtimeSessionId),
-    );
-  }
-
   private clearRuntimeSessionRefresh(runtimeSessionId: string): void {
-    const state = this.runtimeSessionRefreshes.get(runtimeSessionId);
-    if (state) {
-      this.clearRuntimeSessionRefreshTimers(state);
-      this.runtimeSessionRefreshes.delete(runtimeSessionId);
-    }
+    this.runtimeSessionRefreshScheduler.clear(runtimeSessionId);
     this.worktreeDisplayUpdateFingerprints.delete(runtimeSessionId);
   }
 
-  private clearRuntimeSessionRefreshTimers(state: RuntimeSessionRefreshState): void {
-    if (state.outputSettledTimer) {
-      clearTimeout(state.outputSettledTimer);
-      state.outputSettledTimer = null;
-    }
-    if (state.backoffTimer) {
-      clearTimeout(state.backoffTimer);
-      state.backoffTimer = null;
-    }
-  }
-
   private clearRuntimeSessionRefreshes(): void {
-    for (const state of this.runtimeSessionRefreshes.values()) {
-      this.clearRuntimeSessionRefreshTimers(state);
-    }
-    this.runtimeSessionRefreshes.clear();
+    this.runtimeSessionRefreshScheduler.clearAll();
     this.worktreeDisplayUpdateFingerprints.clear();
   }
 
