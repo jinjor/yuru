@@ -15,6 +15,10 @@ export function claudeProjectsPath(): string {
   return projectsDir;
 }
 
+export function claudeSessionFilePath(project: string, sessionId: string): string {
+  return path.join(projectsDir, project.replace(/[/.]/g, "-"), `${sessionId}.jsonl`);
+}
+
 export function claudeWorktreeCwd(repoPath: string, worktreeName: string): string {
   return path.join(repoPath, worktreeSegment, worktreeName);
 }

@@ -13,12 +13,17 @@ import {
 } from "./metadata.js";
 import { loadRepoList } from "./repo-list.js";
 import { toWorktreeId } from "./worktree-identity.js";
-import { loadStoredSessionPreviews, loadSuggestedWorktreeSessions } from "./sessions.js";
+import {
+  loadStoredSessionPreview,
+  loadStoredSessionPreviews,
+  loadSuggestedWorktreeSessions,
+} from "./sessions.js";
 import {
   branchExists,
   getCurrentBranch,
   getGitDiffDocument as loadGitDiffDocument,
   getGitPathStates as loadGitPathStates,
+  getHeadSha,
   getRepoRootForProject,
   listWorktrees,
   removeWorktree as removeGitWorktree,
@@ -49,6 +54,7 @@ import {
   type AppErrorNotice,
   type BranchContext,
   type Result,
+  type WorktreeDisplayUpdate,
   type WorktreeSessionSelection,
 } from "../shared/ipc.js";
 import {
@@ -69,6 +75,8 @@ import { createShellLaunchCommand } from "./shell-launch.js";
 
 const STARTUP_OUTPUT_LIMIT = 4000;
 const TERMINAL_SCROLLBACK_LIMIT = 200000;
+const RUNTIME_SESSION_OUTPUT_SETTLED_DELAY_MS = 1200;
+const RUNTIME_SESSION_REFRESH_BACKOFF_MS = [15_000, 30_000, 60_000, 120_000, 300_000, 600_000];
 const ESCAPE_CHARACTER = String.fromCharCode(0x1b);
 const ANSI_ESCAPE_PATTERN = new RegExp(`${ESCAPE_CHARACTER}\\[[0-9;]*[A-Za-z]`, "g");
 
@@ -84,9 +92,17 @@ interface WorktreeSessionResumeTarget {
   project: string;
 }
 
+interface RuntimeSessionRefreshState {
+  outputSettledTimer: ReturnType<typeof setTimeout> | null;
+  backoffTimer: ReturnType<typeof setTimeout> | null;
+  backoffIndex: number;
+  generation: number;
+}
+
 export interface YuruServiceEvents {
   fileTreeChanged(runtimeSessionId: string, relativePath: string): void;
   ptyData(runtimeSessionId: string, data: string): void;
+  worktreeDisplayChanged(update: WorktreeDisplayUpdate): void;
   sessionsStateChanged(): void;
   errorAdded(notice: AppErrorNotice): void;
   refreshWorktreeWatcher(): Promise<void>;
@@ -202,6 +218,8 @@ export class YuruService {
   private readonly ptyProcesses = new Map<string, pty.IPty>();
   private readonly ptyScrollback = new Map<string, string>();
   private readonly ptyAttachments = new Map<string, { ready: boolean; pendingChunks: string[] }>();
+  private readonly runtimeSessionRefreshes = new Map<string, RuntimeSessionRefreshState>();
+  private readonly worktreeDisplayUpdateFingerprints = new Map<string, string>();
   private readonly pendingProcesses = new Set<pty.IPty>();
   private readonly sessionRuntimeMap = new Map<string, RuntimeSessionInfo>();
   private readonly activeCodeSearches = new Map<string, AbortController>();
@@ -679,6 +697,7 @@ export class YuruService {
       if (!pending.runtimeSessionId) {
         return;
       }
+      this.recordRuntimeSessionOutput(pending.runtimeSessionId);
       this.ptyScrollback.set(
         pending.runtimeSessionId,
         appendTerminalOutput(this.ptyScrollback.get(pending.runtimeSessionId) ?? "", data),
@@ -716,6 +735,7 @@ export class YuruService {
       if (!pending.runtimeSessionId) {
         return;
       }
+      this.clearRuntimeSessionRefresh(pending.runtimeSessionId);
       this.ptyProcesses.delete(pending.runtimeSessionId);
       this.ptyAttachments.delete(pending.runtimeSessionId);
       this.fileTreeWatcher.clearSession(pending.runtimeSessionId);
@@ -740,6 +760,7 @@ export class YuruService {
     this.sessionRuntimeMap.set(runtimeSessionId, {
       provider: pending.provider,
       providerSessionId,
+      repoPath: pending.launchCwd,
       worktreePath: pending.worktreePath,
       startedAt: pending.startedAt,
     });
@@ -760,6 +781,168 @@ export class YuruService {
         providerSessionId,
       });
     }
+  }
+
+  private recordRuntimeSessionOutput(runtimeSessionId: string): void {
+    const state = this.getRuntimeSessionRefreshState(runtimeSessionId);
+    state.generation += 1;
+    state.backoffIndex = 0;
+    this.clearRuntimeSessionRefreshTimers(state);
+
+    const generation = state.generation;
+    state.outputSettledTimer = setTimeout(() => {
+      state.outputSettledTimer = null;
+      void this.handleRuntimeSessionOutputSettled(runtimeSessionId, generation);
+    }, RUNTIME_SESSION_OUTPUT_SETTLED_DELAY_MS);
+  }
+
+  private async handleRuntimeSessionOutputSettled(
+    runtimeSessionId: string,
+    generation: number,
+  ): Promise<void> {
+    if (!this.isRuntimeSessionRefreshCurrent(runtimeSessionId, generation)) {
+      return;
+    }
+    await this.refreshRuntimeSessionWorktreeDisplay(runtimeSessionId);
+    if (!this.isRuntimeSessionRefreshCurrent(runtimeSessionId, generation)) {
+      return;
+    }
+    this.scheduleRuntimeSessionBackoffRefresh(runtimeSessionId, generation);
+  }
+
+  private scheduleRuntimeSessionBackoffRefresh(runtimeSessionId: string, generation: number): void {
+    const state = this.runtimeSessionRefreshes.get(runtimeSessionId);
+    if (!state) {
+      return;
+    }
+
+    const delay = RUNTIME_SESSION_REFRESH_BACKOFF_MS[state.backoffIndex];
+    state.backoffTimer = setTimeout(() => {
+      state.backoffTimer = null;
+      void this.handleRuntimeSessionBackoffRefresh(runtimeSessionId, generation);
+    }, delay);
+  }
+
+  private async handleRuntimeSessionBackoffRefresh(
+    runtimeSessionId: string,
+    generation: number,
+  ): Promise<void> {
+    if (!this.isRuntimeSessionRefreshCurrent(runtimeSessionId, generation)) {
+      return;
+    }
+    await this.refreshRuntimeSessionWorktreeDisplay(runtimeSessionId);
+
+    const state = this.runtimeSessionRefreshes.get(runtimeSessionId);
+    if (!state || state.generation !== generation || !this.ptyProcesses.has(runtimeSessionId)) {
+      return;
+    }
+
+    state.backoffIndex = Math.min(
+      state.backoffIndex + 1,
+      RUNTIME_SESSION_REFRESH_BACKOFF_MS.length - 1,
+    );
+    this.scheduleRuntimeSessionBackoffRefresh(runtimeSessionId, generation);
+  }
+
+  private async refreshRuntimeSessionWorktreeDisplay(runtimeSessionId: string): Promise<void> {
+    const runtime = this.sessionRuntimeMap.get(runtimeSessionId);
+    if (!runtime) {
+      return;
+    }
+
+    const repo = findRepoByPath(runtime.repoPath);
+    if (!repo) {
+      return;
+    }
+
+    const [branch, headSha, preview] = await Promise.all([
+      getCurrentBranch(runtime.worktreePath),
+      getHeadSha(runtime.worktreePath),
+      runtime.providerSessionId
+        ? loadStoredSessionPreview(runtime.provider, runtime.providerSessionId)
+        : Promise.resolve(null),
+    ]);
+    if (!headSha) {
+      return;
+    }
+
+    const update: WorktreeDisplayUpdate = {
+      worktreeId: toWorktreeId(repo.id, runtime.worktreePath),
+      branch,
+      headSha,
+      githubPullRequest: await getGitHubPullRequestForBranch(runtime.repoPath, branch),
+    };
+    if (runtime.providerSessionId && preview !== null) {
+      update.sessionPreview = {
+        providerSessionKey: toSessionKey(runtime.provider, runtime.providerSessionId),
+        preview,
+      };
+    }
+
+    this.emitWorktreeDisplayChanged(runtimeSessionId, update);
+  }
+
+  private emitWorktreeDisplayChanged(
+    runtimeSessionId: string,
+    update: WorktreeDisplayUpdate,
+  ): void {
+    const fingerprint = JSON.stringify(update);
+    if (this.worktreeDisplayUpdateFingerprints.get(runtimeSessionId) === fingerprint) {
+      return;
+    }
+    this.worktreeDisplayUpdateFingerprints.set(runtimeSessionId, fingerprint);
+    this.events.worktreeDisplayChanged(update);
+  }
+
+  private getRuntimeSessionRefreshState(runtimeSessionId: string): RuntimeSessionRefreshState {
+    const existing = this.runtimeSessionRefreshes.get(runtimeSessionId);
+    if (existing) {
+      return existing;
+    }
+
+    const state: RuntimeSessionRefreshState = {
+      outputSettledTimer: null,
+      backoffTimer: null,
+      backoffIndex: 0,
+      generation: 0,
+    };
+    this.runtimeSessionRefreshes.set(runtimeSessionId, state);
+    return state;
+  }
+
+  private isRuntimeSessionRefreshCurrent(runtimeSessionId: string, generation: number): boolean {
+    const state = this.runtimeSessionRefreshes.get(runtimeSessionId);
+    return Boolean(
+      state && state.generation === generation && this.ptyProcesses.has(runtimeSessionId),
+    );
+  }
+
+  private clearRuntimeSessionRefresh(runtimeSessionId: string): void {
+    const state = this.runtimeSessionRefreshes.get(runtimeSessionId);
+    if (state) {
+      this.clearRuntimeSessionRefreshTimers(state);
+      this.runtimeSessionRefreshes.delete(runtimeSessionId);
+    }
+    this.worktreeDisplayUpdateFingerprints.delete(runtimeSessionId);
+  }
+
+  private clearRuntimeSessionRefreshTimers(state: RuntimeSessionRefreshState): void {
+    if (state.outputSettledTimer) {
+      clearTimeout(state.outputSettledTimer);
+      state.outputSettledTimer = null;
+    }
+    if (state.backoffTimer) {
+      clearTimeout(state.backoffTimer);
+      state.backoffTimer = null;
+    }
+  }
+
+  private clearRuntimeSessionRefreshes(): void {
+    for (const state of this.runtimeSessionRefreshes.values()) {
+      this.clearRuntimeSessionRefreshTimers(state);
+    }
+    this.runtimeSessionRefreshes.clear();
+    this.worktreeDisplayUpdateFingerprints.clear();
   }
 
   private async resolveLazySessionId(
@@ -800,6 +983,7 @@ export class YuruService {
     this.ptyAttachments.clear();
     this.pendingProcesses.clear();
     this.ptyScrollback.clear();
+    this.clearRuntimeSessionRefreshes();
   }
 
   private async findPrimarySessionResumeTarget(

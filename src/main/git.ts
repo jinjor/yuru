@@ -13,6 +13,16 @@ export interface WorktreeInfo {
 export async function getCurrentBranch(cwd: string): Promise<string | null> {
   try {
     const output = await exec("git", ["rev-parse", "--abbrev-ref", "HEAD"], cwd);
+    const branch = output.trim();
+    return branch && branch !== "HEAD" ? branch : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getHeadSha(cwd: string): Promise<string | null> {
+  try {
+    const output = await exec("git", ["rev-parse", "HEAD"], cwd);
     return output.trim() || null;
   } catch {
     return null;

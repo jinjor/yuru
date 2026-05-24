@@ -8,6 +8,7 @@ import {
 import "@xterm/xterm/css/xterm.css";
 import type { AgentDefinition } from "../shared/agent";
 import type { RepoListItem, TaskWorktreeListItem } from "../shared/metadata";
+import type { WorktreeDisplayUpdate } from "../shared/ipc";
 import { type RuntimeSessionId, type SessionProvider } from "../shared/session";
 import { BranchNameInput } from "./components/BranchNameInput";
 import { RepoList } from "./components/RepoList";
@@ -67,6 +68,9 @@ export function App() {
           return runtimeSessionId ? { worktreeId: prev.worktreeId, runtimeSessionId } : null;
         });
       });
+    });
+    window.electronAPI.onWorktreeDisplayChanged((update) => {
+      setRepos((prev) => applyWorktreeDisplayUpdate(prev, update));
     });
   }, [refreshRepos]);
 
@@ -266,6 +270,55 @@ function findTaskWorktree(
     }
   }
   return null;
+}
+
+function applyWorktreeDisplayUpdate(
+  repos: RepoListItem[],
+  update: WorktreeDisplayUpdate,
+): RepoListItem[] {
+  let updated = false;
+  const nextRepos = repos.map((repo) => {
+    let repoUpdated = false;
+    const taskWorktrees = repo.taskWorktrees.map((taskWorktree) => {
+      if (taskWorktree.worktreeId !== update.worktreeId) {
+        return taskWorktree;
+      }
+      repoUpdated = true;
+      updated = true;
+      return {
+        ...taskWorktree,
+        branch: update.branch,
+        headSha: update.headSha,
+        githubPullRequest: update.githubPullRequest,
+        primarySession: updatePrimarySessionPreview(taskWorktree, update),
+        suggestedSessions: taskWorktree.suggestedSessions.map((suggestedSession) =>
+          suggestedSession.providerSessionKey === update.sessionPreview?.providerSessionKey
+            ? { ...suggestedSession, preview: update.sessionPreview.preview }
+            : suggestedSession,
+        ),
+      };
+    });
+    return repoUpdated ? { ...repo, taskWorktrees } : repo;
+  });
+
+  return updated ? nextRepos : repos;
+}
+
+function updatePrimarySessionPreview(
+  taskWorktree: TaskWorktreeListItem,
+  update: WorktreeDisplayUpdate,
+) {
+  const primarySession = taskWorktree.primarySession;
+  if (
+    !primarySession ||
+    primarySession.providerSessionKey !== update.sessionPreview?.providerSessionKey
+  ) {
+    return primarySession;
+  }
+  return {
+    ...primarySession,
+    preview: update.sessionPreview.preview,
+  };
 }
 
 function findActiveRuntimeSessionId(

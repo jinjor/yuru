@@ -5,21 +5,24 @@ import { exec } from "../../exec.js";
 import { createWorktree } from "../../git.js";
 import type {
   PendingSession,
+  SessionPreview,
   SessionProviderAdapter,
   SessionSnapshot,
   WorktreeContext,
 } from "../../agent.js";
-import {
-  listFilesRecursive,
-  parseJsonLinesAs,
-  readTextFileIfExists,
-} from "../../agent-store-utils.js";
+import { parseJsonLinesAs, readTextFileIfExists } from "../../agent-store-utils.js";
 import { type WorktreeSessionHint } from "../../worktree-session-detection.js";
 import {
   detectClaudeWorktreeSessionLines,
   type ClaudeSessionLine,
 } from "./worktree-session-detection.js";
-import { claudeHistoryPath, claudeProjectsPath, claudeWorktreeCwd, pidFilePath } from "./paths.js";
+import {
+  claudeHistoryPath,
+  claudeProjectsPath,
+  claudeSessionFilePath,
+  claudeWorktreeCwd,
+  pidFilePath,
+} from "./paths.js";
 import { loadWorktreeContextPrompt } from "../../worktree-context-prompt.js";
 
 interface ClaudeHistoryEntry {
@@ -27,6 +30,10 @@ interface ClaudeHistoryEntry {
   project: string;
   display: string;
   timestamp: number;
+}
+
+interface ClaudeStoredSession extends SessionSnapshot {
+  filePath: string;
 }
 
 function parseClaudeHistoryEntry(entry: unknown): ClaudeHistoryEntry | null {
@@ -56,27 +63,137 @@ function parseClaudeHistoryEntry(entry: unknown): ClaudeHistoryEntry | null {
   };
 }
 
-async function loadStoredSessions(): Promise<SessionSnapshot[]> {
-  const content = await readTextFileIfExists(claudeHistoryPath());
-  if (!content) {
-    return [];
+function parseClaudeAssistantPreviewEntry(entry: unknown): SessionPreview | null {
+  if (typeof entry !== "object" || entry === null) {
+    return null;
   }
 
-  const sessionMap = new Map<string, SessionSnapshot>();
-  for (const entry of parseJsonLinesAs(content, parseClaudeHistoryEntry)) {
+  const maybeEntry = entry as {
+    type?: unknown;
+    timestamp?: unknown;
+    message?: {
+      role?: unknown;
+      content?: unknown;
+    };
+  };
+  if (maybeEntry.type !== "assistant" || maybeEntry.message?.role !== "assistant") {
+    return null;
+  }
+
+  const lastMessage = extractClaudeMessageText(maybeEntry.message.content);
+  if (!lastMessage) {
+    return null;
+  }
+  return {
+    lastMessage,
+    timestamp: parseClaudeTimestamp(maybeEntry.timestamp),
+  };
+}
+
+function extractClaudeMessageText(content: unknown): string {
+  const texts: string[] = [];
+  if (typeof content === "string") {
+    texts.push(content);
+  } else if (Array.isArray(content)) {
+    for (const item of content) {
+      if (typeof item !== "object" || item === null) {
+        continue;
+      }
+      const maybeItem = item as { type?: unknown; text?: unknown };
+      if (maybeItem.type === "text" && typeof maybeItem.text === "string") {
+        texts.push(maybeItem.text);
+      }
+    }
+  }
+
+  return normalizePreviewText(texts.join("\n"));
+}
+
+function parseClaudeTimestamp(timestamp: unknown): number {
+  if (typeof timestamp !== "string") {
+    return 0;
+  }
+  const parsed = Date.parse(timestamp);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function normalizePreviewText(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+async function loadStoredSessions(): Promise<SessionSnapshot[]> {
+  const sessionMap = new Map<string, ClaudeStoredSession>();
+  for (const entry of await readClaudeHistoryEntries()) {
+    const filePath = claudeSessionFilePath(entry.project, entry.sessionId);
+    if (!fs.existsSync(filePath)) {
+      continue;
+    }
+
     const existing = sessionMap.get(entry.sessionId);
     if (!existing || entry.timestamp > existing.timestamp) {
       sessionMap.set(entry.sessionId, {
         provider: "claude",
         providerSessionId: entry.sessionId,
         project: entry.project,
-        lastMessage: entry.display,
+        filePath,
+        lastMessage: "",
         timestamp: entry.timestamp,
       });
     }
   }
 
-  return Array.from(sessionMap.values());
+  return Promise.all(
+    Array.from(sessionMap.values()).map(async (session) => {
+      const preview = await readClaudeSessionPreview(session.filePath);
+      return {
+        provider: session.provider,
+        providerSessionId: session.providerSessionId,
+        project: session.project,
+        lastMessage: preview?.lastMessage ?? "",
+        timestamp: Math.max(session.timestamp, preview?.timestamp ?? 0),
+      };
+    }),
+  );
+}
+
+async function loadStoredSessionPreview(providerSessionId: string): Promise<SessionPreview | null> {
+  const sessionFilePath = await findClaudeSessionFile(providerSessionId);
+  return sessionFilePath ? readClaudeSessionPreview(sessionFilePath) : null;
+}
+
+async function readClaudeHistoryEntries(): Promise<ClaudeHistoryEntry[]> {
+  const content = await readTextFileIfExists(claudeHistoryPath());
+  if (!content) {
+    return [];
+  }
+  return parseJsonLinesAs(content, parseClaudeHistoryEntry);
+}
+
+async function findClaudeSessionFile(providerSessionId: string): Promise<string | null> {
+  for (const entry of (await readClaudeHistoryEntries())
+    .filter((historyEntry) => historyEntry.sessionId === providerSessionId)
+    .sort((a, b) => b.timestamp - a.timestamp)) {
+    const sessionFilePath = claudeSessionFilePath(entry.project, providerSessionId);
+    if (fs.existsSync(sessionFilePath)) {
+      return sessionFilePath;
+    }
+  }
+
+  return null;
+}
+
+async function readClaudeSessionPreview(filePath: string): Promise<SessionPreview | null> {
+  const content = await readTextFileIfExists(filePath);
+  if (!content) {
+    return null;
+  }
+  let preview: SessionPreview | null = null;
+  for (const entry of parseJsonLinesAs(content, parseClaudeAssistantPreviewEntry)) {
+    if (!preview || entry.timestamp >= preview.timestamp) {
+      preview = entry;
+    }
+  }
+  return preview;
 }
 
 async function loadWorktreeSessionHints(
@@ -207,16 +324,7 @@ function stripTrailingLineBreak(line: string): string {
 }
 
 async function hasStoredSession(providerSessionId: string): Promise<boolean> {
-  if (
-    (await loadStoredSessions()).some((session) => session.providerSessionId === providerSessionId)
-  ) {
-    return true;
-  }
-
-  const sessionFileName = `${providerSessionId}.jsonl`;
-  return (await listFilesRecursive(claudeProjectsPath())).some((filePath) =>
-    filePath.endsWith(`/${sessionFileName}`),
-  );
+  return (await findClaudeSessionFile(providerSessionId)) !== null;
 }
 
 async function waitForSessionId(pending: PendingSession): Promise<string> {
@@ -248,6 +356,7 @@ export const sessionProvider: SessionProviderAdapter = {
   command: "claude",
   resolvesSessionIdLazily: false,
   loadStoredSessions,
+  loadStoredSessionPreview,
   loadWorktreeSessionHints,
   hasStoredSession,
   async createResumeLaunch(session) {

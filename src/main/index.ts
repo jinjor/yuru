@@ -5,7 +5,7 @@ import { loadRepos } from "./metadata.js";
 import { cleanupStaleTaskWorktrees } from "./task-worktree-maintenance.js";
 import { WorktreeWatcher } from "./worktree-watcher.js";
 import { YuruService } from "./service.js";
-import type { AppErrorNotice } from "../shared/ipc.js";
+import type { AppErrorNotice, WorktreeDisplayUpdate } from "../shared/ipc.js";
 import type { SessionProvider } from "../shared/session.js";
 
 let mainWindow: BrowserWindow | null = null;
@@ -18,6 +18,7 @@ app.setName(APP_NAME);
 const service = new YuruService({
   fileTreeChanged: sendFileTreeChanged,
   ptyData: sendPtyData,
+  worktreeDisplayChanged: sendWorktreeDisplayChanged,
   sessionsStateChanged: sendSessionsStateChanged,
   errorAdded: sendErrorAdded,
   refreshWorktreeWatcher,
@@ -37,6 +38,10 @@ function sendFileTreeChanged(runtimeSessionId: string, relativePath: string): vo
 
 function sendPtyData(runtimeSessionId: string, data: string): void {
   sendToRenderer("pty:data", runtimeSessionId, data);
+}
+
+function sendWorktreeDisplayChanged(update: WorktreeDisplayUpdate): void {
+  sendToRenderer("worktree:displayChanged", update);
 }
 
 function sendSessionsStateChanged(): void {

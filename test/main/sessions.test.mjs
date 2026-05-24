@@ -11,6 +11,7 @@ process.env.HOME = tempDir;
 const claudeDir = path.join(tempDir, ".claude");
 const codexDir = path.join(tempDir, ".codex");
 const staleProject = path.join(tempDir, "missing-worktree");
+const missingClaudeSessionId = "claude-missing-file";
 fs.mkdirSync(claudeDir, { recursive: true });
 fs.mkdirSync(codexDir, { recursive: true });
 fs.writeFileSync(
@@ -20,10 +21,16 @@ fs.writeFileSync(
     project: staleProject,
     display: "last message",
     timestamp: 1000,
+  })}\n${JSON.stringify({
+    sessionId: missingClaudeSessionId,
+    project: staleProject,
+    display: "missing session file",
+    timestamp: 2000,
   })}\n`,
 );
 
 const {
+  loadStoredSessionPreview,
   loadStoredSessionPreviews,
   loadSuggestedWorktreeSessions,
 } = await import("../../src/main/sessions.ts");
@@ -34,6 +41,90 @@ const { toSessionKey } = await import("../../src/shared/session.ts");
 function jsonl(...entries) {
   return `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`;
 }
+
+function claudeProjectDirName(project) {
+  return project.replace(/[/.]/g, "-");
+}
+
+function codexSessionFilePath(codexHome, sessionId) {
+  const timestamp = Number.parseInt(sessionId.replace(/-/g, "").slice(0, 12), 16);
+  const date = new Date(timestamp);
+  const year = String(date.getFullYear());
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hour = String(date.getHours()).padStart(2, "0");
+  const minute = String(date.getMinutes()).padStart(2, "0");
+  const second = String(date.getSeconds()).padStart(2, "0");
+  return path.join(
+    codexHome,
+    "sessions",
+    year,
+    month,
+    day,
+    `rollout-${year}-${month}-${day}T${hour}-${minute}-${second}-${sessionId}.jsonl`,
+  );
+}
+
+const codexSessionId = "019e5862-8776-7723-8de9-3460e9600119";
+const claudeProjectDir = path.join(claudeDir, "projects", claudeProjectDirName(staleProject));
+fs.mkdirSync(claudeProjectDir, { recursive: true });
+fs.writeFileSync(
+  path.join(claudeProjectDir, "claude-1.jsonl"),
+  jsonl(
+    {
+      type: "assistant",
+      sessionId: "claude-1",
+      timestamp: "2026-05-24T00:00:01.000Z",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "old claude assistant message" }],
+      },
+    },
+    {
+      type: "assistant",
+      sessionId: "claude-1",
+      timestamp: "2026-05-24T00:00:02.000Z",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "new claude assistant message" }],
+      },
+    },
+  ),
+);
+
+const codexSessionFile = codexSessionFilePath(codexDir, codexSessionId);
+fs.mkdirSync(path.dirname(codexSessionFile), { recursive: true });
+fs.writeFileSync(
+  codexSessionFile,
+  jsonl(
+    {
+      type: "session_meta",
+      timestamp: "2026-05-24T00:00:00.000Z",
+      payload: {
+        id: codexSessionId,
+        cwd: staleProject,
+      },
+    },
+    {
+      type: "response_item",
+      timestamp: "2026-05-24T00:00:01.000Z",
+      payload: {
+        type: "message",
+        role: "assistant",
+        content: [{ type: "output_text", text: "old codex assistant message" }],
+      },
+    },
+    {
+      type: "response_item",
+      timestamp: "2026-05-24T00:00:02.000Z",
+      payload: {
+        type: "message",
+        role: "assistant",
+        content: [{ type: "output_text", text: "new codex assistant message" }],
+      },
+    },
+  ),
+);
 
 test.after(() => {
   if (previousHome === undefined) {
@@ -47,7 +138,29 @@ test.after(() => {
 test("loadStoredSessionPreviews は stored session の preview を key で返す", async () => {
   const previews = await loadStoredSessionPreviews();
 
-  assert.equal(previews.get(toSessionKey("claude", "claude-1")), "last message");
+  assert.equal(previews.get(toSessionKey("claude", "claude-1")), "new claude assistant message");
+  assert.equal(previews.get(toSessionKey("codex", codexSessionId)), "new codex assistant message");
+  assert.equal(previews.has(toSessionKey("claude", missingClaudeSessionId)), false);
+});
+
+test("loadStoredSessionPreview は指定 session の preview だけを返す", async () => {
+  fs.writeFileSync(
+    path.join(codexDir, "history.jsonl"),
+    jsonl(
+      { session_id: codexSessionId, text: "history should not be used", ts: 1 },
+      { session_id: "codex-2", text: "other codex message", ts: 3 },
+    ),
+  );
+
+  assert.equal(await loadStoredSessionPreview("claude", "claude-1"), "new claude assistant message");
+  assert.equal(await loadStoredSessionPreview("claude", missingClaudeSessionId), null);
+  assert.equal(await loadStoredSessionPreview("codex", codexSessionId), "new codex assistant message");
+  assert.equal(await loadStoredSessionPreview("codex", "missing"), null);
+});
+
+test("Claude stored session の存在判定は session file の存在を見る", async () => {
+  assert.equal(await claudeProvider.hasStoredSession("claude-1"), true);
+  assert.equal(await claudeProvider.hasStoredSession(missingClaudeSessionId), false);
 });
 
 test("provider resume launch は repo root で起動する", async () => {

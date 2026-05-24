@@ -31,6 +31,16 @@ export async function loadStoredSessionPreviews(): Promise<Map<string, string>> 
   return previews;
 }
 
+export async function loadStoredSessionPreview(
+  provider: SessionProvider,
+  providerSessionId: string,
+): Promise<string | null> {
+  return (
+    (await sessionProviders[provider].loadStoredSessionPreview(providerSessionId))?.lastMessage ??
+    null
+  );
+}
+
 export async function loadSuggestedWorktreeSessions(
   worktreePaths: readonly string[],
 ): Promise<Map<string, SuggestedWorktreeSession[]>> {

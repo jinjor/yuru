@@ -11,9 +11,15 @@ export interface SessionSnapshot {
   timestamp: number;
 }
 
+export interface SessionPreview {
+  lastMessage: string;
+  timestamp: number;
+}
+
 export interface RuntimeSessionInfo {
   provider: SessionProvider;
   providerSessionId: string | null;
+  repoPath: string;
   worktreePath: string;
   startedAt: number;
 }
@@ -64,6 +70,7 @@ export interface SessionProviderAdapter {
   command: string;
   resolvesSessionIdLazily: boolean;
   loadStoredSessions(): Promise<SessionSnapshot[]>;
+  loadStoredSessionPreview(providerSessionId: string): Promise<SessionPreview | null>;
   loadWorktreeSessionHints(worktreePaths: readonly string[]): Promise<WorktreeSessionHint[]>;
   hasStoredSession(providerSessionId: string): Promise<boolean>;
   createResumeLaunch(session: ResumeSessionTarget): Promise<LaunchRequest>;

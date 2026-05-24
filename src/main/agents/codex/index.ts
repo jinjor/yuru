@@ -6,6 +6,7 @@ import { createWorktree } from "../../git.js";
 import { exec } from "../../exec.js";
 import type {
   PendingSession,
+  SessionPreview,
   SessionProviderAdapter,
   SessionSnapshot,
   WorktreeContext,
@@ -16,7 +17,12 @@ import {
   readTextFileIfExists,
 } from "../../agent-store-utils.js";
 import type { WorktreeSessionHint } from "../../worktree-session-detection.js";
-import { codexWorktreeCwd, getCodexHistoryPath, getCodexSessionsDir } from "./paths.js";
+import {
+  codexSessionDateDirFromId,
+  codexWorktreeCwd,
+  getCodexHistoryPath,
+  getCodexSessionsDir,
+} from "./paths.js";
 import { loadWorktreeContextPrompt } from "../../worktree-context-prompt.js";
 import {
   detectCodexWorktreeSessionLines,
@@ -27,11 +33,11 @@ interface CodexSessionMeta {
   providerSessionId: string;
   project: string;
   timestamp: number;
+  filePath: string;
 }
 
 interface CodexHistoryEntry {
   sessionId: string;
-  text: string;
   timestamp: number;
 }
 
@@ -46,7 +52,7 @@ function parseCodexTimestamp(raw: string | number | null | undefined): number | 
   return null;
 }
 
-function parseCodexSessionMetaEntry(entry: unknown): CodexSessionMeta | null {
+function parseCodexSessionMetaEntry(entry: unknown): Omit<CodexSessionMeta, "filePath"> | null {
   if (typeof entry !== "object" || entry === null) {
     return null;
   }
@@ -89,6 +95,44 @@ function parseCodexSessionMetaEntry(entry: unknown): CodexSessionMeta | null {
   };
 }
 
+function parseCodexAssistantPreviewEntry(entry: unknown): SessionPreview | null {
+  if (typeof entry !== "object" || entry === null) {
+    return null;
+  }
+
+  const maybeEntry = entry as {
+    type?: unknown;
+    timestamp?: unknown;
+    payload?: {
+      type?: unknown;
+      role?: unknown;
+      content?: unknown;
+    };
+  };
+
+  if (
+    maybeEntry.type !== "response_item" ||
+    maybeEntry.payload?.type !== "message" ||
+    maybeEntry.payload.role !== "assistant"
+  ) {
+    return null;
+  }
+
+  const lastMessage = extractCodexMessageText(maybeEntry.payload.content);
+  if (!lastMessage) {
+    return null;
+  }
+  return {
+    lastMessage,
+    timestamp:
+      parseCodexTimestamp(
+        typeof maybeEntry.timestamp === "string" || typeof maybeEntry.timestamp === "number"
+          ? maybeEntry.timestamp
+          : null,
+      ) ?? 0,
+  };
+}
+
 function parseCodexHistoryEntry(entry: unknown): CodexHistoryEntry | null {
   if (typeof entry !== "object" || entry === null) {
     return null;
@@ -96,19 +140,41 @@ function parseCodexHistoryEntry(entry: unknown): CodexHistoryEntry | null {
 
   const maybeEntry = entry as {
     session_id?: unknown;
-    text?: unknown;
     ts?: unknown;
   };
-
   if (typeof maybeEntry.session_id !== "string" || typeof maybeEntry.ts !== "number") {
     return null;
   }
-
   return {
     sessionId: maybeEntry.session_id,
-    text: typeof maybeEntry.text === "string" ? maybeEntry.text : "",
     timestamp: maybeEntry.ts * 1000,
   };
+}
+
+function extractCodexMessageText(content: unknown): string {
+  const texts: string[] = [];
+  if (typeof content === "string") {
+    texts.push(content);
+  } else if (Array.isArray(content)) {
+    for (const item of content) {
+      if (typeof item !== "object" || item === null) {
+        continue;
+      }
+      const maybeItem = item as { type?: unknown; text?: unknown };
+      if (
+        (maybeItem.type === "output_text" || maybeItem.type === "text") &&
+        typeof maybeItem.text === "string"
+      ) {
+        texts.push(maybeItem.text);
+      }
+    }
+  }
+
+  return normalizePreviewText(texts.join("\n"));
+}
+
+function normalizePreviewText(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
 }
 
 async function readCodexSessionMetas(): Promise<Map<string, CodexSessionMeta>> {
@@ -132,35 +198,67 @@ async function listExistingSessionIds(): Promise<Set<string>> {
 }
 
 async function hasStoredSession(providerSessionId: string): Promise<boolean> {
-  return (await readCodexSessionMetas()).has(providerSessionId);
+  return (await findCodexSessionFile(providerSessionId)) !== null;
 }
 
 async function loadStoredSessions(): Promise<SessionSnapshot[]> {
   const historyContent = await readTextFileIfExists(getCodexHistoryPath());
-  const historyBySessionId = new Map<string, { lastMessage: string; timestamp: number }>();
+  const historyTimestampsBySessionId = new Map<string, number>();
   if (historyContent) {
     for (const entry of parseJsonLinesAs(historyContent, parseCodexHistoryEntry)) {
-      const existing = historyBySessionId.get(entry.sessionId);
-      if (!existing || entry.timestamp > existing.timestamp) {
-        historyBySessionId.set(entry.sessionId, {
-          lastMessage: entry.text,
-          timestamp: entry.timestamp,
-        });
+      const existingTimestamp = historyTimestampsBySessionId.get(entry.sessionId) ?? 0;
+      if (entry.timestamp > existingTimestamp) {
+        historyTimestampsBySessionId.set(entry.sessionId, entry.timestamp);
       }
     }
   }
 
   const metas = await readCodexSessionMetas();
-  return Array.from(metas.values()).map((meta) => {
-    const history = historyBySessionId.get(meta.providerSessionId);
-    return {
-      provider: "codex",
-      providerSessionId: meta.providerSessionId,
-      project: meta.project,
-      lastMessage: history?.lastMessage ?? "",
-      timestamp: Math.max(meta.timestamp, history?.timestamp ?? 0),
-    } satisfies SessionSnapshot;
-  });
+  return Promise.all(
+    Array.from(metas.values()).map(async (meta) => {
+      const preview = await readCodexSessionPreview(meta.filePath);
+      const historyTimestamp = historyTimestampsBySessionId.get(meta.providerSessionId) ?? 0;
+      return {
+        provider: "codex",
+        providerSessionId: meta.providerSessionId,
+        project: meta.project,
+        lastMessage: preview?.lastMessage ?? "",
+        timestamp: Math.max(meta.timestamp, preview?.timestamp ?? 0, historyTimestamp),
+      } satisfies SessionSnapshot;
+    }),
+  );
+}
+
+async function loadStoredSessionPreview(providerSessionId: string): Promise<SessionPreview | null> {
+  const sessionFilePath = await findCodexSessionFile(providerSessionId);
+  return sessionFilePath ? readCodexSessionPreview(sessionFilePath) : null;
+}
+
+async function findCodexSessionFile(providerSessionId: string): Promise<string | null> {
+  const sessionDateDir = codexSessionDateDirFromId(providerSessionId);
+  if (!sessionDateDir || !fs.existsSync(sessionDateDir)) {
+    return null;
+  }
+
+  const sessionId = providerSessionId.toLowerCase();
+  const sessionFileName =
+    fs.readdirSync(sessionDateDir).find((fileName) => fileName.endsWith(`-${sessionId}.jsonl`)) ??
+    null;
+  return sessionFileName ? path.join(sessionDateDir, sessionFileName) : null;
+}
+
+async function readCodexSessionPreview(filePath: string): Promise<SessionPreview | null> {
+  const content = await readTextFileIfExists(filePath);
+  if (!content) {
+    return null;
+  }
+  let preview: SessionPreview | null = null;
+  for (const entry of parseJsonLinesAs(content, parseCodexAssistantPreviewEntry)) {
+    if (!preview || entry.timestamp >= preview.timestamp) {
+      preview = entry;
+    }
+  }
+  return preview;
 }
 
 async function loadWorktreeSessionHints(
@@ -204,7 +302,8 @@ async function readCodexSessionMeta(filePath: string): Promise<CodexSessionMeta 
         continue;
       }
       try {
-        const meta = parseCodexSessionMetaEntry(JSON.parse(line) as unknown);
+        const parsedMeta = parseCodexSessionMetaEntry(JSON.parse(line) as unknown);
+        const meta = parsedMeta ? { ...parsedMeta, filePath } : null;
         if (meta) {
           return meta;
         }
@@ -361,6 +460,7 @@ export const sessionProvider: SessionProviderAdapter = {
   command: "codex",
   resolvesSessionIdLazily: true,
   loadStoredSessions,
+  loadStoredSessionPreview,
   loadWorktreeSessionHints,
   hasStoredSession,
   async createResumeLaunch(session) {
