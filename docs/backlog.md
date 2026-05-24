@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-05-24
+Last updated: 2026-05-25
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -28,7 +28,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 |---|---|---|---|---|
 | F38 | feature | Tests | provider 挙動の integration / e2e テスト基盤 | `design-properties.md` の性質（resume prompt 出ない、context 注入が hidden、etc.）を回帰検出したい。今は spike の手動検証のみ |
 | F20 | feature | App | アプリのアイコンを付ける | テンションとプロダクト感を上げたい |
-| P11 | polish | Sessions | 最新会話プレビューが一覧に同期されない問題を直す | 一覧の情報鮮度が低い |
 | I18 | investigate | Events / Worktree Context | worktree 表示情報の更新タイミングを matrix で整理する | 詳細: docs/backlog-details/I18-worktree-refresh-policy.md |
 | I19 | investigate | Worktrees | main worktree の情報も Yuru で見られるようにする | 詳細: docs/backlog-details/I19-main-worktree-visibility.md |
 | F41 | feature | Files / Code | ファイル内検索 | 開いているファイル内で目的の箇所へすばやく移動したい |
