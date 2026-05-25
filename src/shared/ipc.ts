@@ -124,34 +124,23 @@ export interface ElectronAPI {
   ) => Promise<Result<WorktreeSessionSelection>>;
   removeWorktree: (repoPath: string, worktreePath: string) => Promise<Result<boolean>>;
   openExternal: (url: string) => Promise<void>;
-  getGitPathStates: (runtimeSessionId: RuntimeSessionId) => Promise<Result<GitPathState[]>>;
+  getGitPathStates: (worktreeId: string) => Promise<Result<GitPathState[]>>;
   getGitDiffDocument: (
-    runtimeSessionId: RuntimeSessionId,
+    worktreeId: string,
     filePath: string,
   ) => Promise<Result<GitDiffDocument | null>>;
-  listFiles: (
-    runtimeSessionId: RuntimeSessionId,
-    relativePath?: string,
-  ) => Promise<Result<FileTreeNode[]>>;
-  listAllFiles: (runtimeSessionId: RuntimeSessionId) => Promise<Result<string[]>>;
-  resolveRepoFile: (runtimeSessionId: RuntimeSessionId, filePath: string) => Promise<string | null>;
-  syncFileWatchTargets: (
-    runtimeSessionId: RuntimeSessionId,
-    relativePaths: string[],
-  ) => Promise<void>;
-  searchCode: (
-    runtimeSessionId: RuntimeSessionId,
-    query: string,
-  ) => Promise<Result<CodeSearchResult>>;
-  cancelCodeSearch: (runtimeSessionId: RuntimeSessionId) => Promise<void>;
+  listFiles: (worktreeId: string, relativePath?: string) => Promise<Result<FileTreeNode[]>>;
+  listAllFiles: (worktreeId: string) => Promise<Result<string[]>>;
+  resolveRepoFile: (worktreeId: string, filePath: string) => Promise<string | null>;
+  syncFileWatchTargets: (worktreeId: string, relativePaths: string[]) => Promise<void>;
+  searchCode: (worktreeId: string, query: string) => Promise<Result<CodeSearchResult>>;
+  cancelCodeSearch: (worktreeId: string) => Promise<void>;
   onErrorAdded: (callback: (error: AppErrorNotice) => void) => void;
   onErrorRemoved: (callback: (id: string) => void) => void;
   onErrorsCleared: (callback: () => void) => void;
   onWorktreeDisplayChanged: (callback: (update: WorktreeDisplayUpdate) => void) => void;
   onSessionsStateChanged: (callback: () => void) => void;
-  onFileTreeChanged: (
-    callback: (runtimeSessionId: RuntimeSessionId, relativePath: string) => void,
-  ) => () => void;
+  onFileTreeChanged: (callback: (worktreeId: string, relativePath: string) => void) => () => void;
   attachPty: (runtimeSessionId: RuntimeSessionId) => Promise<string>;
   readyPty: (runtimeSessionId: RuntimeSessionId) => Promise<void>;
   detachPty: (runtimeSessionId: RuntimeSessionId) => Promise<void>;

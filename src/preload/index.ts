@@ -19,21 +19,19 @@ const electronAPI: ElectronAPI = {
   removeWorktree: (repoPath: string, worktreePath: string) =>
     ipcRenderer.invoke("worktree:remove", repoPath, worktreePath),
   openExternal: (url: string) => ipcRenderer.invoke("shell:openExternal", url),
-  getGitPathStates: (runtimeSessionId: string) =>
-    ipcRenderer.invoke("git:pathStates", runtimeSessionId),
-  getGitDiffDocument: (runtimeSessionId: string, filePath: string) =>
-    ipcRenderer.invoke("git:diffDocument", runtimeSessionId, filePath),
-  listFiles: (runtimeSessionId: string, relativePath?: string) =>
-    ipcRenderer.invoke("files:list", runtimeSessionId, relativePath),
-  listAllFiles: (runtimeSessionId: string) => ipcRenderer.invoke("files:listAll", runtimeSessionId),
-  resolveRepoFile: (runtimeSessionId: string, filePath: string) =>
-    ipcRenderer.invoke("files:resolveRepoFile", runtimeSessionId, filePath),
-  syncFileWatchTargets: (runtimeSessionId: string, relativePaths: string[]) =>
-    ipcRenderer.invoke("files:syncWatchTargets", runtimeSessionId, relativePaths),
-  searchCode: (runtimeSessionId: string, query: string) =>
-    ipcRenderer.invoke("search:code", runtimeSessionId, query),
-  cancelCodeSearch: (runtimeSessionId: string) =>
-    ipcRenderer.invoke("search:cancelCode", runtimeSessionId),
+  getGitPathStates: (worktreeId: string) => ipcRenderer.invoke("git:pathStates", worktreeId),
+  getGitDiffDocument: (worktreeId: string, filePath: string) =>
+    ipcRenderer.invoke("git:diffDocument", worktreeId, filePath),
+  listFiles: (worktreeId: string, relativePath?: string) =>
+    ipcRenderer.invoke("files:list", worktreeId, relativePath),
+  listAllFiles: (worktreeId: string) => ipcRenderer.invoke("files:listAll", worktreeId),
+  resolveRepoFile: (worktreeId: string, filePath: string) =>
+    ipcRenderer.invoke("files:resolveRepoFile", worktreeId, filePath),
+  syncFileWatchTargets: (worktreeId: string, relativePaths: string[]) =>
+    ipcRenderer.invoke("files:syncWatchTargets", worktreeId, relativePaths),
+  searchCode: (worktreeId: string, query: string) =>
+    ipcRenderer.invoke("search:code", worktreeId, query),
+  cancelCodeSearch: (worktreeId: string) => ipcRenderer.invoke("search:cancelCode", worktreeId),
   onErrorAdded: (callback) => ipcRenderer.on("errors:added", (_event, error) => callback(error)),
   onErrorRemoved: (callback) => ipcRenderer.on("errors:removed", (_event, id) => callback(id)),
   onErrorsCleared: (callback) => ipcRenderer.on("errors:cleared", () => callback()),
@@ -43,9 +41,9 @@ const electronAPI: ElectronAPI = {
   onFileTreeChanged: (callback) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
-      runtimeSessionId: string,
+      worktreeId: string,
       relativePath: string,
-    ) => callback(runtimeSessionId, relativePath);
+    ) => callback(worktreeId, relativePath);
     ipcRenderer.on("files:changed", listener);
     return () => {
       ipcRenderer.removeListener("files:changed", listener);

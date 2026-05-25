@@ -32,8 +32,8 @@ function sendToRenderer(channel: string, ...args: unknown[]): void {
   mainWindow.webContents.send(channel, ...args);
 }
 
-function sendFileTreeChanged(runtimeSessionId: string, relativePath: string): void {
-  sendToRenderer("files:changed", runtimeSessionId, relativePath);
+function sendFileTreeChanged(worktreeId: string, relativePath: string): void {
+  sendToRenderer("files:changed", worktreeId, relativePath);
 }
 
 function sendPtyData(runtimeSessionId: string, data: string): void {

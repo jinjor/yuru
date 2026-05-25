@@ -90,7 +90,7 @@ interface WorktreeSessionResumeTarget {
 }
 
 export interface YuruServiceEvents {
-  fileTreeChanged(runtimeSessionId: string, relativePath: string): void;
+  fileTreeChanged(worktreeId: string, relativePath: string): void;
   ptyData(runtimeSessionId: string, data: string): void;
   worktreeDisplayChanged(update: WorktreeDisplayUpdate): void;
   sessionsStateChanged(): void;
@@ -219,8 +219,8 @@ export class YuruService {
     this.runtimeSessionRefreshScheduler = new RuntimeSessionRefreshScheduler({
       onRefreshDue: (runtimeSessionId) => this.handleRuntimeSessionRefreshDue(runtimeSessionId),
     });
-    this.fileTreeWatcher = new FileTreeWatcher((runtimeSessionId, relativePath) => {
-      this.events.fileTreeChanged(runtimeSessionId, relativePath);
+    this.fileTreeWatcher = new FileTreeWatcher((worktreeId, relativePath) => {
+      this.events.fileTreeChanged(worktreeId, relativePath);
     });
   }
 
@@ -499,11 +499,11 @@ export class YuruService {
   async syncFileWatchTargets(worktreeId: string, relativePaths: string[]): Promise<void> {
     const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
     if (!workingRoot) {
-      this.fileTreeWatcher.clearSession(worktreeId);
+      this.fileTreeWatcher.clearWorktree(worktreeId);
       return;
     }
 
-    await this.fileTreeWatcher.syncSessionTargets(worktreeId, workingRoot, relativePaths);
+    await this.fileTreeWatcher.syncWorktreeTargets(worktreeId, workingRoot, relativePaths);
   }
 
   async searchCode(worktreeId: string, query: string) {
@@ -711,7 +711,6 @@ export class YuruService {
       this.clearRuntimeSessionRefresh(pending.runtimeSessionId);
       this.ptyProcesses.delete(pending.runtimeSessionId);
       this.ptyAttachments.delete(pending.runtimeSessionId);
-      this.fileTreeWatcher.clearSession(pending.runtimeSessionId);
       this.sessionRuntimeMap.delete(pending.runtimeSessionId);
       void this.events.refreshWorktreeWatcher();
       this.events.sessionsStateChanged();

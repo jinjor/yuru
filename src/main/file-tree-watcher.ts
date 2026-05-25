@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 
-type FileTreeChangeCallback = (runtimeSessionId: string, relativePath: string) => void;
+type FileTreeChangeCallback = (worktreeId: string, relativePath: string) => void;
 
 function normalizeRelativePath(relativePath: string): string {
   return relativePath.split(path.sep).join("/");
@@ -26,7 +26,7 @@ async function isDirectory(targetPath: string): Promise<boolean> {
 }
 
 export class FileTreeWatcher {
-  private runtimeSessionId: string | null = null;
+  private worktreeId: string | null = null;
   private workingRootPath: string | null = null;
   private watchers = new Map<string, fs.FSWatcher>();
   private pendingPaths = new Set<string>();
@@ -34,20 +34,20 @@ export class FileTreeWatcher {
 
   constructor(private readonly onChange: FileTreeChangeCallback) {}
 
-  async syncSessionTargets(
-    runtimeSessionId: string,
+  async syncWorktreeTargets(
+    worktreeId: string,
     workingRoot: string,
     relativePaths: readonly string[],
   ): Promise<void> {
     const nextTargets = new Set(relativePaths.map(normalizeRelativePath));
 
     if (
-      (this.runtimeSessionId && this.runtimeSessionId !== runtimeSessionId) ||
+      (this.worktreeId && this.worktreeId !== worktreeId) ||
       (this.workingRootPath && this.workingRootPath !== workingRoot)
     ) {
       this.clear();
     }
-    this.runtimeSessionId = runtimeSessionId;
+    this.worktreeId = worktreeId;
     this.workingRootPath = workingRoot;
 
     for (const watchedPath of Array.from(this.watchers.keys())) {
@@ -86,8 +86,8 @@ export class FileTreeWatcher {
     }
   }
 
-  clearSession(runtimeSessionId: string): void {
-    if (this.runtimeSessionId !== runtimeSessionId) {
+  clearWorktree(worktreeId: string): void {
+    if (this.worktreeId !== worktreeId) {
       return;
     }
     this.clear();
@@ -106,7 +106,7 @@ export class FileTreeWatcher {
       this.flushTimer = null;
     }
     this.pendingPaths.clear();
-    this.runtimeSessionId = null;
+    this.worktreeId = null;
     this.workingRootPath = null;
   }
 
@@ -118,11 +118,11 @@ export class FileTreeWatcher {
 
     this.flushTimer = setTimeout(() => {
       this.flushTimer = null;
-      if (!this.runtimeSessionId) {
+      if (!this.worktreeId) {
         return;
       }
       for (const pendingPath of this.pendingPaths) {
-        this.onChange(this.runtimeSessionId, pendingPath);
+        this.onChange(this.worktreeId, pendingPath);
       }
       this.pendingPaths.clear();
     }, 120);
