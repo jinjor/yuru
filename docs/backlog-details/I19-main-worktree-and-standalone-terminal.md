@@ -29,3 +29,7 @@ I19 の議論から、main worktree の可視化だけでなく standalone termi
 
 初手は、挙動を全く変えずに準備のためのリファクタリングを行う。
 現在 provider session と一体になっている runtime / PTY 周りを見直し、terminal として共通化できる部分と provider session 固有の部分を分けやすくする。
+
+## Acceptance condition
+
+最終的に、main worktree と standalone terminal を入れた後の設計が今よりも綺麗になっていること。
