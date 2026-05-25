@@ -205,10 +205,6 @@ function registerIpcHandlers(): void {
     return service.getGitPathStates(worktreeId);
   });
 
-  ipcMain.handle("git:branchContext", (_event, worktreeId: string) => {
-    return service.getGitBranchContext(worktreeId);
-  });
-
   ipcMain.handle("git:diffDocument", (_event, worktreeId: string, filePath: string) => {
     return service.getGitDiffDocument(worktreeId, filePath);
   });

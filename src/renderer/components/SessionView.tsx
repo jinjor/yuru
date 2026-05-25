@@ -12,6 +12,8 @@ import { resultDataOrNull } from "../utils/result";
 
 interface SessionViewProps {
   appRef: RefObject<HTMLDivElement | null>;
+  currentBranch: string | null;
+  currentGitHub: GitHubPullRequest | null;
   onOpenExternal: (url: string) => void;
   runtimeSessionId: string;
   sidebarWidth: number;
@@ -26,6 +28,8 @@ function isPathChanged(states: readonly GitPathState[], path: string): boolean {
 
 export function SessionView({
   appRef,
+  currentBranch,
+  currentGitHub,
   onOpenExternal,
   runtimeSessionId,
   sidebarWidth,
@@ -36,8 +40,6 @@ export function SessionView({
   const [diffDocument, setDiffDocument] = useState<GitDiffDocument | null>(null);
   const [isLoadingDiff, setIsLoadingDiff] = useState(false);
   const [gitPathStates, setGitPathStates] = useState<GitPathState[]>([]);
-  const [currentBranch, setCurrentBranch] = useState<string | null>(null);
-  const [currentGitHub, setCurrentGitHub] = useState<GitHubPullRequest | null>(null);
   const [isFileSearchOpen, setIsFileSearchOpen] = useState(false);
   const [explorerTab, setExplorerTab] = useState<ExplorerTab>("changes");
   const [searchFocusRequest, setSearchFocusRequest] = useState(0);
@@ -92,24 +94,18 @@ export function SessionView({
   useEffect(() => {
     let cancelled = false;
 
-    const fetchStatus = async (): Promise<void> => {
-      const [pathStatesResult, branchContextResult] = await Promise.all([
-        window.electronAPI.getGitPathStates(worktreeId),
-        window.electronAPI.getGitBranchContext(worktreeId),
-      ]);
+    const fetchPathStates = async (): Promise<void> => {
+      const pathStatesResult = await window.electronAPI.getGitPathStates(worktreeId);
       if (cancelled) {
         return;
       }
 
       setGitPathStates(resultDataOrNull(pathStatesResult) ?? []);
-      const branchContext = resultDataOrNull(branchContextResult);
-      setCurrentBranch(branchContext?.branch ?? null);
-      setCurrentGitHub(branchContext?.github ?? null);
     };
 
-    void fetchStatus();
+    void fetchPathStates();
     const interval = setInterval(() => {
-      void fetchStatus();
+      void fetchPathStates();
     }, 3000);
 
     return () => {

@@ -24,7 +24,6 @@ import {
   getGitDiffDocument as loadGitDiffDocument,
   getGitPathStates as loadGitPathStates,
   getHeadSha,
-  getRepoRootForProject,
   listWorktrees,
   removeWorktree as removeGitWorktree,
 } from "./git.js";
@@ -52,7 +51,6 @@ import { FileTreeWatcher } from "./file-tree-watcher.js";
 import {
   type AppError,
   type AppErrorNotice,
-  type BranchContext,
   type Result,
   type WorktreeDisplayUpdate,
   type WorktreeSessionSelection,
@@ -451,26 +449,6 @@ export class YuruService {
       return ok(await loadGitPathStates(workingRoot));
     } catch {
       return ok([]);
-    }
-  }
-
-  async getGitBranchContext(worktreeId: string): Promise<Result<BranchContext>> {
-    const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
-    if (!workingRoot) {
-      return ok({ branch: null, github: null } satisfies BranchContext);
-    }
-
-    try {
-      const branch = await getCurrentBranch(workingRoot);
-      if (!branch) {
-        return ok({ branch: null, github: null } satisfies BranchContext);
-      }
-
-      const repoPath = (await getRepoRootForProject(workingRoot)) ?? workingRoot;
-      const github = await getGitHubPullRequestForBranch(repoPath, branch);
-      return ok({ branch, github } satisfies BranchContext);
-    } catch (error) {
-      return this.failAndReport(toAppError(error, { command: "git" }));
     }
   }
 

@@ -29,6 +29,7 @@ export function App() {
   const [sidebarWidth, setSidebarWidth] = useState(260);
   const selectedWorktreeId = selection?.worktreeId ?? null;
   const selectedRuntimeSessionId = selection?.runtimeSessionId ?? null;
+  const selectedTaskWorktree = findTaskWorktree(repos, selectedWorktreeId);
 
   const refreshRepos = useCallback(async (): Promise<RepoListItem[]> => {
     try {
@@ -232,6 +233,8 @@ export function App() {
         <SessionView
           key={`${selectedWorktreeId}:${selectedRuntimeSessionId}`}
           appRef={appRef}
+          currentBranch={selectedTaskWorktree?.branch ?? null}
+          currentGitHub={selectedTaskWorktree?.githubPullRequest ?? null}
           onOpenExternal={openExternal}
           runtimeSessionId={selectedRuntimeSessionId}
           sidebarWidth={sidebarWidth}

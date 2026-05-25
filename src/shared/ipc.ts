@@ -83,11 +83,6 @@ export interface CodeSearchResult {
   truncated: boolean;
 }
 
-export interface BranchContext {
-  branch: string | null;
-  github: GitHubPullRequest | null;
-}
-
 export interface WorktreeSessionSelection {
   worktreeId: string;
   runtimeSessionId: RuntimeSessionId;
@@ -130,7 +125,6 @@ export interface ElectronAPI {
   removeWorktree: (repoPath: string, worktreePath: string) => Promise<Result<boolean>>;
   openExternal: (url: string) => Promise<void>;
   getGitPathStates: (runtimeSessionId: RuntimeSessionId) => Promise<Result<GitPathState[]>>;
-  getGitBranchContext: (runtimeSessionId: RuntimeSessionId) => Promise<Result<BranchContext>>;
   getGitDiffDocument: (
     runtimeSessionId: RuntimeSessionId,
     filePath: string,

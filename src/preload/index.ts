@@ -21,8 +21,6 @@ const electronAPI: ElectronAPI = {
   openExternal: (url: string) => ipcRenderer.invoke("shell:openExternal", url),
   getGitPathStates: (runtimeSessionId: string) =>
     ipcRenderer.invoke("git:pathStates", runtimeSessionId),
-  getGitBranchContext: (runtimeSessionId: string) =>
-    ipcRenderer.invoke("git:branchContext", runtimeSessionId),
   getGitDiffDocument: (runtimeSessionId: string, filePath: string) =>
     ipcRenderer.invoke("git:diffDocument", runtimeSessionId, filePath),
   listFiles: (runtimeSessionId: string, relativePath?: string) =>
