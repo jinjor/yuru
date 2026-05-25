@@ -26,6 +26,10 @@ function isPathChanged(states: readonly GitPathState[], path: string): boolean {
   );
 }
 
+function isPageVisible(): boolean {
+  return document.visibilityState === "visible";
+}
+
 export function SessionView({
   appRef,
   currentBranch,
@@ -104,7 +108,12 @@ export function SessionView({
     };
 
     void fetchPathStates();
+
     const interval = setInterval(() => {
+      if (!isPageVisible()) {
+        return;
+      }
+
       void fetchPathStates();
     }, 3000);
 
@@ -145,6 +154,10 @@ export function SessionView({
     }
 
     const interval = setInterval(() => {
+      if (!isPageVisible()) {
+        return;
+      }
+
       void fetchDiff(false);
     }, 3000);
 
