@@ -40,7 +40,7 @@ export async function getRepoRootForProject(cwd: string): Promise<string | null>
 }
 
 export async function getGitPathStates(cwd: string): Promise<GitPathState[]> {
-  const output = await exec("git", ["status", "--porcelain", "-uall", "--ignored=matching"], cwd);
+  const output = await exec("git", ["status", "--porcelain", "-uall"], cwd);
   if (!output.trim()) {
     return [];
   }
