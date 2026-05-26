@@ -6,6 +6,15 @@ export interface TerminalRuntimeInfo {
   startedAt: number;
 }
 
+export interface TerminalLaunchRequest {
+  command: string;
+  args: readonly string[];
+  cwd: string;
+  env: Record<string, string>;
+  launchLabel: string;
+  worktreePath: string;
+}
+
 export interface PendingTerminal {
   proc: pty.IPty;
   command: string;

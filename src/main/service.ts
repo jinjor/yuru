@@ -47,7 +47,7 @@ import {
   type SessionProviderAdapter,
   type WorktreeContext,
 } from "./agent.js";
-import type { PendingTerminal } from "./terminal-runtime.js";
+import type { PendingTerminal, TerminalLaunchRequest } from "./terminal-runtime.js";
 import { FileTreeWatcher } from "./file-tree-watcher.js";
 import {
   type AppError,
@@ -627,33 +627,51 @@ export class YuruService {
     request: LaunchRequest,
     launchLabel: string,
   ): PendingSession {
-    const existingProviderSessionIds = request.existingProviderSessionIds ?? new Set<string>();
-    const launchCommand = createShellLaunchCommand(
-      providerAdapter.command,
-      request.args,
-      process.env,
+    const pendingTerminal = this.launchPendingTerminal(
+      {
+        command: providerAdapter.command,
+        args: request.args,
+        cwd: request.cwd,
+        env: createTerminalEnv(process.env, providerAdapter.definition.id),
+        launchLabel,
+        worktreePath: request.worktreePath,
+      },
+      () => {
+        void this.events.refreshWorktreeWatcher();
+        this.events.sessionsStateChanged();
+      },
     );
+
+    return Object.assign(pendingTerminal, {
+      provider: providerAdapter.definition.id,
+      providerSessionId: null,
+      existingProviderSessionIds: request.existingProviderSessionIds ?? new Set<string>(),
+    });
+  }
+
+  private launchPendingTerminal(
+    request: TerminalLaunchRequest,
+    onExit?: (pending: PendingTerminal) => void,
+  ): PendingTerminal {
+    const launchCommand = createShellLaunchCommand(request.command, request.args, process.env);
     const proc = pty.spawn(launchCommand.command, launchCommand.args, {
       name: "xterm-256color",
       cols: 80,
       rows: 24,
       cwd: request.cwd,
-      env: createTerminalEnv(process.env, providerAdapter.definition.id),
+      env: request.env,
     });
     this.pendingProcesses.add(proc);
-    const pending: PendingSession = {
+    const pending: PendingTerminal = {
       proc,
-      provider: providerAdapter.definition.id,
-      command: providerAdapter.command,
+      command: request.command,
       launchCwd: request.cwd,
-      launchLabel,
+      launchLabel: request.launchLabel,
       outputBuffer: "",
       startupOutput: "",
       worktreePath: request.worktreePath,
-      providerSessionId: null,
       terminalRuntimeId: null,
       startedAt: Date.now(),
-      existingProviderSessionIds,
       exited: false,
       startupSettled: false,
       startupFailureReported: false,
@@ -691,10 +709,9 @@ export class YuruService {
       pending.exited = true;
       pending.exitCode = exitCode;
       pending.signal = signal;
-      console.info("[Yuru] session process exited", {
+      console.info("[Yuru] terminal process exited", {
         terminalRuntimeId: pending.terminalRuntimeId,
-        provider: pending.provider,
-        providerSessionId: pending.providerSessionId,
+        command: pending.command,
         launchCwd: pending.launchCwd,
         worktreePath: pending.worktreePath,
         exitCode,
@@ -713,8 +730,7 @@ export class YuruService {
       this.ptyProcesses.delete(pending.terminalRuntimeId);
       this.ptyAttachments.delete(pending.terminalRuntimeId);
       this.terminalRuntimeMap.delete(pending.terminalRuntimeId);
-      void this.events.refreshWorktreeWatcher();
-      this.events.sessionsStateChanged();
+      onExit?.(pending);
     });
 
     return pending;
