@@ -32,7 +32,7 @@ interface ActiveTerminalRuntimeWorktreeSession {
 }
 
 export async function loadRepoList(
-  activeTerminalRuntimeIdsByKey?: ReadonlyMap<string, TerminalRuntimeId>,
+  terminalRuntimeIdsBySessionKey?: ReadonlyMap<string, TerminalRuntimeId>,
   listGitWorktrees: ListWorktrees = listWorktrees,
   primarySessionPreviewsByKey?: ReadonlyMap<string, string>,
   loadSuggestedSessions?: LoadSuggestedSessions,
@@ -43,13 +43,18 @@ export async function loadRepoList(
   const repoEntries = await Promise.all(
     metadata.repos.map(async (repo) => {
       // TODO: repo の存在確認。存在しない repo は返さない。
-      const metadataByPath = new Map(
+      const taskWorktreeMetadataByPath = new Map(
         metadata.taskWorktrees
           .filter((taskWorktree) => taskWorktree.repoId === repo.id)
           .map((taskWorktree) => [toWorktreePathKey(taskWorktree.worktreePath), taskWorktree]),
       );
-      const gitWorktrees = await loadGitWorktrees(repo.repoPath, listGitWorktrees);
-      return { repo, metadataByPath, gitWorktrees };
+      let gitWorktrees: readonly WorktreeInfo[];
+      try {
+        gitWorktrees = await listGitWorktrees(repo.repoPath);
+      } catch {
+        gitWorktrees = [];
+      }
+      return { repo, taskWorktreeMetadataByPath, gitWorktrees };
     }),
   );
   const worktreePaths = repoEntries.flatMap((entry) =>
@@ -62,13 +67,13 @@ export async function loadRepoList(
     ? await loadGitHubPullRequests(repoEntries, loadGitHubPullRequest)
     : undefined;
 
-  return repoEntries.map(({ repo, metadataByPath, gitWorktrees }) => {
+  return repoEntries.map(({ repo, taskWorktreeMetadataByPath, gitWorktrees }) => {
     const taskWorktrees = gitWorktrees.map((gitWorktree) =>
       toTaskWorktreeListItem(
         repo.id,
         gitWorktree,
-        metadataByPath.get(toWorktreePathKey(gitWorktree.path)),
-        activeTerminalRuntimeIdsByKey,
+        taskWorktreeMetadataByPath.get(toWorktreePathKey(gitWorktree.path)),
+        terminalRuntimeIdsBySessionKey,
         activeTerminalRuntimesByWorktreePath,
         primarySessionPreviewsByKey,
         suggestedSessionsByWorktreePath?.get(gitWorktree.path) ?? [],
@@ -81,17 +86,6 @@ export async function loadRepoList(
       taskWorktrees,
     };
   });
-}
-
-async function loadGitWorktrees(
-  repoPath: string,
-  listGitWorktrees: ListWorktrees,
-): Promise<readonly WorktreeInfo[]> {
-  try {
-    return await listGitWorktrees(repoPath);
-  } catch {
-    return [];
-  }
 }
 
 async function loadGitHubPullRequests(
@@ -119,7 +113,7 @@ function toTaskWorktreeListItem(
   repoId: string,
   gitWorktree: WorktreeInfo,
   metadataEntry: TaskWorktreeMetadata | undefined,
-  activeTerminalRuntimeIdsByKey: ReadonlyMap<string, TerminalRuntimeId> | undefined,
+  terminalRuntimeIdsBySessionKey: ReadonlyMap<string, TerminalRuntimeId> | undefined,
   activeTerminalRuntimesByWorktreePath:
     | ReadonlyMap<string, ActiveTerminalRuntimeWorktreeSession>
     | undefined,
@@ -134,7 +128,7 @@ function toTaskWorktreeListItem(
     ? toSessionKey(primarySession.provider, primarySession.providerSessionId)
     : null;
   const activeTerminalRuntimeId = primarySessionKey
-    ? (activeTerminalRuntimeIdsByKey?.get(primarySessionKey) ?? null)
+    ? (terminalRuntimeIdsBySessionKey?.get(primarySessionKey) ?? null)
     : null;
   const activeTerminalRuntime = primarySession
     ? null
@@ -142,7 +136,7 @@ function toTaskWorktreeListItem(
   const suggestedSessionItems = toSuggestedSessionListItems(
     suggestedSessions,
     new Set([primarySessionKey].filter((key) => key !== null)),
-    activeTerminalRuntimeIdsByKey,
+    terminalRuntimeIdsBySessionKey,
     primarySessionPreviewsByKey,
   );
 
@@ -183,7 +177,7 @@ function toTaskWorktreeListItem(
 function toSuggestedSessionListItems(
   suggestedSessions: readonly SuggestedWorktreeSession[],
   excludedSessionKeys: ReadonlySet<string>,
-  activeTerminalRuntimeIdsByKey: ReadonlyMap<string, TerminalRuntimeId> | undefined,
+  terminalRuntimeIdsBySessionKey: ReadonlyMap<string, TerminalRuntimeId> | undefined,
   primarySessionPreviewsByKey: ReadonlyMap<string, string> | undefined,
 ): SuggestedSessionListItem[] {
   return suggestedSessions.flatMap((session) => {
@@ -191,7 +185,7 @@ function toSuggestedSessionListItems(
     if (excludedSessionKeys.has(providerSessionKey)) {
       return [];
     }
-    const activeTerminalRuntimeId = activeTerminalRuntimeIdsByKey?.get(providerSessionKey) ?? null;
+    const activeTerminalRuntimeId = terminalRuntimeIdsBySessionKey?.get(providerSessionKey) ?? null;
     return [
       {
         provider: session.provider,

@@ -451,6 +451,72 @@ test("loadRepoList は active session key と一致する suggested を active �
   ]);
 });
 
+test("loadRepoList は複数の active suggested session をそれぞれ active として返す", async () => {
+  const codexSessionKey = toSessionKey("codex", "codex-1");
+  const claudeSessionKey = toSessionKey("claude", "claude-1");
+  seed({
+    repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
+    taskWorktrees: [
+      {
+        repoId: "repo-1",
+        worktreePath: "/tmp/repo-a/.yuru/worktrees/task-a",
+      },
+    ],
+  });
+  const listGitWorktrees = listGitWorktreesFrom(
+    new Map([
+      [
+        "/tmp/repo-a",
+        [{ path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" }],
+      ],
+    ]),
+  );
+
+  const result = await loadRepoList(
+    new Map([
+      [codexSessionKey, "runtime-codex"],
+      [claudeSessionKey, "runtime-claude"],
+    ]),
+    listGitWorktrees,
+    undefined,
+    async (worktreePaths) =>
+      new Map([
+        [
+          worktreePaths[0],
+          [
+            {
+              provider: "codex",
+              providerSessionId: "codex-1",
+            },
+            {
+              provider: "claude",
+              providerSessionId: "claude-1",
+            },
+          ],
+        ],
+      ]),
+  );
+
+  assert.deepEqual(result[0].taskWorktrees[0].suggestedSessions, [
+    {
+      provider: "codex",
+      providerSessionKey: codexSessionKey,
+      activeTerminalRuntimeId: "runtime-codex",
+      state: "active",
+      preview: "",
+      timestamp: 0,
+    },
+    {
+      provider: "claude",
+      providerSessionKey: claudeSessionKey,
+      activeTerminalRuntimeId: "runtime-claude",
+      state: "active",
+      preview: "",
+      timestamp: 0,
+    },
+  ]);
+});
+
 test("loadRepoList は primary と同じ session を suggested から除外する", async () => {
   seed({
     repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],

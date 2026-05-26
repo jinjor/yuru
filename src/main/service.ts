@@ -228,11 +228,11 @@ export class YuruService {
   async getRepos() {
     const previewsByKey = await loadStoredSessionPreviews();
     return loadRepoList(
-      this.getActiveTerminalRuntimeIdsByKey(),
+      this.getTerminalRuntimeIdsBySessionKey(),
       undefined,
       previewsByKey,
       loadSuggestedWorktreeSessions,
-      this.getActiveTerminalRuntimesByWorktreePath(),
+      this.getTerminalRuntimesByWorktreePath(),
       getGitHubPullRequestForBranch,
     );
   }
@@ -581,7 +581,7 @@ export class YuruService {
     this.activeCodeSearches.delete(worktreeId);
   }
 
-  private getActiveTerminalRuntimeIdsByKey(): Map<string, string> {
+  private getTerminalRuntimeIdsBySessionKey(): Map<string, string> {
     const idsByKey = new Map<string, string>();
     for (const [terminalRuntimeId, info] of this.terminalRuntimeMap) {
       if (info.providerSessionId) {
@@ -591,7 +591,7 @@ export class YuruService {
     return idsByKey;
   }
 
-  private getActiveTerminalRuntimesByWorktreePath(): Map<
+  private getTerminalRuntimesByWorktreePath(): Map<
     string,
     { provider: SessionProvider; terminalRuntimeId: string }
   > {
@@ -617,7 +617,7 @@ export class YuruService {
     if (!primarySession) {
       return false;
     }
-    return this.getActiveTerminalRuntimeIdsByKey().has(
+    return this.getTerminalRuntimeIdsBySessionKey().has(
       toSessionKey(primarySession.provider, primarySession.providerSessionId),
     );
   }
@@ -1034,7 +1034,8 @@ export class YuruService {
       });
     }
 
-    const activeTerminalRuntimeId = this.getActiveTerminalRuntimeIdsByKey().get(providerSessionKey);
+    const activeTerminalRuntimeId =
+      this.getTerminalRuntimeIdsBySessionKey().get(providerSessionKey);
     if (activeTerminalRuntimeId && this.ptyProcesses.has(activeTerminalRuntimeId)) {
       return ok({ worktreeId, terminalRuntimeId: activeTerminalRuntimeId });
     }
