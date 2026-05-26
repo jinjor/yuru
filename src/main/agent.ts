@@ -1,6 +1,6 @@
-import * as pty from "node-pty";
 import type { SessionProvider } from "../shared/session.js";
 import type { AgentDefinition } from "../shared/agent.js";
+import type { PendingTerminal, TerminalRuntimeInfo } from "./terminal-runtime.js";
 import type { WorktreeSessionHint } from "./worktree-session-detection.js";
 
 export interface SessionSnapshot {
@@ -16,32 +16,15 @@ export interface SessionPreview {
   timestamp: number;
 }
 
-export interface RuntimeSessionInfo {
+export interface AgentRuntimeInfo extends TerminalRuntimeInfo {
   provider: SessionProvider;
   providerSessionId: string | null;
-  repoPath: string;
-  worktreePath: string;
-  startedAt: number;
 }
 
-export interface PendingSession {
-  proc: pty.IPty;
+export interface PendingSession extends PendingTerminal {
   provider: SessionProvider;
-  command: string;
-  launchCwd: string;
-  launchLabel: string;
-  outputBuffer: string;
-  startupOutput: string;
-  worktreePath: string;
   providerSessionId: string | null;
-  runtimeSessionId: string | null;
-  startedAt: number;
   existingProviderSessionIds: ReadonlySet<string>;
-  exited: boolean;
-  exitCode?: number;
-  signal?: number;
-  startupSettled: boolean;
-  startupFailureReported: boolean;
 }
 
 export interface LaunchRequest {

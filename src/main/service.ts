@@ -41,12 +41,13 @@ import {
   searchCode as runCodeSearch,
 } from "./code-search.js";
 import {
+  type AgentRuntimeInfo,
   type LaunchRequest,
   type PendingSession,
-  type RuntimeSessionInfo,
   type SessionProviderAdapter,
   type WorktreeContext,
 } from "./agent.js";
+import type { PendingTerminal } from "./terminal-runtime.js";
 import { FileTreeWatcher } from "./file-tree-watcher.js";
 import {
   type AppError,
@@ -175,7 +176,7 @@ function startupExitDetail(output: string, exitCode: number, signal?: number): s
 }
 
 function startupFailureMessage(
-  pending: PendingSession,
+  pending: PendingTerminal,
   exitCode: number,
   signal?: number,
 ): AppError {
@@ -211,7 +212,7 @@ export class YuruService {
   private readonly runtimeSessionRefreshScheduler: RuntimeSessionRefreshScheduler;
   private readonly worktreeDisplayUpdateFingerprints = new Map<string, string>();
   private readonly pendingProcesses = new Set<pty.IPty>();
-  private readonly sessionRuntimeMap = new Map<string, RuntimeSessionInfo>();
+  private readonly sessionRuntimeMap = new Map<string, AgentRuntimeInfo>();
   private readonly activeCodeSearches = new Map<string, AbortController>();
   private readonly fileTreeWatcher: FileTreeWatcher;
 
@@ -738,7 +739,7 @@ export class YuruService {
     });
   }
 
-  private createRuntimeSessionId(provider: SessionProvider, pending: PendingSession): string {
+  private createRuntimeSessionId(provider: SessionProvider, pending: PendingTerminal): string {
     return toRuntimeSessionKey(provider, pending.startedAt);
   }
 
