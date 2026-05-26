@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-const { RuntimeSessionRefreshScheduler } = await import(
-  "../../src/main/runtime-session-refresh-scheduler.ts"
+const { TerminalRuntimeRefreshScheduler } = await import(
+  "../../src/main/terminal-runtime-refresh-scheduler.ts"
 );
 
 class FakeTimers {
@@ -55,12 +55,12 @@ async function flushAsyncWork() {
   await Promise.resolve();
 }
 
-test("RuntimeSessionRefreshScheduler は settled 後に refresh due を通知し backoff を続ける", async () => {
+test("TerminalRuntimeRefreshScheduler は settled 後に refresh due を通知し backoff を続ける", async () => {
   const timers = new FakeTimers();
   const refreshes = [];
-  const scheduler = new RuntimeSessionRefreshScheduler({
-    onRefreshDue: (runtimeSessionId) => {
-      refreshes.push(runtimeSessionId);
+  const scheduler = new TerminalRuntimeRefreshScheduler({
+    onRefreshDue: (terminalRuntimeId) => {
+      refreshes.push(terminalRuntimeId);
     },
     outputSettledDelayMs: 12,
     backoffDelaysMs: [30, 60],
@@ -86,11 +86,11 @@ test("RuntimeSessionRefreshScheduler は settled 後に refresh due を通知し
   assert.deepEqual(timers.activeDelays(), [60]);
 });
 
-test("RuntimeSessionRefreshScheduler は新しい activity で古い refresh 列を止める", async () => {
+test("TerminalRuntimeRefreshScheduler は新しい activity で古い refresh 列を止める", async () => {
   const timers = new FakeTimers();
   const firstRefresh = deferred();
   let calls = 0;
-  const scheduler = new RuntimeSessionRefreshScheduler({
+  const scheduler = new TerminalRuntimeRefreshScheduler({
     onRefreshDue: () => {
       calls += 1;
       return calls === 1 ? firstRefresh.promise : undefined;
@@ -113,10 +113,10 @@ test("RuntimeSessionRefreshScheduler は新しい activity で古い refresh 列
   assert.deepEqual(timers.activeDelays(), [12]);
 });
 
-test("RuntimeSessionRefreshScheduler は clear された runtime session を再スケジュールしない", async () => {
+test("TerminalRuntimeRefreshScheduler は clear された terminal runtime を再スケジュールしない", async () => {
   const timers = new FakeTimers();
   const firstRefresh = deferred();
-  const scheduler = new RuntimeSessionRefreshScheduler({
+  const scheduler = new TerminalRuntimeRefreshScheduler({
     onRefreshDue: () => firstRefresh.promise,
     outputSettledDelayMs: 12,
     backoffDelaysMs: [30],

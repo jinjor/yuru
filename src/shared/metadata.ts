@@ -13,7 +13,7 @@ export interface PrimarySessionMetadata {
 export interface SuggestedSessionListItem {
   provider: SessionProvider;
   providerSessionKey: string;
-  activeRuntimeSessionId: string | null;
+  activeTerminalRuntimeId: string | null;
   state: WorktreeSessionState;
   preview: string;
   timestamp: number;
@@ -31,7 +31,7 @@ export type PrimarySessionState = WorktreeSessionState;
 export interface PrimarySessionListItem {
   provider: SessionProvider;
   providerSessionKey: string | null;
-  activeRuntimeSessionId: string | null;
+  activeTerminalRuntimeId: string | null;
   state: PrimarySessionState;
   preview: string;
 }

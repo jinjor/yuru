@@ -41,7 +41,7 @@ import {
   searchCode as runCodeSearch,
 } from "./code-search.js";
 import {
-  type AgentRuntimeInfo,
+  type AgentTerminalRuntimeInfo,
   type LaunchRequest,
   type PendingSession,
   type SessionProviderAdapter,
@@ -59,7 +59,7 @@ import {
 import {
   type SessionProvider,
   type SuggestedWorktreeSession,
-  toRuntimeSessionKey,
+  toTerminalRuntimeKey,
   toSessionKey,
 } from "../shared/session.js";
 import { toAppError } from "./errors.js";
@@ -71,7 +71,7 @@ import {
 } from "./error-center.js";
 import { createTerminalEnv } from "./terminal-env.js";
 import { createShellLaunchCommand } from "./shell-launch.js";
-import { RuntimeSessionRefreshScheduler } from "./runtime-session-refresh-scheduler.js";
+import { TerminalRuntimeRefreshScheduler } from "./terminal-runtime-refresh-scheduler.js";
 
 const STARTUP_OUTPUT_LIMIT = 4000;
 const TERMINAL_SCROLLBACK_LIMIT = 200000;
@@ -79,7 +79,7 @@ const ESCAPE_CHARACTER = String.fromCharCode(0x1b);
 const ANSI_ESCAPE_PATTERN = new RegExp(`${ESCAPE_CHARACTER}\\[[0-9;]*[A-Za-z]`, "g");
 
 interface StartedSession {
-  runtimeSessionId: string;
+  terminalRuntimeId: string;
   providerSessionId: string | null;
 }
 
@@ -92,7 +92,7 @@ interface WorktreeSessionResumeTarget {
 
 export interface YuruServiceEvents {
   fileTreeChanged(worktreeId: string, relativePath: string): void;
-  ptyData(runtimeSessionId: string, data: string): void;
+  ptyData(terminalRuntimeId: string, data: string): void;
   worktreeDisplayChanged(update: WorktreeDisplayUpdate): void;
   sessionsStateChanged(): void;
   errorAdded(notice: AppErrorNotice): void;
@@ -209,16 +209,16 @@ export class YuruService {
   private readonly ptyProcesses = new Map<string, pty.IPty>();
   private readonly ptyScrollback = new Map<string, string>();
   private readonly ptyAttachments = new Map<string, { ready: boolean; pendingChunks: string[] }>();
-  private readonly runtimeSessionRefreshScheduler: RuntimeSessionRefreshScheduler;
+  private readonly terminalRuntimeRefreshScheduler: TerminalRuntimeRefreshScheduler;
   private readonly worktreeDisplayUpdateFingerprints = new Map<string, string>();
   private readonly pendingProcesses = new Set<pty.IPty>();
-  private readonly sessionRuntimeMap = new Map<string, AgentRuntimeInfo>();
+  private readonly terminalRuntimeMap = new Map<string, AgentTerminalRuntimeInfo>();
   private readonly activeCodeSearches = new Map<string, AbortController>();
   private readonly fileTreeWatcher: FileTreeWatcher;
 
   constructor(private readonly events: YuruServiceEvents) {
-    this.runtimeSessionRefreshScheduler = new RuntimeSessionRefreshScheduler({
-      onRefreshDue: (runtimeSessionId) => this.handleRuntimeSessionRefreshDue(runtimeSessionId),
+    this.terminalRuntimeRefreshScheduler = new TerminalRuntimeRefreshScheduler({
+      onRefreshDue: (terminalRuntimeId) => this.handleTerminalRuntimeRefreshDue(terminalRuntimeId),
     });
     this.fileTreeWatcher = new FileTreeWatcher((worktreeId, relativePath) => {
       this.events.fileTreeChanged(worktreeId, relativePath);
@@ -228,11 +228,11 @@ export class YuruService {
   async getRepos() {
     const previewsByKey = await loadStoredSessionPreviews();
     return loadRepoList(
-      this.getActiveRuntimeSessionIdsByKey(),
+      this.getActiveTerminalRuntimeIdsByKey(),
       undefined,
       previewsByKey,
       loadSuggestedWorktreeSessions,
-      this.getActiveRuntimeSessionsByWorktreePath(),
+      this.getActiveTerminalRuntimesByWorktreePath(),
       getGitHubPullRequestForBranch,
     );
   }
@@ -241,16 +241,16 @@ export class YuruService {
     return listSessionProviderDefinitions();
   }
 
-  attachPty(runtimeSessionId: string): string {
-    this.ptyAttachments.set(runtimeSessionId, {
+  attachPty(terminalRuntimeId: string): string {
+    this.ptyAttachments.set(terminalRuntimeId, {
       ready: false,
       pendingChunks: [],
     });
-    return this.ptyScrollback.get(runtimeSessionId) ?? "";
+    return this.ptyScrollback.get(terminalRuntimeId) ?? "";
   }
 
-  readyPty(runtimeSessionId: string): string | null {
-    const attachment = this.ptyAttachments.get(runtimeSessionId);
+  readyPty(terminalRuntimeId: string): string | null {
+    const attachment = this.ptyAttachments.get(terminalRuntimeId);
     if (!attachment) {
       return null;
     }
@@ -261,8 +261,8 @@ export class YuruService {
     return pendingChunk || null;
   }
 
-  detachPty(runtimeSessionId: string): void {
-    this.ptyAttachments.delete(runtimeSessionId);
+  detachPty(terminalRuntimeId: string): void {
+    this.ptyAttachments.delete(terminalRuntimeId);
   }
 
   getErrors(): AppErrorNotice[] {
@@ -312,7 +312,7 @@ export class YuruService {
         await providerAdapter.createWorktreeLaunch(this.createContextForExistingWorktree(worktree)),
         "Failed to create worktree session",
       );
-      const { runtimeSessionId, providerSessionId } = await this.startSession(
+      const { terminalRuntimeId, providerSessionId } = await this.startSession(
         provider,
         providerAdapter,
         pending,
@@ -324,7 +324,7 @@ export class YuruService {
           providerSessionId,
         });
       }
-      return ok({ worktreeId, runtimeSessionId });
+      return ok({ worktreeId, terminalRuntimeId });
     } catch (error) {
       if (pending && !pending.exited) {
         pending.proc.kill();
@@ -382,7 +382,7 @@ export class YuruService {
         await providerAdapter.createWorktreeLaunch(worktreeContext),
         "Failed to create worktree session",
       );
-      const { runtimeSessionId, providerSessionId } = await this.startSession(
+      const { terminalRuntimeId, providerSessionId } = await this.startSession(
         provider,
         providerAdapter,
         pending,
@@ -398,7 +398,7 @@ export class YuruService {
       this.events.addWorktreeWatcherRepo(repoPath);
       return ok({
         worktreeId: toWorktreeId(repo.id, worktreePath),
-        runtimeSessionId,
+        terminalRuntimeId,
       });
     } catch (error) {
       if (pending && !pending.exited) {
@@ -543,15 +543,15 @@ export class YuruService {
     this.cancelActiveCodeSearch(worktreeId);
   }
 
-  ptyWrite(runtimeSessionId: string, data: string): void {
-    const proc = this.ptyProcesses.get(runtimeSessionId);
+  ptyWrite(terminalRuntimeId: string, data: string): void {
+    const proc = this.ptyProcesses.get(terminalRuntimeId);
     if (proc) {
       proc.write(data);
     }
   }
 
-  ptyResize(runtimeSessionId: string, cols: number, rows: number): void {
-    const proc = this.ptyProcesses.get(runtimeSessionId);
+  ptyResize(terminalRuntimeId: string, cols: number, rows: number): void {
+    const proc = this.ptyProcesses.get(terminalRuntimeId);
     if (proc) {
       proc.resize(cols, rows);
     }
@@ -581,31 +581,31 @@ export class YuruService {
     this.activeCodeSearches.delete(worktreeId);
   }
 
-  private getActiveRuntimeSessionIdsByKey(): Map<string, string> {
+  private getActiveTerminalRuntimeIdsByKey(): Map<string, string> {
     const idsByKey = new Map<string, string>();
-    for (const [runtimeSessionId, info] of this.sessionRuntimeMap) {
+    for (const [terminalRuntimeId, info] of this.terminalRuntimeMap) {
       if (info.providerSessionId) {
-        idsByKey.set(toSessionKey(info.provider, info.providerSessionId), runtimeSessionId);
+        idsByKey.set(toSessionKey(info.provider, info.providerSessionId), terminalRuntimeId);
       }
     }
     return idsByKey;
   }
 
-  private getActiveRuntimeSessionsByWorktreePath(): Map<
+  private getActiveTerminalRuntimesByWorktreePath(): Map<
     string,
-    { provider: SessionProvider; runtimeSessionId: string }
+    { provider: SessionProvider; terminalRuntimeId: string }
   > {
-    const sessionsByWorktreePath = new Map<
+    const terminalRuntimesByWorktreePath = new Map<
       string,
-      { provider: SessionProvider; runtimeSessionId: string }
+      { provider: SessionProvider; terminalRuntimeId: string }
     >();
-    for (const [runtimeSessionId, info] of this.sessionRuntimeMap) {
-      sessionsByWorktreePath.set(path.resolve(info.worktreePath), {
+    for (const [terminalRuntimeId, info] of this.terminalRuntimeMap) {
+      terminalRuntimesByWorktreePath.set(path.resolve(info.worktreePath), {
         provider: info.provider,
-        runtimeSessionId,
+        terminalRuntimeId,
       });
     }
-    return sessionsByWorktreePath;
+    return terminalRuntimesByWorktreePath;
   }
 
   private hasActivePrimarySessionForWorktree(worktreePath: string): boolean {
@@ -617,7 +617,7 @@ export class YuruService {
     if (!primarySession) {
       return false;
     }
-    return this.getActiveRuntimeSessionIdsByKey().has(
+    return this.getActiveTerminalRuntimeIdsByKey().has(
       toSessionKey(primarySession.provider, primarySession.providerSessionId),
     );
   }
@@ -651,7 +651,7 @@ export class YuruService {
       startupOutput: "",
       worktreePath: request.worktreePath,
       providerSessionId: null,
-      runtimeSessionId: null,
+      terminalRuntimeId: null,
       startedAt: Date.now(),
       existingProviderSessionIds,
       exited: false,
@@ -668,15 +668,15 @@ export class YuruService {
       if (!pending.startupSettled) {
         pending.startupOutput = appendStartupOutput(pending.startupOutput, data);
       }
-      if (!pending.runtimeSessionId) {
+      if (!pending.terminalRuntimeId) {
         return;
       }
-      this.runtimeSessionRefreshScheduler.recordActivity(pending.runtimeSessionId);
+      this.terminalRuntimeRefreshScheduler.recordActivity(pending.terminalRuntimeId);
       this.ptyScrollback.set(
-        pending.runtimeSessionId,
-        appendTerminalOutput(this.ptyScrollback.get(pending.runtimeSessionId) ?? "", data),
+        pending.terminalRuntimeId,
+        appendTerminalOutput(this.ptyScrollback.get(pending.terminalRuntimeId) ?? "", data),
       );
-      const attachment = this.ptyAttachments.get(pending.runtimeSessionId);
+      const attachment = this.ptyAttachments.get(pending.terminalRuntimeId);
       if (!attachment) {
         return;
       }
@@ -684,7 +684,7 @@ export class YuruService {
         attachment.pendingChunks.push(data);
         return;
       }
-      this.events.ptyData(pending.runtimeSessionId, data);
+      this.events.ptyData(pending.terminalRuntimeId, data);
     });
 
     proc.onExit(({ exitCode, signal }) => {
@@ -692,7 +692,7 @@ export class YuruService {
       pending.exitCode = exitCode;
       pending.signal = signal;
       console.info("[Yuru] session process exited", {
-        runtimeSessionId: pending.runtimeSessionId,
+        terminalRuntimeId: pending.terminalRuntimeId,
         provider: pending.provider,
         providerSessionId: pending.providerSessionId,
         launchCwd: pending.launchCwd,
@@ -706,13 +706,13 @@ export class YuruService {
         pending.startupFailureReported = true;
         this.reportError(startupFailureMessage(pending, exitCode, signal));
       }
-      if (!pending.runtimeSessionId) {
+      if (!pending.terminalRuntimeId) {
         return;
       }
-      this.clearRuntimeSessionRefresh(pending.runtimeSessionId);
-      this.ptyProcesses.delete(pending.runtimeSessionId);
-      this.ptyAttachments.delete(pending.runtimeSessionId);
-      this.sessionRuntimeMap.delete(pending.runtimeSessionId);
+      this.clearTerminalRuntimeRefresh(pending.terminalRuntimeId);
+      this.ptyProcesses.delete(pending.terminalRuntimeId);
+      this.ptyAttachments.delete(pending.terminalRuntimeId);
+      this.terminalRuntimeMap.delete(pending.terminalRuntimeId);
       void this.events.refreshWorktreeWatcher();
       this.events.sessionsStateChanged();
     });
@@ -720,17 +720,17 @@ export class YuruService {
     return pending;
   }
 
-  private registerRuntimeSession(
-    runtimeSessionId: string,
+  private registerTerminalRuntime(
+    terminalRuntimeId: string,
     pending: PendingSession,
     providerSessionId: string | null,
   ): void {
     pending.providerSessionId = providerSessionId;
-    pending.runtimeSessionId = runtimeSessionId;
+    pending.terminalRuntimeId = terminalRuntimeId;
     this.pendingProcesses.delete(pending.proc);
-    this.ptyProcesses.set(runtimeSessionId, pending.proc);
-    this.ptyScrollback.set(runtimeSessionId, pending.outputBuffer);
-    this.sessionRuntimeMap.set(runtimeSessionId, {
+    this.ptyProcesses.set(terminalRuntimeId, pending.proc);
+    this.ptyScrollback.set(terminalRuntimeId, pending.outputBuffer);
+    this.terminalRuntimeMap.set(terminalRuntimeId, {
       provider: pending.provider,
       providerSessionId,
       repoPath: pending.launchCwd,
@@ -739,32 +739,32 @@ export class YuruService {
     });
   }
 
-  private createRuntimeSessionId(provider: SessionProvider, pending: PendingTerminal): string {
-    return toRuntimeSessionKey(provider, pending.startedAt);
+  private createTerminalRuntimeId(provider: SessionProvider, pending: PendingTerminal): string {
+    return toTerminalRuntimeKey(provider, pending.startedAt);
   }
 
-  private updateRuntimeSessionProviderSessionId(
-    runtimeSessionId: string,
+  private updateTerminalRuntimeProviderSessionId(
+    terminalRuntimeId: string,
     providerSessionId: string,
   ): void {
-    const runtime = this.sessionRuntimeMap.get(runtimeSessionId);
+    const runtime = this.terminalRuntimeMap.get(terminalRuntimeId);
     if (runtime) {
-      this.sessionRuntimeMap.set(runtimeSessionId, {
+      this.terminalRuntimeMap.set(terminalRuntimeId, {
         ...runtime,
         providerSessionId,
       });
     }
   }
 
-  private async handleRuntimeSessionRefreshDue(runtimeSessionId: string): Promise<void> {
-    if (!this.ptyProcesses.has(runtimeSessionId)) {
+  private async handleTerminalRuntimeRefreshDue(terminalRuntimeId: string): Promise<void> {
+    if (!this.ptyProcesses.has(terminalRuntimeId)) {
       return;
     }
-    await this.refreshRuntimeSessionWorktreeDisplay(runtimeSessionId);
+    await this.refreshTerminalRuntimeWorktreeDisplay(terminalRuntimeId);
   }
 
-  private async refreshRuntimeSessionWorktreeDisplay(runtimeSessionId: string): Promise<void> {
-    const runtime = this.sessionRuntimeMap.get(runtimeSessionId);
+  private async refreshTerminalRuntimeWorktreeDisplay(terminalRuntimeId: string): Promise<void> {
+    const runtime = this.terminalRuntimeMap.get(terminalRuntimeId);
     if (!runtime) {
       return;
     }
@@ -798,35 +798,35 @@ export class YuruService {
       };
     }
 
-    this.emitWorktreeDisplayChanged(runtimeSessionId, update);
+    this.emitWorktreeDisplayChanged(terminalRuntimeId, update);
   }
 
   private emitWorktreeDisplayChanged(
-    runtimeSessionId: string,
+    terminalRuntimeId: string,
     update: WorktreeDisplayUpdate,
   ): void {
     const fingerprint = JSON.stringify(update);
-    if (this.worktreeDisplayUpdateFingerprints.get(runtimeSessionId) === fingerprint) {
+    if (this.worktreeDisplayUpdateFingerprints.get(terminalRuntimeId) === fingerprint) {
       return;
     }
-    this.worktreeDisplayUpdateFingerprints.set(runtimeSessionId, fingerprint);
+    this.worktreeDisplayUpdateFingerprints.set(terminalRuntimeId, fingerprint);
     this.events.worktreeDisplayChanged(update);
   }
 
-  private clearRuntimeSessionRefresh(runtimeSessionId: string): void {
-    this.runtimeSessionRefreshScheduler.clear(runtimeSessionId);
-    this.worktreeDisplayUpdateFingerprints.delete(runtimeSessionId);
+  private clearTerminalRuntimeRefresh(terminalRuntimeId: string): void {
+    this.terminalRuntimeRefreshScheduler.clear(terminalRuntimeId);
+    this.worktreeDisplayUpdateFingerprints.delete(terminalRuntimeId);
   }
 
-  private clearRuntimeSessionRefreshes(): void {
-    this.runtimeSessionRefreshScheduler.clearAll();
+  private clearTerminalRuntimeRefreshes(): void {
+    this.terminalRuntimeRefreshScheduler.clearAll();
     this.worktreeDisplayUpdateFingerprints.clear();
   }
 
   private async resolveLazySessionId(
     providerAdapter: SessionProviderAdapter,
     pending: PendingSession,
-    runtimeSessionId: string,
+    terminalRuntimeId: string,
   ): Promise<void> {
     try {
       const providerSessionId = await providerAdapter.waitForSessionId(pending);
@@ -835,8 +835,8 @@ export class YuruService {
       }
       pending.providerSessionId = providerSessionId;
       pending.startupSettled = true;
-      this.updateRuntimeSessionProviderSessionId(runtimeSessionId, providerSessionId);
-      if (!this.sessionRuntimeMap.has(runtimeSessionId)) {
+      this.updateTerminalRuntimeProviderSessionId(terminalRuntimeId, providerSessionId);
+      if (!this.terminalRuntimeMap.has(terminalRuntimeId)) {
         return;
       }
       attachPrimarySessionByPath(pending.worktreePath, {
@@ -861,7 +861,7 @@ export class YuruService {
     this.ptyAttachments.clear();
     this.pendingProcesses.clear();
     this.ptyScrollback.clear();
-    this.clearRuntimeSessionRefreshes();
+    this.clearTerminalRuntimeRefreshes();
   }
 
   private async findPrimarySessionResumeTarget(
@@ -990,9 +990,9 @@ export class YuruService {
         await providerAdapter.createResumeLaunch(target),
         "Failed to resume session",
       );
-      const runtimeSessionId = this.createRuntimeSessionId(target.provider, pending);
-      this.registerRuntimeSession(runtimeSessionId, pending, target.providerSessionId);
-      return ok(runtimeSessionId);
+      const terminalRuntimeId = this.createTerminalRuntimeId(target.provider, pending);
+      this.registerTerminalRuntime(terminalRuntimeId, pending, target.providerSessionId);
+      return ok(terminalRuntimeId);
     } catch (error) {
       if (pending && !pending.exited) {
         pending.proc.kill();
@@ -1018,14 +1018,14 @@ export class YuruService {
       });
     }
 
-    const activeRuntimeSessionId = this.getActiveRuntimeSessionIdsByKey().get(providerSessionKey);
-    if (activeRuntimeSessionId && this.ptyProcesses.has(activeRuntimeSessionId)) {
-      return ok({ worktreeId, runtimeSessionId: activeRuntimeSessionId });
+    const activeTerminalRuntimeId = this.getActiveTerminalRuntimeIdsByKey().get(providerSessionKey);
+    if (activeTerminalRuntimeId && this.ptyProcesses.has(activeTerminalRuntimeId)) {
+      return ok({ worktreeId, terminalRuntimeId: activeTerminalRuntimeId });
     }
 
     const result = await this.activateWorktreeSession(target, { detachMissingPrimary: true });
     if (result.ok) {
-      return ok({ worktreeId, runtimeSessionId: result.data });
+      return ok({ worktreeId, terminalRuntimeId: result.data });
     }
     return result;
   }
@@ -1062,21 +1062,21 @@ export class YuruService {
     providerAdapter: SessionProviderAdapter,
     pending: PendingSession,
   ): Promise<StartedSession> {
-    const runtimeSessionId = this.createRuntimeSessionId(provider, pending);
+    const terminalRuntimeId = this.createTerminalRuntimeId(provider, pending);
 
     if (providerAdapter.resolvesSessionIdLazily) {
-      this.registerRuntimeSession(runtimeSessionId, pending, null);
-      void this.resolveLazySessionId(providerAdapter, pending, runtimeSessionId);
+      this.registerTerminalRuntime(terminalRuntimeId, pending, null);
+      void this.resolveLazySessionId(providerAdapter, pending, terminalRuntimeId);
       return {
-        runtimeSessionId,
+        terminalRuntimeId,
         providerSessionId: null,
       };
     }
 
     const providerSessionId = await providerAdapter.waitForSessionId(pending);
-    this.registerRuntimeSession(runtimeSessionId, pending, providerSessionId);
+    this.registerTerminalRuntime(terminalRuntimeId, pending, providerSessionId);
     return {
-      runtimeSessionId,
+      terminalRuntimeId,
       providerSessionId,
     };
   }

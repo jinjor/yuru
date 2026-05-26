@@ -9,7 +9,7 @@ import "@xterm/xterm/css/xterm.css";
 import type { AgentDefinition } from "../shared/agent";
 import type { RepoListItem, TaskWorktreeListItem } from "../shared/metadata";
 import type { WorktreeDisplayUpdate } from "../shared/ipc";
-import { type RuntimeSessionId, type SessionProvider } from "../shared/session";
+import { type TerminalRuntimeId, type SessionProvider } from "../shared/session";
 import { BranchNameInput } from "./components/BranchNameInput";
 import { RepoList } from "./components/RepoList";
 import { SessionView } from "./components/SessionView";
@@ -22,13 +22,13 @@ export function App() {
   const [availableProviders, setAvailableProviders] = useState<AgentDefinition[]>([]);
   const [selection, setSelection] = useState<{
     worktreeId: string;
-    runtimeSessionId: RuntimeSessionId;
+    terminalRuntimeId: TerminalRuntimeId;
   } | null>(null);
   const [worktreeTarget, setWorktreeTarget] = useState<string | null>(null);
   const [worktreeError, setWorktreeError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(260);
   const selectedWorktreeId = selection?.worktreeId ?? null;
-  const selectedRuntimeSessionId = selection?.runtimeSessionId ?? null;
+  const selectedTerminalRuntimeId = selection?.terminalRuntimeId ?? null;
   const selectedTaskWorktree = findTaskWorktree(repos, selectedWorktreeId);
 
   const refreshRepos = useCallback(async (): Promise<RepoListItem[]> => {
@@ -65,8 +65,8 @@ export function App() {
           if (!prev) {
             return null;
           }
-          const runtimeSessionId = findActiveRuntimeSessionId(nextRepos, prev.worktreeId);
-          return runtimeSessionId ? { worktreeId: prev.worktreeId, runtimeSessionId } : null;
+          const terminalRuntimeId = findActiveTerminalRuntimeId(nextRepos, prev.worktreeId);
+          return terminalRuntimeId ? { worktreeId: prev.worktreeId, terminalRuntimeId } : null;
         });
       });
     });
@@ -91,7 +91,7 @@ export function App() {
       document.body.style.userSelect = "none";
 
       const handleMouseMove = (moveEvent: globalThis.MouseEvent): void => {
-        const reservedSessionViewWidth = selectedRuntimeSessionId ? 520 : 640;
+        const reservedSessionViewWidth = selectedTerminalRuntimeId ? 520 : 640;
         const maxWidth = Math.max(220, appWidth - reservedSessionViewWidth);
         setSidebarWidth(clamp(startWidth + moveEvent.clientX - startX, 220, maxWidth));
       };
@@ -106,7 +106,7 @@ export function App() {
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("mouseup", stopDragging);
     },
-    [selectedRuntimeSessionId, sidebarWidth],
+    [selectedTerminalRuntimeId, sidebarWidth],
   );
 
   const handleResumePrimarySession = useCallback(
@@ -163,8 +163,8 @@ export function App() {
           if (prev?.worktreeId !== result.data.worktreeId) {
             return prev;
           }
-          const runtimeSessionId = findActiveRuntimeSessionId(nextRepos, prev.worktreeId);
-          return runtimeSessionId ? { worktreeId: prev.worktreeId, runtimeSessionId } : prev;
+          const terminalRuntimeId = findActiveTerminalRuntimeId(nextRepos, prev.worktreeId);
+          return terminalRuntimeId ? { worktreeId: prev.worktreeId, terminalRuntimeId } : prev;
         });
       });
     },
@@ -192,8 +192,8 @@ export function App() {
           if (prev?.worktreeId !== result.data.worktreeId) {
             return prev;
           }
-          const runtimeSessionId = findActiveRuntimeSessionId(nextRepos, prev.worktreeId);
-          return runtimeSessionId ? { worktreeId: prev.worktreeId, runtimeSessionId } : prev;
+          const terminalRuntimeId = findActiveTerminalRuntimeId(nextRepos, prev.worktreeId);
+          return terminalRuntimeId ? { worktreeId: prev.worktreeId, terminalRuntimeId } : prev;
         });
       });
     },
@@ -215,8 +215,8 @@ export function App() {
               setWorktreeError(null);
               setWorktreeTarget(repoPath);
             }}
-            onSelectActiveSession={(worktreeId, runtimeSessionId) =>
-              setSelection({ worktreeId, runtimeSessionId })
+            onSelectActiveSession={(worktreeId, terminalRuntimeId) =>
+              setSelection({ worktreeId, terminalRuntimeId })
             }
             onResumePrimarySession={handleResumePrimarySession}
             onResumeSuggestedSession={handleResumeSuggestedSession}
@@ -229,14 +229,14 @@ export function App() {
         onMouseDown={handleSidebarResizeStart}
         aria-hidden="true"
       />
-      {selectedWorktreeId && selectedRuntimeSessionId ? (
+      {selectedWorktreeId && selectedTerminalRuntimeId ? (
         <SessionView
-          key={`${selectedWorktreeId}:${selectedRuntimeSessionId}`}
+          key={`${selectedWorktreeId}:${selectedTerminalRuntimeId}`}
           appRef={appRef}
           currentBranch={selectedTaskWorktree?.branch ?? null}
           currentGitHub={selectedTaskWorktree?.githubPullRequest ?? null}
           onOpenExternal={openExternal}
-          runtimeSessionId={selectedRuntimeSessionId}
+          terminalRuntimeId={selectedTerminalRuntimeId}
           sidebarWidth={sidebarWidth}
           worktreeId={selectedWorktreeId}
         />
@@ -324,15 +324,15 @@ function updatePrimarySessionPreview(
   };
 }
 
-function findActiveRuntimeSessionId(
+function findActiveTerminalRuntimeId(
   repos: RepoListItem[],
   worktreeId: string,
-): RuntimeSessionId | null {
+): TerminalRuntimeId | null {
   const taskWorktree = findTaskWorktree(repos, worktreeId);
   return (
-    taskWorktree?.primarySession?.activeRuntimeSessionId ??
-    taskWorktree?.suggestedSessions.find((session) => session.activeRuntimeSessionId)
-      ?.activeRuntimeSessionId ??
+    taskWorktree?.primarySession?.activeTerminalRuntimeId ??
+    taskWorktree?.suggestedSessions.find((session) => session.activeTerminalRuntimeId)
+      ?.activeTerminalRuntimeId ??
     null
   );
 }

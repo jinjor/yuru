@@ -14,7 +14,7 @@ export interface PendingTerminal {
   outputBuffer: string;
   startupOutput: string;
   worktreePath: string;
-  runtimeSessionId: string | null;
+  terminalRuntimeId: string | null;
   startedAt: number;
   exited: boolean;
   exitCode?: number;

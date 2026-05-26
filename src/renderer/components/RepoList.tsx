@@ -14,7 +14,7 @@ import type {
   SuggestedSessionListItem,
   TaskWorktreeListItem,
 } from "../../shared/metadata";
-import type { RuntimeSessionId, SessionProvider } from "../../shared/session";
+import type { TerminalRuntimeId, SessionProvider } from "../../shared/session";
 import { providerLabel } from "../utils/session";
 import { GitHubBadge } from "./GitHubBadge";
 
@@ -23,7 +23,7 @@ interface RepoListProps {
   providers: AgentDefinition[];
   selectedWorktreeId: string | null;
   onCreateWorktreeSession: (repoPath: string) => void;
-  onSelectActiveSession: (worktreeId: string, runtimeSessionId: RuntimeSessionId) => void;
+  onSelectActiveSession: (worktreeId: string, terminalRuntimeId: TerminalRuntimeId) => void;
   onResumePrimarySession: (worktreeId: string, providerSessionKey: string) => void;
   onResumeSuggestedSession: (worktreeId: string, providerSessionKey: string) => void;
   onCreateSessionForWorktree: (worktreeId: string, provider: SessionProvider) => void;
@@ -118,7 +118,7 @@ interface TaskWorktreeCardProps {
   isActionSurfaceOpen: boolean;
   onCloseActionSurface: () => void;
   onToggleActionSurface: () => void;
-  onSelectActiveSession: (worktreeId: string, runtimeSessionId: RuntimeSessionId) => void;
+  onSelectActiveSession: (worktreeId: string, terminalRuntimeId: TerminalRuntimeId) => void;
   onResumePrimarySession: (worktreeId: string, providerSessionKey: string) => void;
   onResumeSuggestedSession: (worktreeId: string, providerSessionKey: string) => void;
   onCreateSessionForWorktree: (worktreeId: string, provider: SessionProvider) => void;
@@ -144,8 +144,8 @@ function TaskWorktreeCard({
     if (!primarySession) {
       return;
     }
-    if (primarySession.activeRuntimeSessionId) {
-      onSelectActiveSession(taskWorktree.worktreeId, primarySession.activeRuntimeSessionId);
+    if (primarySession.activeTerminalRuntimeId) {
+      onSelectActiveSession(taskWorktree.worktreeId, primarySession.activeTerminalRuntimeId);
       return;
     }
     if (primarySession.providerSessionKey) {

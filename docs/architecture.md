@@ -1,6 +1,6 @@
 # Architecture Notes
 
-Last updated: 2026-05-16
+Last updated: 2026-05-27
 
 この文書は現在の Yuru のアーキテクチャをまとめる。
 実装の細部、型定義、処理手順の正確な姿はコードを正とする。
@@ -23,10 +23,10 @@ Last updated: 2026-05-16
   - Yuru 外で作られ、task worktree に紐づいていると推測される session
   - provider store から推測した weak candidate
   - 明示的な昇格操作までは primary として扱わない
-- `runtime session`
+- `terminal runtime`
   - Yuru が現在起動している PTY process
-  - active / inactive 表示は runtime session の有無から導出する
-  - runtime session 自体は永続化しない
+  - active / inactive 表示は terminal runtime の有無から導出する
+  - terminal runtime 自体は永続化しない
 
 ## Source of truth
 
@@ -45,13 +45,13 @@ Last updated: 2026-05-16
   - repo と task worktree の path link
   - task worktree と primary session の strong link
 - process memory
-  - active runtime session
+  - active terminal runtime
   - PTY process と scrollback
   - file watcher の購読状態
 
 Yuru metadata は source of truth の複製ではない。
 Git や provider store が持っている状態を丸ごとコピーせず、Yuru 自身が主導線を組み立てるために必要な最小限の情報だけを持つ。
-branch、diff、provider session の本文、runtime process は metadata に保存しない。
+branch、diff、provider session の本文、terminal runtime は metadata に保存しない。
 
 metadata は通常 `~/.yuru/metadata.json` に置く。
 テストや開発用に `YURU_METADATA_PATH` で保存先を差し替えられる。
@@ -89,11 +89,11 @@ Git 上には存在するが、まだ Yuru metadata に strong link を持たな
 
 各 repo の task worktree 一覧は、その repo に対して Git から worktree 群を読んで組み立てる。
 main worktree は task worktree として表示しない。
-その上に Yuru metadata、provider store、active runtime session を重ねる。
+その上に Yuru metadata、provider store、active terminal runtime を重ねる。
 
 - metadata の `primarySession` が有効なら、その session を task worktree の primary として表示する
 - provider store の hint から worktree 配下の session を推測できる場合は suggested session として表示する
-- active runtime session があれば active として表示する
+- active terminal runtime があれば active として表示する
 - metadata にない Git worktree も、primary なしの task worktree として表示する
 
 provider の path hint は candidate 推測にだけ使う。
@@ -138,7 +138,7 @@ worktree context prompt は `~/.yuru/worktree-context-prompt.txt` で差し替�
   - 既存 directory や既存 branch がある場合は作成しない
   - Git worktree 作成、provider 起動、primary attach を 1 つの作成フローとして扱う
 - resume primary session
-  - primary session がすでに active runtime を持つ場合は、その runtime を選択する
+  - primary session がすでに active terminal runtime を持つ場合は、その terminal runtime を選択する
   - inactive の場合は provider store の session を確認してから resume する
   - provider store から消えている primary は detach する
 - promote suggested session
@@ -162,7 +162,7 @@ primary session が active なら選択し、inactive なら resume する。
 primary がない task worktree では suggested session を表示し、ユーザー操作で primary に昇格できる。
 
 右側の `Terminal`, `Files`, `Changes`, preview は選択中の task worktree に連動する。
-どの runtime session の terminal を見ているかと、どの task worktree のファイルを見ているかがずれないように、UI の選択状態は `worktreeId` と `runtimeSessionId` の組み合わせで持つ。
+どの terminal runtime を見ているかと、どの task worktree のファイルを見ているかがずれないように、UI の選択状態は `worktreeId` と `terminalRuntimeId` の組み合わせで持つ。
 
 ## Appendix
 

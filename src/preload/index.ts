@@ -49,16 +49,16 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.removeListener("files:changed", listener);
     };
   },
-  attachPty: (runtimeSessionId: string) => ipcRenderer.invoke("pty:attach", runtimeSessionId),
-  readyPty: (runtimeSessionId: string) => ipcRenderer.invoke("pty:ready", runtimeSessionId),
-  detachPty: (runtimeSessionId: string) => ipcRenderer.invoke("pty:detach", runtimeSessionId),
-  ptyWrite: (runtimeSessionId: string, data: string) =>
-    ipcRenderer.send("pty:write", runtimeSessionId, data),
-  ptyResize: (runtimeSessionId: string, cols: number, rows: number) =>
-    ipcRenderer.send("pty:resize", runtimeSessionId, cols, rows),
+  attachPty: (terminalRuntimeId: string) => ipcRenderer.invoke("pty:attach", terminalRuntimeId),
+  readyPty: (terminalRuntimeId: string) => ipcRenderer.invoke("pty:ready", terminalRuntimeId),
+  detachPty: (terminalRuntimeId: string) => ipcRenderer.invoke("pty:detach", terminalRuntimeId),
+  ptyWrite: (terminalRuntimeId: string, data: string) =>
+    ipcRenderer.send("pty:write", terminalRuntimeId, data),
+  ptyResize: (terminalRuntimeId: string, cols: number, rows: number) =>
+    ipcRenderer.send("pty:resize", terminalRuntimeId, cols, rows),
   onPtyData: (callback) => {
-    const listener = (_event: Electron.IpcRendererEvent, runtimeSessionId: string, data: string) =>
-      callback(runtimeSessionId, data);
+    const listener = (_event: Electron.IpcRendererEvent, terminalRuntimeId: string, data: string) =>
+      callback(terminalRuntimeId, data);
     ipcRenderer.on("pty:data", listener);
     return () => {
       ipcRenderer.removeListener("pty:data", listener);

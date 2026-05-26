@@ -15,7 +15,7 @@ interface SessionViewProps {
   currentBranch: string | null;
   currentGitHub: GitHubPullRequest | null;
   onOpenExternal: (url: string) => void;
-  runtimeSessionId: string;
+  terminalRuntimeId: string;
   sidebarWidth: number;
   worktreeId: string;
 }
@@ -35,7 +35,7 @@ export function SessionView({
   currentBranch,
   currentGitHub,
   onOpenExternal,
-  runtimeSessionId,
+  terminalRuntimeId,
   sidebarWidth,
   worktreeId,
 }: SessionViewProps) {
@@ -204,10 +204,10 @@ export function SessionView({
           }}
           onOpenExternal={onOpenExternal}
           previewRatio={paneLayout.previewRatio}
-          runtimeSessionId={runtimeSessionId}
+          terminalRuntimeId={terminalRuntimeId}
         />
       </div>
-      {runtimeSessionId && (
+      {terminalRuntimeId && (
         <>
           <div
             className="pane-resize-handle vertical"
@@ -231,7 +231,7 @@ export function SessionView({
           />
         </>
       )}
-      {runtimeSessionId && isFileSearchOpen && (
+      {terminalRuntimeId && isFileSearchOpen && (
         <FileSearch
           onClose={() => setIsFileSearchOpen(false)}
           onSelectFile={(path) => setPreviewSelection({ path })}

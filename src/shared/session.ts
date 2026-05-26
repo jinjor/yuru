@@ -1,5 +1,5 @@
 export type SessionProvider = "claude" | "codex";
-export type RuntimeSessionId = string;
+export type TerminalRuntimeId = string;
 
 export interface SuggestedWorktreeSession {
   provider: SessionProvider;
@@ -17,6 +17,6 @@ export function toSessionKey(provider: SessionProvider, providerSessionId: strin
   return `${provider}:${providerSessionId}`;
 }
 
-export function toRuntimeSessionKey(provider: SessionProvider, startedAt: number): string {
+export function toTerminalRuntimeKey(provider: SessionProvider, startedAt: number): string {
   return `${provider}:runtime:${startedAt}`;
 }

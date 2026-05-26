@@ -1,6 +1,6 @@
 import type { AgentDefinition } from "./agent.js";
 import type { RepoListItem } from "./metadata.js";
-import type { GitHubPullRequest, RuntimeSessionId, SessionProvider } from "./session.js";
+import type { GitHubPullRequest, TerminalRuntimeId, SessionProvider } from "./session.js";
 
 export interface AppError {
   code:
@@ -85,7 +85,7 @@ export interface CodeSearchResult {
 
 export interface WorktreeSessionSelection {
   worktreeId: string;
-  runtimeSessionId: RuntimeSessionId;
+  terminalRuntimeId: TerminalRuntimeId;
 }
 
 export interface WorktreeDisplayUpdate {
@@ -141,10 +141,10 @@ export interface ElectronAPI {
   onWorktreeDisplayChanged: (callback: (update: WorktreeDisplayUpdate) => void) => void;
   onSessionsStateChanged: (callback: () => void) => void;
   onFileTreeChanged: (callback: (worktreeId: string, relativePath: string) => void) => () => void;
-  attachPty: (runtimeSessionId: RuntimeSessionId) => Promise<string>;
-  readyPty: (runtimeSessionId: RuntimeSessionId) => Promise<void>;
-  detachPty: (runtimeSessionId: RuntimeSessionId) => Promise<void>;
-  ptyWrite: (runtimeSessionId: RuntimeSessionId, data: string) => void;
-  ptyResize: (runtimeSessionId: RuntimeSessionId, cols: number, rows: number) => void;
-  onPtyData: (callback: (runtimeSessionId: RuntimeSessionId, data: string) => void) => () => void;
+  attachPty: (terminalRuntimeId: TerminalRuntimeId) => Promise<string>;
+  readyPty: (terminalRuntimeId: TerminalRuntimeId) => Promise<void>;
+  detachPty: (terminalRuntimeId: TerminalRuntimeId) => Promise<void>;
+  ptyWrite: (terminalRuntimeId: TerminalRuntimeId, data: string) => void;
+  ptyResize: (terminalRuntimeId: TerminalRuntimeId, cols: number, rows: number) => void;
+  onPtyData: (callback: (terminalRuntimeId: TerminalRuntimeId, data: string) => void) => () => void;
 }

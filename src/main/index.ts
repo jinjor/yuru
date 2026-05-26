@@ -36,8 +36,8 @@ function sendFileTreeChanged(worktreeId: string, relativePath: string): void {
   sendToRenderer("files:changed", worktreeId, relativePath);
 }
 
-function sendPtyData(runtimeSessionId: string, data: string): void {
-  sendToRenderer("pty:data", runtimeSessionId, data);
+function sendPtyData(terminalRuntimeId: string, data: string): void {
+  sendToRenderer("pty:data", terminalRuntimeId, data);
 }
 
 function sendWorktreeDisplayChanged(update: WorktreeDisplayUpdate): void {
@@ -136,19 +136,19 @@ function registerIpcHandlers(): void {
   ipcMain.handle("metadata:listRepos", () => service.getRepos());
   ipcMain.handle("providers:list", () => service.getSessionProviders());
 
-  ipcMain.handle("pty:attach", (_event, runtimeSessionId: string) => {
-    return service.attachPty(runtimeSessionId);
+  ipcMain.handle("pty:attach", (_event, terminalRuntimeId: string) => {
+    return service.attachPty(terminalRuntimeId);
   });
 
-  ipcMain.handle("pty:ready", (_event, runtimeSessionId: string) => {
-    const pendingChunk = service.readyPty(runtimeSessionId);
+  ipcMain.handle("pty:ready", (_event, terminalRuntimeId: string) => {
+    const pendingChunk = service.readyPty(terminalRuntimeId);
     if (pendingChunk) {
-      sendPtyData(runtimeSessionId, pendingChunk);
+      sendPtyData(terminalRuntimeId, pendingChunk);
     }
   });
 
-  ipcMain.handle("pty:detach", (_event, runtimeSessionId: string) => {
-    service.detachPty(runtimeSessionId);
+  ipcMain.handle("pty:detach", (_event, terminalRuntimeId: string) => {
+    service.detachPty(terminalRuntimeId);
   });
 
   ipcMain.handle("errors:list", () => service.getErrors());
@@ -236,12 +236,12 @@ function registerIpcHandlers(): void {
     service.cancelCodeSearch(worktreeId);
   });
 
-  ipcMain.on("pty:write", (_event, runtimeSessionId: string, data: string) => {
-    service.ptyWrite(runtimeSessionId, data);
+  ipcMain.on("pty:write", (_event, terminalRuntimeId: string, data: string) => {
+    service.ptyWrite(terminalRuntimeId, data);
   });
 
-  ipcMain.on("pty:resize", (_event, runtimeSessionId: string, cols: number, rows: number) => {
-    service.ptyResize(runtimeSessionId, cols, rows);
+  ipcMain.on("pty:resize", (_event, terminalRuntimeId: string, cols: number, rows: number) => {
+    service.ptyResize(terminalRuntimeId, cols, rows);
   });
 }
 

@@ -16,7 +16,7 @@ export interface SessionPreview {
   timestamp: number;
 }
 
-export interface AgentRuntimeInfo extends TerminalRuntimeInfo {
+export interface AgentTerminalRuntimeInfo extends TerminalRuntimeInfo {
   provider: SessionProvider;
   providerSessionId: string | null;
 }

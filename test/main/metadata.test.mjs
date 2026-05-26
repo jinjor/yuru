@@ -140,7 +140,7 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
           primarySession: {
             provider: "codex",
             providerSessionKey: toSessionKey("codex", "codex-1"),
-            activeRuntimeSessionId: null,
+            activeTerminalRuntimeId: null,
             state: "inactive",
             preview: "",
           },
@@ -209,15 +209,15 @@ test("loadRepoList は active session key と一致する primary を active と
   const taskWorktrees = result[0].taskWorktrees;
   assert.equal(taskWorktrees[0].primarySession.state, "active");
   assert.equal(taskWorktrees[0].primarySession.providerSessionKey, toSessionKey("codex", "codex-1"));
-  assert.equal(taskWorktrees[0].primarySession.activeRuntimeSessionId, "runtime-1");
+  assert.equal(taskWorktrees[0].primarySession.activeTerminalRuntimeId, "runtime-1");
   assert.equal(taskWorktrees[0].primarySession.preview, "");
   assert.equal(taskWorktrees[1].primarySession.state, "inactive");
   assert.equal(taskWorktrees[1].primarySession.providerSessionKey, toSessionKey("claude", "claude-1"));
-  assert.equal(taskWorktrees[1].primarySession.activeRuntimeSessionId, null);
+  assert.equal(taskWorktrees[1].primarySession.activeTerminalRuntimeId, null);
   assert.equal(taskWorktrees[1].primarySession.preview, "");
 });
 
-test("loadRepoList は metadata primary がない worktree に active runtime session を合成しない", async () => {
+test("loadRepoList は metadata primary がない worktree に active terminal runtime を合成しない", async () => {
   seed({
     repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
     taskWorktrees: [
@@ -244,7 +244,7 @@ test("loadRepoList は metadata primary がない worktree に active runtime se
   assert.equal(result[0].taskWorktrees[0].primarySession, undefined);
 });
 
-test("loadRepoList は primary 未確定の active runtime session を worktree に重ねる", async () => {
+test("loadRepoList は primary 未確定の active terminal runtime を worktree に重ねる", async () => {
   const worktreePath = "/tmp/repo-a/.yuru/worktrees/task-a";
   seed({
     repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
@@ -274,7 +274,7 @@ test("loadRepoList は primary 未確定の active runtime session を worktree 
         path.resolve(worktreePath),
         {
           provider: "codex",
-          runtimeSessionId: "runtime-1",
+          terminalRuntimeId: "runtime-1",
         },
       ],
     ]),
@@ -283,7 +283,7 @@ test("loadRepoList は primary 未確定の active runtime session を worktree 
   assert.deepEqual(result[0].taskWorktrees[0].primarySession, {
     provider: "codex",
     providerSessionKey: null,
-    activeRuntimeSessionId: "runtime-1",
+    activeTerminalRuntimeId: "runtime-1",
     state: "active",
     preview: "",
   });
@@ -394,7 +394,7 @@ test("loadRepoList は suggested worktree session を返す", async () => {
     {
       provider: "claude",
       providerSessionKey: toSessionKey("claude", "claude-1"),
-      activeRuntimeSessionId: null,
+      activeTerminalRuntimeId: null,
       state: "inactive",
       preview: "suggested preview",
       timestamp: 0,
@@ -443,7 +443,7 @@ test("loadRepoList は active session key と一致する suggested を active �
     {
       provider: "claude",
       providerSessionKey: toSessionKey("claude", "claude-1"),
-      activeRuntimeSessionId: "runtime-1",
+      activeTerminalRuntimeId: "runtime-1",
       state: "active",
       preview: "suggested preview",
       timestamp: 0,
