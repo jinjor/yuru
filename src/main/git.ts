@@ -12,9 +12,9 @@ export interface WorktreeInfo {
 
 export async function getCurrentBranch(cwd: string): Promise<string | null> {
   try {
-    const output = await exec("git", ["rev-parse", "--abbrev-ref", "HEAD"], cwd);
+    const output = await exec("git", ["symbolic-ref", "--quiet", "--short", "HEAD"], cwd);
     const branch = output.trim();
-    return branch && branch !== "HEAD" ? branch : null;
+    return branch || null;
   } catch {
     return null;
   }
@@ -36,6 +36,18 @@ export async function getRepoRootForProject(cwd: string): Promise<string | null>
     return path.dirname(resolvedCommonDir);
   } catch {
     return null;
+  }
+}
+
+export async function isSupportedGitRepo(cwd: string): Promise<boolean> {
+  try {
+    const [insideWorkTree, bareRepository] = await Promise.all([
+      exec("git", ["rev-parse", "--is-inside-work-tree"], cwd),
+      exec("git", ["rev-parse", "--is-bare-repository"], cwd),
+    ]);
+    return insideWorkTree.trim() === "true" && bareRepository.trim() === "false";
+  } catch {
+    return false;
   }
 }
 

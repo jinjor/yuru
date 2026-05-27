@@ -3,8 +3,8 @@ import type {
   RepoListItem,
   RepoMetadata,
   SuggestedSessionListItem,
-  TaskWorktreeListItem,
   TaskWorktreeMetadata,
+  WorktreeListItem,
 } from "../shared/metadata.js";
 import {
   toSessionKey,
@@ -13,7 +13,13 @@ import {
   type SessionProvider,
   type SuggestedWorktreeSession,
 } from "../shared/session.js";
-import { listWorktrees, type WorktreeInfo } from "./git.js";
+import {
+  getCurrentBranch,
+  getHeadSha,
+  isSupportedGitRepo,
+  listWorktrees,
+  type WorktreeInfo,
+} from "./git.js";
 import { loadMetadata } from "./metadata.js";
 import { toWorktreeId, toWorktreePathKey } from "./worktree-identity.js";
 
@@ -26,9 +32,22 @@ type LoadGitHubPullRequest = (
   branch: string | null,
 ) => Promise<GitHubPullRequest | null>;
 
+interface WorktreeListSource {
+  path: string;
+  branch: string | null;
+  headSha: string | null;
+}
+
 interface ActiveTerminalRuntimeWorktreeSession {
   provider: SessionProvider;
   terminalRuntimeId: TerminalRuntimeId;
+}
+
+interface RepoListSource {
+  repo: RepoMetadata;
+  taskWorktreeMetadataByPath: Map<string, TaskWorktreeMetadata>;
+  gitWorktrees: readonly WorktreeInfo[];
+  mainWorktree: WorktreeListSource;
 }
 
 export async function loadRepoList(
@@ -40,23 +59,23 @@ export async function loadRepoList(
   loadGitHubPullRequest?: LoadGitHubPullRequest,
 ): Promise<RepoListItem[]> {
   const metadata = loadMetadata();
-  const repoEntries = await Promise.all(
-    metadata.repos.map(async (repo) => {
-      // TODO: repo の存在確認。存在しない repo は返さない。
-      const taskWorktreeMetadataByPath = new Map(
-        metadata.taskWorktrees
-          .filter((taskWorktree) => taskWorktree.repoId === repo.id)
-          .map((taskWorktree) => [toWorktreePathKey(taskWorktree.worktreePath), taskWorktree]),
-      );
-      let gitWorktrees: readonly WorktreeInfo[];
-      try {
-        gitWorktrees = await listGitWorktrees(repo.repoPath);
-      } catch {
-        gitWorktrees = [];
-      }
-      return { repo, taskWorktreeMetadataByPath, gitWorktrees };
-    }),
-  );
+  const repoEntries = (
+    await Promise.all(
+      metadata.repos.map(async (repo) => {
+        const taskWorktreeMetadataByPath = new Map(
+          metadata.taskWorktrees
+            .filter((taskWorktree) => taskWorktree.repoId === repo.id)
+            .map((taskWorktree) => [toWorktreePathKey(taskWorktree.worktreePath), taskWorktree]),
+        );
+        if (!(await isSupportedGitRepo(repo.repoPath))) {
+          return null;
+        }
+        const gitWorktrees = await listGitWorktrees(repo.repoPath);
+        const mainWorktree = await loadMainWorktree(repo.repoPath);
+        return { repo, taskWorktreeMetadataByPath, gitWorktrees, mainWorktree };
+      }),
+    )
+  ).filter((entry): entry is RepoListSource => entry !== null);
   const worktreePaths = repoEntries.flatMap((entry) =>
     entry.gitWorktrees.map((gitWorktree) => gitWorktree.path),
   );
@@ -67,9 +86,9 @@ export async function loadRepoList(
     ? await loadGitHubPullRequests(repoEntries, loadGitHubPullRequest)
     : undefined;
 
-  return repoEntries.map(({ repo, taskWorktreeMetadataByPath, gitWorktrees }) => {
+  return repoEntries.map(({ repo, taskWorktreeMetadataByPath, gitWorktrees, mainWorktree }) => {
     const taskWorktrees = gitWorktrees.map((gitWorktree) =>
-      toTaskWorktreeListItem(
+      toWorktreeListItem(
         repo.id,
         gitWorktree,
         taskWorktreeMetadataByPath.get(toWorktreePathKey(gitWorktree.path)),
@@ -80,38 +99,59 @@ export async function loadRepoList(
         githubPullRequestsByWorktreePath?.get(gitWorktree.path),
       ),
     );
-
     return {
       ...repo,
+      mainWorktree: toWorktreeListItem(
+        repo.id,
+        mainWorktree,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        [],
+        githubPullRequestsByWorktreePath?.get(mainWorktree.path),
+        true,
+      ),
       taskWorktrees,
     };
   });
 }
 
+async function loadMainWorktree(repoPath: string): Promise<WorktreeListSource> {
+  const [branch, headSha] = await Promise.all([getCurrentBranch(repoPath), getHeadSha(repoPath)]);
+  return {
+    path: repoPath,
+    branch,
+    headSha,
+  };
+}
+
 async function loadGitHubPullRequests(
   repoEntries: readonly {
     repo: RepoMetadata;
+    mainWorktree: WorktreeListSource;
     gitWorktrees: readonly WorktreeInfo[];
   }[],
   loadGitHubPullRequest: LoadGitHubPullRequest,
 ): Promise<Map<string, GitHubPullRequest | null>> {
   const entries = await Promise.all(
-    repoEntries.flatMap(({ repo, gitWorktrees }) =>
-      gitWorktrees.map(
+    repoEntries.flatMap(({ repo, mainWorktree, gitWorktrees }) => {
+      const worktrees = [mainWorktree, ...gitWorktrees];
+      return worktrees.map(
         async (gitWorktree) =>
           [
             gitWorktree.path,
             await loadGitHubPullRequest(repo.repoPath, gitWorktree.branch),
           ] as const,
-      ),
-    ),
+      );
+    }),
   );
   return new Map(entries);
 }
 
-function toTaskWorktreeListItem(
+function toWorktreeListItem(
   repoId: string,
-  gitWorktree: WorktreeInfo,
+  gitWorktree: WorktreeListSource,
   metadataEntry: TaskWorktreeMetadata | undefined,
   terminalRuntimeIdsBySessionKey: ReadonlyMap<string, TerminalRuntimeId> | undefined,
   activeTerminalRuntimesByWorktreePath:
@@ -120,7 +160,8 @@ function toTaskWorktreeListItem(
   primarySessionPreviewsByKey: ReadonlyMap<string, string> | undefined,
   suggestedSessions: readonly SuggestedWorktreeSession[],
   githubPullRequest: GitHubPullRequest | null | undefined,
-): TaskWorktreeListItem {
+  isMainWorktree = false,
+): WorktreeListItem {
   const worktreePath = gitWorktree.path;
   const worktreeId = toWorktreeId(repoId, worktreePath);
   const primarySession = metadataEntry?.primarySession;
@@ -140,7 +181,7 @@ function toTaskWorktreeListItem(
     primarySessionPreviewsByKey,
   );
 
-  const item: TaskWorktreeListItem = {
+  const item: WorktreeListItem = {
     worktreeId,
     worktreePath,
     name: path.basename(worktreePath),
@@ -169,6 +210,9 @@ function toTaskWorktreeListItem(
 
   if (githubPullRequest !== undefined) {
     item.githubPullRequest = githubPullRequest;
+  }
+  if (isMainWorktree) {
+    item.isMainWorktree = true;
   }
 
   return item;

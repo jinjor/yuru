@@ -36,19 +36,21 @@ export interface PrimarySessionListItem {
   preview: string;
 }
 
-export interface TaskWorktreeListItem {
+export interface WorktreeListItem {
   worktreeId: string;
   worktreePath: string;
   name: string;
   branch: string | null;
-  headSha: string;
+  headSha: string | null;
+  isMainWorktree?: boolean;
   githubPullRequest?: GitHubPullRequest | null;
   primarySession?: PrimarySessionListItem;
   suggestedSessions: SuggestedSessionListItem[];
 }
 
 export interface RepoListItem extends RepoMetadata {
-  taskWorktrees: TaskWorktreeListItem[];
+  mainWorktree: WorktreeListItem;
+  taskWorktrees: WorktreeListItem[];
 }
 
 export interface YuruMetadata {

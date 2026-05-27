@@ -18,6 +18,7 @@ app.setName(APP_NAME);
 const service = new YuruService({
   fileTreeChanged: sendFileTreeChanged,
   ptyData: sendPtyData,
+  terminalRuntimeExited: sendTerminalRuntimeExited,
   worktreeDisplayChanged: sendWorktreeDisplayChanged,
   sessionsStateChanged: sendSessionsStateChanged,
   errorAdded: sendErrorAdded,
@@ -38,6 +39,10 @@ function sendFileTreeChanged(worktreeId: string, relativePath: string): void {
 
 function sendPtyData(terminalRuntimeId: string, data: string): void {
   sendToRenderer("pty:data", terminalRuntimeId, data);
+}
+
+function sendTerminalRuntimeExited(terminalRuntimeId: string): void {
+  sendToRenderer("terminalRuntime:exited", terminalRuntimeId);
 }
 
 function sendWorktreeDisplayChanged(update: WorktreeDisplayUpdate): void {
@@ -185,6 +190,10 @@ function registerIpcHandlers(): void {
       return service.createSessionForWorktree(worktreeId, provider);
     },
   );
+
+  ipcMain.handle("worktreeTerminal:open", (_event, worktreeId: string) => {
+    return service.openWorktreeTerminal(worktreeId);
+  });
 
   ipcMain.handle(
     "session:createWorktree",

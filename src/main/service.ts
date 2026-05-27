@@ -24,6 +24,7 @@ import {
   getGitDiffDocument as loadGitDiffDocument,
   getGitPathStates as loadGitPathStates,
   getHeadSha,
+  isSupportedGitRepo,
   listWorktrees,
   removeWorktree as removeGitWorktree,
 } from "./git.js";
@@ -41,13 +42,16 @@ import {
   searchCode as runCodeSearch,
 } from "./code-search.js";
 import {
-  type AgentTerminalRuntimeInfo,
   type LaunchRequest,
   type PendingSession,
   type SessionProviderAdapter,
   type WorktreeContext,
 } from "./agent.js";
-import type { PendingTerminal, TerminalLaunchRequest } from "./terminal-runtime.js";
+import type {
+  PendingTerminal,
+  TerminalLaunchRequest,
+  TerminalRuntimeInfo,
+} from "./terminal-runtime.js";
 import { FileTreeWatcher } from "./file-tree-watcher.js";
 import {
   type AppError,
@@ -59,6 +63,7 @@ import {
 import {
   type SessionProvider,
   type SuggestedWorktreeSession,
+  toStandaloneTerminalRuntimeKey,
   toTerminalRuntimeKey,
   toSessionKey,
 } from "../shared/session.js";
@@ -70,7 +75,7 @@ import {
   recordAppError,
 } from "./error-center.js";
 import { createTerminalEnv } from "./terminal-env.js";
-import { createShellLaunchCommand } from "./shell-launch.js";
+import { buildShellStartupCommand, createInteractiveShellLaunchCommand } from "./shell-launch.js";
 import { TerminalRuntimeRefreshScheduler } from "./terminal-runtime-refresh-scheduler.js";
 
 const STARTUP_OUTPUT_LIMIT = 4000;
@@ -93,6 +98,7 @@ interface WorktreeSessionResumeTarget {
 export interface YuruServiceEvents {
   fileTreeChanged(worktreeId: string, relativePath: string): void;
   ptyData(terminalRuntimeId: string, data: string): void;
+  terminalRuntimeExited(terminalRuntimeId: string): void;
   worktreeDisplayChanged(update: WorktreeDisplayUpdate): void;
   sessionsStateChanged(): void;
   errorAdded(notice: AppErrorNotice): void;
@@ -212,7 +218,7 @@ export class YuruService {
   private readonly terminalRuntimeRefreshScheduler: TerminalRuntimeRefreshScheduler;
   private readonly worktreeDisplayUpdateFingerprints = new Map<string, string>();
   private readonly pendingProcesses = new Set<pty.IPty>();
-  private readonly terminalRuntimeMap = new Map<string, AgentTerminalRuntimeInfo>();
+  private readonly terminalRuntimeMap = new Map<string, TerminalRuntimeInfo>();
   private readonly activeCodeSearches = new Map<string, AbortController>();
   private readonly fileTreeWatcher: FileTreeWatcher;
 
@@ -330,6 +336,48 @@ export class YuruService {
         pending.proc.kill();
       }
       const appError = toAppError(error, { command: providerAdapter.command });
+      return pending?.startupFailureReported
+        ? fail<WorktreeSessionSelection>(appError)
+        : this.failAndReport<WorktreeSessionSelection>(appError);
+    }
+  }
+
+  async openWorktreeTerminal(worktreeId: string): Promise<Result<WorktreeSessionSelection>> {
+    const worktree = await this.findGitWorktree(worktreeId);
+    if (!worktree) {
+      return this.failAndReport<WorktreeSessionSelection>({
+        code: "unknown",
+        message: "This worktree no longer exists.",
+      });
+    }
+
+    const activeTerminalRuntimeId = this.findStandaloneTerminalRuntimeId(worktree.worktreePath);
+    if (activeTerminalRuntimeId) {
+      return ok({ worktreeId, terminalRuntimeId: activeTerminalRuntimeId });
+    }
+
+    let pending: PendingTerminal | null = null;
+    try {
+      pending = this.launchPendingTerminal(
+        {
+          cwd: worktree.worktreePath,
+          env: createTerminalEnv(process.env),
+          launchLabel: "Failed to start terminal",
+          worktreePath: worktree.worktreePath,
+        },
+        () => {
+          this.events.sessionsStateChanged();
+        },
+      );
+      const terminalRuntimeId = this.createStandaloneTerminalRuntimeId(pending);
+      this.registerStandaloneTerminalRuntime(terminalRuntimeId, pending, worktree.repoPath);
+      pending.startupSettled = true;
+      return ok({ worktreeId, terminalRuntimeId });
+    } catch (error) {
+      if (pending && !pending.exited) {
+        pending.proc.kill();
+      }
+      const appError = toAppError(error, { command: pending?.command });
       return pending?.startupFailureReported
         ? fail<WorktreeSessionSelection>(appError)
         : this.failAndReport<WorktreeSessionSelection>(appError);
@@ -584,7 +632,7 @@ export class YuruService {
   private getTerminalRuntimeIdsBySessionKey(): Map<string, string> {
     const idsByKey = new Map<string, string>();
     for (const [terminalRuntimeId, info] of this.terminalRuntimeMap) {
-      if (info.providerSessionId) {
+      if (info.provider && info.providerSessionId) {
         idsByKey.set(toSessionKey(info.provider, info.providerSessionId), terminalRuntimeId);
       }
     }
@@ -600,6 +648,9 @@ export class YuruService {
       { provider: SessionProvider; terminalRuntimeId: string }
     >();
     for (const [terminalRuntimeId, info] of this.terminalRuntimeMap) {
+      if (!info.provider) {
+        continue;
+      }
       terminalRuntimesByWorktreePath.set(path.resolve(info.worktreePath), {
         provider: info.provider,
         terminalRuntimeId,
@@ -629,11 +680,13 @@ export class YuruService {
   ): PendingSession {
     const pendingTerminal = this.launchPendingTerminal(
       {
-        command: providerAdapter.command,
-        args: request.args,
         cwd: request.cwd,
         env: createTerminalEnv(process.env, providerAdapter.definition.id),
         launchLabel,
+        startupCommand: {
+          command: providerAdapter.command,
+          args: request.args,
+        },
         worktreePath: request.worktreePath,
       },
       () => {
@@ -653,7 +706,7 @@ export class YuruService {
     request: TerminalLaunchRequest,
     onExit?: (pending: PendingTerminal) => void,
   ): PendingTerminal {
-    const launchCommand = createShellLaunchCommand(request.command, request.args, process.env);
+    const launchCommand = createInteractiveShellLaunchCommand(request.env);
     const proc = pty.spawn(launchCommand.command, launchCommand.args, {
       name: "xterm-256color",
       cols: 80,
@@ -664,7 +717,7 @@ export class YuruService {
     this.pendingProcesses.add(proc);
     const pending: PendingTerminal = {
       proc,
-      command: request.command,
+      command: request.startupCommand?.command ?? launchCommand.command,
       launchCwd: request.cwd,
       launchLabel: request.launchLabel,
       outputBuffer: "",
@@ -730,8 +783,15 @@ export class YuruService {
       this.ptyProcesses.delete(pending.terminalRuntimeId);
       this.ptyAttachments.delete(pending.terminalRuntimeId);
       this.terminalRuntimeMap.delete(pending.terminalRuntimeId);
+      this.events.terminalRuntimeExited(pending.terminalRuntimeId);
       onExit?.(pending);
     });
+
+    if (request.startupCommand) {
+      proc.write(
+        `${buildShellStartupCommand(request.startupCommand.command, request.startupCommand.args)}\r`,
+      );
+    }
 
     return pending;
   }
@@ -755,8 +815,41 @@ export class YuruService {
     });
   }
 
+  private registerStandaloneTerminalRuntime(
+    terminalRuntimeId: string,
+    pending: PendingTerminal,
+    repoPath: string,
+  ): void {
+    pending.terminalRuntimeId = terminalRuntimeId;
+    this.pendingProcesses.delete(pending.proc);
+    this.ptyProcesses.set(terminalRuntimeId, pending.proc);
+    this.ptyScrollback.set(terminalRuntimeId, pending.outputBuffer);
+    this.terminalRuntimeMap.set(terminalRuntimeId, {
+      repoPath,
+      worktreePath: pending.worktreePath,
+      startedAt: pending.startedAt,
+    });
+  }
+
   private createTerminalRuntimeId(provider: SessionProvider, pending: PendingTerminal): string {
     return toTerminalRuntimeKey(provider, pending.startedAt);
+  }
+
+  private createStandaloneTerminalRuntimeId(pending: PendingTerminal): string {
+    return toStandaloneTerminalRuntimeKey(pending.startedAt);
+  }
+
+  private findStandaloneTerminalRuntimeId(worktreePath: string): string | null {
+    const worktreePathKey = path.resolve(worktreePath);
+    for (const [terminalRuntimeId, info] of this.terminalRuntimeMap) {
+      if (info.provider || path.resolve(info.worktreePath) !== worktreePathKey) {
+        continue;
+      }
+      if (this.ptyProcesses.has(terminalRuntimeId)) {
+        return terminalRuntimeId;
+      }
+    }
+    return null;
   }
 
   private updateTerminalRuntimeProviderSessionId(
@@ -793,21 +886,17 @@ export class YuruService {
     const [branch, headSha, preview] = await Promise.all([
       getCurrentBranch(runtime.worktreePath),
       getHeadSha(runtime.worktreePath),
-      runtime.providerSessionId
+      runtime.provider && runtime.providerSessionId
         ? loadStoredSessionPreview(runtime.provider, runtime.providerSessionId)
         : Promise.resolve(null),
     ]);
-    if (!headSha) {
-      return;
-    }
-
     const update: WorktreeDisplayUpdate = {
       worktreeId: toWorktreeId(repo.id, runtime.worktreePath),
       branch,
       headSha,
       githubPullRequest: await getGitHubPullRequestForBranch(runtime.repoPath, branch),
     };
-    if (runtime.providerSessionId && preview !== null) {
+    if (runtime.provider && runtime.providerSessionId && preview !== null) {
       update.sessionPreview = {
         providerSessionKey: toSessionKey(runtime.provider, runtime.providerSessionId),
         preview,
@@ -931,10 +1020,26 @@ export class YuruService {
     repoPath: string;
     worktreePath: string;
     branch: string | null;
-    headSha: string;
+    headSha: string | null;
   } | null> {
     for (const repo of loadRepos()) {
-      const worktrees = await listWorktrees(repo.repoPath).catch(() => []);
+      if (!(await isSupportedGitRepo(repo.repoPath))) {
+        continue;
+      }
+      if (toWorktreeId(repo.id, repo.repoPath) === worktreeId) {
+        const [branch, headSha] = await Promise.all([
+          getCurrentBranch(repo.repoPath),
+          getHeadSha(repo.repoPath),
+        ]);
+        return {
+          repoId: repo.id,
+          repoPath: repo.repoPath,
+          worktreePath: repo.repoPath,
+          branch,
+          headSha,
+        };
+      }
+      const worktrees = await listWorktrees(repo.repoPath);
       const worktree = worktrees.find((entry) => toWorktreeId(repo.id, entry.path) === worktreeId);
       if (worktree) {
         return {
@@ -953,13 +1058,16 @@ export class YuruService {
     repoPath: string;
     worktreePath: string;
     branch: string | null;
-    headSha: string;
+    headSha: string | null;
   }): WorktreeContext {
+    const fallbackBranchName = worktree.headSha
+      ? `detached @ ${worktree.headSha.slice(0, 7)}`
+      : "no commits";
     return {
       repoPath: worktree.repoPath,
       worktreePath: worktree.worktreePath,
       worktreeName: path.basename(worktree.worktreePath),
-      branchName: worktree.branch ?? `detached @ ${worktree.headSha.slice(0, 7)}`,
+      branchName: worktree.branch ?? fallbackBranchName,
     };
   }
 

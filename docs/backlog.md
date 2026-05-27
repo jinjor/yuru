@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-05-25
+Last updated: 2026-05-28
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -76,6 +76,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | I6 | investigate | Sessions / Terminal | セッション終了時メッセージの表示保持を見直す | 終了直前の案内や要約をその場で読めないと戸惑いやすい |
 | I7 | investigate | Sessions / Persistence | セッション終了メッセージの再到達性をどう担保するか決める | あとから確認できる保証がないと次の操作で迷いやすい |
 | I8 | investigate | Dependencies | 依存更新の安全運用を決める | minimum release age や通知方針を整理したい |
+| I20 | investigate | Workspace | repo ではない作業場所のサポート | 現在は Git repo 前提が強いため、standalone terminal / Files / Changes の扱いを分けて設計する |
 
 ## Open decisions
 
@@ -88,4 +89,5 @@ UI 改善も機能追加も同じ土俵で扱う。
 - macOS 以外のプラットフォーム（Windows / Linux）
 - Claude / Codex 以外のエージェント
 - 外付けボリューム上での使用
+- bare repository
 - UTF-8 以外の文字コードで書かれたファイル

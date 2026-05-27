@@ -12,7 +12,7 @@ import type {
   PrimarySessionListItem,
   RepoListItem,
   SuggestedSessionListItem,
-  TaskWorktreeListItem,
+  WorktreeListItem,
 } from "../../shared/metadata";
 import type { TerminalRuntimeId, SessionProvider } from "../../shared/session";
 import { providerLabel } from "../utils/session";
@@ -27,6 +27,7 @@ interface RepoListProps {
   onResumePrimarySession: (worktreeId: string, providerSessionKey: string) => void;
   onResumeSuggestedSession: (worktreeId: string, providerSessionKey: string) => void;
   onCreateSessionForWorktree: (worktreeId: string, provider: SessionProvider) => void;
+  onOpenWorktreeTerminal: (worktreeId: string) => void;
 }
 
 export function RepoList({
@@ -38,6 +39,7 @@ export function RepoList({
   onResumePrimarySession,
   onResumeSuggestedSession,
   onCreateSessionForWorktree,
+  onOpenWorktreeTerminal,
 }: RepoListProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const [openActionWorktreeId, setOpenActionWorktreeId] = useState<string | null>(null);
@@ -82,37 +84,50 @@ export function RepoList({
               +
             </button>
           </div>
-          {repo.taskWorktrees.length > 0 && (
-            <div className="repo-task-worktrees">
-              {repo.taskWorktrees.map((taskWorktree) => (
-                <TaskWorktreeCard
-                  key={taskWorktree.worktreeId}
-                  taskWorktree={taskWorktree}
-                  providers={providers}
-                  selectedWorktreeId={selectedWorktreeId}
-                  isActionSurfaceOpen={openActionWorktreeId === taskWorktree.worktreeId}
-                  onCloseActionSurface={() => setOpenActionWorktreeId(null)}
-                  onToggleActionSurface={() => {
-                    setOpenActionWorktreeId((prev) =>
-                      prev === taskWorktree.worktreeId ? null : taskWorktree.worktreeId,
-                    );
-                  }}
-                  onSelectActiveSession={onSelectActiveSession}
-                  onResumePrimarySession={onResumePrimarySession}
-                  onResumeSuggestedSession={onResumeSuggestedSession}
-                  onCreateSessionForWorktree={onCreateSessionForWorktree}
-                />
-              ))}
-            </div>
-          )}
+          <div className="repo-task-worktrees">
+            <WorktreeCard
+              key={repo.mainWorktree.worktreeId}
+              worktree={repo.mainWorktree}
+              providers={providers}
+              selectedWorktreeId={selectedWorktreeId}
+              isActionSurfaceOpen={false}
+              onCloseActionSurface={() => setOpenActionWorktreeId(null)}
+              onToggleActionSurface={() => undefined}
+              onSelectActiveSession={onSelectActiveSession}
+              onResumePrimarySession={onResumePrimarySession}
+              onResumeSuggestedSession={onResumeSuggestedSession}
+              onCreateSessionForWorktree={onCreateSessionForWorktree}
+              onOpenWorktreeTerminal={onOpenWorktreeTerminal}
+            />
+            {repo.taskWorktrees.map((taskWorktree) => (
+              <WorktreeCard
+                key={taskWorktree.worktreeId}
+                worktree={taskWorktree}
+                providers={providers}
+                selectedWorktreeId={selectedWorktreeId}
+                isActionSurfaceOpen={openActionWorktreeId === taskWorktree.worktreeId}
+                onCloseActionSurface={() => setOpenActionWorktreeId(null)}
+                onToggleActionSurface={() => {
+                  setOpenActionWorktreeId((prev) =>
+                    prev === taskWorktree.worktreeId ? null : taskWorktree.worktreeId,
+                  );
+                }}
+                onSelectActiveSession={onSelectActiveSession}
+                onResumePrimarySession={onResumePrimarySession}
+                onResumeSuggestedSession={onResumeSuggestedSession}
+                onCreateSessionForWorktree={onCreateSessionForWorktree}
+                onOpenWorktreeTerminal={onOpenWorktreeTerminal}
+              />
+            ))}
+          </div>
         </div>
       ))}
     </div>
   );
 }
 
-interface TaskWorktreeCardProps {
-  taskWorktree: TaskWorktreeListItem;
+interface WorktreeCardProps {
+  worktree: WorktreeListItem;
   providers: AgentDefinition[];
   selectedWorktreeId: string | null;
   isActionSurfaceOpen: boolean;
@@ -122,10 +137,11 @@ interface TaskWorktreeCardProps {
   onResumePrimarySession: (worktreeId: string, providerSessionKey: string) => void;
   onResumeSuggestedSession: (worktreeId: string, providerSessionKey: string) => void;
   onCreateSessionForWorktree: (worktreeId: string, provider: SessionProvider) => void;
+  onOpenWorktreeTerminal: (worktreeId: string) => void;
 }
 
-function TaskWorktreeCard({
-  taskWorktree,
+function WorktreeCard({
+  worktree,
   providers,
   selectedWorktreeId,
   isActionSurfaceOpen,
@@ -135,21 +151,23 @@ function TaskWorktreeCard({
   onResumePrimarySession,
   onResumeSuggestedSession,
   onCreateSessionForWorktree,
-}: TaskWorktreeCardProps) {
-  const { primarySession, suggestedSessions } = taskWorktree;
-  const isSelected = selectedWorktreeId === taskWorktree.worktreeId;
+  onOpenWorktreeTerminal,
+}: WorktreeCardProps) {
+  const { primarySession, suggestedSessions } = worktree;
+  const isSelected = selectedWorktreeId === worktree.worktreeId;
   const isPrimarySessionActive = isSelected || primarySession?.state === "active";
+  const opensStandaloneTerminal = worktree.isMainWorktree === true;
 
   const selectPrimarySession = () => {
     if (!primarySession) {
       return;
     }
     if (primarySession.activeTerminalRuntimeId) {
-      onSelectActiveSession(taskWorktree.worktreeId, primarySession.activeTerminalRuntimeId);
+      onSelectActiveSession(worktree.worktreeId, primarySession.activeTerminalRuntimeId);
       return;
     }
     if (primarySession.providerSessionKey) {
-      onResumePrimarySession(taskWorktree.worktreeId, primarySession.providerSessionKey);
+      onResumePrimarySession(worktree.worktreeId, primarySession.providerSessionKey);
     }
   };
 
@@ -158,6 +176,11 @@ function TaskWorktreeCard({
     if (primarySession) {
       onCloseActionSurface();
       selectPrimarySession();
+      return;
+    }
+    if (opensStandaloneTerminal) {
+      onCloseActionSurface();
+      onOpenWorktreeTerminal(worktree.worktreeId);
       return;
     }
     onToggleActionSurface();
@@ -173,6 +196,11 @@ function TaskWorktreeCard({
       selectPrimarySession();
       return;
     }
+    if (opensStandaloneTerminal) {
+      onCloseActionSurface();
+      onOpenWorktreeTerminal(worktree.worktreeId);
+      return;
+    }
     onToggleActionSurface();
   };
 
@@ -185,7 +213,7 @@ function TaskWorktreeCard({
         isSelected ? "selected" : "",
         isActionSurfaceOpen ? "action-open" : "",
       ].join(" ")}
-      title={taskWorktree.worktreePath}
+      title={worktree.worktreePath}
       role="button"
       tabIndex={0}
       onClick={handleCardClick}
@@ -193,12 +221,10 @@ function TaskWorktreeCard({
     >
       <div className="task-worktree-summary">
         <span className="task-worktree-heading">
-          <span className="task-worktree-name" title={worktreeLabelText(taskWorktree)}>
-            {renderWorktreeLabel(taskWorktree)}
+          <span className="task-worktree-name" title={worktreeLabelText(worktree)}>
+            {renderWorktreeLabel(worktree)}
           </span>
-          {taskWorktree.githubPullRequest && (
-            <GitHubBadge github={taskWorktree.githubPullRequest} />
-          )}
+          {worktree.githubPullRequest && <GitHubBadge github={worktree.githubPullRequest} />}
         </span>
         {primarySession ? (
           <PrimarySessionSummary
@@ -207,13 +233,15 @@ function TaskWorktreeCard({
           />
         ) : (
           <span className="task-worktree-hint">
-            {formatExistingSessionCount(suggestedSessions.length)}
+            {opensStandaloneTerminal
+              ? "terminal"
+              : formatExistingSessionCount(suggestedSessions.length)}
           </span>
         )}
       </div>
-      {!primarySession && isActionSurfaceOpen && (
+      {!primarySession && !opensStandaloneTerminal && isActionSurfaceOpen && (
         <TaskWorktreeActionSurface
-          worktreeId={taskWorktree.worktreeId}
+          worktreeId={worktree.worktreeId}
           providers={providers}
           suggestedSessions={suggestedSessions}
           onResumeSuggestedSession={onResumeSuggestedSession}
@@ -337,16 +365,19 @@ function SuggestedSessionAction({ suggestedSession, onSelect }: SuggestedSession
   );
 }
 
-function worktreeLabelText(taskWorktree: TaskWorktreeListItem): string {
-  if (taskWorktree.branch) {
-    return taskWorktree.branch;
+function worktreeLabelText(worktree: WorktreeListItem): string {
+  if (worktree.branch) {
+    return worktree.branch;
   }
-  return `(detached @ ${taskWorktree.headSha.slice(0, 7)})`;
+  if (!worktree.headSha) {
+    return "(no commits)";
+  }
+  return `detached @ ${worktree.headSha.slice(0, 7)}`;
 }
 
-function renderWorktreeLabel(taskWorktree: TaskWorktreeListItem): ReactNode {
-  const text = worktreeLabelText(taskWorktree);
-  if (!taskWorktree.branch) {
+function renderWorktreeLabel(worktree: WorktreeListItem): ReactNode {
+  const text = worktreeLabelText(worktree);
+  if (!worktree.branch) {
     return text;
   }
   return (

@@ -91,7 +91,7 @@ export interface WorktreeSessionSelection {
 export interface WorktreeDisplayUpdate {
   worktreeId: string;
   branch: string | null;
-  headSha: string;
+  headSha: string | null;
   githubPullRequest: GitHubPullRequest | null;
   sessionPreview?: {
     providerSessionKey: string;
@@ -117,6 +117,7 @@ export interface ElectronAPI {
     worktreeId: string,
     provider: SessionProvider,
   ) => Promise<Result<WorktreeSessionSelection>>;
+  openWorktreeTerminal: (worktreeId: string) => Promise<Result<WorktreeSessionSelection>>;
   createWorktreeSession: (
     provider: SessionProvider,
     repoPath: string,
@@ -140,6 +141,7 @@ export interface ElectronAPI {
   onErrorsCleared: (callback: () => void) => void;
   onWorktreeDisplayChanged: (callback: (update: WorktreeDisplayUpdate) => void) => void;
   onSessionsStateChanged: (callback: () => void) => void;
+  onTerminalRuntimeExited: (callback: (terminalRuntimeId: TerminalRuntimeId) => void) => () => void;
   onFileTreeChanged: (callback: (worktreeId: string, relativePath: string) => void) => () => void;
   attachPty: (terminalRuntimeId: TerminalRuntimeId) => Promise<string>;
   readyPty: (terminalRuntimeId: TerminalRuntimeId) => Promise<void>;

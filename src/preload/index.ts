@@ -14,6 +14,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke("worktreeSession:resumeSuggested", worktreeId, providerSessionKey),
   createSessionForWorktree: (worktreeId: string, provider: SessionProvider) =>
     ipcRenderer.invoke("worktreeSession:create", worktreeId, provider),
+  openWorktreeTerminal: (worktreeId: string) =>
+    ipcRenderer.invoke("worktreeTerminal:open", worktreeId),
   createWorktreeSession: (provider: SessionProvider, repoPath: string, branchName: string) =>
     ipcRenderer.invoke("session:createWorktree", provider, repoPath, branchName),
   removeWorktree: (repoPath: string, worktreePath: string) =>
@@ -38,6 +40,14 @@ const electronAPI: ElectronAPI = {
   onWorktreeDisplayChanged: (callback) =>
     ipcRenderer.on("worktree:displayChanged", (_event, update) => callback(update)),
   onSessionsStateChanged: (callback) => ipcRenderer.on("sessions:stateChanged", () => callback()),
+  onTerminalRuntimeExited: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, terminalRuntimeId: string) =>
+      callback(terminalRuntimeId);
+    ipcRenderer.on("terminalRuntime:exited", listener);
+    return () => {
+      ipcRenderer.removeListener("terminalRuntime:exited", listener);
+    };
+  },
   onFileTreeChanged: (callback) => {
     const listener = (
       _event: Electron.IpcRendererEvent,

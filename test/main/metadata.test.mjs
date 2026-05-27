@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -32,6 +33,29 @@ function seed(metadata) {
 
 function listGitWorktreesFrom(worktreesByRepoPath) {
   return async (repoPath) => worktreesByRepoPath.get(repoPath) ?? [];
+}
+
+function runGit(args, cwd) {
+  execFileSync("git", args, {
+    cwd,
+    stdio: "ignore",
+    env: {
+      ...process.env,
+      GIT_AUTHOR_NAME: "Yuru Test",
+      GIT_AUTHOR_EMAIL: "yuru@example.test",
+      GIT_COMMITTER_NAME: "Yuru Test",
+      GIT_COMMITTER_EMAIL: "yuru@example.test",
+    },
+  });
+}
+
+let repoSequence = 0;
+function createGitRepo(name) {
+  const repoPath = path.join(tempDir, `${name}-${repoSequence++}`);
+  fs.mkdirSync(repoPath);
+  runGit(["init"], repoPath);
+  runGit(["symbolic-ref", "HEAD", "refs/heads/main"], repoPath);
+  return repoPath;
 }
 
 test.beforeEach(reset);
@@ -90,24 +114,30 @@ test("findRepoByPath は登録済みの repo を返す", () => {
 });
 
 test("loadRepoList は Git worktree に metadata の primary 状態を重ねて返す", async () => {
+  const repoA = createGitRepo("repo-a");
+  const repoB = createGitRepo("repo-b");
+  const taskA = path.join(repoA, ".yuru/worktrees/task-a");
+  const taskB = path.join(repoA, ".yuru/worktrees/task-b");
+  const gitOnly = path.join(repoA, ".yuru/worktrees/git-only");
+  const missingTask = path.join(repoA, ".yuru/worktrees/missing-task");
   seed({
     repos: [
-      { id: "repo-1", repoPath: "/tmp/repo-a" },
-      { id: "repo-2", repoPath: "/tmp/repo-b" },
+      { id: "repo-1", repoPath: repoA },
+      { id: "repo-2", repoPath: repoB },
     ],
     taskWorktrees: [
       {
         repoId: "repo-1",
-        worktreePath: "/tmp/repo-a/.yuru/worktrees/task-a",
+        worktreePath: taskA,
         primarySession: { provider: "codex", providerSessionId: "codex-1" },
       },
       {
         repoId: "repo-1",
-        worktreePath: "/tmp/repo-a/.yuru/worktrees/task-b",
+        worktreePath: taskB,
       },
       {
         repoId: "repo-1",
-        worktreePath: "/tmp/repo-a/.yuru/worktrees/missing-task",
+        worktreePath: missingTask,
         primarySession: { provider: "claude", providerSessionId: "claude-1" },
       },
     ],
@@ -115,25 +145,35 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
   const listGitWorktrees = listGitWorktreesFrom(
     new Map([
       [
-        "/tmp/repo-a",
+        repoA,
         [
-          { path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" },
-          { path: "/tmp/repo-a/.yuru/worktrees/task-b", branch: "task-b", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" },
-          { path: "/tmp/repo-a/.yuru/worktrees/git-only", branch: "git-only", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" },
+          { path: taskA, branch: "task-a", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" },
+          { path: taskB, branch: "task-b", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" },
+          { path: gitOnly, branch: "git-only", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" },
         ],
       ],
-      ["/tmp/repo-b", []],
+      [repoB, []],
     ]),
   );
 
   assert.deepEqual(await loadRepoList(undefined, listGitWorktrees), [
     {
       id: "repo-1",
-      repoPath: "/tmp/repo-a",
+      repoPath: repoA,
+      mainWorktree: {
+        worktreeId: toWorktreeId("repo-1", repoA),
+        worktreePath: repoA,
+        name: path.basename(repoA),
+        branch: "main",
+        headSha: null,
+        isMainWorktree: true,
+        primarySession: undefined,
+        suggestedSessions: [],
+      },
       taskWorktrees: [
         {
-          worktreeId: toWorktreeId("repo-1", "/tmp/repo-a/.yuru/worktrees/task-a"),
-          worktreePath: "/tmp/repo-a/.yuru/worktrees/task-a",
+          worktreeId: toWorktreeId("repo-1", taskA),
+          worktreePath: taskA,
           name: "task-a",
           branch: "task-a",
           headSha: "abc1234abc1234abc1234abc1234abc1234abc12",
@@ -147,8 +187,8 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
           suggestedSessions: [],
         },
         {
-          worktreeId: toWorktreeId("repo-1", "/tmp/repo-a/.yuru/worktrees/task-b"),
-          worktreePath: "/tmp/repo-a/.yuru/worktrees/task-b",
+          worktreeId: toWorktreeId("repo-1", taskB),
+          worktreePath: taskB,
           name: "task-b",
           branch: "task-b",
           headSha: "abc1234abc1234abc1234abc1234abc1234abc12",
@@ -156,8 +196,8 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
           suggestedSessions: [],
         },
         {
-          worktreeId: toWorktreeId("repo-1", "/tmp/repo-a/.yuru/worktrees/git-only"),
-          worktreePath: "/tmp/repo-a/.yuru/worktrees/git-only",
+          worktreeId: toWorktreeId("repo-1", gitOnly),
+          worktreePath: gitOnly,
           name: "git-only",
           branch: "git-only",
           headSha: "abc1234abc1234abc1234abc1234abc1234abc12",
@@ -168,24 +208,145 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
     },
     {
       id: "repo-2",
-      repoPath: "/tmp/repo-b",
+      repoPath: repoB,
+      mainWorktree: {
+        worktreeId: toWorktreeId("repo-2", repoB),
+        worktreePath: repoB,
+        name: path.basename(repoB),
+        branch: "main",
+        headSha: null,
+        isMainWorktree: true,
+        primarySession: undefined,
+        suggestedSessions: [],
+      },
       taskWorktrees: [],
     },
   ]);
 });
 
-test("loadRepoList は active session key と一致する primary を active として返す", async () => {
+test("loadRepoList は main worktree を repo item に返す", async () => {
+  const repoPath = path.join(tempDir, "repo-main");
+  fs.mkdirSync(repoPath);
+  runGit(["init"], repoPath);
+  runGit(["checkout", "-B", "main"], repoPath);
+  runGit(["commit", "--allow-empty", "-m", "init"], repoPath);
   seed({
-    repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
+    repos: [{ id: "repo-1", repoPath }],
+    taskWorktrees: [],
+  });
+
+  const result = await loadRepoList(undefined, async () => []);
+
+  assert.equal(result[0].mainWorktree.worktreeId, toWorktreeId("repo-1", repoPath));
+  assert.equal(result[0].mainWorktree.worktreePath, repoPath);
+  assert.equal(result[0].mainWorktree.branch, "main");
+  assert.equal(result[0].mainWorktree.isMainWorktree, true);
+  assert.equal(result[0].mainWorktree.primarySession, undefined);
+  assert.deepEqual(result[0].mainWorktree.suggestedSessions, []);
+});
+
+test("loadRepoList は detached HEAD の main worktree を branch null で返す", async () => {
+  const repoPath = path.join(tempDir, "repo-detached-main");
+  fs.mkdirSync(repoPath);
+  runGit(["init"], repoPath);
+  runGit(["checkout", "-B", "main"], repoPath);
+  runGit(["commit", "--allow-empty", "-m", "init"], repoPath);
+  runGit(["checkout", "--detach", "HEAD"], repoPath);
+  seed({
+    repos: [{ id: "repo-1", repoPath }],
+    taskWorktrees: [],
+  });
+
+  const result = await loadRepoList(undefined, async () => []);
+
+  assert.equal(result[0].mainWorktree.worktreeId, toWorktreeId("repo-1", repoPath));
+  assert.equal(result[0].mainWorktree.branch, null);
+  assert.match(result[0].mainWorktree.headSha, /^[0-9a-f]{40}$/);
+  assert.equal(result[0].mainWorktree.isMainWorktree, true);
+});
+
+test("loadRepoList は HEAD がない main worktree も返す", async () => {
+  const repoPath = path.join(tempDir, "repo-empty-main");
+  fs.mkdirSync(repoPath);
+  runGit(["init"], repoPath);
+  runGit(["symbolic-ref", "HEAD", "refs/heads/main"], repoPath);
+  seed({
+    repos: [{ id: "repo-1", repoPath }],
+    taskWorktrees: [],
+  });
+
+  const result = await loadRepoList(undefined, async () => []);
+
+  assert.equal(result[0].mainWorktree.worktreeId, toWorktreeId("repo-1", repoPath));
+  assert.equal(result[0].mainWorktree.branch, "main");
+  assert.equal(result[0].mainWorktree.headSha, null);
+  assert.equal(result[0].mainWorktree.isMainWorktree, true);
+});
+
+test("loadRepoList は Git repo ではない metadata repo を返さない", async () => {
+  const repoPath = path.join(tempDir, "not-a-git-repo");
+  fs.mkdirSync(repoPath);
+  seed({
+    repos: [{ id: "repo-1", repoPath }],
+    taskWorktrees: [],
+  });
+
+  assert.deepEqual(await loadRepoList(), []);
+});
+
+test("loadRepoList は消えた metadata repo を返さない", async () => {
+  const repoPath = path.join(tempDir, "missing-git-repo");
+  seed({
+    repos: [{ id: "repo-1", repoPath }],
+    taskWorktrees: [],
+  });
+
+  assert.deepEqual(await loadRepoList(), []);
+});
+
+test("loadRepoList は bare repo を返さない", async () => {
+  const repoPath = path.join(tempDir, "bare-repo");
+  fs.mkdirSync(repoPath);
+  runGit(["init", "--bare"], repoPath);
+  seed({
+    repos: [{ id: "repo-1", repoPath }],
+    taskWorktrees: [],
+  });
+
+  assert.deepEqual(await loadRepoList(), []);
+});
+
+test("loadRepoList は valid repo の worktree list 失敗を握りつぶさない", async () => {
+  const repoPath = createGitRepo("repo-list-fails");
+  seed({
+    repos: [{ id: "repo-1", repoPath }],
+    taskWorktrees: [],
+  });
+
+  await assert.rejects(
+    () =>
+      loadRepoList(undefined, async () => {
+        throw new Error("list failed");
+      }),
+    /list failed/,
+  );
+});
+
+test("loadRepoList は active session key と一致する primary を active として返す", async () => {
+  const repoPath = createGitRepo("repo-active-primary");
+  const taskA = path.join(repoPath, ".yuru/worktrees/task-a");
+  const taskB = path.join(repoPath, ".yuru/worktrees/task-b");
+  seed({
+    repos: [{ id: "repo-1", repoPath }],
     taskWorktrees: [
       {
         repoId: "repo-1",
-        worktreePath: "/tmp/repo-a/.yuru/worktrees/task-a",
+        worktreePath: taskA,
         primarySession: { provider: "codex", providerSessionId: "codex-1" },
       },
       {
         repoId: "repo-1",
-        worktreePath: "/tmp/repo-a/.yuru/worktrees/task-b",
+        worktreePath: taskB,
         primarySession: { provider: "claude", providerSessionId: "claude-1" },
       },
     ],
@@ -193,10 +354,10 @@ test("loadRepoList は active session key と一致する primary を active と
   const listGitWorktrees = listGitWorktreesFrom(
     new Map([
       [
-        "/tmp/repo-a",
+        repoPath,
         [
-          { path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" },
-          { path: "/tmp/repo-a/.yuru/worktrees/task-b", branch: "task-b", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" },
+          { path: taskA, branch: "task-a", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" },
+          { path: taskB, branch: "task-b", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" },
         ],
       ],
     ]),
@@ -218,20 +379,28 @@ test("loadRepoList は active session key と一致する primary を active と
 });
 
 test("loadRepoList は metadata primary がない worktree に active terminal runtime を合成しない", async () => {
+  const repoPath = createGitRepo("repo-no-primary-active");
+  const worktreePath = path.join(repoPath, ".yuru/worktrees/task-a");
   seed({
-    repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
+    repos: [{ id: "repo-1", repoPath }],
     taskWorktrees: [
       {
         repoId: "repo-1",
-        worktreePath: "/tmp/repo-a/.yuru/worktrees/task-a",
+        worktreePath,
       },
     ],
   });
   const listGitWorktrees = listGitWorktreesFrom(
     new Map([
       [
-        "/tmp/repo-a",
-        [{ path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" }],
+        repoPath,
+        [
+          {
+            path: worktreePath,
+            branch: "task-a",
+            headSha: "abc1234abc1234abc1234abc1234abc12",
+          },
+        ],
       ],
     ]),
   );
@@ -245,9 +414,10 @@ test("loadRepoList は metadata primary がない worktree に active terminal r
 });
 
 test("loadRepoList は primary 未確定の active terminal runtime を worktree に重ねる", async () => {
-  const worktreePath = "/tmp/repo-a/.yuru/worktrees/task-a";
+  const repoPath = createGitRepo("repo-active-terminal");
+  const worktreePath = path.join(repoPath, ".yuru/worktrees/task-a");
   seed({
-    repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
+    repos: [{ id: "repo-1", repoPath }],
     taskWorktrees: [
       {
         repoId: "repo-1",
@@ -258,7 +428,7 @@ test("loadRepoList は primary 未確定の active terminal runtime を worktree
   const listGitWorktrees = listGitWorktreesFrom(
     new Map([
       [
-        "/tmp/repo-a",
+        repoPath,
         [{ path: worktreePath, branch: "task-a", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" }],
       ],
     ]),
@@ -290,12 +460,14 @@ test("loadRepoList は primary 未確定の active terminal runtime を worktree
 });
 
 test("loadRepoList は primary session の preview を返す", async () => {
+  const repoPath = createGitRepo("repo-primary-preview");
+  const worktreePath = path.join(repoPath, ".yuru/worktrees/task-a");
   seed({
-    repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
+    repos: [{ id: "repo-1", repoPath }],
     taskWorktrees: [
       {
         repoId: "repo-1",
-        worktreePath: "/tmp/repo-a/.yuru/worktrees/task-a",
+        worktreePath,
         primarySession: { provider: "codex", providerSessionId: "codex-1" },
       },
     ],
@@ -303,8 +475,14 @@ test("loadRepoList は primary session の preview を返す", async () => {
   const listGitWorktrees = listGitWorktreesFrom(
     new Map([
       [
-        "/tmp/repo-a",
-        [{ path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" }],
+        repoPath,
+        [
+          {
+            path: worktreePath,
+            branch: "task-a",
+            headSha: "abc1234abc1234abc1234abc1234abc12",
+          },
+        ],
       ],
     ]),
   );
@@ -319,17 +497,20 @@ test("loadRepoList は primary session の preview を返す", async () => {
 });
 
 test("loadRepoList は worktree branch の GitHub PR を返す", async () => {
+  const repoPath = createGitRepo("repo-github-pr");
+  const taskA = path.join(repoPath, ".yuru/worktrees/task-a");
+  const taskB = path.join(repoPath, ".yuru/worktrees/task-b");
   seed({
-    repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
+    repos: [{ id: "repo-1", repoPath }],
     taskWorktrees: [],
   });
   const listGitWorktrees = listGitWorktreesFrom(
     new Map([
       [
-        "/tmp/repo-a",
+        repoPath,
         [
-          { path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" },
-          { path: "/tmp/repo-a/.yuru/worktrees/task-b", branch: "task-b", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" },
+          { path: taskA, branch: "task-a", headSha: "abc1234abc1234abc1234abc1234abc12" },
+          { path: taskB, branch: "task-b", headSha: "abc1234abc1234abc1234abc1234abc12" },
         ],
       ],
     ]),
@@ -354,20 +535,28 @@ test("loadRepoList は worktree branch の GitHub PR を返す", async () => {
 });
 
 test("loadRepoList は suggested worktree session を返す", async () => {
+  const repoPath = createGitRepo("repo-suggested-session");
+  const worktreePath = path.join(repoPath, ".yuru/worktrees/task-a");
   seed({
-    repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
+    repos: [{ id: "repo-1", repoPath }],
     taskWorktrees: [
       {
         repoId: "repo-1",
-        worktreePath: "/tmp/repo-a/.yuru/worktrees/task-a",
+        worktreePath,
       },
     ],
   });
   const listGitWorktrees = listGitWorktreesFrom(
     new Map([
       [
-        "/tmp/repo-a",
-        [{ path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" }],
+        repoPath,
+        [
+          {
+            path: worktreePath,
+            branch: "task-a",
+            headSha: "abc1234abc1234abc1234abc1234abc12",
+          },
+        ],
       ],
     ]),
   );
@@ -403,20 +592,28 @@ test("loadRepoList は suggested worktree session を返す", async () => {
 });
 
 test("loadRepoList は active session key と一致する suggested を active として返す", async () => {
+  const repoPath = createGitRepo("repo-active-suggested");
+  const worktreePath = path.join(repoPath, ".yuru/worktrees/task-a");
   seed({
-    repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
+    repos: [{ id: "repo-1", repoPath }],
     taskWorktrees: [
       {
         repoId: "repo-1",
-        worktreePath: "/tmp/repo-a/.yuru/worktrees/task-a",
+        worktreePath,
       },
     ],
   });
   const listGitWorktrees = listGitWorktreesFrom(
     new Map([
       [
-        "/tmp/repo-a",
-        [{ path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" }],
+        repoPath,
+        [
+          {
+            path: worktreePath,
+            branch: "task-a",
+            headSha: "abc1234abc1234abc1234abc1234abc12",
+          },
+        ],
       ],
     ]),
   );
@@ -454,20 +651,28 @@ test("loadRepoList は active session key と一致する suggested を active �
 test("loadRepoList は複数の active suggested session をそれぞれ active として返す", async () => {
   const codexSessionKey = toSessionKey("codex", "codex-1");
   const claudeSessionKey = toSessionKey("claude", "claude-1");
+  const repoPath = createGitRepo("repo-multiple-active-suggested");
+  const worktreePath = path.join(repoPath, ".yuru/worktrees/task-a");
   seed({
-    repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
+    repos: [{ id: "repo-1", repoPath }],
     taskWorktrees: [
       {
         repoId: "repo-1",
-        worktreePath: "/tmp/repo-a/.yuru/worktrees/task-a",
+        worktreePath,
       },
     ],
   });
   const listGitWorktrees = listGitWorktreesFrom(
     new Map([
       [
-        "/tmp/repo-a",
-        [{ path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" }],
+        repoPath,
+        [
+          {
+            path: worktreePath,
+            branch: "task-a",
+            headSha: "abc1234abc1234abc1234abc1234abc12",
+          },
+        ],
       ],
     ]),
   );
@@ -518,12 +723,14 @@ test("loadRepoList は複数の active suggested session をそれぞれ active 
 });
 
 test("loadRepoList は primary と同じ session を suggested から除外する", async () => {
+  const repoPath = createGitRepo("repo-primary-excludes-suggested");
+  const worktreePath = path.join(repoPath, ".yuru/worktrees/task-a");
   seed({
-    repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
+    repos: [{ id: "repo-1", repoPath }],
     taskWorktrees: [
       {
         repoId: "repo-1",
-        worktreePath: "/tmp/repo-a/.yuru/worktrees/task-a",
+        worktreePath,
         primarySession: { provider: "claude", providerSessionId: "claude-1" },
       },
     ],
@@ -531,8 +738,14 @@ test("loadRepoList は primary と同じ session を suggested から除外す�
   const listGitWorktrees = listGitWorktreesFrom(
     new Map([
       [
-        "/tmp/repo-a",
-        [{ path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" }],
+        repoPath,
+        [
+          {
+            path: worktreePath,
+            branch: "task-a",
+            headSha: "abc1234abc1234abc1234abc1234abc12",
+          },
+        ],
       ],
     ]),
   );
@@ -559,15 +772,23 @@ test("loadRepoList は primary と同じ session を suggested から除外す�
 });
 
 test("loadRepoList は suggested worktree session を並び替えずに返す", async () => {
+  const repoPath = createGitRepo("repo-suggested-order");
+  const worktreePath = path.join(repoPath, ".yuru/worktrees/task-a");
   seed({
-    repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
+    repos: [{ id: "repo-1", repoPath }],
     taskWorktrees: [],
   });
   const listGitWorktrees = listGitWorktreesFrom(
     new Map([
       [
-        "/tmp/repo-a",
-        [{ path: "/tmp/repo-a/.yuru/worktrees/task-a", branch: "task-a", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" }],
+        repoPath,
+        [
+          {
+            path: worktreePath,
+            branch: "task-a",
+            headSha: "abc1234abc1234abc1234abc1234abc12",
+          },
+        ],
       ],
     ]),
   );

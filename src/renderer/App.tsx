@@ -7,7 +7,7 @@ import {
 } from "react";
 import "@xterm/xterm/css/xterm.css";
 import type { AgentDefinition } from "../shared/agent";
-import type { RepoListItem, TaskWorktreeListItem } from "../shared/metadata";
+import type { RepoListItem, WorktreeListItem } from "../shared/metadata";
 import type { WorktreeDisplayUpdate } from "../shared/ipc";
 import { type TerminalRuntimeId, type SessionProvider } from "../shared/session";
 import { BranchNameInput } from "./components/BranchNameInput";
@@ -29,7 +29,7 @@ export function App() {
   const [sidebarWidth, setSidebarWidth] = useState(260);
   const selectedWorktreeId = selection?.worktreeId ?? null;
   const selectedTerminalRuntimeId = selection?.terminalRuntimeId ?? null;
-  const selectedTaskWorktree = findTaskWorktree(repos, selectedWorktreeId);
+  const selectedWorktree = findWorktree(repos, selectedWorktreeId);
 
   const refreshRepos = useCallback(async (): Promise<RepoListItem[]> => {
     try {
@@ -65,13 +65,23 @@ export function App() {
           if (!prev) {
             return null;
           }
+          const selectedWorktree = findWorktree(nextRepos, prev.worktreeId);
+          if (!selectedWorktree) {
+            return null;
+          }
           const terminalRuntimeId = findActiveTerminalRuntimeId(nextRepos, prev.worktreeId);
-          return terminalRuntimeId ? { worktreeId: prev.worktreeId, terminalRuntimeId } : null;
+          if (terminalRuntimeId) {
+            return { worktreeId: prev.worktreeId, terminalRuntimeId };
+          }
+          return selectedWorktree.isMainWorktree ? prev : null;
         });
       });
     });
     window.electronAPI.onWorktreeDisplayChanged((update) => {
       setRepos((prev) => applyWorktreeDisplayUpdate(prev, update));
+    });
+    window.electronAPI.onTerminalRuntimeExited((terminalRuntimeId) => {
+      setSelection((prev) => (prev?.terminalRuntimeId === terminalRuntimeId ? null : prev));
     });
   }, [refreshRepos]);
 
@@ -171,6 +181,19 @@ export function App() {
     [refreshRepos],
   );
 
+  const handleOpenWorktreeTerminal = useCallback(async (worktreeId: string): Promise<void> => {
+    const requestId = ++resumeRequestRef.current;
+    const result = await window.electronAPI.openWorktreeTerminal(worktreeId);
+    if (resumeRequestRef.current !== requestId) {
+      return;
+    }
+    if (!result.ok) {
+      return;
+    }
+
+    setSelection(result.data);
+  }, []);
+
   const handleCreateWorktreeSession = useCallback(
     async (branchName: string, provider: SessionProvider): Promise<void> => {
       if (!worktreeTarget) {
@@ -221,6 +244,7 @@ export function App() {
             onResumePrimarySession={handleResumePrimarySession}
             onResumeSuggestedSession={handleResumeSuggestedSession}
             onCreateSessionForWorktree={handleCreateSessionForWorktree}
+            onOpenWorktreeTerminal={handleOpenWorktreeTerminal}
           />
         </div>
       </aside>
@@ -233,8 +257,8 @@ export function App() {
         <SessionView
           key={`${selectedWorktreeId}:${selectedTerminalRuntimeId}`}
           appRef={appRef}
-          currentBranch={selectedTaskWorktree?.branch ?? null}
-          currentGitHub={selectedTaskWorktree?.githubPullRequest ?? null}
+          currentBranch={selectedWorktree?.branch ?? null}
+          currentGitHub={selectedWorktree?.githubPullRequest ?? null}
           onOpenExternal={openExternal}
           terminalRuntimeId={selectedTerminalRuntimeId}
           sidebarWidth={sidebarWidth}
@@ -259,14 +283,14 @@ export function App() {
   );
 }
 
-function findTaskWorktree(
-  repos: RepoListItem[],
-  worktreeId: string | null,
-): TaskWorktreeListItem | null {
+function findWorktree(repos: RepoListItem[], worktreeId: string | null): WorktreeListItem | null {
   if (!worktreeId) {
     return null;
   }
   for (const repo of repos) {
+    if (repo.mainWorktree.worktreeId === worktreeId) {
+      return repo.mainWorktree;
+    }
     const taskWorktree = repo.taskWorktrees.find((entry) => entry.worktreeId === worktreeId);
     if (taskWorktree) {
       return taskWorktree;
@@ -282,33 +306,48 @@ function applyWorktreeDisplayUpdate(
   let updated = false;
   const nextRepos = repos.map((repo) => {
     let repoUpdated = false;
+    const mainWorktree =
+      repo.mainWorktree.worktreeId === update.worktreeId
+        ? applyDisplayUpdateToWorktree(repo.mainWorktree, update)
+        : repo.mainWorktree;
+    if (mainWorktree !== repo.mainWorktree) {
+      repoUpdated = true;
+      updated = true;
+    }
     const taskWorktrees = repo.taskWorktrees.map((taskWorktree) => {
       if (taskWorktree.worktreeId !== update.worktreeId) {
         return taskWorktree;
       }
       repoUpdated = true;
       updated = true;
-      return {
-        ...taskWorktree,
-        branch: update.branch,
-        headSha: update.headSha,
-        githubPullRequest: update.githubPullRequest,
-        primarySession: updatePrimarySessionPreview(taskWorktree, update),
-        suggestedSessions: taskWorktree.suggestedSessions.map((suggestedSession) =>
-          suggestedSession.providerSessionKey === update.sessionPreview?.providerSessionKey
-            ? { ...suggestedSession, preview: update.sessionPreview.preview }
-            : suggestedSession,
-        ),
-      };
+      return applyDisplayUpdateToWorktree(taskWorktree, update);
     });
-    return repoUpdated ? { ...repo, taskWorktrees } : repo;
+    return repoUpdated ? { ...repo, mainWorktree, taskWorktrees } : repo;
   });
 
   return updated ? nextRepos : repos;
 }
 
+function applyDisplayUpdateToWorktree(
+  taskWorktree: WorktreeListItem,
+  update: WorktreeDisplayUpdate,
+): WorktreeListItem {
+  return {
+    ...taskWorktree,
+    branch: update.branch,
+    headSha: update.headSha,
+    githubPullRequest: update.githubPullRequest,
+    primarySession: updatePrimarySessionPreview(taskWorktree, update),
+    suggestedSessions: taskWorktree.suggestedSessions.map((suggestedSession) =>
+      suggestedSession.providerSessionKey === update.sessionPreview?.providerSessionKey
+        ? { ...suggestedSession, preview: update.sessionPreview.preview }
+        : suggestedSession,
+    ),
+  };
+}
+
 function updatePrimarySessionPreview(
-  taskWorktree: TaskWorktreeListItem,
+  taskWorktree: WorktreeListItem,
   update: WorktreeDisplayUpdate,
 ) {
   const primarySession = taskWorktree.primarySession;
@@ -328,7 +367,7 @@ function findActiveTerminalRuntimeId(
   repos: RepoListItem[],
   worktreeId: string,
 ): TerminalRuntimeId | null {
-  const taskWorktree = findTaskWorktree(repos, worktreeId);
+  const taskWorktree = findWorktree(repos, worktreeId);
   return (
     taskWorktree?.primarySession?.activeTerminalRuntimeId ??
     taskWorktree?.suggestedSessions.find((session) => session.activeTerminalRuntimeId)

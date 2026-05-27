@@ -3,7 +3,8 @@ import test from "node:test";
 
 import {
   buildShellExecCommand,
-  createShellLaunchCommand,
+  buildShellStartupCommand,
+  createInteractiveShellLaunchCommand,
   shellQuote,
 } from "../../src/main/shell-launch.ts";
 
@@ -18,13 +19,18 @@ test("buildShellExecCommand は command と args を exec に渡す", () => {
   );
 });
 
-test("createShellLaunchCommand はログイン対話シェル経由で command を起動する", () => {
-  const result = createShellLaunchCommand("codex", ["resume", "session-1"], {
-    SHELL: "/bin/zsh",
-  });
+test("buildShellStartupCommand は exec 失敗時に shell を終了する", () => {
+  assert.equal(
+    buildShellStartupCommand("codex", ["resume", "session 1"]),
+    "exec 'codex' 'resume' 'session 1' || exit $?",
+  );
+});
+
+test("createInteractiveShellLaunchCommand はログイン対話シェルを起動する", () => {
+  const result = createInteractiveShellLaunchCommand({ SHELL: "/bin/zsh" });
 
   assert.deepEqual(result, {
     command: "/bin/zsh",
-    args: ["-i", "-l", "-c", "exec 'codex' 'resume' 'session-1'"],
+    args: ["-i", "-l"],
   });
 });
