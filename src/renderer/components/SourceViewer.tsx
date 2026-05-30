@@ -17,20 +17,22 @@ export function SourceViewer({ lines, className, scrollToLine }: SourceViewerPro
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = 0;
-      scrollRef.current.scrollLeft = 0;
-    }
-  }, [lines]);
-
-  useEffect(() => {
-    if (!scrollToLine || !scrollRef.current) {
+    const container = scrollRef.current;
+    if (!container) {
       return;
     }
-    const lineElement = scrollRef.current.querySelector(`[data-line="${scrollToLine}"]`);
-    if (lineElement) {
-      lineElement.scrollIntoView({ block: "center" });
+    // When a specific line is requested, scroll to it. Otherwise scroll to the
+    // first changed line so a diff is visible without manual scrolling. With no
+    // target (e.g. an unchanged file), reset to the top.
+    const target = scrollToLine
+      ? container.querySelector(`[data-line="${scrollToLine}"]`)
+      : container.querySelector(".diff-added, .diff-deleted");
+    if (target) {
+      target.scrollIntoView({ block: "center" });
+      return;
     }
+    container.scrollTop = 0;
+    container.scrollLeft = 0;
   }, [lines, scrollToLine]);
 
   const markers = computeDiffMarkers(lines);
