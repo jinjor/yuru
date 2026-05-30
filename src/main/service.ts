@@ -1,4 +1,5 @@
 import { shell } from "electron";
+import { randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
 import * as pty from "node-pty";
@@ -50,6 +51,7 @@ import {
 import type {
   PendingTerminal,
   TerminalLaunchRequest,
+  TerminalRuntimeKind,
   TerminalRuntimeInfo,
 } from "./terminal-runtime.js";
 import { FileTreeWatcher } from "./file-tree-watcher.js";
@@ -63,8 +65,6 @@ import {
 import {
   type SessionProvider,
   type SuggestedWorktreeSession,
-  toStandaloneTerminalRuntimeKey,
-  toTerminalRuntimeKey,
   toSessionKey,
 } from "../shared/session.js";
 import { toAppError } from "./errors.js";
@@ -86,6 +86,10 @@ const ANSI_ESCAPE_PATTERN = new RegExp(`${ESCAPE_CHARACTER}\\[[0-9;]*[A-Za-z]`, 
 interface StartedSession {
   terminalRuntimeId: string;
   providerSessionId: string | null;
+}
+
+function createTerminalRuntimeId(kind: TerminalRuntimeKind): string {
+  return `${kind}:runtime:${randomUUID()}`;
 }
 
 interface WorktreeSessionResumeTarget {
@@ -319,7 +323,6 @@ export class YuruService {
         "Failed to create worktree session",
       );
       const { terminalRuntimeId, providerSessionId } = await this.startSession(
-        provider,
         providerAdapter,
         pending,
       );
@@ -363,16 +366,16 @@ export class YuruService {
           cwd: worktree.worktreePath,
           env: createTerminalEnv(process.env),
           launchLabel: "Failed to start terminal",
+          runtimeKind: "standalone",
           worktreePath: worktree.worktreePath,
         },
         () => {
           this.events.sessionsStateChanged();
         },
       );
-      const terminalRuntimeId = this.createStandaloneTerminalRuntimeId(pending);
-      this.registerStandaloneTerminalRuntime(terminalRuntimeId, pending, worktree.repoPath);
+      this.registerStandaloneTerminalRuntime(pending, worktree.repoPath);
       pending.startupSettled = true;
-      return ok({ worktreeId, terminalRuntimeId });
+      return ok({ worktreeId, terminalRuntimeId: pending.terminalRuntimeId });
     } catch (error) {
       if (pending && !pending.exited) {
         pending.proc.kill();
@@ -431,7 +434,6 @@ export class YuruService {
         "Failed to create worktree session",
       );
       const { terminalRuntimeId, providerSessionId } = await this.startSession(
-        provider,
         providerAdapter,
         pending,
       );
@@ -683,6 +685,7 @@ export class YuruService {
         cwd: request.cwd,
         env: createTerminalEnv(process.env, providerAdapter.definition.id),
         launchLabel,
+        runtimeKind: providerAdapter.definition.id,
         startupCommand: {
           command: providerAdapter.command,
           args: request.args,
@@ -706,6 +709,8 @@ export class YuruService {
     request: TerminalLaunchRequest,
     onExit?: (pending: PendingTerminal) => void,
   ): PendingTerminal {
+    const startedAt = Date.now();
+    const terminalRuntimeId = createTerminalRuntimeId(request.runtimeKind);
     const launchCommand = createInteractiveShellLaunchCommand(request.env);
     const proc = pty.spawn(launchCommand.command, launchCommand.args, {
       name: "xterm-256color",
@@ -723,8 +728,8 @@ export class YuruService {
       outputBuffer: "",
       startupOutput: "",
       worktreePath: request.worktreePath,
-      terminalRuntimeId: null,
-      startedAt: Date.now(),
+      terminalRuntimeId,
+      startedAt,
       exited: false,
       startupSettled: false,
       startupFailureReported: false,
@@ -739,7 +744,7 @@ export class YuruService {
       if (!pending.startupSettled) {
         pending.startupOutput = appendStartupOutput(pending.startupOutput, data);
       }
-      if (!pending.terminalRuntimeId) {
+      if (!this.ptyProcesses.has(pending.terminalRuntimeId)) {
         return;
       }
       this.terminalRuntimeRefreshScheduler.recordActivity(pending.terminalRuntimeId);
@@ -776,7 +781,7 @@ export class YuruService {
         pending.startupFailureReported = true;
         this.reportError(startupFailureMessage(pending, exitCode, signal));
       }
-      if (!pending.terminalRuntimeId) {
+      if (!this.ptyProcesses.has(pending.terminalRuntimeId)) {
         return;
       }
       this.clearTerminalRuntimeRefresh(pending.terminalRuntimeId);
@@ -796,17 +801,12 @@ export class YuruService {
     return pending;
   }
 
-  private registerTerminalRuntime(
-    terminalRuntimeId: string,
-    pending: PendingSession,
-    providerSessionId: string | null,
-  ): void {
+  private registerTerminalRuntime(pending: PendingSession, providerSessionId: string | null): void {
     pending.providerSessionId = providerSessionId;
-    pending.terminalRuntimeId = terminalRuntimeId;
     this.pendingProcesses.delete(pending.proc);
-    this.ptyProcesses.set(terminalRuntimeId, pending.proc);
-    this.ptyScrollback.set(terminalRuntimeId, pending.outputBuffer);
-    this.terminalRuntimeMap.set(terminalRuntimeId, {
+    this.ptyProcesses.set(pending.terminalRuntimeId, pending.proc);
+    this.ptyScrollback.set(pending.terminalRuntimeId, pending.outputBuffer);
+    this.terminalRuntimeMap.set(pending.terminalRuntimeId, {
       provider: pending.provider,
       providerSessionId,
       repoPath: pending.launchCwd,
@@ -815,28 +815,15 @@ export class YuruService {
     });
   }
 
-  private registerStandaloneTerminalRuntime(
-    terminalRuntimeId: string,
-    pending: PendingTerminal,
-    repoPath: string,
-  ): void {
-    pending.terminalRuntimeId = terminalRuntimeId;
+  private registerStandaloneTerminalRuntime(pending: PendingTerminal, repoPath: string): void {
     this.pendingProcesses.delete(pending.proc);
-    this.ptyProcesses.set(terminalRuntimeId, pending.proc);
-    this.ptyScrollback.set(terminalRuntimeId, pending.outputBuffer);
-    this.terminalRuntimeMap.set(terminalRuntimeId, {
+    this.ptyProcesses.set(pending.terminalRuntimeId, pending.proc);
+    this.ptyScrollback.set(pending.terminalRuntimeId, pending.outputBuffer);
+    this.terminalRuntimeMap.set(pending.terminalRuntimeId, {
       repoPath,
       worktreePath: pending.worktreePath,
       startedAt: pending.startedAt,
     });
-  }
-
-  private createTerminalRuntimeId(provider: SessionProvider, pending: PendingTerminal): string {
-    return toTerminalRuntimeKey(provider, pending.startedAt);
-  }
-
-  private createStandaloneTerminalRuntimeId(pending: PendingTerminal): string {
-    return toStandaloneTerminalRuntimeKey(pending.startedAt);
   }
 
   private findStandaloneTerminalRuntimeId(worktreePath: string): string | null {
@@ -1114,9 +1101,8 @@ export class YuruService {
         await providerAdapter.createResumeLaunch(target),
         "Failed to resume session",
       );
-      const terminalRuntimeId = this.createTerminalRuntimeId(target.provider, pending);
-      this.registerTerminalRuntime(terminalRuntimeId, pending, target.providerSessionId);
-      return ok(terminalRuntimeId);
+      this.registerTerminalRuntime(pending, target.providerSessionId);
+      return ok(pending.terminalRuntimeId);
     } catch (error) {
       if (pending && !pending.exited) {
         pending.proc.kill();
@@ -1183,14 +1169,13 @@ export class YuruService {
   }
 
   private async startSession(
-    provider: SessionProvider,
     providerAdapter: SessionProviderAdapter,
     pending: PendingSession,
   ): Promise<StartedSession> {
-    const terminalRuntimeId = this.createTerminalRuntimeId(provider, pending);
+    const terminalRuntimeId = pending.terminalRuntimeId;
 
     if (providerAdapter.resolvesSessionIdLazily) {
-      this.registerTerminalRuntime(terminalRuntimeId, pending, null);
+      this.registerTerminalRuntime(pending, null);
       void this.resolveLazySessionId(providerAdapter, pending, terminalRuntimeId);
       return {
         terminalRuntimeId,
@@ -1199,7 +1184,7 @@ export class YuruService {
     }
 
     const providerSessionId = await providerAdapter.waitForSessionId(pending);
-    this.registerTerminalRuntime(terminalRuntimeId, pending, providerSessionId);
+    this.registerTerminalRuntime(pending, providerSessionId);
     return {
       terminalRuntimeId,
       providerSessionId,

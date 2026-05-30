@@ -16,11 +16,3 @@ export interface GitHubPullRequest {
 export function toSessionKey(provider: SessionProvider, providerSessionId: string): string {
   return `${provider}:${providerSessionId}`;
 }
-
-export function toTerminalRuntimeKey(provider: SessionProvider, startedAt: number): string {
-  return `${provider}:runtime:${startedAt}`;
-}
-
-export function toStandaloneTerminalRuntimeKey(startedAt: number): string {
-  return `standalone:runtime:${startedAt}`;
-}

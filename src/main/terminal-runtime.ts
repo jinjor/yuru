@@ -1,6 +1,8 @@
 import type * as pty from "node-pty";
 import type { SessionProvider } from "../shared/session.js";
 
+export type TerminalRuntimeKind = SessionProvider | "standalone";
+
 export interface TerminalRuntimeInfo {
   repoPath: string;
   worktreePath: string;
@@ -18,6 +20,7 @@ export interface TerminalLaunchRequest {
   cwd: string;
   env: Record<string, string>;
   launchLabel: string;
+  runtimeKind: TerminalRuntimeKind;
   startupCommand?: TerminalStartupCommand;
   worktreePath: string;
 }
@@ -30,7 +33,7 @@ export interface PendingTerminal {
   outputBuffer: string;
   startupOutput: string;
   worktreePath: string;
-  terminalRuntimeId: string | null;
+  terminalRuntimeId: string;
   startedAt: number;
   exited: boolean;
   exitCode?: number;
