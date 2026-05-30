@@ -26,7 +26,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 
 | ID | Type | Area | Item | Why now |
 |---|---|---|---|---|
-| F38 | feature | Tests | provider 挙動の integration / e2e テスト基盤 | `design-properties.md` の性質（resume prompt 出ない、context 注入が hidden、etc.）を回帰検出したい。今は spike の手動検証のみ |
+| F38 | feature | Tests | e2e テストケースの実装拡充 | 隔離 HOME・本物 provider の e2e ハーネスは検証済みで smoke + 作成フロー 2 本が通る。あとは ~58 ケース（git/shell 中心、provider 系は最小限）を埋めるだけ。詳細: docs/backlog-details/F38-e2e-test-cases.md |
 | F20 | feature | App | アプリのアイコンを付ける | テンションとプロダクト感を上げたい |
 | I18 | investigate | Events / Worktree Context | worktree 表示情報の更新タイミングを matrix で整理する | 詳細: docs/backlog-details/I18-worktree-refresh-policy.md |
 | I19 | investigate | Worktrees | main worktree の情報も Yuru で見られるようにする | 詳細: docs/backlog-details/I19-main-worktree-visibility.md |
