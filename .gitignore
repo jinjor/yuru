@@ -6,3 +6,5 @@ out/
 .yuru/
 codex-worktrees
 reviews/
+playwright-report/
+test-results/
