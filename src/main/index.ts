@@ -212,10 +212,6 @@ function registerIpcHandlers(): void {
     },
   );
 
-  ipcMain.handle("worktree:remove", (_event, repoPath: string, worktreePath: string) => {
-    return service.removeWorktree(repoPath, worktreePath);
-  });
-
   ipcMain.handle("shell:openExternal", (_event, url: string) => {
     return service.openExternal(url);
   });

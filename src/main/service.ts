@@ -488,22 +488,6 @@ export class YuruService {
     }
   }
 
-  async removeWorktree(repoPath: string, worktreePath: string): Promise<Result<boolean>> {
-    if (this.hasActivePrimarySessionForWorktree(worktreePath)) {
-      return this.failAndReport<boolean>({
-        code: "unknown",
-        message: "Stop the session before removing this worktree.",
-      });
-    }
-    try {
-      await removeGitWorktree(repoPath, worktreePath);
-      removeTaskWorktreeByPath(worktreePath);
-      return ok(true);
-    } catch (error) {
-      return this.failAndReport<boolean>(toAppError(error, { command: "git" }));
-    }
-  }
-
   async openExternal(url: string): Promise<void> {
     const parsedUrl = new URL(url);
     if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
@@ -681,20 +665,6 @@ export class YuruService {
       });
     }
     return terminalRuntimesByWorktreePath;
-  }
-
-  private hasActivePrimarySessionForWorktree(worktreePath: string): boolean {
-    const worktreePathKey = path.resolve(worktreePath);
-    const taskWorktree = loadTaskWorktrees().find(
-      (entry) => path.resolve(entry.worktreePath) === worktreePathKey,
-    );
-    const primarySession = taskWorktree?.primarySession;
-    if (!primarySession) {
-      return false;
-    }
-    return this.getTerminalRuntimeIdsBySessionKey().has(
-      toSessionKey(primarySession.provider, primarySession.providerSessionId),
-    );
   }
 
   private launchPendingSession(

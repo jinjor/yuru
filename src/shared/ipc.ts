@@ -123,7 +123,6 @@ export interface ElectronAPI {
     repoPath: string,
     branchName: string,
   ) => Promise<Result<WorktreeSessionSelection>>;
-  removeWorktree: (repoPath: string, worktreePath: string) => Promise<Result<boolean>>;
   openExternal: (url: string) => Promise<void>;
   getGitPathStates: (worktreeId: string) => Promise<Result<GitPathState[]>>;
   getGitDiffDocument: (
