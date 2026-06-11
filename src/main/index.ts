@@ -10,6 +10,7 @@ import type { SessionProvider } from "../shared/session.js";
 
 let mainWindow: BrowserWindow | null = null;
 let worktreeWatcher: WorktreeWatcher | null = null;
+let servicesStopped = false;
 
 const APP_NAME = "Yuru";
 
@@ -135,6 +136,15 @@ async function refreshWorktreeWatcher(): Promise<void> {
     return;
   }
   worktreeWatcher.setRepos(loadRepos().map((repo) => repo.repoPath));
+}
+
+async function stopApplicationServices(): Promise<void> {
+  if (servicesStopped) {
+    return;
+  }
+  servicesStopped = true;
+  worktreeWatcher?.stop();
+  await service.stop();
 }
 
 function registerIpcHandlers(): void {
@@ -275,8 +285,17 @@ app.whenReady().then(async () => {
   registerIpcHandlers();
 });
 
+app.on("before-quit", (event) => {
+  if (servicesStopped) {
+    return;
+  }
+  // Hold off the quit until every PTY has been reaped, then quit for real.
+  event.preventDefault();
+  void stopApplicationServices().then(() => {
+    app.quit();
+  });
+});
+
 app.on("window-all-closed", () => {
-  worktreeWatcher?.stop();
-  service.stop();
   app.quit();
 });

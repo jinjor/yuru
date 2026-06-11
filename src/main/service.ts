@@ -80,6 +80,11 @@ import { TerminalRuntimeRefreshScheduler } from "./terminal-runtime-refresh-sche
 
 const STARTUP_OUTPUT_LIMIT = 4000;
 const TERMINAL_SCROLLBACK_LIMIT = 200000;
+// On shutdown we SIGHUP every PTY and wait for node-pty to finish reaping the
+// child before letting the process tear down; otherwise node-pty's native exit
+// callback fires during environment cleanup and aborts. If a child ignores
+// SIGHUP we escalate to SIGKILL after this grace period so quit can never hang.
+const PTY_SHUTDOWN_GRACE_MS = 2000;
 const ESCAPE_CHARACTER = String.fromCharCode(0x1b);
 const ANSI_ESCAPE_PATTERN = new RegExp(`${ESCAPE_CHARACTER}\\[[0-9;]*[A-Za-z]`, "g");
 
@@ -213,6 +218,23 @@ function startupFailureMessage(
     message: `${pending.launchLabel}. ${pending.command} exited before startup finished.`,
     detail,
   };
+}
+
+// Resolves once node-pty has reaped the child and emitted "exit". SIGHUP first,
+// then SIGKILL if the child outlives the grace period, so shutdown can wait for
+// node-pty's native cleanup without ever hanging on a SIGHUP-ignoring child.
+function killPtyAndWait(proc: pty.IPty): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const killTimer = setTimeout(() => {
+      proc.kill("SIGKILL");
+    }, PTY_SHUTDOWN_GRACE_MS);
+    const disposable = proc.onExit(() => {
+      clearTimeout(killTimer);
+      disposable.dispose();
+      resolve();
+    });
+    proc.kill();
+  });
 }
 
 export class YuruService {
@@ -607,9 +629,9 @@ export class YuruService {
     }
   }
 
-  stop(): void {
+  async stop(): Promise<void> {
     this.fileTreeWatcher.stop();
-    this.killAllPty();
+    await this.killAllPty();
   }
 
   private reportError(error: AppError): AppError {
@@ -942,18 +964,14 @@ export class YuruService {
     }
   }
 
-  private killAllPty(): void {
-    for (const proc of this.ptyProcesses.values()) {
-      proc.kill();
-    }
-    for (const proc of this.pendingProcesses.values()) {
-      proc.kill();
-    }
+  private async killAllPty(): Promise<void> {
+    const procs = [...this.ptyProcesses.values(), ...this.pendingProcesses.values()];
     this.ptyProcesses.clear();
     this.ptyAttachments.clear();
     this.pendingProcesses.clear();
     this.ptyScrollback.clear();
     this.clearTerminalRuntimeRefreshes();
+    await Promise.all(procs.map((proc) => killPtyAndWait(proc)));
   }
 
   private async findPrimarySessionResumeTarget(
