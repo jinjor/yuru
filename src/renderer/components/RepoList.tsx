@@ -366,18 +366,18 @@ function SuggestedSessionAction({ suggestedSession, onSelect }: SuggestedSession
 }
 
 function worktreeLabelText(worktree: WorktreeListItem): string {
-  if (worktree.branch) {
-    return worktree.branch;
-  }
   if (!worktree.headSha) {
     return "(no commits)";
+  }
+  if (worktree.branch) {
+    return worktree.branch;
   }
   return `detached @ ${worktree.headSha.slice(0, 7)}`;
 }
 
 function renderWorktreeLabel(worktree: WorktreeListItem): ReactNode {
   const text = worktreeLabelText(worktree);
-  if (!worktree.branch) {
+  if (!worktree.branch || !worktree.headSha) {
     return text;
   }
   return (

@@ -13,6 +13,12 @@ Run these commands from the active task worktree, not from the repository root.
 
 This is for checking behavior changes. Documentation-only edits do not need a rebuild or restart.
 
+## E2E
+
+Electron/Playwright e2e launches a real macOS GUI app. In Codex, do not run it in the default sandbox; use an approved/escalated `npm run test:e2e` command. Running `_electron.launch()` in `CODEX_SANDBOX=seatbelt` can abort Electron during macOS app registration and leave a system crash/reopen dialog.
+
+E2E runs hide the BrowserWindow by default with `YURU_E2E_HIDE_WINDOW=1`. Use `YURU_E2E_SHOW_WINDOW=1 npm run test:e2e -- ...` only when visible debugging is needed.
+
 ## Docs
 
 - Purpose: `docs/purpose.md`

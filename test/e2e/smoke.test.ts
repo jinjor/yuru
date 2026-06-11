@@ -1,24 +1,37 @@
-import { _electron as electron, expect, test } from "@playwright/test";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
+import { expect, test } from "@playwright/test";
+import { closeYuru, createE2eContext, launchYuru } from "./helpers";
 
-test("app launches and shows main window", async () => {
-  const repoRoot = process.cwd();
-  const yuruHome = await mkdtemp(path.join(tmpdir(), "yuru-e2e-"));
-  const app = await electron.launch({
-    args: [repoRoot],
-    cwd: repoRoot,
-    env: {
-      ...process.env,
-      YURU_HOME: yuruHome,
-    },
-  });
+test("アプリを起動するとタイトルが Yuru になる", async () => {
+  const context = await createE2eContext();
+  const app = await launchYuru(context);
   try {
     const window = await app.firstWindow();
     await expect(window).toHaveTitle("Yuru");
   } finally {
-    await app.close();
-    await rm(yuruHome, { recursive: true, force: true });
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+test("e2e 実行中は BrowserWindow が hidden のままになる", async () => {
+  const context = await createE2eContext();
+  const app = await launchYuru(context);
+  try {
+    const window = await app.firstWindow();
+    await expect(window.locator(".repo-list-empty")).toBeVisible();
+    const browserWindowState = await app.evaluate(async ({ BrowserWindow }) => {
+      const browserWindow = BrowserWindow.getAllWindows()[0];
+      return {
+        isFocused: browserWindow.isFocused(),
+        isVisible: browserWindow.isVisible(),
+      };
+    });
+    expect(browserWindowState).toEqual({
+      isFocused: false,
+      isVisible: false,
+    });
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
   }
 });

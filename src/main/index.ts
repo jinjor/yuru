@@ -13,6 +13,7 @@ let worktreeWatcher: WorktreeWatcher | null = null;
 let servicesStopped = false;
 
 const APP_NAME = "Yuru";
+const HIDE_WINDOW_FOR_E2E = process.env.YURU_E2E_HIDE_WINDOW === "1";
 
 app.setName(APP_NAME);
 
@@ -121,10 +122,12 @@ function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
+    show: !HIDE_WINDOW_FOR_E2E,
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      backgroundThrottling: false,
     },
   });
 
