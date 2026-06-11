@@ -12,6 +12,7 @@ interface WorktreeSessionScore {
   providerSessionId: string;
   worktreePath: string;
   worktreeRank: number;
+  cwd: string;
   timestamp: number;
 }
 
@@ -48,10 +49,10 @@ export async function loadSuggestedWorktreeSessions(
     worktreePaths.map((worktreePath) => [path.resolve(worktreePath), worktreePath]),
   );
   const suggestionsByWorktreePath = new Map<string, SuggestedWorktreeSession[]>();
-  const timestampsBySessionKey = new Map(
+  const snapshotsBySessionKey = new Map(
     (await loadStoredSessionSnapshots()).map((snapshot) => [
       toSessionKey(snapshot.provider, snapshot.providerSessionId),
-      snapshot.timestamp,
+      { timestamp: snapshot.timestamp, cwd: snapshot.project },
     ]),
   );
   const hints = (
@@ -67,11 +68,12 @@ export async function loadSuggestedWorktreeSessions(
       return worktreePath ? [{ ...hint, worktreePath }] : [];
     });
 
-  for (const score of rankWorktreeSessionScores(hints, timestampsBySessionKey)) {
+  for (const score of rankWorktreeSessionScores(hints, snapshotsBySessionKey)) {
     const suggestions = suggestionsByWorktreePath.get(score.worktreePath) ?? [];
     suggestions.push({
       provider: score.provider,
       providerSessionId: score.providerSessionId,
+      cwd: score.cwd,
       timestamp: score.timestamp,
     });
     suggestionsByWorktreePath.set(score.worktreePath, suggestions);
@@ -82,19 +84,23 @@ export async function loadSuggestedWorktreeSessions(
 
 function rankWorktreeSessionScores(
   hints: readonly WorktreeSessionHint[],
-  timestampsBySessionKey: ReadonlyMap<string, number>,
+  snapshotsBySessionKey: ReadonlyMap<string, { timestamp: number; cwd: string }>,
 ): WorktreeSessionScore[] {
   const scoresByKey = new Map<string, WorktreeSessionScore>();
 
   for (const hint of hints) {
     const sessionKey = toSessionKey(hint.provider, hint.providerSessionId);
     const scoreKey = `${sessionKey}:${hint.worktreePath}`;
+    const snapshot = snapshotsBySessionKey.get(sessionKey);
     const nextScore: WorktreeSessionScore = {
       provider: hint.provider,
       providerSessionId: hint.providerSessionId,
       worktreePath: hint.worktreePath,
       worktreeRank: hint.worktreeRank,
-      timestamp: timestampsBySessionKey.get(sessionKey) ?? 0,
+      // Sessions without a snapshot have no resumable store entry; fall back to
+      // the detected worktree so the type stays a plain string.
+      cwd: snapshot?.cwd ?? hint.worktreePath,
+      timestamp: snapshot?.timestamp ?? 0,
     };
     const existingScore = scoresByKey.get(scoreKey);
     if (!existingScore || compareWorktreeSessionScores(nextScore, existingScore) < 0) {

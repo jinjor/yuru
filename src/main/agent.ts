@@ -44,7 +44,8 @@ export interface WorktreeContext {
 export interface ResumeSessionTarget {
   provider: SessionProvider;
   providerSessionId: string;
-  repoPath: string;
+  // Directory to launch the resume in (where the provider stored the session).
+  cwd: string;
   project: string;
 }
 

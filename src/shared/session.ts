@@ -4,6 +4,9 @@ export type TerminalRuntimeId = string;
 export interface SuggestedWorktreeSession {
   provider: SessionProvider;
   providerSessionId: string;
+  // Directory the session was created in (where the provider stores it). Carried
+  // so promoting the session can record where to resume it.
+  cwd: string;
   timestamp: number;
 }
 

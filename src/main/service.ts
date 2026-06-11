@@ -100,7 +100,7 @@ function createTerminalRuntimeId(kind: TerminalRuntimeKind): string {
 interface WorktreeSessionResumeTarget {
   provider: SessionProvider;
   providerSessionId: string;
-  repoPath: string;
+  cwd: string;
   project: string;
 }
 
@@ -353,6 +353,7 @@ export class YuruService {
         attachPrimarySessionByPath(worktree.worktreePath, {
           provider,
           providerSessionId,
+          cwd: pending.launchCwd,
         });
       }
       return ok({ worktreeId, terminalRuntimeId });
@@ -926,6 +927,7 @@ export class YuruService {
       attachPrimarySessionByPath(pending.worktreePath, {
         provider: pending.provider,
         providerSessionId,
+        cwd: pending.launchCwd,
       });
       await this.events.refreshWorktreeWatcher();
       this.events.sessionsStateChanged();
@@ -972,7 +974,9 @@ export class YuruService {
     return {
       provider: taskWorktree.primarySession.provider,
       providerSessionId: taskWorktree.primarySession.providerSessionId,
-      repoPath: worktree.repoPath,
+      // Entries written before cwd was recorded predate promote support and were
+      // all created at the repo root, so fall back to it.
+      cwd: taskWorktree.primarySession.cwd ?? worktree.repoPath,
       project: taskWorktree.worktreePath,
     };
   }
@@ -1059,6 +1063,7 @@ export class YuruService {
     attachPrimarySessionByPath(worktree.worktreePath, {
       provider: session.provider,
       providerSessionId: session.providerSessionId,
+      cwd: session.cwd,
     });
   }
 

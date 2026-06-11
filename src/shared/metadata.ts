@@ -8,6 +8,10 @@ export interface RepoMetadata {
 export interface PrimarySessionMetadata {
   provider: SessionProvider;
   providerSessionId: string;
+  // Directory to resume the session in (where the provider stored it). Optional
+  // for backward compatibility with metadata written before this was recorded;
+  // such entries predate promote support and were all created at the repo root.
+  cwd?: string;
 }
 
 export interface SuggestedSessionListItem {

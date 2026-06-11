@@ -163,7 +163,7 @@ test("Claude stored session の存在判定は session file の存在を見る",
   assert.equal(await claudeProvider.hasStoredSession(missingClaudeSessionId), false);
 });
 
-test("provider resume launch は repo root で起動する", async () => {
+test("provider resume launch は session の記録場所 (target.cwd) で起動する", async () => {
   const repoRoot = path.join(tempDir, "repo");
   const worktreePath = path.join(repoRoot, ".yuru", "worktrees", "task-a");
 
@@ -171,11 +171,11 @@ test("provider resume launch は repo root で起動する", async () => {
     await claudeProvider.createResumeLaunch({
       provider: "claude",
       providerSessionId: "claude-resume",
-      repoPath: repoRoot,
+      cwd: worktreePath,
       project: worktreePath,
     }),
     {
-      cwd: repoRoot,
+      cwd: worktreePath,
       args: ["--resume", "claude-resume"],
       worktreePath,
     },
@@ -184,11 +184,11 @@ test("provider resume launch は repo root で起動する", async () => {
     await codexProvider.createResumeLaunch({
       provider: "codex",
       providerSessionId: "codex-resume",
-      repoPath: repoRoot,
+      cwd: worktreePath,
       project: worktreePath,
     }),
     {
-      cwd: repoRoot,
+      cwd: worktreePath,
       args: ["resume", "--all", "codex-resume"],
       worktreePath,
     },
@@ -298,13 +298,13 @@ test("loadSuggestedWorktreeSessions は suggested session を worktree ごとに
   const suggestions = await loadSuggestedWorktreeSessions([worktreeB, worktreeA]);
 
   assert.deepEqual(suggestions.get(worktreeA), [
-    { provider: "claude", providerSessionId: "claude-a", timestamp: 0 },
-    { provider: "claude", providerSessionId: "claude-b", timestamp: 0 },
-    { provider: "codex", providerSessionId: "codex-a", timestamp: 0 },
+    { provider: "claude", providerSessionId: "claude-a", cwd: worktreeA, timestamp: 0 },
+    { provider: "claude", providerSessionId: "claude-b", cwd: worktreeA, timestamp: 0 },
+    { provider: "codex", providerSessionId: "codex-a", cwd: path.join(worktreeA, "src"), timestamp: 0 },
   ]);
   assert.deepEqual(suggestions.get(worktreeB), [
-    { provider: "claude", providerSessionId: "claude-a", timestamp: 0 },
-    { provider: "codex", providerSessionId: "codex-b", timestamp: 0 },
+    { provider: "claude", providerSessionId: "claude-a", cwd: worktreeB, timestamp: 0 },
+    { provider: "codex", providerSessionId: "codex-b", cwd: path.join(tempDir, "repo"), timestamp: 0 },
   ]);
 });
 
@@ -408,9 +408,19 @@ test("loadSuggestedWorktreeSessions は同じ worktreeRank なら session id で
   const suggestions = await loadSuggestedWorktreeSessions([worktreePath]);
 
   assert.deepEqual(suggestions.get(worktreePath), [
-    { provider: "codex", providerSessionId: "codex-meta", timestamp: 0 },
-    { provider: "codex", providerSessionId: "codex-patch", timestamp: 0 },
-    { provider: "codex", providerSessionId: "codex-workdir", timestamp: 0 },
+    { provider: "codex", providerSessionId: "codex-meta", cwd: worktreePath, timestamp: 0 },
+    {
+      provider: "codex",
+      providerSessionId: "codex-patch",
+      cwd: path.join(tempDir, "repo"),
+      timestamp: 0,
+    },
+    {
+      provider: "codex",
+      providerSessionId: "codex-workdir",
+      cwd: path.join(tempDir, "repo"),
+      timestamp: 0,
+    },
   ]);
 });
 
@@ -514,6 +524,7 @@ test("loadSuggestedWorktreeSessions は session 内で対象 worktree の順位�
   assert.deepEqual(suggestions.get(targetWorktree)?.[0], {
     provider: "codex",
     providerSessionId: "codex-target",
+    cwd: repoPath,
     timestamp: Date.parse("2026-05-10T00:00:02.000Z"),
   });
 });

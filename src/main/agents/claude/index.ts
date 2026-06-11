@@ -361,7 +361,7 @@ export const sessionProvider: SessionProviderAdapter = {
   hasStoredSession,
   async createResumeLaunch(session) {
     return {
-      cwd: session.repoPath,
+      cwd: session.cwd,
       args: ["--resume", session.providerSessionId],
       worktreePath: session.project,
     };

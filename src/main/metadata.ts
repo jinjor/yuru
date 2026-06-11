@@ -173,7 +173,7 @@ function parsePrimarySession(value: unknown): PrimarySessionMetadata {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Yuru metadata primarySession must be an object.");
   }
-  const maybe = value as { provider?: unknown; providerSessionId?: unknown };
+  const maybe = value as { provider?: unknown; providerSessionId?: unknown; cwd?: unknown };
   if (
     (maybe.provider !== "claude" && maybe.provider !== "codex") ||
     typeof maybe.providerSessionId !== "string"
@@ -182,10 +182,17 @@ function parsePrimarySession(value: unknown): PrimarySessionMetadata {
       "Yuru metadata primarySession must have provider claude|codex and string providerSessionId.",
     );
   }
-  return {
+  if (maybe.cwd !== undefined && typeof maybe.cwd !== "string") {
+    throw new Error("Yuru metadata primarySession cwd must be a string.");
+  }
+  const primarySession: PrimarySessionMetadata = {
     provider: maybe.provider as SessionProvider,
     providerSessionId: maybe.providerSessionId,
   };
+  if (maybe.cwd !== undefined) {
+    primarySession.cwd = maybe.cwd;
+  }
+  return primarySession;
 }
 
 export function saveMetadata(metadata: YuruMetadata): void {
