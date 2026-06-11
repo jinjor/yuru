@@ -28,7 +28,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 |---|---|---|---|---|
 | F20 | feature | App | アプリのアイコンを付ける | テンションとプロダクト感を上げたい |
 | I18 | investigate | Events / Worktree Context | worktree 表示情報の更新タイミングを matrix で整理する | 詳細: docs/backlog-details/I18-worktree-refresh-policy.md |
-| I19 | investigate | Worktrees | main worktree の情報も Yuru で見られるようにする | 詳細: docs/backlog-details/I19-main-worktree-visibility.md |
 | F41 | feature | Files / Code | ファイル内検索 | 開いているファイル内で目的の箇所へすばやく移動したい |
 | F37 | feature | Diff | ブランチの任意のコミット間で diff を表示できるようにする | 複数コミットある作業で差分の範囲を切り替えて確認したい |
 | F32 | feature | Terminal | task worktree 外の作業を standalone terminal として分離する | task worktree list に混ぜない補助導線として欲しい |
