@@ -1231,6 +1231,82 @@ button.github-badge {
   background: var(--danger);
 }
 
+/* In-file find */
+.source-find-bar {
+  position: absolute;
+  top: 8px;
+  right: 18px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+.source-find-input {
+  width: 160px;
+  padding: 2px 6px;
+  background: var(--viewer-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  outline: none;
+}
+
+.source-find-input:focus {
+  border-color: var(--border-strong);
+}
+
+.source-find-count {
+  min-width: 5ch;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.source-find-button {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-subtle);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.source-find-button:hover:not(:disabled) {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.source-find-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.source-find-match {
+  background: #4c3916;
+  border-radius: 2px;
+}
+
+.source-find-match.active {
+  background: #7d5a14;
+  outline: 1px solid #ffd479;
+}
+
 /* Text selection */
 .source-viewer ::selection {
   background: var(--viewer-selection);

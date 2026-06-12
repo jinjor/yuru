@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { ThemedToken } from "shiki";
+import { useSourceFind } from "./SourceFind";
 
 export interface SourceLine {
   tokens: ThemedToken[];
@@ -15,6 +16,7 @@ interface SourceViewerProps {
 
 export function SourceViewer({ lines, className, scrollToLine }: SourceViewerProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { findBar, renderTokens } = useSourceFind(lines);
 
   useEffect(() => {
     const container = scrollRef.current;
@@ -39,6 +41,7 @@ export function SourceViewer({ lines, className, scrollToLine }: SourceViewerPro
 
   return (
     <div className="source-viewer-wrap">
+      {findBar}
       <div ref={scrollRef} className={`source-viewer ${className ?? ""}`}>
         <div className="source-viewer-content">
           {lines.map((line, index) => (
@@ -49,11 +52,7 @@ export function SourceViewer({ lines, className, scrollToLine }: SourceViewerPro
             >
               <span className="source-gutter">{line.lineNumber ?? ""}</span>
               <span className="source-code">
-                {line.tokens.map((token, tokenIndex) => (
-                  <span key={tokenIndex} style={{ color: token.color }}>
-                    {token.content}
-                  </span>
-                ))}
+                {renderTokens(line.tokens, index)}
                 {line.tokens.length === 0 && "\n"}
               </span>
             </div>
