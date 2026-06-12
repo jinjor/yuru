@@ -1,9 +1,20 @@
-import type { GitFileStatus } from "../../../shared/ipc";
+import type { GitFileStatus, GitLineStat } from "../../../shared/ipc";
 
 export interface ChangeSection {
   key: "staged" | "unstaged";
   label: "Staged" | "Unstaged";
   files: readonly GitFileStatus[];
+  totalLineStat: GitLineStat;
+}
+
+function sumLineStats(files: readonly GitFileStatus[]): GitLineStat {
+  let added = 0;
+  let deleted = 0;
+  for (const file of files) {
+    added += file.lineStat?.added ?? 0;
+    deleted += file.lineStat?.deleted ?? 0;
+  }
+  return { added, deleted };
 }
 
 export function buildChangeSections({
@@ -20,6 +31,7 @@ export function buildChangeSections({
       key: "staged",
       label: "Staged",
       files: stagedFiles,
+      totalLineStat: sumLineStats(stagedFiles),
     });
   }
 
@@ -28,6 +40,7 @@ export function buildChangeSections({
       key: "unstaged",
       label: "Unstaged",
       files: unstagedFiles,
+      totalLineStat: sumLineStats(unstagedFiles),
     });
   }
 

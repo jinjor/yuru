@@ -5,7 +5,7 @@ import { loadRepos } from "./metadata.js";
 import { cleanupStaleTaskWorktrees } from "./task-worktree-maintenance.js";
 import { WorktreeWatcher } from "./worktree-watcher.js";
 import { YuruService } from "./service.js";
-import type { AppErrorNotice, WorktreeDisplayUpdate } from "../shared/ipc.js";
+import type { AppErrorNotice, GitDiffScope, WorktreeDisplayUpdate } from "../shared/ipc.js";
 import type { SessionProvider } from "../shared/session.js";
 
 let mainWindow: BrowserWindow | null = null;
@@ -223,9 +223,12 @@ function registerIpcHandlers(): void {
     return service.getGitPathStates(worktreeId);
   });
 
-  ipcMain.handle("git:diffDocument", (_event, worktreeId: string, filePath: string) => {
-    return service.getGitDiffDocument(worktreeId, filePath);
-  });
+  ipcMain.handle(
+    "git:diffDocument",
+    (_event, worktreeId: string, filePath: string, scope?: GitDiffScope) => {
+      return service.getGitDiffDocument(worktreeId, filePath, scope);
+    },
+  );
 
   ipcMain.handle("files:list", (_event, worktreeId: string, relativePath?: string) => {
     return service.listFiles(worktreeId, relativePath);

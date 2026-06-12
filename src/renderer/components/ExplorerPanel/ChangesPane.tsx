@@ -1,7 +1,8 @@
 import type { GitFileStatus } from "../../../shared/ipc";
 import type { PreviewSelection } from "../../types";
 import { statusColor, statusLabel } from "../../utils/git";
-import { buildChangeSections } from "./changes";
+import { LineStatLabel } from "../LineStatLabel";
+import { buildChangeSections, type ChangeSection } from "./changes";
 
 interface ChangesPaneProps {
   onPreviewSelectionChange: (selection: PreviewSelection | null) => void;
@@ -29,10 +30,9 @@ export function ChangesPane({
   return (
     <div className="changes-list">
       {sections.map((section) => (
-        <ChangeSection
+        <ChangeSectionView
           key={section.key}
-          files={section.files}
-          label={section.label}
+          section={section}
           onPreviewSelectionChange={onPreviewSelectionChange}
           previewSelection={previewSelection}
         />
@@ -41,40 +41,44 @@ export function ChangesPane({
   );
 }
 
-function ChangeSection({
-  files,
-  label,
+function ChangeSectionView({
+  section,
   onPreviewSelectionChange,
   previewSelection,
 }: {
-  files: readonly GitFileStatus[];
-  label: string;
+  section: ChangeSection;
   onPreviewSelectionChange: (selection: PreviewSelection | null) => void;
   previewSelection: PreviewSelection | null;
 }) {
   return (
     <section className="change-section">
       <div className="change-section-header">
-        <span>{label}</span>
-        <span className="change-section-count">{files.length}</span>
+        <span>{section.label}</span>
+        <span className="change-section-count">{section.files.length}</span>
+        <LineStatLabel lineStat={section.totalLineStat} />
       </div>
-      {files.map((file) => (
-        <div
-          key={`${label}:${file.path}`}
-          className={`change-item ${previewSelection?.path === file.path ? "selected" : ""}`}
-          onClick={() => onPreviewSelectionChange({ path: file.path })}
-        >
-          <span className="change-status" style={{ color: statusColor(file.status) }}>
-            {statusLabel(file.status)}
-          </span>
-          <span className="change-path" title={file.path}>
-            {file.path.split("/").pop()}
-          </span>
-          <span className="change-dir" title={file.path}>
-            {file.path.includes("/") ? file.path.substring(0, file.path.lastIndexOf("/")) : ""}
-          </span>
-        </div>
-      ))}
+      {section.files.map((file) => {
+        const isSelected =
+          previewSelection?.path === file.path && previewSelection?.scope === section.key;
+        return (
+          <div
+            key={`${section.label}:${file.path}`}
+            className={`change-item ${isSelected ? "selected" : ""}`}
+            onClick={() => onPreviewSelectionChange({ path: file.path, scope: section.key })}
+          >
+            <span className="change-status" style={{ color: statusColor(file.status) }}>
+              {statusLabel(file.status)}
+            </span>
+            <span className="change-path" title={file.path}>
+              {file.path.split("/").pop()}
+            </span>
+            <span className="change-dir" title={file.path}>
+              {file.path.includes("/") ? file.path.substring(0, file.path.lastIndexOf("/")) : ""}
+            </span>
+            {file.lineStat && <LineStatLabel lineStat={file.lineStat} />}
+          </div>
+        );
+      })}
     </section>
   );
 }

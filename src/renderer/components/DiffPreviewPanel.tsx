@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { diffArrays } from "diff";
-import type { GitDiffDocument } from "../../shared/ipc";
+import type { GitDiffDocument, GitLineStat } from "../../shared/ipc";
 import { SourceViewer, type SourceLine } from "./SourceViewer";
 import { tokenizeCode, type TokenizedLine } from "../highlight";
 import { PreviewPanel } from "./PreviewPanel";
@@ -30,6 +30,7 @@ export function DiffPreviewPanel({
   const fileSize = diffDocument?.size ?? null;
   const isBinary = diffDocument?.isBinary ?? false;
   const hasChanges = originalContent !== currentContent;
+  const lineStat = hasChanges && !isBinary && lines.length > 0 ? countDiffLines(lines) : undefined;
 
   useEffect(() => {
     let cancelled = false;
@@ -61,7 +62,7 @@ export function DiffPreviewPanel({
   }, [currentContent, fileSize, originalContent, displayPath]);
 
   return (
-    <PreviewPanel title="Code" path={displayPath} onClose={onClose}>
+    <PreviewPanel title="Code" path={displayPath} lineStat={lineStat} onClose={onClose}>
       {diffDocument === null ? (
         <div className="code-panel-empty">
           <p>{isLoading ? "Loading..." : "Preview is not available"}</p>
@@ -79,6 +80,19 @@ export function DiffPreviewPanel({
       )}
     </PreviewPanel>
   );
+}
+
+function countDiffLines(lines: readonly SourceLine[]): GitLineStat {
+  let added = 0;
+  let deleted = 0;
+  for (const line of lines) {
+    if (line.className === "diff-added") {
+      added++;
+    } else if (line.className === "diff-deleted") {
+      deleted++;
+    }
+  }
+  return { added, deleted };
 }
 
 function computeDiffLines(

@@ -8,24 +8,43 @@ import {
   buildUnstagedFiles,
 } from "../../../src/renderer/utils/git.ts";
 
-test("buildStagedFiles と buildUnstagedFiles は staged/unstaged を分ける", () => {
+test("buildStagedFiles と buildUnstagedFiles は staged/unstaged を分けて行数を引き継ぐ", () => {
   const pathStates = [
-    { path: "src/a.ts", indexStatus: "M", worktreeStatus: "", ignored: false },
+    {
+      path: "src/a.ts",
+      indexStatus: "M",
+      worktreeStatus: "",
+      ignored: false,
+      stagedLineStat: { added: 2, deleted: 1 },
+    },
     { path: "src/b.ts", indexStatus: "", worktreeStatus: "M", ignored: false },
-    { path: "src/c.ts", indexStatus: "A", worktreeStatus: "M", ignored: false },
-    { path: "notes/todo.md", indexStatus: "", worktreeStatus: "??", ignored: false },
+    {
+      path: "src/c.ts",
+      indexStatus: "A",
+      worktreeStatus: "M",
+      ignored: false,
+      stagedLineStat: { added: 10, deleted: 0 },
+      unstagedLineStat: { added: 3, deleted: 2 },
+    },
+    {
+      path: "notes/todo.md",
+      indexStatus: "",
+      worktreeStatus: "??",
+      ignored: false,
+      unstagedLineStat: { added: 5, deleted: 0 },
+    },
     { path: "dist/app.js", indexStatus: "", worktreeStatus: "", ignored: true },
   ];
 
   assert.deepEqual(buildStagedFiles(pathStates), [
-    { path: "src/a.ts", status: "M" },
-    { path: "src/c.ts", status: "A" },
+    { path: "src/a.ts", status: "M", lineStat: { added: 2, deleted: 1 } },
+    { path: "src/c.ts", status: "A", lineStat: { added: 10, deleted: 0 } },
   ]);
 
   assert.deepEqual(buildUnstagedFiles(pathStates), [
-    { path: "src/b.ts", status: "M" },
-    { path: "src/c.ts", status: "M" },
-    { path: "notes/todo.md", status: "??" },
+    { path: "src/b.ts", status: "M", lineStat: undefined },
+    { path: "src/c.ts", status: "M", lineStat: { added: 3, deleted: 2 } },
+    { path: "notes/todo.md", status: "??", lineStat: { added: 5, deleted: 0 } },
   ]);
 });
 

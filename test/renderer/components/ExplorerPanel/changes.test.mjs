@@ -14,7 +14,29 @@ test("buildChangeSections は空のセクションを省く", () => {
         key: "unstaged",
         label: "Unstaged",
         files: [{ path: "src/app.ts", status: "M" }],
+        totalLineStat: { added: 0, deleted: 0 },
       },
+    ],
+  );
+});
+
+test("buildChangeSections は section ごとに行数を合計する", () => {
+  const sections = buildChangeSections({
+    stagedFiles: [
+      { path: "src/a.ts", status: "M", lineStat: { added: 2, deleted: 1 } },
+      { path: "assets/icon.png", status: "A" },
+    ],
+    unstagedFiles: [
+      { path: "src/b.ts", status: "M", lineStat: { added: 3, deleted: 4 } },
+      { path: "notes/todo.md", status: "??", lineStat: { added: 5, deleted: 0 } },
+    ],
+  });
+
+  assert.deepEqual(
+    sections.map((section) => section.totalLineStat),
+    [
+      { added: 2, deleted: 1 },
+      { added: 8, deleted: 4 },
     ],
   );
 });

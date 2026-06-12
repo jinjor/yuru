@@ -53,6 +53,7 @@ export function SessionView({
     sessionViewColumnRef,
   });
   const previewPath = previewSelection?.path ?? null;
+  const previewScope = previewSelection?.scope;
   const previewPathChanged = previewPath ? isPathChanged(gitPathStates, previewPath) : false;
 
   const resetPreviewState = useCallback((): void => {
@@ -134,7 +135,11 @@ export function SessionView({
     setIsLoadingDiff(true);
 
     const fetchDiff = async (showLoader: boolean): Promise<void> => {
-      const result = await window.electronAPI.getGitDiffDocument(worktreeId, previewPath);
+      const result = await window.electronAPI.getGitDiffDocument(
+        worktreeId,
+        previewPath,
+        previewScope,
+      );
       if (cancelled) {
         return;
       }
@@ -165,7 +170,7 @@ export function SessionView({
       cancelled = true;
       clearInterval(interval);
     };
-  }, [previewPath, previewPathChanged, worktreeId]);
+  }, [previewPath, previewPathChanged, previewScope, worktreeId]);
 
   return (
     <>

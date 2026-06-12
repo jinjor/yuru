@@ -31,9 +31,17 @@ export type Result<T> =
       error: AppError;
     };
 
+export interface GitLineStat {
+  added: number;
+  deleted: number;
+}
+
+export type GitDiffScope = "staged" | "unstaged";
+
 export interface GitFileStatus {
   path: string;
   status: string;
+  lineStat?: GitLineStat;
 }
 
 export interface GitPathState {
@@ -41,6 +49,8 @@ export interface GitPathState {
   indexStatus: string;
   worktreeStatus: string;
   ignored: boolean;
+  stagedLineStat?: GitLineStat;
+  unstagedLineStat?: GitLineStat;
 }
 
 export interface FileTreeNode {
@@ -128,6 +138,7 @@ export interface ElectronAPI {
   getGitDiffDocument: (
     worktreeId: string,
     filePath: string,
+    scope?: GitDiffScope,
   ) => Promise<Result<GitDiffDocument | null>>;
   listFiles: (worktreeId: string, relativePath?: string) => Promise<Result<FileTreeNode[]>>;
   listAllFiles: (worktreeId: string) => Promise<Result<string[]>>;

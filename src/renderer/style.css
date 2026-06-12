@@ -755,6 +755,29 @@ button.github-badge {
   text-align: right;
 }
 
+.line-stat {
+  display: inline-flex;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.line-stat-added {
+  color: #73c991;
+}
+
+.line-stat-deleted {
+  color: #c74e39;
+}
+
+/* header 自体は space-between なので、合計行数だけを右端に寄せる */
+.change-section-header .line-stat {
+  margin-left: auto;
+}
+
 /* Panel tabs */
 .panel-tabs {
   display: flex;

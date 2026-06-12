@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { ElectronAPI } from "../shared/ipc.js";
+import type { ElectronAPI, GitDiffScope } from "../shared/ipc.js";
 import type { SessionProvider } from "../shared/session.js";
 
 const electronAPI: ElectronAPI = {
@@ -20,8 +20,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke("session:createWorktree", provider, repoPath, branchName),
   openExternal: (url: string) => ipcRenderer.invoke("shell:openExternal", url),
   getGitPathStates: (worktreeId: string) => ipcRenderer.invoke("git:pathStates", worktreeId),
-  getGitDiffDocument: (worktreeId: string, filePath: string) =>
-    ipcRenderer.invoke("git:diffDocument", worktreeId, filePath),
+  getGitDiffDocument: (worktreeId: string, filePath: string, scope?: GitDiffScope) =>
+    ipcRenderer.invoke("git:diffDocument", worktreeId, filePath, scope),
   listFiles: (worktreeId: string, relativePath?: string) =>
     ipcRenderer.invoke("files:list", worktreeId, relativePath),
   listAllFiles: (worktreeId: string) => ipcRenderer.invoke("files:listAll", worktreeId),

@@ -145,7 +145,7 @@ test("Changed dirs で変更ファイルのディレクトリだけを展開し 
   }
 });
 
-test("Changes タブは staged と unstaged を別セクションで表示する", async () => {
+test("Changes タブは staged と unstaged を別セクションで表示し、それぞれの diff と行数を出す", async () => {
   const context = await createE2eContext();
   let app: ElectronApplication | null = null;
   try {
@@ -153,23 +153,45 @@ test("Changes タブは staged と unstaged を別セクションで表示する
       "README.md": "# original\n",
       "src/app.ts": "export const value = 1;\n",
     });
+    await writeFiles(repoDir, { "README.md": "# staged\n" });
+    git(["add", "README.md"], repoDir);
     await writeFiles(repoDir, {
-      "README.md": "# staged\n",
+      "README.md": "# unstaged\n",
       "src/app.ts": "export const value = 2;\n",
     });
-    git(["add", "README.md"], repoDir);
     await registerRepo(context, repoDir);
     const launched = await launchWindow(context);
     app = launched.app;
     const window = launched.window;
     await openMainTerminal(window);
 
-    await expect(window.locator(".change-section-header", { hasText: /^Staged1$/ })).toBeVisible({
-      timeout: 10_000,
-    });
-    await expect(window.locator(".change-section-header", { hasText: /^Unstaged1$/ })).toBeVisible();
-    await expect(window.locator(".change-item", { hasText: "README.md" })).toContainText("M");
-    await expect(window.locator(".change-item", { hasText: "app.ts" })).toContainText("M");
+    // header: label + file 数 + 合計行数
+    await expect(
+      window.locator(".change-section-header", { hasText: /^Staged1\+1-1$/ }),
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(
+      window.locator(".change-section-header", { hasText: /^Unstaged2\+2-2$/ }),
+    ).toBeVisible();
+
+    const stagedSection = window.locator(".change-section").nth(0);
+    const unstagedSection = window.locator(".change-section").nth(1);
+    const stagedReadme = stagedSection.locator(".change-item", { hasText: "README.md" });
+    const unstagedReadme = unstagedSection.locator(".change-item", { hasText: "README.md" });
+    await expect(stagedReadme).toContainText("M");
+    await expect(stagedReadme.locator(".line-stat")).toHaveText("+1-1");
+    await expect(unstagedSection.locator(".change-item", { hasText: "app.ts" })).toContainText("M");
+
+    // Staged の行は HEAD ↔ index の diff を出す
+    await stagedReadme.click();
+    await expect(window.locator(".preview-path")).toHaveText("README.md");
+    await expect(window.locator(".source-line.diff-deleted")).toContainText("# original");
+    await expect(window.locator(".source-line.diff-added")).toContainText("# staged");
+    await expect(window.locator(".preview-header-meta .line-stat")).toHaveText("+1-1");
+
+    // Unstaged の行は index ↔ 作業ツリーの diff を出す
+    await unstagedReadme.click();
+    await expect(window.locator(".source-line.diff-deleted")).toContainText("# staged");
+    await expect(window.locator(".source-line.diff-added")).toContainText("# unstaged");
   } finally {
     await closeYuru(app);
     await context.cleanup();
@@ -211,6 +233,7 @@ test("Changes タブは削除ファイルを D として表示し diff を開く
 
     const changeItem = window.locator(".change-item", { hasText: "delete-me.txt" });
     await expect(changeItem).toContainText("D", { timeout: 10_000 });
+    await expect(changeItem.locator(".line-stat")).toHaveText("-1");
     await changeItem.click();
 
     await expect(window.locator(".preview-path")).toHaveText("delete-me.txt");

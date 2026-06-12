@@ -58,6 +58,7 @@ import { FileTreeWatcher } from "./file-tree-watcher.js";
 import {
   type AppError,
   type AppErrorNotice,
+  type GitDiffScope,
   type Result,
   type WorktreeDisplayUpdate,
   type WorktreeSessionSelection,
@@ -510,13 +511,13 @@ export class YuruService {
     }
   }
 
-  async getGitDiffDocument(worktreeId: string, filePath: string) {
+  async getGitDiffDocument(worktreeId: string, filePath: string, scope?: GitDiffScope) {
     const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
     if (!workingRoot) {
       return ok(null);
     }
     try {
-      return ok(await loadGitDiffDocument(workingRoot, filePath));
+      return ok(await loadGitDiffDocument(workingRoot, filePath, scope));
     } catch (error) {
       return this.failAndReport(toAppError(error, { command: "git" }));
     }

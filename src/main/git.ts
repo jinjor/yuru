@@ -1,8 +1,9 @@
 import fs from "fs";
 import path from "path";
-import type { GitDiffDocument, GitPathState } from "../shared/ipc.js";
+import type { GitDiffDocument, GitDiffScope, GitPathState } from "../shared/ipc.js";
 import { exec, execBuffer } from "./exec.js";
-import { parsePorcelainLine } from "./git-status.js";
+import { parseNameStatusZ, parseNumstatZ, parsePorcelainLine } from "./git-status.js";
+import { getUntrackedLineStats } from "./untracked-line-stats.js";
 
 export interface WorktreeInfo {
   path: string;
@@ -52,15 +53,43 @@ export async function isSupportedGitRepo(cwd: string): Promise<boolean> {
 }
 
 export async function getGitPathStates(cwd: string): Promise<GitPathState[]> {
-  const output = await exec("git", ["status", "--porcelain", "-uall"], cwd);
-  if (!output.trim()) {
+  const [statusOutput, stagedNumstat, unstagedNumstat] = await Promise.all([
+    exec("git", ["status", "--porcelain", "-uall"], cwd),
+    exec("git", ["diff", "--numstat", "-z", "--cached"], cwd),
+    exec("git", ["diff", "--numstat", "-z"], cwd),
+  ]);
+
+  if (!statusOutput.trim()) {
     return [];
   }
 
-  return output
+  const states = statusOutput
     .split("\n")
     .map(parsePorcelainLine)
     .filter((entry): entry is GitPathState => entry !== null);
+
+  const stagedStats = parseNumstatZ(stagedNumstat);
+  const unstagedStats = parseNumstatZ(unstagedNumstat);
+  const untrackedPaths = states
+    .filter((entry) => entry.worktreeStatus === "??")
+    .map((entry) => entry.path);
+  const untrackedStats = await getUntrackedLineStats(cwd, untrackedPaths);
+
+  for (const entry of states) {
+    const stagedLineStat = stagedStats.get(entry.path);
+    if (stagedLineStat) {
+      entry.stagedLineStat = stagedLineStat;
+    }
+    const unstagedLineStat =
+      entry.worktreeStatus === "??"
+        ? untrackedStats.get(entry.path)
+        : unstagedStats.get(entry.path);
+    if (unstagedLineStat) {
+      entry.unstagedLineStat = unstagedLineStat;
+    }
+  }
+
+  return states;
 }
 
 async function hasHead(cwd: string): Promise<boolean> {
@@ -72,26 +101,28 @@ async function hasHead(cwd: string): Promise<boolean> {
   }
 }
 
-async function resolveOriginalPath(cwd: string, filePath: string): Promise<string | null> {
+async function resolveOriginalPath(
+  cwd: string,
+  filePath: string,
+  scope: GitDiffScope | undefined,
+): Promise<string | null> {
   if (!(await hasHead(cwd))) {
     return null;
   }
 
-  try {
-    const output = await exec(
-      "git",
-      ["diff", "--name-status", "--find-renames", "HEAD", "--", filePath],
-      cwd,
-    );
-    const firstLine = output.trim().split("\n")[0];
-    if (firstLine?.startsWith("R")) {
-      const parts = firstLine.split("\t");
-      if (parts.length >= 3) {
-        return parts[1];
-      }
+  // pathspec で対象 file に絞ると rename 元が diff から外れて rename 検出が
+  // 効かなくなるため、全体の name-status から対象 file の record を探す
+  const rangeArgs = scope === "staged" ? ["--cached"] : ["HEAD"];
+  const output = await exec(
+    "git",
+    ["diff", "--name-status", "--find-renames", "-z", ...rangeArgs],
+    cwd,
+  );
+
+  for (const entry of parseNameStatusZ(output)) {
+    if (entry.path === filePath) {
+      return entry.srcPath ?? filePath;
     }
-  } catch {
-    return filePath;
   }
 
   return filePath;
@@ -100,6 +131,14 @@ async function resolveOriginalPath(cwd: string, filePath: string): Promise<strin
 async function readGitBlob(cwd: string, filePath: string): Promise<Buffer | null> {
   try {
     return await execBuffer("git", ["show", `HEAD:${filePath}`], cwd);
+  } catch {
+    return null;
+  }
+}
+
+async function readIndexBlob(cwd: string, filePath: string): Promise<Buffer | null> {
+  try {
+    return await execBuffer("git", ["show", `:0:${filePath}`], cwd);
   } catch {
     return null;
   }
@@ -114,16 +153,55 @@ async function isPathChanged(cwd: string, filePath: string): Promise<boolean> {
   return output.trim().length > 0;
 }
 
-async function loadOriginalBuffer(cwd: string, filePath: string): Promise<Buffer | null> {
-  const originalPath = await resolveOriginalPath(cwd, filePath);
+async function loadOriginalBuffer(
+  cwd: string,
+  filePath: string,
+  scope: GitDiffScope | undefined,
+): Promise<Buffer | null> {
+  const originalPath = await resolveOriginalPath(cwd, filePath, scope);
   return originalPath ? await readGitBlob(cwd, originalPath) : null;
 }
 
-export async function getGitDiffDocument(cwd: string, filePath: string): Promise<GitDiffDocument> {
+async function readWorktreeFile(cwd: string, filePath: string): Promise<Buffer | null> {
   const currentPath = path.join(cwd, filePath);
-  const currentBuffer = fs.existsSync(currentPath) ? await fs.promises.readFile(currentPath) : null;
+  return fs.existsSync(currentPath) ? await fs.promises.readFile(currentPath) : null;
+}
+
+// scope なし: HEAD ↔ 作業ツリー (staged + unstaged の合算)
+// staged: HEAD ↔ index / unstaged: index ↔ 作業ツリー
+async function loadDiffBuffers(
+  cwd: string,
+  filePath: string,
+  scope: GitDiffScope | undefined,
+): Promise<{ originalBuffer: Buffer | null; currentBuffer: Buffer | null }> {
+  if (scope === "staged") {
+    const [originalBuffer, currentBuffer] = await Promise.all([
+      loadOriginalBuffer(cwd, filePath, scope),
+      readIndexBlob(cwd, filePath),
+    ]);
+    return { originalBuffer, currentBuffer };
+  }
+
+  if (scope === "unstaged") {
+    const [originalBuffer, currentBuffer] = await Promise.all([
+      readIndexBlob(cwd, filePath),
+      readWorktreeFile(cwd, filePath),
+    ]);
+    return { originalBuffer, currentBuffer };
+  }
+
+  const currentBuffer = await readWorktreeFile(cwd, filePath);
   const changed = await isPathChanged(cwd, filePath);
-  const originalBuffer = changed ? await loadOriginalBuffer(cwd, filePath) : currentBuffer;
+  const originalBuffer = changed ? await loadOriginalBuffer(cwd, filePath, scope) : currentBuffer;
+  return { originalBuffer, currentBuffer };
+}
+
+export async function getGitDiffDocument(
+  cwd: string,
+  filePath: string,
+  scope?: GitDiffScope,
+): Promise<GitDiffDocument> {
+  const { originalBuffer, currentBuffer } = await loadDiffBuffers(cwd, filePath, scope);
   const isBinary = [originalBuffer, currentBuffer].some((buffer) => buffer?.includes(0));
   const size = Math.max(originalBuffer?.byteLength ?? 0, currentBuffer?.byteLength ?? 0);
 

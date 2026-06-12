@@ -83,6 +83,7 @@ export function buildStagedFiles(pathStates: readonly GitPathState[]): GitFileSt
     .map((entry) => ({
       path: entry.path,
       status: entry.indexStatus,
+      lineStat: entry.stagedLineStat,
     }));
 }
 
@@ -92,6 +93,7 @@ export function buildUnstagedFiles(pathStates: readonly GitPathState[]): GitFile
     .map((entry) => ({
       path: entry.path,
       status: entry.worktreeStatus,
+      lineStat: entry.unstagedLineStat,
     }));
 }
 
