@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-06-12
+Last updated: 2026-06-13
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -30,6 +30,8 @@ UI 改善も機能追加も同じ土俵で扱う。
 | I18 | investigate | Events / Worktree Context | worktree 表示情報の更新タイミングを matrix で整理する | 詳細: docs/backlog-details/I18-worktree-refresh-policy.md |
 | F37 | feature | Diff | ブランチの任意のコミット間で diff を表示できるようにする | 複数コミットある作業で差分の範囲を切り替えて確認したい |
 | F32 | feature | Terminal | task worktree 外の作業を standalone terminal として分離する | task worktree list に混ぜない補助導線として欲しい |
+| I21 | investigate | Diff / Changes | merge conflict 中のファイルの diff 表示を考える | conflict はすぐ出てくるシナリオ。scope 付き diff (staged/unstaged) は conflict 中の index を読めず全行追加に見える。具体的な対応は着手時に具体化する |
+| P14 | polish | Changes / Diff | ポーリングを自走ループにして巨大 repo で処理が積み上がらないようにする | 巨大 repo はすぐ出てくるシナリオ。3 秒固定発火だと 1 回が 3 秒を超えた時に並走してさらに重くなる。前回完了後に 3 秒待つ形にし、失敗しても必ず次を予約する |
 
 ## Next
 
@@ -38,8 +40,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F1 | feature | Notifications | 並列実行セッションの完了通知を出す | 完了に気づけない |
 | P9 | polish | New Session | 長い repo path の省略ルールを見直す | 折りたたみが不自然 |
 | P13 | polish | Files | Files タブのアクション UI を整える | 階層感が弱く見た目もまだ野暮ったい |
-| F3 | feature | Changes | 変更行数も出す | diff 集計で対応したい |
-| F4 | feature | Diff | 各ファイルの変更行数表示 | Changes と整合させたい |
 | F7 | feature | Terminal | ファイル名が改行を跨いでもリンクできるようにする | linkifier 改善 |
 | F8 | feature | Terminal | ファイルクリック時にツリー側も開く | navigation の連動 |
 | F9 | feature | Terminal | ウィンドウを広げた時に 1 行の文字数を増やす | xterm fit を調整 |
@@ -77,7 +77,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 
 ## Open decisions
 
-- 変更ファイル数・変更行数の集計は都度計算かキャッシュか
+- (なし)
 
 ## Won't support
 
