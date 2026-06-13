@@ -2,6 +2,8 @@ import type { GitFileStatus, GitPathState } from "../../shared/ipc";
 
 function statusPriority(status: string): number {
   switch (status) {
+    case "!":
+      return 4;
     case "A":
     case "R":
     case "??":
@@ -25,6 +27,8 @@ export function statusColor(status: string): string {
       return "#73c991";
     case "D":
       return "#c74e39";
+    case "!":
+      return "#f08f86";
     default:
       return "#888";
   }
@@ -47,12 +51,17 @@ export function treeStatusClass(status?: string): string {
     case "R":
     case "??":
       return "added";
+    case "!":
+      return "conflicted";
     default:
       return "";
   }
 }
 
 function statusForTree(entry: GitPathState): string {
+  if (entry.conflicted) {
+    return "!";
+  }
   if (!entry.indexStatus) {
     return entry.worktreeStatus;
   }
@@ -70,10 +79,22 @@ function statusForTree(entry: GitPathState): string {
 
 export function buildChangedFiles(pathStates: readonly GitPathState[]): GitFileStatus[] {
   return pathStates
-    .filter((entry) => !entry.ignored && (entry.indexStatus || entry.worktreeStatus))
+    .filter(
+      (entry) => !entry.ignored && (entry.conflicted || entry.indexStatus || entry.worktreeStatus),
+    )
     .map((entry) => ({
       path: entry.path,
       status: statusForTree(entry),
+    }));
+}
+
+export function buildConflictedFiles(pathStates: readonly GitPathState[]): GitFileStatus[] {
+  return pathStates
+    .filter((entry) => entry.conflicted)
+    .map((entry) => ({
+      path: entry.path,
+      status: "!",
+      lineStat: entry.conflictLineStat,
     }));
 }
 

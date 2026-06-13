@@ -22,7 +22,10 @@ interface SessionViewProps {
 
 function isPathChanged(states: readonly GitPathState[], path: string): boolean {
   return states.some(
-    (entry) => !entry.ignored && (entry.indexStatus || entry.worktreeStatus) && entry.path === path,
+    (entry) =>
+      !entry.ignored &&
+      (entry.conflicted || entry.indexStatus || entry.worktreeStatus) &&
+      entry.path === path,
   );
 }
 

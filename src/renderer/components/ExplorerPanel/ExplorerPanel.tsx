@@ -1,7 +1,12 @@
 import type { GitPathState } from "../../../shared/ipc";
 import { useElementSize } from "../../hooks/useElementSize";
 import type { PreviewSelection } from "../../types";
-import { buildChangedFiles, buildStagedFiles, buildUnstagedFiles } from "../../utils/git";
+import {
+  buildChangedFiles,
+  buildConflictedFiles,
+  buildStagedFiles,
+  buildUnstagedFiles,
+} from "../../utils/git";
 import { ChangesPane } from "./ChangesPane";
 import { FilesPane } from "./FilesPane";
 import { SearchPane } from "./SearchPane";
@@ -33,6 +38,7 @@ export function ExplorerPanel({
   const [headerRef, headerSize] = useElementSize<HTMLDivElement>();
   const contentHeight = Math.max(panelSize.height - headerSize.height, 0);
   const changedFiles = buildChangedFiles(gitPathStates);
+  const conflictedFiles = buildConflictedFiles(gitPathStates);
   const stagedFiles = buildStagedFiles(gitPathStates);
   const unstagedFiles = buildUnstagedFiles(gitPathStates);
 
@@ -65,6 +71,7 @@ export function ExplorerPanel({
       </div>
       {activeTab === "changes" ? (
         <ChangesPane
+          conflictedFiles={conflictedFiles}
           onPreviewSelectionChange={onPreviewSelectionChange}
           previewSelection={previewSelection}
           stagedFiles={stagedFiles}

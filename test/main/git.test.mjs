@@ -9,6 +9,7 @@ test("parsePorcelainLine は staged と unstaged を分けて解釈する", () =
     path: "src/app.ts",
     indexStatus: "M",
     worktreeStatus: "",
+    conflicted: false,
     ignored: false,
   });
 
@@ -16,6 +17,7 @@ test("parsePorcelainLine は staged と unstaged を分けて解釈する", () =
     path: "src/app.ts",
     indexStatus: "",
     worktreeStatus: "M",
+    conflicted: false,
     ignored: false,
   });
 
@@ -23,6 +25,7 @@ test("parsePorcelainLine は staged と unstaged を分けて解釈する", () =
     path: "src/app.ts",
     indexStatus: "M",
     worktreeStatus: "M",
+    conflicted: false,
     ignored: false,
   });
 });
@@ -32,6 +35,7 @@ test("parsePorcelainLine は untracked と ignored を特別扱いする", () =>
     path: "notes/todo.md",
     indexStatus: "",
     worktreeStatus: "??",
+    conflicted: false,
     ignored: false,
   });
 
@@ -39,6 +43,7 @@ test("parsePorcelainLine は untracked と ignored を特別扱いする", () =>
     path: "dist/app.js",
     indexStatus: "",
     worktreeStatus: "",
+    conflicted: false,
     ignored: true,
   });
 });
@@ -48,8 +53,21 @@ test("parsePorcelainLine は rename の移動先 path を使う", () => {
     path: "new/name.ts",
     indexStatus: "R",
     worktreeStatus: "",
+    conflicted: false,
     ignored: false,
   });
+});
+
+test("parsePorcelainLine は unmerged な status を conflicted として解釈する", () => {
+  for (const rawStatus of ["DD", "AU", "UD", "UA", "DU", "AA", "UU"]) {
+    assert.deepEqual(parsePorcelainLine(`${rawStatus} src/app.ts`), {
+      path: "src/app.ts",
+      indexStatus: "",
+      worktreeStatus: "",
+      conflicted: true,
+      ignored: false,
+    });
+  }
 });
 
 test("parseNumstatZ は path ごとの追加・削除行数を返す", () => {

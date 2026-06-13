@@ -945,6 +945,10 @@ button.github-badge {
   color: var(--success);
 }
 
+.file-tree-name.conflicted {
+  color: var(--danger);
+}
+
 .file-tree-name.ignored {
   color: #566275;
 }

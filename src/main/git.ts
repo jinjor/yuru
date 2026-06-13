@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import type { GitDiffDocument, GitDiffScope, GitPathState } from "../shared/ipc.js";
+import type { GitDiffDocument, GitDiffScope, GitLineStat, GitPathState } from "../shared/ipc.js";
 import { exec, execBuffer } from "./exec.js";
 import { parseNameStatusZ, parseNumstatZ, parsePorcelainLine } from "./git-status.js";
 import { getUntrackedLineStats } from "./untracked-line-stats.js";
@@ -73,9 +73,20 @@ export async function getGitPathStates(cwd: string): Promise<GitPathState[]> {
   const untrackedPaths = states
     .filter((entry) => entry.worktreeStatus === "??")
     .map((entry) => entry.path);
-  const untrackedStats = await getUntrackedLineStats(cwd, untrackedPaths);
+  const hasConflicts = states.some((entry) => entry.conflicted);
+  const [untrackedStats, conflictStats] = await Promise.all([
+    getUntrackedLineStats(cwd, untrackedPaths),
+    hasConflicts ? getHeadWorktreeLineStats(cwd) : new Map<string, GitLineStat>(),
+  ]);
 
   for (const entry of states) {
+    if (entry.conflicted) {
+      const conflictLineStat = conflictStats.get(entry.path);
+      if (conflictLineStat) {
+        entry.conflictLineStat = conflictLineStat;
+      }
+      continue;
+    }
     const stagedLineStat = stagedStats.get(entry.path);
     if (stagedLineStat) {
       entry.stagedLineStat = stagedLineStat;
@@ -90,6 +101,13 @@ export async function getGitPathStates(cwd: string): Promise<GitPathState[]> {
   }
 
   return states;
+}
+
+// conflict 中の file は index が unmerged で staged/unstaged の行数が意味を持たないため、
+// scope なし diff と同じ HEAD ↔ 作業ツリー の行数を別途取得する
+async function getHeadWorktreeLineStats(cwd: string): Promise<Map<string, GitLineStat>> {
+  const output = await exec("git", ["diff", "--numstat", "-z", "HEAD"], cwd);
+  return parseNumstatZ(output);
 }
 
 async function hasHead(cwd: string): Promise<boolean> {

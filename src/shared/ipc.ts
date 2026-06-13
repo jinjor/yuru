@@ -48,9 +48,14 @@ export interface GitPathState {
   path: string;
   indexStatus: string;
   worktreeStatus: string;
+  // merge conflict などで unmerged な path。この場合 indexStatus / worktreeStatus は空
+  // (porcelain の XY は staged/unstaged ではなく衝突の種類を表すため、そのまま入れない)
+  conflicted: boolean;
   ignored: boolean;
   stagedLineStat?: GitLineStat;
   unstagedLineStat?: GitLineStat;
+  // conflicted な path のみ。HEAD ↔ 作業ツリー (scope なし diff と同じ範囲) の行数
+  conflictLineStat?: GitLineStat;
 }
 
 export interface FileTreeNode {

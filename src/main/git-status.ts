@@ -4,6 +4,9 @@ function normalizePorcelainStatus(status: string): string {
   return status === " " ? "" : status;
 }
 
+// git-status(1) の仕様で unmerged と定義されている XY の組み合わせ
+const UNMERGED_STATUSES = new Set(["DD", "AU", "UD", "UA", "DU", "AA", "UU"]);
+
 export function parsePorcelainLine(line: string): GitPathState | null {
   if (!line) {
     return null;
@@ -28,6 +31,7 @@ export function parsePorcelainLine(line: string): GitPathState | null {
       path: filePath,
       indexStatus: "",
       worktreeStatus: "",
+      conflicted: false,
       ignored: true,
     };
   }
@@ -37,6 +41,17 @@ export function parsePorcelainLine(line: string): GitPathState | null {
       path: filePath,
       indexStatus: "",
       worktreeStatus: "??",
+      conflicted: false,
+      ignored: false,
+    };
+  }
+
+  if (UNMERGED_STATUSES.has(rawStatus)) {
+    return {
+      path: filePath,
+      indexStatus: "",
+      worktreeStatus: "",
+      conflicted: true,
       ignored: false,
     };
   }
@@ -45,6 +60,7 @@ export function parsePorcelainLine(line: string): GitPathState | null {
     path: filePath,
     indexStatus: normalizePorcelainStatus(rawStatus[0] ?? ""),
     worktreeStatus: normalizePorcelainStatus(rawStatus[1] ?? ""),
+    conflicted: false,
     ignored: false,
   };
 }
