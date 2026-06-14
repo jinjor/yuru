@@ -40,6 +40,8 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F1 | feature | Notifications | 並列実行セッションの完了通知を出す | 完了に気づけない |
 | P9 | polish | New Session | 長い repo path の省略ルールを見直す | 折りたたみが不自然 |
 | P13 | polish | Files | Files タブのアクション UI を整える | 階層感が弱く見た目もまだ野暮ったい |
+| P15 | polish | Changes | 変更ファイル一覧のディレクトリ省略幅を見直す | 横幅に余裕があってもディレクトリが `...` で省略され、ファイルの場所が分かりにくい |
+| P16 | polish | Worktrees / Changes | 左ペインで worktree の Git 変更状態を分かるようにする | いま選択していない worktree に unstaged/staged/untracked 変更があることに気づけない |
 | F7 | feature | Terminal | ファイル名が改行を跨いでもリンクできるようにする | linkifier 改善 |
 | F8 | feature | Terminal | ファイルクリック時にツリー側も開く | navigation の連動 |
 | F9 | feature | Terminal | ウィンドウを広げた時に 1 行の文字数を増やす | xterm fit を調整 |
