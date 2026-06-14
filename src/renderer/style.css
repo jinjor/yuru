@@ -751,7 +751,7 @@ button.github-badge {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100px;
+  min-width: 0;
   text-align: right;
 }
 
