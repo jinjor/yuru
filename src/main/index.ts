@@ -5,7 +5,7 @@ import { loadRepos } from "./metadata.js";
 import { cleanupStaleTaskWorktrees } from "./task-worktree-maintenance.js";
 import { WorktreeWatcher } from "./worktree-watcher.js";
 import { YuruService } from "./service.js";
-import type { AppErrorNotice, GitDiffScope, WorktreeDisplayUpdate } from "../shared/ipc.js";
+import type { AppErrorNotice, GitDiffScope } from "../shared/ipc.js";
 import type { SessionProvider } from "../shared/session.js";
 
 let mainWindow: BrowserWindow | null = null;
@@ -21,8 +21,7 @@ const service = new YuruService({
   fileTreeChanged: sendFileTreeChanged,
   ptyData: sendPtyData,
   terminalRuntimeExited: sendTerminalRuntimeExited,
-  worktreeDisplayChanged: sendWorktreeDisplayChanged,
-  sessionsStateChanged: sendSessionsStateChanged,
+  repoListChanged: sendRepoListChanged,
   errorAdded: sendErrorAdded,
   refreshWorktreeWatcher,
   addWorktreeWatcherRepo,
@@ -47,12 +46,8 @@ function sendTerminalRuntimeExited(terminalRuntimeId: string): void {
   sendToRenderer("terminalRuntime:exited", terminalRuntimeId);
 }
 
-function sendWorktreeDisplayChanged(update: WorktreeDisplayUpdate): void {
-  sendToRenderer("worktree:displayChanged", update);
-}
-
-function sendSessionsStateChanged(): void {
-  sendToRenderer("sessions:stateChanged");
+function sendRepoListChanged(): void {
+  sendToRenderer("repos:changed");
 }
 
 function sendErrorAdded(notice: AppErrorNotice): void {
@@ -152,6 +147,9 @@ async function stopApplicationServices(): Promise<void> {
 
 function registerIpcHandlers(): void {
   ipcMain.handle("metadata:listRepos", () => service.getRepos());
+  ipcMain.handle("terminalRuntime:activityStates", (_event, terminalRuntimeIds: string[]) => {
+    return service.getTerminalRuntimeActivityStates(terminalRuntimeIds);
+  });
   ipcMain.handle("providers:list", () => service.getSessionProviders());
 
   ipcMain.handle("pty:attach", (_event, terminalRuntimeId: string) => {
@@ -281,7 +279,7 @@ app.whenReady().then(async () => {
   worktreeWatcher = new WorktreeWatcher();
   worktreeWatcher.onChange(() => {
     void refreshWorktreeWatcher();
-    sendSessionsStateChanged();
+    sendRepoListChanged();
   });
   void refreshWorktreeWatcher();
   registerIpcHandlers();

@@ -1,6 +1,6 @@
 import type { AgentDefinition } from "./agent.js";
 import type { RepoListItem } from "./metadata.js";
-import type { GitHubPullRequest, TerminalRuntimeId, SessionProvider } from "./session.js";
+import type { AgentActivityState, TerminalRuntimeId, SessionProvider } from "./session.js";
 
 export interface AppError {
   code:
@@ -103,19 +103,16 @@ export interface WorktreeSessionSelection {
   terminalRuntimeId: TerminalRuntimeId;
 }
 
-export interface WorktreeDisplayUpdate {
-  worktreeId: string;
-  branch: string | null;
-  headSha: string | null;
-  githubPullRequest: GitHubPullRequest | null;
-  sessionPreview?: {
-    providerSessionKey: string;
-    preview: string;
-  };
+export interface TerminalRuntimeActivityState {
+  terminalRuntimeId: TerminalRuntimeId;
+  activityState: AgentActivityState;
 }
 
 export interface ElectronAPI {
   getRepos: () => Promise<RepoListItem[]>;
+  getTerminalRuntimeActivityStates: (
+    terminalRuntimeIds: TerminalRuntimeId[],
+  ) => Promise<TerminalRuntimeActivityState[]>;
   getSessionProviders: () => Promise<AgentDefinition[]>;
   getErrors: () => Promise<AppErrorNotice[]>;
   dismissError: (id: string) => Promise<void>;
@@ -154,8 +151,7 @@ export interface ElectronAPI {
   onErrorAdded: (callback: (error: AppErrorNotice) => void) => void;
   onErrorRemoved: (callback: (id: string) => void) => void;
   onErrorsCleared: (callback: () => void) => void;
-  onWorktreeDisplayChanged: (callback: (update: WorktreeDisplayUpdate) => void) => void;
-  onSessionsStateChanged: (callback: () => void) => void;
+  onRepoListChanged: (callback: () => void) => () => void;
   onTerminalRuntimeExited: (callback: (terminalRuntimeId: TerminalRuntimeId) => void) => () => void;
   onFileTreeChanged: (callback: (worktreeId: string, relativePath: string) => void) => () => void;
   attachPty: (terminalRuntimeId: TerminalRuntimeId) => Promise<string>;

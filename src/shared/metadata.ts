@@ -1,4 +1,4 @@
-import type { GitHubPullRequest, SessionProvider } from "./session.js";
+import type { AgentActivityState, GitHubPullRequest, SessionProvider } from "./session.js";
 
 export interface RepoMetadata {
   id: string;
@@ -19,6 +19,7 @@ export interface SuggestedSessionListItem {
   providerSessionKey: string;
   activeTerminalRuntimeId: string | null;
   state: WorktreeSessionState;
+  activityState: AgentActivityState;
   preview: string;
   timestamp: number;
 }
@@ -37,6 +38,7 @@ export interface PrimarySessionListItem {
   providerSessionKey: string | null;
   activeTerminalRuntimeId: string | null;
   state: PrimarySessionState;
+  activityState: AgentActivityState;
   preview: string;
 }
 

@@ -1,8 +1,10 @@
 import path from "path";
 import { sessionProviders } from "./agent-registry.js";
+import type { StoredSessionActivityContext } from "./agent.js";
 import type { WorktreeSessionHint } from "./worktree-session-detection.js";
 import {
   toSessionKey,
+  type AgentActivityState,
   type SessionProvider,
   type SuggestedWorktreeSession,
 } from "../shared/session.js";
@@ -40,6 +42,14 @@ export async function loadStoredSessionPreview(
     (await sessionProviders[provider].loadStoredSessionPreview(providerSessionId))?.lastMessage ??
     null
   );
+}
+
+export async function loadStoredSessionActivity(
+  provider: SessionProvider,
+  providerSessionId: string,
+  context?: StoredSessionActivityContext,
+): Promise<AgentActivityState | null> {
+  return sessionProviders[provider].loadStoredSessionActivity(providerSessionId, context);
 }
 
 export async function loadSuggestedWorktreeSessions(

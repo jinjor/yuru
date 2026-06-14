@@ -1,0 +1,190 @@
+import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
+import {
+  claudeHasAssistantReply,
+  closeYuru,
+  codexHasAssistantReply,
+  createCommittedRepo,
+  createE2eContext,
+  launchWindow,
+  registerRepo,
+  seedClaudeHome,
+  seedCodexHome,
+  worktreeCard,
+  type E2eContext,
+} from "./helpers";
+
+interface ProviderActivityE2e {
+  id: "claude" | "codex";
+  label: "Claude" | "Codex";
+  branchName: string;
+  modelCommandCompleteText: string;
+  seedHome(home: string, trustedRepoPath: string): Promise<void>;
+  hasAssistantReply(home: string, cwd: string): boolean;
+  waitForReady(window: Page): Promise<void>;
+}
+
+const providers: ProviderActivityE2e[] = [
+  {
+    id: "claude",
+    label: "Claude",
+    branchName: "activity-claude",
+    modelCommandCompleteText: "Set model to",
+    seedHome: seedClaudeHome,
+    hasAssistantReply: claudeHasAssistantReply,
+    async waitForReady(window) {
+      await expect(window.locator(".xterm")).toContainText("Claude Code", { timeout: 30_000 });
+      await window.waitForTimeout(9000);
+    },
+  },
+  {
+    id: "codex",
+    label: "Codex",
+    branchName: "activity-codex",
+    modelCommandCompleteText: "Model changed to",
+    seedHome: seedCodexHome,
+    hasAssistantReply: (home) => codexHasAssistantReply(home),
+    async waitForReady(window) {
+      await expect(window.locator(".xterm")).toContainText("OpenAI Codex", { timeout: 30_000 });
+      await window.waitForTimeout(1000);
+    },
+  },
+];
+
+for (const provider of providers) {
+  test(`${provider.label}: active session の activity 表示を実 provider の状態から更新する`, async () => {
+    test.setTimeout(120_000);
+    const context = await createE2eContext();
+    let app: ElectronApplication | null = null;
+    try {
+      const repoDir = await createCommittedRepo(context);
+      await registerRepo(context, repoDir);
+      await provider.seedHome(context.tmpHome, repoDir);
+
+      const launched = await launchWindow(context);
+      app = launched.app;
+      const window = launched.window;
+
+      await startWorktreeSession(window, provider);
+      await expectActivity(window, provider, "waiting");
+
+      await runNormalConversation(context, window, provider, repoDir);
+      await runModelCommand(window, provider);
+      await runInterrupt(window, provider);
+    } finally {
+      await closeYuru(app);
+      await context.cleanup();
+    }
+  });
+}
+
+async function startWorktreeSession(window: Page, provider: ProviderActivityE2e): Promise<void> {
+  await window.locator(".repo-row-new-btn").click();
+  await window.locator(".worktree-name-input").fill(provider.branchName);
+  await window.locator(".provider-picker-btn", { hasText: provider.label }).click();
+  await window.locator(".worktree-create-btn").click();
+  await expect(window.locator(".xterm")).toBeVisible({ timeout: 30_000 });
+  await provider.waitForReady(window);
+}
+
+async function runNormalConversation(
+  context: E2eContext,
+  window: Page,
+  provider: ProviderActivityE2e,
+  repoDir: string,
+): Promise<void> {
+  const marker = `ACTIVITY_NORMAL_${provider.id.toUpperCase()}`;
+  await submitPrompt(
+    window,
+    `Start with ${marker}, then write a 20-line numbered reply. Do not use tools.`,
+  );
+  await expectActivity(window, provider, "working", 30_000);
+  await expect(() => {
+    expect(provider.hasAssistantReply(context.tmpHome, repoDir)).toBe(true);
+  }).toPass({ timeout: 90_000 });
+  await expectActivity(window, provider, "waiting", 30_000);
+}
+
+async function runModelCommand(window: Page, provider: ProviderActivityE2e): Promise<void> {
+  await submitPrompt(window, "/model");
+  await window.waitForTimeout(1000);
+  await window.keyboard.press("Enter");
+  if (provider.id === "codex") {
+    await expect(window.locator(".xterm")).toContainText("Select Reasoning Level", {
+      timeout: 20_000,
+    });
+    await window.keyboard.press("Enter");
+  }
+  await expect(window.locator(".xterm")).toContainText(provider.modelCommandCompleteText, {
+    timeout: 20_000,
+  });
+  await expectActivity(window, provider, "waiting", 20_000);
+}
+
+async function runInterrupt(
+  window: Page,
+  provider: ProviderActivityE2e,
+): Promise<void> {
+  await submitPrompt(
+    window,
+    [
+      "Keep listing integers, one per line, until interrupted.",
+      "Do not ask for confirmation and do not stop on your own.",
+    ].join(" "),
+  );
+  await expectActivity(window, provider, "working", 30_000);
+  await window.locator(".xterm").click();
+  await window.keyboard.press("Control+C");
+  await expectActivity(window, provider, "waiting", 20_000);
+}
+
+async function submitPrompt(window: Page, prompt: string): Promise<void> {
+  await window.locator(".xterm").click();
+  await window.keyboard.type(prompt);
+  await window.waitForTimeout(300);
+  await window.keyboard.press("Enter");
+}
+
+async function expectActivity(
+  window: Page,
+  provider: ProviderActivityE2e,
+  activity: "working" | "waiting",
+  timeout = 30_000,
+): Promise<void> {
+  try {
+    await expect(sessionDot(window, provider, activity)).toBeVisible({ timeout });
+  } catch (error) {
+    throw new Error(
+      [
+        `Timed out waiting for ${provider.label} activity ${activity}.`,
+        "Session dot labels:",
+        ...(await readSessionDotLabels(window, provider)),
+        "Terminal snapshot:",
+        await readTerminalText(window),
+      ].join("\n"),
+      { cause: error },
+    );
+  }
+}
+
+function sessionDot(window: Page, provider: ProviderActivityE2e, activity: "working" | "waiting") {
+  return worktreeCard(window, provider.branchName).locator(
+    `[aria-label="${provider.label} primary session active · ${activity}"]`,
+  );
+}
+
+async function readTerminalText(window: Page): Promise<string> {
+  return window
+    .locator(".xterm")
+    .evaluate((element) => element.querySelector(".xterm-rows")?.textContent ?? "");
+}
+
+async function readSessionDotLabels(
+  window: Page,
+  provider: ProviderActivityE2e,
+): Promise<string[]> {
+  return worktreeCard(window, provider.branchName)
+    .locator(".session-provider-dot")
+    .evaluateAll((dots) =>
+      dots.map((dot) => dot.getAttribute("aria-label") ?? "(no aria-label)"),
+    );
+}

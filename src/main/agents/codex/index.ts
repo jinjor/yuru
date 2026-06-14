@@ -11,6 +11,7 @@ import type {
   SessionSnapshot,
   WorktreeContext,
 } from "../../agent.js";
+import type { AgentActivityState } from "../../../shared/session.js";
 import {
   listFilesRecursive,
   parseJsonLinesAs,
@@ -133,6 +134,32 @@ function parseCodexAssistantPreviewEntry(entry: unknown): SessionPreview | null 
   };
 }
 
+function parseCodexActivityEntry(entry: unknown): AgentActivityState | null {
+  if (typeof entry !== "object" || entry === null) {
+    return null;
+  }
+
+  const maybeEntry = entry as {
+    type?: unknown;
+    payload?: {
+      type?: unknown;
+    };
+  };
+  if (maybeEntry.type !== "event_msg") {
+    return null;
+  }
+  if (maybeEntry.payload?.type === "task_started") {
+    return "working";
+  }
+  if (maybeEntry.payload?.type === "task_complete") {
+    return "waiting";
+  }
+  if (maybeEntry.payload?.type === "turn_aborted") {
+    return "waiting";
+  }
+  return null;
+}
+
 function parseCodexHistoryEntry(entry: unknown): CodexHistoryEntry | null {
   if (typeof entry !== "object" || entry === null) {
     return null;
@@ -232,6 +259,25 @@ async function loadStoredSessions(): Promise<SessionSnapshot[]> {
 async function loadStoredSessionPreview(providerSessionId: string): Promise<SessionPreview | null> {
   const sessionFilePath = await findCodexSessionFile(providerSessionId);
   return sessionFilePath ? readCodexSessionPreview(sessionFilePath) : null;
+}
+
+async function loadStoredSessionActivity(
+  providerSessionId: string,
+): Promise<AgentActivityState | null> {
+  const sessionFilePath = await findCodexSessionFile(providerSessionId);
+  if (!sessionFilePath) {
+    return null;
+  }
+  const content = await readTextFileIfExists(sessionFilePath);
+  if (!content) {
+    return null;
+  }
+
+  let activity: AgentActivityState | null = null;
+  for (const entry of parseJsonLinesAs(content, parseCodexActivityEntry)) {
+    activity = entry;
+  }
+  return activity;
 }
 
 async function findCodexSessionFile(providerSessionId: string): Promise<string | null> {
@@ -461,6 +507,7 @@ export const sessionProvider: SessionProviderAdapter = {
   resolvesSessionIdLazily: true,
   loadStoredSessions,
   loadStoredSessionPreview,
+  loadStoredSessionActivity,
   loadWorktreeSessionHints,
   hasStoredSession,
   async createResumeLaunch(session) {

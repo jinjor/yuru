@@ -4,6 +4,8 @@ import type { SessionProvider } from "../shared/session.js";
 
 const electronAPI: ElectronAPI = {
   getRepos: () => ipcRenderer.invoke("metadata:listRepos"),
+  getTerminalRuntimeActivityStates: (terminalRuntimeIds) =>
+    ipcRenderer.invoke("terminalRuntime:activityStates", terminalRuntimeIds),
   getSessionProviders: () => ipcRenderer.invoke("providers:list"),
   getErrors: () => ipcRenderer.invoke("errors:list"),
   dismissError: (id: string) => ipcRenderer.invoke("errors:dismiss", id),
@@ -35,9 +37,13 @@ const electronAPI: ElectronAPI = {
   onErrorAdded: (callback) => ipcRenderer.on("errors:added", (_event, error) => callback(error)),
   onErrorRemoved: (callback) => ipcRenderer.on("errors:removed", (_event, id) => callback(id)),
   onErrorsCleared: (callback) => ipcRenderer.on("errors:cleared", () => callback()),
-  onWorktreeDisplayChanged: (callback) =>
-    ipcRenderer.on("worktree:displayChanged", (_event, update) => callback(update)),
-  onSessionsStateChanged: (callback) => ipcRenderer.on("sessions:stateChanged", () => callback()),
+  onRepoListChanged: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on("repos:changed", listener);
+    return () => {
+      ipcRenderer.removeListener("repos:changed", listener);
+    };
+  },
   onTerminalRuntimeExited: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, terminalRuntimeId: string) =>
       callback(terminalRuntimeId);

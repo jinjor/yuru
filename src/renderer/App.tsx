@@ -8,16 +8,17 @@ import {
 import "@xterm/xterm/css/xterm.css";
 import type { AgentDefinition } from "../shared/agent";
 import type { RepoListItem, WorktreeListItem } from "../shared/metadata";
-import type { WorktreeDisplayUpdate } from "../shared/ipc";
 import { type TerminalRuntimeId, type SessionProvider } from "../shared/session";
 import { BranchNameInput } from "./components/BranchNameInput";
 import { RepoList } from "./components/RepoList";
 import { SessionView } from "./components/SessionView";
+import { useTerminalRuntimeActivityStates } from "./hooks/useTerminalRuntimeActivityStates";
 import { clamp } from "./utils/layout";
 
 export function App() {
   const appRef = useRef<HTMLDivElement>(null);
   const resumeRequestRef = useRef(0);
+  const repoRefreshRequestRef = useRef(0);
   const [repos, setRepos] = useState<RepoListItem[]>([]);
   const [availableProviders, setAvailableProviders] = useState<AgentDefinition[]>([]);
   const [selection, setSelection] = useState<{
@@ -30,15 +31,23 @@ export function App() {
   const selectedWorktreeId = selection?.worktreeId ?? null;
   const selectedTerminalRuntimeId = selection?.terminalRuntimeId ?? null;
   const selectedWorktree = findWorktree(repos, selectedWorktreeId);
+  const activityStates = useTerminalRuntimeActivityStates(repos);
 
-  const refreshRepos = useCallback(async (): Promise<RepoListItem[]> => {
+  const refreshRepos = useCallback(async (): Promise<RepoListItem[] | null> => {
+    const requestId = ++repoRefreshRequestRef.current;
     try {
       const nextRepos = await window.electronAPI.getRepos();
+      if (repoRefreshRequestRef.current !== requestId) {
+        return null;
+      }
       setRepos(nextRepos);
       return nextRepos;
     } catch (error) {
+      if (repoRefreshRequestRef.current !== requestId) {
+        return null;
+      }
       console.error("Failed to load repos.", error);
-      return [];
+      return null;
     }
   }, []);
 
@@ -59,30 +68,19 @@ export function App() {
       });
 
     void refreshRepos();
-    window.electronAPI.onSessionsStateChanged(() => {
-      void refreshRepos().then((nextRepos) => {
-        setSelection((prev) => {
-          if (!prev) {
-            return null;
-          }
-          const selectedWorktree = findWorktree(nextRepos, prev.worktreeId);
-          if (!selectedWorktree) {
-            return null;
-          }
-          const terminalRuntimeId = findActiveTerminalRuntimeId(nextRepos, prev.worktreeId);
-          if (terminalRuntimeId) {
-            return { worktreeId: prev.worktreeId, terminalRuntimeId };
-          }
-          return selectedWorktree.isMainWorktree ? prev : null;
-        });
-      });
+    const disposeRepoListChanged = window.electronAPI.onRepoListChanged(() => {
+      void refreshRepos();
     });
-    window.electronAPI.onWorktreeDisplayChanged((update) => {
-      setRepos((prev) => applyWorktreeDisplayUpdate(prev, update));
-    });
-    window.electronAPI.onTerminalRuntimeExited((terminalRuntimeId) => {
-      setSelection((prev) => (prev?.terminalRuntimeId === terminalRuntimeId ? null : prev));
-    });
+    const disposeTerminalRuntimeExited = window.electronAPI.onTerminalRuntimeExited(
+      (terminalRuntimeId) => {
+        setSelection((prev) => (prev?.terminalRuntimeId === terminalRuntimeId ? null : prev));
+        void refreshRepos();
+      },
+    );
+    return () => {
+      disposeRepoListChanged();
+      disposeTerminalRuntimeExited();
+    };
   }, [refreshRepos]);
 
   const handleSidebarResizeStart = useCallback(
@@ -169,6 +167,9 @@ export function App() {
 
       setSelection(result.data);
       void refreshRepos().then((nextRepos) => {
+        if (!nextRepos) {
+          return;
+        }
         setSelection((prev) => {
           if (prev?.worktreeId !== result.data.worktreeId) {
             return prev;
@@ -181,18 +182,22 @@ export function App() {
     [refreshRepos],
   );
 
-  const handleOpenWorktreeTerminal = useCallback(async (worktreeId: string): Promise<void> => {
-    const requestId = ++resumeRequestRef.current;
-    const result = await window.electronAPI.openWorktreeTerminal(worktreeId);
-    if (resumeRequestRef.current !== requestId) {
-      return;
-    }
-    if (!result.ok) {
-      return;
-    }
+  const handleOpenWorktreeTerminal = useCallback(
+    async (worktreeId: string): Promise<void> => {
+      const requestId = ++resumeRequestRef.current;
+      const result = await window.electronAPI.openWorktreeTerminal(worktreeId);
+      if (resumeRequestRef.current !== requestId) {
+        return;
+      }
+      if (!result.ok) {
+        return;
+      }
 
-    setSelection(result.data);
-  }, []);
+      setSelection(result.data);
+      void refreshRepos();
+    },
+    [refreshRepos],
+  );
 
   const handleCreateWorktreeSession = useCallback(
     async (branchName: string, provider: SessionProvider): Promise<void> => {
@@ -211,6 +216,9 @@ export function App() {
       setSelection(result.data);
       setWorktreeTarget(null);
       void refreshRepos().then((nextRepos) => {
+        if (!nextRepos) {
+          return;
+        }
         setSelection((prev) => {
           if (prev?.worktreeId !== result.data.worktreeId) {
             return prev;
@@ -232,6 +240,7 @@ export function App() {
           </div>
           <RepoList
             repos={repos}
+            activityStates={activityStates}
             providers={availableProviders}
             selectedWorktreeId={selectedWorktreeId}
             onCreateWorktreeSession={(repoPath) => {
@@ -297,70 +306,6 @@ function findWorktree(repos: RepoListItem[], worktreeId: string | null): Worktre
     }
   }
   return null;
-}
-
-function applyWorktreeDisplayUpdate(
-  repos: RepoListItem[],
-  update: WorktreeDisplayUpdate,
-): RepoListItem[] {
-  let updated = false;
-  const nextRepos = repos.map((repo) => {
-    let repoUpdated = false;
-    const mainWorktree =
-      repo.mainWorktree.worktreeId === update.worktreeId
-        ? applyDisplayUpdateToWorktree(repo.mainWorktree, update)
-        : repo.mainWorktree;
-    if (mainWorktree !== repo.mainWorktree) {
-      repoUpdated = true;
-      updated = true;
-    }
-    const taskWorktrees = repo.taskWorktrees.map((taskWorktree) => {
-      if (taskWorktree.worktreeId !== update.worktreeId) {
-        return taskWorktree;
-      }
-      repoUpdated = true;
-      updated = true;
-      return applyDisplayUpdateToWorktree(taskWorktree, update);
-    });
-    return repoUpdated ? { ...repo, mainWorktree, taskWorktrees } : repo;
-  });
-
-  return updated ? nextRepos : repos;
-}
-
-function applyDisplayUpdateToWorktree(
-  taskWorktree: WorktreeListItem,
-  update: WorktreeDisplayUpdate,
-): WorktreeListItem {
-  return {
-    ...taskWorktree,
-    branch: update.branch,
-    headSha: update.headSha,
-    githubPullRequest: update.githubPullRequest,
-    primarySession: updatePrimarySessionPreview(taskWorktree, update),
-    suggestedSessions: taskWorktree.suggestedSessions.map((suggestedSession) =>
-      suggestedSession.providerSessionKey === update.sessionPreview?.providerSessionKey
-        ? { ...suggestedSession, preview: update.sessionPreview.preview }
-        : suggestedSession,
-    ),
-  };
-}
-
-function updatePrimarySessionPreview(
-  taskWorktree: WorktreeListItem,
-  update: WorktreeDisplayUpdate,
-) {
-  const primarySession = taskWorktree.primarySession;
-  if (
-    !primarySession ||
-    primarySession.providerSessionKey !== update.sessionPreview?.providerSessionKey
-  ) {
-    return primarySession;
-  }
-  return {
-    ...primarySession,
-    preview: update.sessionPreview.preview,
-  };
 }
 
 function findActiveTerminalRuntimeId(

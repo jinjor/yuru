@@ -223,7 +223,16 @@ export async function seedCodexHome(home: string, trustedRepoPath: string): Prom
   await copyFile(path.join(homedir(), ".codex", "auth.json"), path.join(codexDir, "auth.json"));
   await writeFile(
     path.join(codexDir, "config.toml"),
-    `[projects.${JSON.stringify(trustedRepoPath)}]\ntrust_level = "trusted"\n`,
+    [
+      `model = "gpt-5.4-mini"`,
+      "",
+      "[notice]",
+      "hide_rate_limit_model_nudge = true",
+      "",
+      `[projects.${JSON.stringify(trustedRepoPath)}]`,
+      `trust_level = "trusted"`,
+      "",
+    ].join("\n"),
   );
   await seedCodexVersionCheck(codexDir);
 }

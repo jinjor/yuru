@@ -2,12 +2,14 @@ import path from "path";
 import type {
   RepoListItem,
   RepoMetadata,
+  PrimarySessionListItem,
   SuggestedSessionListItem,
   TaskWorktreeMetadata,
   WorktreeListItem,
 } from "../shared/metadata.js";
 import {
   toSessionKey,
+  type AgentActivityState,
   type GitHubPullRequest,
   type TerminalRuntimeId,
   type SessionProvider,
@@ -57,6 +59,7 @@ export async function loadRepoList(
   loadSuggestedSessions?: LoadSuggestedSessions,
   activeTerminalRuntimesByWorktreePath?: ReadonlyMap<string, ActiveTerminalRuntimeWorktreeSession>,
   loadGitHubPullRequest?: LoadGitHubPullRequest,
+  agentActivityStatesByTerminalRuntimeId?: ReadonlyMap<TerminalRuntimeId, AgentActivityState>,
 ): Promise<RepoListItem[]> {
   const metadata = loadMetadata();
   const repoEntries = (
@@ -97,6 +100,7 @@ export async function loadRepoList(
         primarySessionPreviewsByKey,
         suggestedSessionsByWorktreePath?.get(gitWorktree.path) ?? [],
         githubPullRequestsByWorktreePath?.get(gitWorktree.path),
+        agentActivityStatesByTerminalRuntimeId,
       ),
     );
     return {
@@ -110,6 +114,7 @@ export async function loadRepoList(
         undefined,
         [],
         githubPullRequestsByWorktreePath?.get(mainWorktree.path),
+        undefined,
         true,
       ),
       taskWorktrees,
@@ -160,6 +165,9 @@ function toWorktreeListItem(
   primarySessionPreviewsByKey: ReadonlyMap<string, string> | undefined,
   suggestedSessions: readonly SuggestedWorktreeSession[],
   githubPullRequest: GitHubPullRequest | null | undefined,
+  agentActivityStatesByTerminalRuntimeId:
+    | ReadonlyMap<TerminalRuntimeId, AgentActivityState>
+    | undefined,
   isMainWorktree = false,
 ): WorktreeListItem {
   const worktreePath = gitWorktree.path;
@@ -174,12 +182,40 @@ function toWorktreeListItem(
   const activeTerminalRuntime = primarySession
     ? null
     : (activeTerminalRuntimesByWorktreePath?.get(toWorktreePathKey(worktreePath)) ?? null);
+  const primaryActivityState = activeTerminalRuntimeId
+    ? (agentActivityStatesByTerminalRuntimeId?.get(activeTerminalRuntimeId) ?? "waiting")
+    : "waiting";
+  const activeTerminalActivityState = activeTerminalRuntime
+    ? (agentActivityStatesByTerminalRuntimeId?.get(activeTerminalRuntime.terminalRuntimeId) ??
+      "waiting")
+    : "waiting";
   const suggestedSessionItems = toSuggestedSessionListItems(
     suggestedSessions,
     new Set([primarySessionKey].filter((key) => key !== null)),
     terminalRuntimeIdsBySessionKey,
     primarySessionPreviewsByKey,
+    agentActivityStatesByTerminalRuntimeId,
   );
+  const primarySessionItem: PrimarySessionListItem | undefined =
+    primarySession && primarySessionKey
+      ? {
+          provider: primarySession.provider,
+          providerSessionKey: primarySessionKey,
+          activeTerminalRuntimeId,
+          state: activeTerminalRuntimeId ? "active" : "inactive",
+          activityState: primaryActivityState,
+          preview: primarySessionPreviewsByKey?.get(primarySessionKey) ?? "",
+        }
+      : activeTerminalRuntime
+        ? {
+            provider: activeTerminalRuntime.provider,
+            providerSessionKey: null,
+            activeTerminalRuntimeId: activeTerminalRuntime.terminalRuntimeId,
+            state: "active",
+            activityState: activeTerminalActivityState,
+            preview: "",
+          }
+        : undefined;
 
   const item: WorktreeListItem = {
     worktreeId,
@@ -187,24 +223,7 @@ function toWorktreeListItem(
     name: path.basename(worktreePath),
     branch: gitWorktree.branch,
     headSha: gitWorktree.headSha,
-    primarySession:
-      primarySession && primarySessionKey
-        ? {
-            provider: primarySession.provider,
-            providerSessionKey: primarySessionKey,
-            activeTerminalRuntimeId,
-            state: activeTerminalRuntimeId ? "active" : "inactive",
-            preview: primarySessionPreviewsByKey?.get(primarySessionKey) ?? "",
-          }
-        : activeTerminalRuntime
-          ? {
-              provider: activeTerminalRuntime.provider,
-              providerSessionKey: null,
-              activeTerminalRuntimeId: activeTerminalRuntime.terminalRuntimeId,
-              state: "active",
-              preview: "",
-            }
-          : undefined,
+    primarySession: primarySessionItem,
     suggestedSessions: suggestedSessionItems,
   };
 
@@ -223,6 +242,9 @@ function toSuggestedSessionListItems(
   excludedSessionKeys: ReadonlySet<string>,
   terminalRuntimeIdsBySessionKey: ReadonlyMap<string, TerminalRuntimeId> | undefined,
   primarySessionPreviewsByKey: ReadonlyMap<string, string> | undefined,
+  agentActivityStatesByTerminalRuntimeId:
+    | ReadonlyMap<TerminalRuntimeId, AgentActivityState>
+    | undefined,
 ): SuggestedSessionListItem[] {
   return suggestedSessions.flatMap((session) => {
     const providerSessionKey = toSessionKey(session.provider, session.providerSessionId);
@@ -230,15 +252,17 @@ function toSuggestedSessionListItems(
       return [];
     }
     const activeTerminalRuntimeId = terminalRuntimeIdsBySessionKey?.get(providerSessionKey) ?? null;
-    return [
-      {
-        provider: session.provider,
-        providerSessionKey,
-        activeTerminalRuntimeId,
-        state: activeTerminalRuntimeId ? "active" : "inactive",
-        preview: primarySessionPreviewsByKey?.get(providerSessionKey) ?? "",
-        timestamp: session.timestamp ?? 0,
-      },
-    ];
+    const item: SuggestedSessionListItem = {
+      provider: session.provider,
+      providerSessionKey,
+      activeTerminalRuntimeId,
+      state: activeTerminalRuntimeId ? "active" : "inactive",
+      activityState: activeTerminalRuntimeId
+        ? (agentActivityStatesByTerminalRuntimeId?.get(activeTerminalRuntimeId) ?? "waiting")
+        : "waiting",
+      preview: primarySessionPreviewsByKey?.get(providerSessionKey) ?? "",
+      timestamp: session.timestamp ?? 0,
+    };
+    return [item];
   });
 }

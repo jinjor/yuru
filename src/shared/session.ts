@@ -1,5 +1,6 @@
 export type SessionProvider = "claude" | "codex";
 export type TerminalRuntimeId = string;
+export type AgentActivityState = "working" | "waiting";
 
 export interface SuggestedWorktreeSession {
   provider: SessionProvider;

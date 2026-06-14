@@ -37,7 +37,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 
 | ID | Type | Area | Item | Notes |
 |---|---|---|---|---|
-| F1 | feature | Notifications | 並列実行セッションの完了通知を出す | 完了に気づけない |
+| F1 | feature | Sessions | active なセッションの作業中/応答待ちを区別して表示する | 詳細: docs/backlog-details/F1-session-activity-state.md |
 | P9 | polish | New Session | 長い repo path の省略ルールを見直す | 折りたたみが不自然 |
 | P13 | polish | Files | Files タブのアクション UI を整える | 階層感が弱く見た目もまだ野暮ったい |
 | P16 | polish | Worktrees / Changes | 左ペインで worktree の Git 変更状態を分かるようにする | いま選択していない worktree に unstaged/staged/untracked 変更があることに気づけない |

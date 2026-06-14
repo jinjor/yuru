@@ -1,4 +1,4 @@
-import type { SessionProvider } from "../shared/session.js";
+import type { AgentActivityState, SessionProvider } from "../shared/session.js";
 import type { AgentDefinition } from "../shared/agent.js";
 import type { PendingTerminal, TerminalRuntimeInfo } from "./terminal-runtime.js";
 import type { WorktreeSessionHint } from "./worktree-session-detection.js";
@@ -14,6 +14,10 @@ export interface SessionSnapshot {
 export interface SessionPreview {
   lastMessage: string;
   timestamp: number;
+}
+
+export interface StoredSessionActivityContext {
+  outputActive: boolean;
 }
 
 export interface AgentTerminalRuntimeInfo extends TerminalRuntimeInfo {
@@ -55,6 +59,10 @@ export interface SessionProviderAdapter {
   resolvesSessionIdLazily: boolean;
   loadStoredSessions(): Promise<SessionSnapshot[]>;
   loadStoredSessionPreview(providerSessionId: string): Promise<SessionPreview | null>;
+  loadStoredSessionActivity(
+    providerSessionId: string,
+    context?: StoredSessionActivityContext,
+  ): Promise<AgentActivityState | null>;
   loadWorktreeSessionHints(worktreePaths: readonly string[]): Promise<WorktreeSessionHint[]>;
   hasStoredSession(providerSessionId: string): Promise<boolean>;
   createResumeLaunch(session: ResumeSessionTarget): Promise<LaunchRequest>;
