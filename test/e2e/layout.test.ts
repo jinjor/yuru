@@ -3,6 +3,7 @@ import {
   closeYuru,
   createCommittedRepo,
   createE2eContext,
+  createGitWorktree,
   launchWindow,
   openMainTerminal,
   registerRepo,
@@ -26,6 +27,39 @@ test("サイドバーのリサイズで幅が clamp 範囲内で変わる", asyn
 
     expect(after).toBeGreaterThan(before);
     expect(after).toBeGreaterThanOrEqual(220);
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+test("worktree が多い時も左ペインの repo 一覧をスクロールできる", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context);
+    for (let index = 0; index < 18; index += 1) {
+      await createGitWorktree(context, repoDir, `long-list-${index.toString().padStart(2, "0")}`);
+    }
+    await registerRepo(context, repoDir);
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+
+    const repoList = window.locator(".repo-list");
+    await expect(repoList).toBeVisible();
+    const scrollState = await repoList.evaluate((element) => {
+      element.scrollTop = 0;
+      element.scrollTop = element.scrollHeight;
+      return {
+        clientHeight: element.clientHeight,
+        scrollHeight: element.scrollHeight,
+        scrollTop: element.scrollTop,
+      };
+    });
+
+    expect(scrollState.scrollHeight).toBeGreaterThan(scrollState.clientHeight);
+    expect(scrollState.scrollTop).toBeGreaterThan(0);
   } finally {
     await closeYuru(app);
     await context.cleanup();
