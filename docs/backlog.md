@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-06-15
+Last updated: 2026-06-18
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -26,6 +26,9 @@ UI 改善も機能追加も同じ土俵で扱う。
 
 | ID | Type | Area | Item | Why now |
 |---|---|---|---|---|
+| F41 | feature | Worktrees | task worktree を削除できるようにする | 詳細: docs/backlog-details/F41-worktree-removal.md |
+| F42 | feature | Worktrees | remote branch から task worktree を作れるようにする | 他人や別環境で作った branch を Yuru の作業単位として開きたい |
+| F11 | feature | Diff | GitHub review のようにファイルごとに差分を確認済みにできるようにする | 大きめの差分で、どのファイルを見終わったかを失わずに確認したい |
 | F20 | feature | App | アプリのアイコンを付ける | テンションとプロダクト感を上げたい |
 | I18 | investigate | Events / Worktree Context | worktree 表示情報の更新タイミングを matrix で整理する | 詳細: docs/backlog-details/I18-worktree-refresh-policy.md |
 | F37 | feature | Diff | ブランチの任意のコミット間で diff を表示できるようにする | 複数コミットある作業で差分の範囲を切り替えて確認したい |
@@ -55,7 +58,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | I15 | investigate | IPC | `electronAPI` と IPC channel の対応を追いやすくする | renderer / preload / main で名前がズレていて読みにくいため、channel 名を露出するか shared RPC wrapper に寄せるか決めたい |
 | I16 | investigate | Events | backend event の発火ポリシーと購読設計を整理する | frontend 起点 IPC の応答代わりに push すると race しやすいため、外部変化・非同期完了・プロセス終了などに用途を限定したい |
 | I17 | investigate | Dependencies | `rg` 依存を見直す | provider store の検索で暗黙に使っているため、Codex 同梱 / Homebrew / GUI 起動時 PATH のどれを前提にするか整理したい |
-| I1 | investigate | Sessions | worktree を安全に削除できる条件と UX を決める | backend の削除口はあるが、UI と安全確認がまだない |
 | F28 | feature | Files | ファイル検索の最近開いたファイル履歴 | Cmd+P 空入力時に履歴を出したい |
 | I11 | investigate | App | モーダルとショートカットの管理設計を決める (詳細: docs/backlog-details/I11-modal-management.md) | FileSearch 導入時に Cmd+P が他モーダル裏で発火する問題が出たため、場当たり対応せず設計として直したい |
 
@@ -66,7 +68,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | I9 | investigate | App Runtime | build/restart 後にたまに白画面になる原因を調べる | 開発中の再起動ループで不安になる |
 | B3 | bug | Sessions | 古いセッション選択時の `No conversation found with ID: ...` のちらつきを消す | 誤解を生む |
 | F10 | feature | Terminal | ターミナル内文字列検索 | 独立機能として実装したい |
-| F11 | feature | Diff | ファイル単位の既読管理 | 状態設計が必要 |
 | F12 | feature | Diff | Split mode | 面積と複雑さが増える |
 | F13 | feature | Files / Code | 選択範囲をターミナルに貼り付ける | editor と terminal の連携が必要 |
 | F18 | feature | GitHub | PR マージ時に worktree を自動整理する | 自動 archived までつなげたい |
