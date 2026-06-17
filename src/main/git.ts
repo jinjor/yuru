@@ -162,8 +162,13 @@ async function readIndexBlob(cwd: string, filePath: string): Promise<Buffer | nu
   }
 }
 
-function bufferToContent(buffer: Buffer | null): string {
-  return buffer ? buffer.toString("utf-8") : "";
+// 不在 (null) と空ファイル ("") を区別する: 削除は null、空ファイルは ""。
+// バイナリの存在する側は "" にする (バイト列を文字列で送らない)。
+function bufferToContent(buffer: Buffer | null, isBinary: boolean): string | null {
+  if (buffer === null) {
+    return null;
+  }
+  return isBinary ? "" : buffer.toString("utf-8");
 }
 
 async function isPathChanged(cwd: string, filePath: string): Promise<boolean> {
@@ -225,8 +230,8 @@ export async function getGitDiffDocument(
 
   return {
     path: filePath,
-    originalContent: isBinary ? "" : bufferToContent(originalBuffer),
-    currentContent: isBinary ? "" : bufferToContent(currentBuffer),
+    originalContent: bufferToContent(originalBuffer, isBinary),
+    currentContent: bufferToContent(currentBuffer, isBinary),
     isBinary,
     size,
   };

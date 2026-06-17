@@ -5,6 +5,7 @@ import {
   createCommittedRepo,
   createE2eContext,
   createGitWorktree,
+  expectPreviewPath,
   git,
   launchWindow,
   openMainTerminal,
@@ -39,7 +40,7 @@ test("Files タブで追跡ファイルを表示しクリックしたファイ�
     await expect(window.locator(".file-tree-name", { hasText: "app.ts" })).toBeVisible();
     await window.locator(".file-tree-row", { hasText: "app.ts" }).click();
 
-    await expect(window.locator(".preview-path")).toHaveText("src/app.ts");
+    await expectPreviewPath(window, "src/app.ts");
     await expect(window.locator(".source-viewer")).toContainText("needle");
   } finally {
     await closeYuru(app);
@@ -73,7 +74,7 @@ test("Changes タブで変更ファイルと未追跡ファイルを表示し di
     await expect(window.locator(".change-status", { hasText: "U" })).toBeVisible();
 
     await window.locator(".change-item", { hasText: "README.md" }).click();
-    await expect(window.locator(".preview-path")).toHaveText("README.md");
+    await expectPreviewPath(window, "README.md");
     await expect(window.locator(".source-line.diff-deleted")).toContainText("# original");
     await expect(window.locator(".source-line.diff-added")).toContainText("# changed");
 
@@ -183,10 +184,10 @@ test("Changes タブは staged と unstaged を別セクションで表示し、
 
     // Staged の行は HEAD ↔ index の diff を出す
     await stagedReadme.click();
-    await expect(window.locator(".preview-path")).toHaveText("README.md");
+    await expectPreviewPath(window, "README.md");
     await expect(window.locator(".source-line.diff-deleted")).toContainText("# original");
     await expect(window.locator(".source-line.diff-added")).toContainText("# staged");
-    await expect(window.locator(".preview-header-meta .line-stat")).toHaveText("+1-1");
+    await expect(window.locator(".preview-header .line-stat")).toHaveText("+1-1");
 
     // Unstaged の行は index ↔ 作業ツリーの diff を出す
     await unstagedReadme.click();
@@ -236,7 +237,7 @@ test("Changes タブは削除ファイルを D として表示し diff を開く
     await expect(changeItem.locator(".line-stat")).toHaveText("-1");
     await changeItem.click();
 
-    await expect(window.locator(".preview-path")).toHaveText("delete-me.txt");
+    await expectPreviewPath(window, "delete-me.txt");
     await expect(window.locator(".source-line.diff-deleted")).toContainText("deleted content");
   } finally {
     await closeYuru(app);

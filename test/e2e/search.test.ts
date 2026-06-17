@@ -3,6 +3,7 @@ import {
   closeYuru,
   createCommittedRepo,
   createE2eContext,
+  expectPreviewPath,
   launchWindow,
   openMainTerminal,
   registerRepo,
@@ -29,7 +30,7 @@ test("Cmd+P でファイル検索パレットを開き選択したファイル�
 
     await window.locator(".file-search-row", { hasText: "app.ts" }).click();
     await expect(window.locator(".file-search")).toBeHidden();
-    await expect(window.locator(".preview-path")).toHaveText("src/app.ts");
+    await expectPreviewPath(window, "src/app.ts");
 
     await window.keyboard.press("Meta+P");
     await expect(window.locator(".file-search")).toBeVisible();
@@ -65,7 +66,7 @@ test("Cmd+Shift+F で code search を開き結果をプレビューする", asyn
     });
     await expect(window.locator(".code-search-file-header")).toContainText("app.ts");
     await window.locator(".code-search-match-row").click();
-    await expect(window.locator(".preview-path")).toHaveText("src/app.ts");
+    await expectPreviewPath(window, "src/app.ts");
     await expect(window.locator(".source-line.highlight")).toContainText("YURU_NEEDLE");
   } finally {
     await closeYuru(app);
@@ -93,7 +94,7 @@ test("ファイル検索パレットは Enter で先頭候補を開ける", asyn
     await window.keyboard.press("Enter");
 
     await expect(window.locator(".file-search")).toBeHidden();
-    await expect(window.locator(".preview-path")).toHaveText("docs/target-note.md");
+    await expectPreviewPath(window, "docs/target-note.md");
   } finally {
     await closeYuru(app);
     await context.cleanup();
@@ -124,7 +125,7 @@ test("code search は複数結果から別の一致行を開ける", async () =>
     await expect(secondGroup).toBeVisible();
     await secondGroup.locator(".code-search-match-row").click();
 
-    await expect(window.locator(".preview-path")).toHaveText("src/second.ts");
+    await expectPreviewPath(window, "src/second.ts");
     await expect(window.locator(".source-line.highlight")).toContainText("YURU_MULTI_MATCH");
   } finally {
     await closeYuru(app);

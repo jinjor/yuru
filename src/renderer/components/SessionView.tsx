@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
-import type { GitDiffDocument, GitPathState } from "../../shared/ipc";
+import type { GitPathState } from "../../shared/ipc";
 import type { GitHubPullRequest } from "../../shared/session";
 import { DiffPreviewPanel } from "./DiffPreviewPanel";
 import { ExplorerPanel, type ExplorerTab } from "./ExplorerPanel";
@@ -44,8 +44,6 @@ export function SessionView({
 }: SessionViewProps) {
   const sessionViewColumnRef = useRef<HTMLDivElement>(null);
   const [previewSelection, setPreviewSelection] = useState<PreviewSelection | null>(null);
-  const [diffDocument, setDiffDocument] = useState<GitDiffDocument | null>(null);
-  const [isLoadingDiff, setIsLoadingDiff] = useState(false);
   const [gitPathStates, setGitPathStates] = useState<GitPathState[]>([]);
   const [isFileSearchOpen, setIsFileSearchOpen] = useState(false);
   const [explorerTab, setExplorerTab] = useState<ExplorerTab>("changes");
@@ -56,13 +54,10 @@ export function SessionView({
     sessionViewColumnRef,
   });
   const previewPath = previewSelection?.path ?? null;
-  const previewScope = previewSelection?.scope;
   const previewPathChanged = previewPath ? isPathChanged(gitPathStates, previewPath) : false;
 
   const resetPreviewState = useCallback((): void => {
     setPreviewSelection(null);
-    setDiffDocument(null);
-    setIsLoadingDiff(false);
   }, []);
 
   const handleFileLinkActivate = useCallback(
@@ -127,54 +122,6 @@ export function SessionView({
     };
   }, [worktreeId]);
 
-  useEffect(() => {
-    if (!previewPath) {
-      setDiffDocument(null);
-      setIsLoadingDiff(false);
-      return;
-    }
-
-    let cancelled = false;
-    setIsLoadingDiff(true);
-
-    const fetchDiff = async (showLoader: boolean): Promise<void> => {
-      const result = await window.electronAPI.getGitDiffDocument(
-        worktreeId,
-        previewPath,
-        previewScope,
-      );
-      if (cancelled) {
-        return;
-      }
-
-      setDiffDocument(resultDataOrNull(result));
-      if (showLoader) {
-        setIsLoadingDiff(false);
-      }
-    };
-
-    void fetchDiff(true);
-
-    if (!previewPathChanged) {
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    const interval = setInterval(() => {
-      if (!isPageVisible()) {
-        return;
-      }
-
-      void fetchDiff(false);
-    }, 3000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [previewPath, previewPathChanged, previewScope, worktreeId]);
-
   return (
     <>
       <div
@@ -190,9 +137,10 @@ export function SessionView({
           <DiffPreviewPanel
             path={previewSelection.path}
             line={previewSelection.line}
-            diffDocument={diffDocument}
-            isLoading={isLoadingDiff}
+            scope={previewSelection.scope}
+            pathChanged={previewPathChanged}
             onClose={resetPreviewState}
+            worktreeId={worktreeId}
           />
         )}
         {previewSelection && (

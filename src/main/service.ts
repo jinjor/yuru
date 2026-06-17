@@ -33,7 +33,9 @@ import { getGitHubPullRequestForBranch } from "./github.js";
 import {
   listAllFiles as listAllRepoFiles,
   listFiles as listRepoFiles,
+  readWorktreeFile as readRepoWorktreeFile,
   resolveRepoFile as resolveRepoFilePath,
+  writeFile as writeRepoFile,
 } from "./files.js";
 import { getSessionProvider, listSessionProviderDefinitions } from "./agent-registry.js";
 import {
@@ -69,7 +71,7 @@ import {
   type SuggestedWorktreeSession,
   toSessionKey,
 } from "../shared/session.js";
-import { toAppError } from "./errors.js";
+import { isFileNotFoundError, toAppError } from "./errors.js";
 import {
   clearErrorNotices,
   dismissErrorNotice,
@@ -551,6 +553,41 @@ export class YuruService {
       return ok(await listAllRepoFiles(workingRoot));
     } catch (error) {
       return this.failAndReport(toAppError(error, { command: "git" }));
+    }
+  }
+
+  async readWorktreeFile(worktreeId: string, filePath: string): Promise<Result<string | null>> {
+    const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
+    if (!workingRoot) {
+      return fail({
+        code: "invalid_path",
+        message: "Selected worktree is no longer available.",
+      });
+    }
+    try {
+      return ok(await readRepoWorktreeFile(workingRoot, filePath));
+    } catch (error) {
+      return this.failAndReport(toAppError(error));
+    }
+  }
+
+  async writeFile(worktreeId: string, filePath: string, content: string): Promise<Result<void>> {
+    const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
+    if (!workingRoot) {
+      return fail({
+        code: "invalid_path",
+        message: "Selected worktree is no longer available.",
+      });
+    }
+    try {
+      await writeRepoFile(workingRoot, filePath, content);
+      return ok(undefined);
+    } catch (error) {
+      // 編集中に削除された等で対象が無いのは想定内の競合。error center に出さず静かに失敗。
+      if (isFileNotFoundError(error)) {
+        return fail({ code: "filesystem_failed", message: "File no longer exists." });
+      }
+      return this.failAndReport(toAppError(error));
     }
   }
 

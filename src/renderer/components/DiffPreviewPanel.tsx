@@ -1,26 +1,51 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { diffArrays } from "diff";
-import type { GitDiffDocument, GitLineStat } from "../../shared/ipc";
+import type { GitDiffDocument, GitDiffScope, GitLineStat } from "../../shared/ipc";
+import type { FileViewMode } from "../types";
+import { computeLineChanges } from "./CodeEditor/lineChanges";
 import { SourceViewer, type SourceLine } from "./SourceViewer";
 import { tokenizeCode, type TokenizedLine } from "../highlight";
-import { PreviewPanel } from "./PreviewPanel";
+import { PreviewHeader } from "./PreviewHeader";
+import { resultDataOrNull } from "../utils/result";
+
+const EditModeEditor = lazy(() => import("./CodeEditor/EditModeEditor"));
+
+function isPageVisible(): boolean {
+  return document.visibilityState === "visible";
+}
 
 interface DiffPreviewPanelProps {
-  diffDocument: GitDiffDocument | null;
-  isLoading: boolean;
   line?: number;
   onClose: () => void;
   path: string;
+  // Changes pane から選んだ時だけ入る scope。なしは HEAD ↔ 作業ツリーの合算 diff。
+  scope?: GitDiffScope;
+  worktreeId: string;
+  // 変更ありのファイルだけ diff をポーリングするための判定。git status は親が持つ。
+  pathChanged: boolean;
 }
 
 export function DiffPreviewPanel({
-  diffDocument,
-  isLoading,
   line,
   onClose,
   path,
+  scope,
+  worktreeId,
+  pathChanged,
 }: DiffPreviewPanelProps) {
+  const [diffDocument, setDiffDocument] = useState<GitDiffDocument | null>(null);
+  const [isLoadingDiff, setIsLoadingDiff] = useState(false);
   const [lines, setLines] = useState<SourceLine[]>([]);
+  const [mode, setMode] = useState<FileViewMode>("view");
+
+  // ファイルが変わったら閲覧モードに戻す。パネルは再マウントしたくない (前の diff を出し続けて
+  // チラつきを防ぐため key にしていない) ので、effect ではなく描画中に直接調整する React の方式。
+  const [prevPath, setPrevPath] = useState(path);
+  if (path !== prevPath) {
+    setPrevPath(path);
+    setMode("view");
+  }
+
   // While a new file's diff is being fetched, `diffDocument` still holds the
   // previously shown file. Render it (with its own path) until the new diff
   // arrives so switching files does not flash a "Loading..." screen.
@@ -30,7 +55,62 @@ export function DiffPreviewPanel({
   const fileSize = diffDocument?.size ?? null;
   const isBinary = diffDocument?.isBinary ?? false;
   const hasChanges = originalContent !== currentContent;
-  const lineStat = hasChanges && !isBinary && lines.length > 0 ? countDiffLines(lines) : undefined;
+
+  // staged 差分は index を見ているので、作業ツリーを編集する編集モードには入れない。
+  // (unstaged / Files から開いた時は current 側が作業ツリーなので編集に入れる)。実在チェックは
+  // 編集に入った EditModeEditor が実ファイルを読んで行う (削除済みなら "missing")。
+  const editDisabledReason = isBinary
+    ? "Binary files cannot be edited"
+    : scope === "staged"
+      ? "Switch to the unstaged diff to edit"
+      : undefined;
+  const canEdit = diffDocument !== null && diffDocument.path === path && !editDisabledReason;
+  const isEditing = mode === "edit" && canEdit;
+  // ヘッダの +/- はポーリング中の diff から算出する (編集中の数値は autosave 後に追従する)。
+  const headerLineStat = useMemo<GitLineStat>(
+    () =>
+      computeLineChanges((originalContent ?? "").split("\n"), (currentContent ?? "").split("\n"))
+        .stat,
+    [originalContent, currentContent],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoadingDiff(true);
+
+    const fetchDiff = async (showLoader: boolean): Promise<void> => {
+      const result = await window.electronAPI.getGitDiffDocument(worktreeId, path, scope);
+      if (cancelled) {
+        return;
+      }
+
+      setDiffDocument(resultDataOrNull(result));
+      if (showLoader) {
+        setIsLoadingDiff(false);
+      }
+    };
+
+    void fetchDiff(true);
+
+    if (!pathChanged) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const interval = setInterval(() => {
+      if (!isPageVisible()) {
+        return;
+      }
+
+      void fetchDiff(false);
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [path, scope, pathChanged, worktreeId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,37 +142,45 @@ export function DiffPreviewPanel({
   }, [currentContent, fileSize, originalContent, displayPath]);
 
   return (
-    <PreviewPanel title="Code" path={displayPath} lineStat={lineStat} onClose={onClose}>
-      {diffDocument === null ? (
-        <div className="code-panel-empty">
-          <p>{isLoading ? "Loading..." : "Preview is not available"}</p>
-        </div>
-      ) : isBinary ? (
-        <div className="code-panel-empty">
-          <p>Binary preview is not available</p>
-        </div>
-      ) : (
-        <SourceViewer
-          lines={lines}
-          className={hasChanges ? "diff-viewer" : ""}
-          scrollToLine={diffDocument.path === path ? line : undefined}
-        />
-      )}
-    </PreviewPanel>
+    <div className="preview-panel">
+      <PreviewHeader
+        path={displayPath}
+        mode={mode}
+        onModeChange={setMode}
+        canEdit={canEdit}
+        editDisabledReason={editDisabledReason}
+        lineStat={headerLineStat}
+        onClose={onClose}
+      />
+      <div className="preview-body">
+        {diffDocument === null ? (
+          <div className="code-panel-empty">
+            <p>{isLoadingDiff ? "Loading..." : "Preview is not available"}</p>
+          </div>
+        ) : isEditing ? (
+          <Suspense
+            fallback={
+              <div className="code-panel-empty">
+                <p>Loading editor…</p>
+              </div>
+            }
+          >
+            <EditModeEditor key={path} worktreeId={worktreeId} path={path} />
+          </Suspense>
+        ) : isBinary ? (
+          <div className="code-panel-empty">
+            <p>Binary preview is not available</p>
+          </div>
+        ) : (
+          <SourceViewer
+            lines={lines}
+            className={hasChanges ? "diff-viewer" : ""}
+            scrollToLine={diffDocument.path === path ? line : undefined}
+          />
+        )}
+      </div>
+    </div>
   );
-}
-
-function countDiffLines(lines: readonly SourceLine[]): GitLineStat {
-  let added = 0;
-  let deleted = 0;
-  for (const line of lines) {
-    if (line.className === "diff-added") {
-      added++;
-    } else if (line.className === "diff-deleted") {
-      deleted++;
-    }
-  }
-  return { added, deleted };
 }
 
 function computeDiffLines(

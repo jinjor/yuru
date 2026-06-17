@@ -355,6 +355,16 @@ export async function openMainTerminal(window: Page): Promise<void> {
   await expect(window.locator(".xterm")).toBeVisible({ timeout: 10_000 });
 }
 
+// ヘッダはファイル名とディレクトリを分けて出すので、両者をまとめて検証する。
+export async function expectPreviewPath(window: Page, fullPath: string): Promise<void> {
+  const lastSlash = fullPath.lastIndexOf("/");
+  const name = lastSlash < 0 ? fullPath : fullPath.slice(lastSlash + 1);
+  await expect(window.locator(".preview-filename")).toHaveText(name);
+  if (lastSlash >= 0) {
+    await expect(window.locator(".preview-dir")).toHaveText(fullPath.slice(0, lastSlash));
+  }
+}
+
 export function worktreeCard(window: Page, text: string) {
   return window.locator(".task-worktree-card", { hasText: text });
 }

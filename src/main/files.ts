@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import type { FileTreeNode } from "../shared/ipc.js";
 import { execBuffer } from "./exec.js";
+import { isFileNotFoundError } from "./errors.js";
 
 function normalizeRelativePath(relativePath: string): string {
   return relativePath.split(path.sep).join("/");
@@ -46,6 +47,39 @@ export function resolveRepoFile(workingRoot: string, filePath: string): string |
     return normalizeRelativePath(relative);
   } catch {
     return null;
+  }
+}
+
+// 編集モードの seed 用。既存テキストは内容 (空は "")、不在は null、範囲外は throw。
+export async function readWorktreeFile(
+  workingRoot: string,
+  filePath: string,
+): Promise<string | null> {
+  const targetPath = resolveSessionPath(workingRoot, filePath);
+  try {
+    return await fs.promises.readFile(targetPath, "utf-8");
+  } catch (error) {
+    if (isFileNotFoundError(error)) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+// 既存ファイルの更新のみ。"r+" は O_CREAT を付けないので、対象が無ければ ENOENT で失敗する
+// (編集中に削除されたファイルを autosave / 離脱時 flush で復活させない。TOCTOU も避けられる)。
+export async function writeFile(
+  workingRoot: string,
+  filePath: string,
+  content: string,
+): Promise<void> {
+  const targetPath = resolveSessionPath(workingRoot, filePath);
+  const handle = await fs.promises.open(targetPath, "r+");
+  try {
+    const { bytesWritten } = await handle.write(content, 0, "utf-8");
+    await handle.truncate(bytesWritten);
+  } finally {
+    await handle.close();
   }
 }
 

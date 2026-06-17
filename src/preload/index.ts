@@ -29,6 +29,10 @@ const electronAPI: ElectronAPI = {
   listAllFiles: (worktreeId: string) => ipcRenderer.invoke("files:listAll", worktreeId),
   resolveRepoFile: (worktreeId: string, filePath: string) =>
     ipcRenderer.invoke("files:resolveRepoFile", worktreeId, filePath),
+  readWorktreeFile: (worktreeId: string, filePath: string) =>
+    ipcRenderer.invoke("files:readWorktree", worktreeId, filePath),
+  writeFile: (worktreeId: string, filePath: string, content: string) =>
+    ipcRenderer.invoke("files:write", worktreeId, filePath, content),
   syncFileWatchTargets: (worktreeId: string, relativePaths: string[]) =>
     ipcRenderer.invoke("files:syncWatchTargets", worktreeId, relativePaths),
   searchCode: (worktreeId: string, query: string) =>

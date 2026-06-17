@@ -240,6 +240,14 @@ function registerIpcHandlers(): void {
     return service.resolveRepoFile(worktreeId, filePath);
   });
 
+  ipcMain.handle("files:readWorktree", (_event, worktreeId: string, filePath: string) => {
+    return service.readWorktreeFile(worktreeId, filePath);
+  });
+
+  ipcMain.handle("files:write", (_event, worktreeId: string, filePath: string, content: string) => {
+    return service.writeFile(worktreeId, filePath, content);
+  });
+
   ipcMain.handle(
     "files:syncWatchTargets",
     (_event, worktreeId: string, relativePaths: string[]) => {

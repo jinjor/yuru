@@ -25,6 +25,12 @@ function isFilesystemError(error: unknown): boolean {
   );
 }
 
+export function isFileNotFoundError(error: unknown): boolean {
+  return (
+    Boolean(error) && typeof error === "object" && (error as { code?: unknown }).code === "ENOENT"
+  );
+}
+
 function isCommandNotFound(error: unknown, detail?: string): boolean {
   if (error && typeof error === "object" && (error as { code?: unknown }).code === "ENOENT") {
     return true;

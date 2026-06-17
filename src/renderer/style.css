@@ -1128,24 +1128,78 @@ button.github-badge {
 }
 
 .preview-header {
-  gap: 12px;
-}
-
-.preview-header-meta {
-  min-width: 0;
-  display: flex;
-  align-items: center;
   gap: 10px;
 }
 
-.preview-path {
+/* ファイル名 + ディレクトリ を隣接で左にまとめる */
+.preview-filemeta {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.preview-filename {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* 質感は Changes と揃える (subtle・mono・小さめ)。あふれたら後ろ省略、全パスは title で出す。 */
+.preview-dir {
   min-width: 0;
   flex: 1;
   font-size: 11px;
+  font-family: var(--font-mono);
   color: var(--text-subtle);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* モード切替: アイコンのセグメント (コンパクト) */
+.preview-mode-segment {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--viewer-gutter);
+}
+
+.preview-mode-btn {
+  width: 30px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    background 120ms ease;
+}
+
+.preview-mode-btn:hover:not(:disabled):not(.active) {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.preview-mode-btn.active {
+  background: var(--bg-selected);
+  color: var(--text);
+}
+
+.preview-mode-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
 }
 
 .preview-close-btn {
@@ -1280,6 +1334,67 @@ button.github-badge {
 
 .diff-overview-mark.diff-deleted {
   background: var(--danger);
+}
+
+/* Code editor (CodeMirror, edit mode) */
+.code-editor {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+
+.code-editor .cm-editor {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+/* 変更行マークのガター: 行番号の右、コードの隣に細く出す */
+.code-editor .cm-change-gutter {
+  width: 8px;
+  padding: 0;
+}
+
+.code-editor .cm-change-gutter .cm-gutterElement {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0;
+}
+
+.cm-change-mark {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* 追加 / 変更行: 緑の縦バー (コード側に寄せる) */
+.cm-change-mark-added {
+  width: 3px;
+  margin-left: auto;
+  background: var(--success);
+}
+
+/* 削除: 赤い三角。削除があった境界 (この行の上端) に出す */
+.cm-change-mark-deleted::before,
+.cm-change-mark-deleted-end::before {
+  content: "";
+  position: absolute;
+  right: 0;
+  border-style: solid;
+  border-color: transparent;
+}
+
+.cm-change-mark-deleted::before {
+  top: 0;
+  border-width: 4px 3px 0 3px;
+  border-top-color: var(--danger);
+}
+
+.cm-change-mark-deleted-end::before {
+  bottom: 0;
+  border-width: 0 3px 4px 3px;
+  border-bottom-color: var(--danger);
 }
 
 /* In-file find */

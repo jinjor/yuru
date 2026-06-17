@@ -68,8 +68,10 @@ export interface FileTreeNode {
 
 export interface GitDiffDocument {
   path: string;
-  originalContent: string;
-  currentContent: string;
+  // null は元側にファイルが無いこと (例: 新規追加されたファイル)。
+  originalContent: string | null;
+  // null は作業ツリーにファイルが無いこと (例: 削除されたファイル)。"" は空ファイル。
+  currentContent: string | null;
   isBinary: boolean;
   size: number;
 }
@@ -145,6 +147,8 @@ export interface ElectronAPI {
   listFiles: (worktreeId: string, relativePath?: string) => Promise<Result<FileTreeNode[]>>;
   listAllFiles: (worktreeId: string) => Promise<Result<string[]>>;
   resolveRepoFile: (worktreeId: string, filePath: string) => Promise<string | null>;
+  readWorktreeFile: (worktreeId: string, filePath: string) => Promise<Result<string | null>>;
+  writeFile: (worktreeId: string, filePath: string, content: string) => Promise<Result<void>>;
   syncFileWatchTargets: (worktreeId: string, relativePaths: string[]) => Promise<void>;
   searchCode: (worktreeId: string, query: string) => Promise<Result<CodeSearchResult>>;
   cancelCodeSearch: (worktreeId: string) => Promise<void>;
