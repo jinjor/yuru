@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>F41 Worktree Removal — 削除導線と確認ダイアログ モックアップ</title>
+<style>
+  :root {
+    --bg-app: #11151d;
+    --bg-panel: #181d27;
+    --bg-hover: #262f3f;
+    --bg-selected: #2f4058;
+    --border: #2f394a;
+    --border-strong: #445068;
+    --text: #d8e1ef;
+    --text-muted: #91a0b8;
+    --text-subtle: #63718a;
+    --accent: #7bc1ff;
+    --success: #7ad7a1;
+    --warning: #e2c08d;
+    --danger: #f08f86;
+    --viewer-gutter: #131a24;
+    --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg-app);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Hiragino Sans", sans-serif;
+    font-size: 13px;
+    padding: 32px 40px 90px;
+  }
+  h1 { font-size: 18px; font-weight: 600; margin: 0 0 6px; }
+  .lead { color: var(--text-muted); max-width: 860px; line-height: 1.7; margin: 0 0 8px; }
+  code { background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+
+  /* 注意書き */
+  .warn {
+    border: 1px solid var(--danger);
+    border-left: 4px solid var(--danger);
+    border-radius: 8px;
+    background: rgba(240,143,134,0.08);
+    padding: 14px 18px;
+    max-width: 860px;
+    margin: 20px 0 16px;
+    line-height: 1.75;
+  }
+  .warn h2 { font-size: 13px; margin: 0 0 8px; color: var(--danger); letter-spacing: 0.04em; }
+  .warn ul { margin: 0; padding-left: 20px; color: var(--text); }
+  .warn b { color: #fff; }
+
+  .fixed-spec {
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--success);
+    border-radius: 8px;
+    background: rgba(122,215,161,0.06);
+    padding: 14px 18px;
+    max-width: 860px;
+    margin: 0 0 16px;
+    line-height: 1.7;
+  }
+  .fixed-spec h2 { font-size: 13px; margin: 0 0 8px; color: var(--success); letter-spacing: 0.04em; }
+  .fixed-spec ul { margin: 0; padding-left: 20px; color: var(--text-muted); }
+  .fixed-spec b { color: var(--text); }
+
+  .flow {
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    background: rgba(123,193,255,0.05);
+    padding: 14px 18px;
+    max-width: 860px;
+    margin: 0 0 36px;
+    line-height: 1.75;
+  }
+  .flow h2 { font-size: 13px; margin: 0 0 8px; color: var(--accent); letter-spacing: 0.04em; }
+  .flow ol { margin: 0; padding-left: 20px; color: var(--text-muted); }
+  .flow b { color: var(--text); }
+  .flow .ref { color: var(--text-subtle); font-size: 11px; }
+
+  .case { margin: 0 0 30px; }
+  .case-title { font-size: 13px; font-weight: 600; color: var(--accent); margin: 0 0 4px; }
+  .case-sub { color: var(--text-subtle); font-size: 11px; margin: 0 0 12px; max-width: 640px; line-height: 1.6; }
+  .row { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; }
+
+  /* ===== 左ペイン断片（実装の見た目に寄せる） ===== */
+  .sidebar {
+    width: 268px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+  }
+  .sidebar-cap { font-size: 10px; letter-spacing: 0.06em; color: var(--text-subtle); margin: 0 0 8px; text-transform: uppercase; }
+  .wt-card {
+    position: relative;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: linear-gradient(180deg, #1b212c 0%, #151a23 100%);
+    margin-bottom: 8px;
+  }
+  .wt-card.hovered { border-color: var(--border-strong); }
+  .wt-card.selected { border-color: var(--accent); background: linear-gradient(180deg, #27344d 0%, #1f2a3f 100%); box-shadow: 0 0 0 1px rgba(123,193,255,0.12); }
+  .wt-summary { min-height: 60px; padding: 9px 12px 8px; display: flex; flex-direction: column; justify-content: center; gap: 5px; }
+  .wt-heading { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .wt-name { flex: 1; min-width: 0; font-size: 13px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 5px; }
+  .wt-name svg { color: var(--text-subtle); flex-shrink: 0; }
+  .wt-session-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .wt-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .wt-dot.claude { background: #e2956b; }
+  .wt-dot.running { box-shadow: 0 0 0 3px rgba(226,192,141,0.25); background: var(--warning); }
+  .wt-preview { min-width: 0; flex: 1; font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wt-hint { font-size: 11px; color: var(--text-subtle); }
+
+  /* GitHub badge（実装の質感に合わせる） */
+  .gh-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 999px; font-size: 10px; font-weight: 600; white-space: nowrap; border: 1px solid transparent; flex-shrink: 0; }
+  .gh-badge.open { color: #aee9c2; background: rgba(59,122,81,0.22); border-color: rgba(122,215,161,0.28); }
+
+  /* overflow（︙）ボタン：ホバー / 選択時に出す。提案部分。 */
+  .wt-overflow {
+    position: absolute; top: 7px; right: 7px;
+    width: 24px; height: 24px; border-radius: 7px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--text-subtle); background: rgba(17,21,29,0.6); border: 1px solid transparent;
+    cursor: pointer;
+  }
+  .wt-overflow:hover { color: var(--text); background: var(--bg-hover); border-color: var(--border); }
+
+  /* card-anchored popover（既存の action surface と同じ流儀） */
+  .wt-menu {
+    position: absolute; top: 34px; right: 7px; z-index: 5;
+    min-width: 168px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-strong);
+    border-radius: 9px;
+    box-shadow: 0 14px 34px rgba(0,0,0,0.4);
+    padding: 5px;
+  }
+  .wt-menu button { width: 100%; text-align: left; display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 6px; background: transparent; border: 0; color: var(--danger); font-size: 12px; cursor: pointer; }
+  .wt-menu button:hover { background: rgba(240,143,134,0.12); }
+  .wt-menu button[disabled] { color: var(--text-subtle); opacity: 0.55; cursor: not-allowed; }
+  .wt-menu button[disabled]:hover { background: transparent; }
+  .wt-menu-reason { padding: 6px 9px 5px; margin-top: 4px; border-top: 1px solid var(--border); font-size: 11px; line-height: 1.5; color: var(--text-subtle); }
+
+  /* ===== 確認ダイアログ ===== */
+  .stage { position: relative; }
+  .dlg {
+    width: 430px; max-width: 100%;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-strong);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 18px 48px rgba(0,0,0,0.5);
+  }
+  .dlg-head { padding: 14px 18px; font-size: 14px; font-weight: 600; color: var(--text); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 9px; }
+  .dlg-head svg { flex-shrink: 0; }
+  .dlg-head.danger svg { color: var(--danger); }
+  .dlg-body { padding: 16px 18px; }
+
+  .dlg-target { display: flex; align-items: center; gap: 8px; padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-app); margin-bottom: 14px; }
+  .dlg-target .name { font-weight: 700; font-size: 13px; color: var(--text); display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .dlg-target .name svg { color: var(--text-subtle); }
+  .dlg-target .dir { color: var(--text-subtle); font-size: 11px; font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+
+  .dlg-text { margin: 0; line-height: 1.65; color: var(--text-muted); }
+  .dlg-text b { color: var(--text); font-weight: 600; }
+
+  .note {
+    border-radius: 8px; padding: 11px 13px; margin: 4px 0 0; line-height: 1.65; font-size: 12px;
+  }
+  .note.pr { border: 1px solid rgba(122,215,161,0.3); background: rgba(59,122,81,0.12); color: var(--text); }
+  .note.pr b { color: #aee9c2; }
+  .note.force { border: 1px solid var(--danger); background: rgba(240,143,134,0.1); color: var(--text); }
+  .note.force b { color: #fff; }
+
+  .dlg-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 13px 18px; border-top: 1px solid var(--border); background: rgba(255,255,255,0.015); }
+  .btn { padding: 7px 15px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid var(--border-strong); background: transparent; color: var(--text); }
+  .btn.ghost { color: var(--text-muted); }
+  .btn.ghost:hover { background: var(--bg-hover); }
+  .btn.danger { border-color: rgba(240,143,134,0.55); background: rgba(240,143,134,0.16); color: #ffd2cc; }
+  .btn.danger:hover { background: rgba(240,143,134,0.26); }
+
+  .hint { color: var(--text-subtle); font-size: 11px; margin: 10px 0 0; max-width: 430px; line-height: 1.6; }
+  svg { display: block; }
+</style>
+</head>
+<body>
+
+<h1>F41 Worktree Removal — 削除導線と確認ダイアログ</h1>
+<p class="lead">不要になった task worktree を左ペインから削除する機能の UI モックアップ。
+主役は<b>確認ダイアログ 3 種</b>（通常 / open PR / force）、<b>生きているプロセスがある時のブロック（メニュー段階）</b>、そしてそれらをつなぐ判定フロー。</p>
+
+<div class="warn">
+  <h2>⚠ このモックの見方</h2>
+  <ul>
+    <li>確認したいのは <b>削除の入口</b>と <b>確認ダイアログの中身（何を消し / 何を残すかの伝え方）</b>。文言・色・並びはここで詰める。</li>
+    <li><b>左ペインのカードはダミー</b>。既存実装の見た目に寄せてあるだけで、行間・影などは参考にしない。</li>
+    <li>ダイアログ内の文言は <b>英語</b>（プロダクト UI に合わせる）。説明・注記は日本語。</li>
+    <li><b>入口（︙メニュー）は提案</b>。detail は「削除操作を選ぶ」としか決めていない。下の <b>提案</b>セクション参照。</li>
+  </ul>
+</div>
+
+<div class="fixed-spec">
+  <h2>■ 確定仕様（detail 由来・ダイアログで崩さない）</h2>
+  <ul>
+    <li><b>消えるのは worktree（作業ディレクトリ）と、この一覧の項目だけ。</b></li>
+    <li><b>branch は消さない。provider session 履歴も消さない</b>（あとで resume できる）。primary session の<b>ひも付けだけ</b>が項目と一緒に消える。</li>
+    <li><b>force（<code>--force</code>）は通常削除とは別の明示確認</b>。未コミット変更が消える / untracked file が消える、を判断材料にする。</li>
+    <li><b>dirty のファイル一覧・件数は出さない</b>。必要なら Changes / Files / Git CLI で事前確認できる。</li>
+    <li><b>open PR は完全なブロックにしない</b>。続行の明示意思があれば消せる。PR と branch は残る。誤削除の復帰は <code>F42</code>。</li>
+    <li><b>その worktree で生きているプロセスがある間は削除しない</b>（active session が代表例）。先に停止が必要。最終判定は削除の直前に OS へ問い合わせる（停止と削除を 1 フローにまとめるのは初期実装では扱わない）。</li>
+  </ul>
+</div>
+
+<div class="flow">
+  <h2>■ 判定フロー（どのダイアログが出るか）</h2>
+  <ol>
+    <li>削除操作を選ぶ。</li>
+    <li><b>active な session があれば → メニュー段階でブロック（ケース D）</b>。確認ダイアログまで進まない。<span class="ref">＝ detail step 2</span></li>
+    <li>そうでなく <b>open PR が分かっていれば → PR 警告付きの確認（ケース B）</b>。なければ <b>通常の確認（ケース A）</b>。<span class="ref">＝ detail step 3</span></li>
+    <li>確認 → <code>git worktree remove</code> を実行。<span class="ref">＝ detail step 4</span></li>
+    <li><b>dirty で拒否されたら → force 確認（ケース C）</b>。git の拒否を真実とし、こちらで dirty を先読みしない。<span class="ref">＝ detail step 5</span></li>
+    <li>成功 → 一覧から項目を消す。<span class="ref">＝ detail step 6–7</span></li>
+  </ol>
+</div>
+
+<!-- ===== 提案: 入口 ===== -->
+<div class="case">
+  <div class="case-title">提案: 削除の入口（︙オーバーフローメニュー）</div>
+  <div class="case-sub">カードに primary session があるとクリックで session 選択に取られるため、削除はカード右上の <b>︙</b>（ホバー / 選択時に表示）に逃がす。
+  押すとカードに固定された小さなメニュー（既存の action surface と同じ流儀）が開き、現状の項目は <code>Remove worktree…</code> の 1 つだけ。main worktree には ︙ を出さない（削除対象外）。</div>
+  <div class="row">
+    <div class="sidebar">
+      <div class="sidebar-cap">my-repo</div>
+      <!-- main worktree: 削除不可 → ︙なし -->
+      <div class="wt-card">
+        <div class="wt-summary">
+          <div class="wt-heading"><span class="wt-name"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6"/><circle cx="18" cy="6" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>main</span></div>
+          <div class="wt-hint">terminal</div>
+        </div>
+      </div>
+      <!-- task worktree（hover）: ︙メニューを開いた状態 -->
+      <div class="wt-card hovered">
+        <div class="wt-overflow" title="More actions">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>
+        </div>
+        <div class="wt-summary">
+          <div class="wt-heading"><span class="wt-name"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6"/><circle cx="18" cy="6" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>feature/search-streaming</span></div>
+          <div class="wt-session-row"><span class="wt-dot claude"></span><span class="wt-preview">stream results as they arrive</span></div>
+        </div>
+        <div class="wt-menu">
+          <button><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>Remove worktree…</button>
+        </div>
+      </div>
+      <!-- task worktree（通常） -->
+      <div class="wt-card">
+        <div class="wt-summary">
+          <div class="wt-heading"><span class="wt-name"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6"/><circle cx="18" cy="6" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>fix/login-redirect</span><span class="gh-badge open"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 9v12M18 9v3a6 6 0 0 1-6 6h-3"/></svg>Open #128</span></div>
+          <div class="wt-session-row"><span class="wt-dot claude"></span><span class="wt-preview">guard the redirect param</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="hint">右クリック（context menu）でも同じメニューを出せると速い。初期実装では ︙ だけでもよい。「…」は確認ダイアログが続くサイン。</p>
+  </div>
+</div>
+
+<!-- ===== ケース A: 通常 ===== -->
+<div class="case">
+  <div class="case-title">ケース A: 通常削除（clean・PR なし・active session なし）</div>
+  <div class="case-sub">何が消えて何が残るかだけを淡々と。脅し要素はなし。</div>
+  <div class="stage">
+    <div class="dlg">
+      <div class="dlg-head">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+        Remove worktree
+      </div>
+      <div class="dlg-body">
+        <div class="dlg-target">
+          <span class="name"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6"/><circle cx="18" cy="6" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>feature/search-streaming</span>
+          <span class="dir" title="~/code/my-repo/.worktrees/search-streaming">~/code/my-repo/.worktrees/search-streaming</span>
+        </div>
+        <p class="dlg-text">Removes the <b>worktree directory</b> and its entry from this list. The <b>branch</b> and <b>session history</b> are kept — you can resume them later.</p>
+      </div>
+      <div class="dlg-foot">
+        <button class="btn ghost">Cancel</button>
+        <button class="btn danger">Remove</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== ケース B: open PR ===== -->
+<div class="case">
+  <div class="case-title">ケース B: open PR がある（ブロックせず、続行の明示意思を求める）</div>
+  <div class="case-sub">PR バッジを引き継いで「PR と branch は残る／Yuru 上の追跡だけ失う」を伝える。主ボタンは <b>Remove anyway</b>。</div>
+  <div class="stage">
+    <div class="dlg">
+      <div class="dlg-head">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+        Remove worktree
+      </div>
+      <div class="dlg-body">
+        <div class="dlg-target">
+          <span class="name"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6"/><circle cx="18" cy="6" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>fix/login-redirect</span>
+          <span class="gh-badge open"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 9v12M18 9v3a6 6 0 0 1-6 6h-3"/></svg>Open #128</span>
+        </div>
+        <div class="note pr">
+          This worktree has an <b>open pull request</b>. Removing it won't touch the PR or the branch — but you'll lose the link to this work in Yuru.
+        </div>
+        <p class="dlg-text" style="margin-top:12px">Removes the worktree and its list entry. The <b>PR</b>, <b>branch</b>, and <b>session history</b> are kept.</p>
+      </div>
+      <div class="dlg-foot">
+        <button class="btn ghost">Cancel</button>
+        <button class="btn danger">Remove anyway</button>
+      </div>
+    </div>
+  </div>
+  <p class="hint">PR 情報は provider（GitHub 等）から取れた時だけ使う。remote/local branch から PR を推測しない。</p>
+</div>
+
+<!-- ===== ケース C: force ===== -->
+<div class="case">
+  <div class="case-title">ケース C: force 削除（通常削除が dirty で拒否された後）</div>
+  <div class="case-sub">A / B で Remove を押した直後、git に拒否されて初めて出る 2 段目。強さはヘッダと文言で出し、ボタンは A / B と同じ danger（<b>Force remove</b>）。</div>
+  <div class="stage">
+    <div class="dlg">
+      <div class="dlg-head danger">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
+        Force remove worktree
+      </div>
+      <div class="dlg-body">
+        <div class="dlg-target">
+          <span class="name"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6"/><circle cx="18" cy="6" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>feature/search-streaming</span>
+          <span class="dir" title="~/code/my-repo/.worktrees/search-streaming">~/code/my-repo/.worktrees/search-streaming</span>
+        </div>
+        <div class="note force">
+          This worktree has <b>uncommitted work</b>, so a normal remove was refused. Forcing will throw it away.
+        </div>
+        <p class="dlg-text" style="margin-top:12px"><b>Uncommitted changes and untracked files will be discarded.</b> The <b>branch</b> and <b>session history</b> are kept.</p>
+      </div>
+      <div class="dlg-foot">
+        <button class="btn ghost">Cancel</button>
+        <button class="btn danger">Force remove</button>
+      </div>
+    </div>
+  </div>
+  <p class="hint">ファイル名・件数は出さない。中身を見たいなら Cancel して Changes / Files / Git CLI で確認できる。</p>
+</div>
+
+<!-- ===== ケース D: 生きているプロセスがある（メニュー段階で簡素にブロック） ===== -->
+<div class="case">
+  <div class="case-title">ケース D: 生きているプロセスがある（削除させない・モーダルは出さない）</div>
+  <div class="case-sub">大半は active session で、Yuru がメニュー時点で把握している。だから専用モーダルは出さず、メニューの <code>Remove worktree…</code> を<b>無効化して理由だけ添える</b>。確認ダイアログまで進ませない。</div>
+  <div class="row">
+    <div class="sidebar">
+      <div class="sidebar-cap">my-repo</div>
+      <div class="wt-card hovered">
+        <div class="wt-overflow" title="More actions">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>
+        </div>
+        <div class="wt-summary">
+          <div class="wt-heading"><span class="wt-name"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6"/><circle cx="18" cy="6" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>feature/search-streaming</span></div>
+          <div class="wt-session-row"><span class="wt-dot claude running"></span><span class="wt-preview">working…</span></div>
+        </div>
+        <div class="wt-menu">
+          <button disabled><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>Remove worktree…</button>
+          <div class="wt-menu-reason">Stop the running session first</div>
+        </div>
+      </div>
+    </div>
+    <p class="hint">Yuru が知らない裏のプロセスやレースで<b>削除直前に</b>判明した時だけ、確認ダイアログの中身を同じ一文（Stop it first）に差し替える。専用の「Got it」モーダルは持たない。</p>
+  </div>
+</div>
+
+</body>
+</html>
