@@ -213,6 +213,10 @@ function registerIpcHandlers(): void {
     },
   );
 
+  ipcMain.handle("worktree:remove", (_event, worktreeId: string, force: boolean) => {
+    return service.removeWorktree(worktreeId, force);
+  });
+
   ipcMain.handle("shell:openExternal", (_event, url: string) => {
     return service.openExternal(url);
   });

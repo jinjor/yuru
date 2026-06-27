@@ -26,9 +26,12 @@ import {
   getGitPathStates as loadGitPathStates,
   getHeadSha,
   isSupportedGitRepo,
+  isWorktreeDirty,
   listWorktrees,
   removeWorktree as removeGitWorktree,
+  removeWorktreeForce as removeGitWorktreeForce,
 } from "./git.js";
+import { hasLiveProcessInWorktree } from "./worktree-process-check.js";
 import { getGitHubPullRequestForBranch } from "./github.js";
 import {
   listAllFiles as listAllRepoFiles,
@@ -63,6 +66,7 @@ import {
   type GitDiffScope,
   type Result,
   type TerminalRuntimeActivityState,
+  type WorktreeRemovalOutcome,
   type WorktreeSessionSelection,
 } from "../shared/ipc.js";
 import {
@@ -497,6 +501,47 @@ export class YuruService {
         ? fail<WorktreeSessionSelection>(appError)
         : this.failAndReport<WorktreeSessionSelection>(appError);
     }
+  }
+
+  // 削除フローは renderer 側が確認ダイアログを出し分け、実行直前のチェックと git 削除をここで行う。
+  // 生プロセスがいれば削除せず process_alive を、通常削除が dirty で拒否されたら dirty を返し、
+  // どちらも確認ダイアログの差し替えに使う (→ docs/backlog-details/F41-worktree-removal.md)。
+  async removeWorktree(
+    worktreeId: string,
+    force: boolean,
+  ): Promise<Result<WorktreeRemovalOutcome>> {
+    const worktree = await this.findGitWorktree(worktreeId);
+    if (!worktree) {
+      return this.failAndReport<WorktreeRemovalOutcome>({
+        code: "unknown",
+        message: "This worktree no longer exists.",
+      });
+    }
+
+    if (await hasLiveProcessInWorktree(worktree.worktreePath, worktree.repoPath)) {
+      return ok({ status: "process_alive" });
+    }
+
+    try {
+      if (force) {
+        await removeGitWorktreeForce(worktree.repoPath, worktree.worktreePath);
+      } else {
+        await removeGitWorktree(worktree.repoPath, worktree.worktreePath);
+      }
+    } catch (error) {
+      if (!force && (await isWorktreeDirty(worktree.worktreePath))) {
+        return ok({ status: "dirty" });
+      }
+      return this.failAndReport<WorktreeRemovalOutcome>(toAppError(error, { command: "git" }));
+    }
+
+    // worktree ディレクトリが消えた以上、そこに紐づく file 監視と進行中の code 検索はもう無効。
+    // 消えたパスを指したまま残さないようここで止める。
+    this.cancelActiveCodeSearch(worktreeId);
+    this.fileTreeWatcher.clearWorktree(worktreeId);
+
+    removeTaskWorktreeByPath(worktree.worktreePath);
+    return ok({ status: "removed" });
   }
 
   async openExternal(url: string): Promise<void> {

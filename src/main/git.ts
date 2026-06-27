@@ -309,3 +309,14 @@ export async function createWorktree(
 export async function removeWorktree(repoPath: string, worktreePath: string): Promise<void> {
   await exec("git", ["worktree", "remove", worktreePath], repoPath);
 }
+
+// 未コミット変更や untracked file があると `git worktree remove` は拒否する。`--force` でそれらを捨てて消す。
+export async function removeWorktreeForce(repoPath: string, worktreePath: string): Promise<void> {
+  await exec("git", ["worktree", "remove", "--force", worktreePath], repoPath);
+}
+
+// 通常削除が拒否された理由が dirty かを git 自身の status で判定する (拒否メッセージは読まない)。
+export async function isWorktreeDirty(worktreePath: string): Promise<boolean> {
+  const output = await exec("git", ["status", "--porcelain", "-uall"], worktreePath);
+  return output.trim().length > 0;
+}

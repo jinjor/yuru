@@ -20,6 +20,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke("worktreeTerminal:open", worktreeId),
   createWorktreeSession: (provider: SessionProvider, repoPath: string, branchName: string) =>
     ipcRenderer.invoke("session:createWorktree", provider, repoPath, branchName),
+  removeWorktree: (worktreeId: string, force: boolean) =>
+    ipcRenderer.invoke("worktree:remove", worktreeId, force),
   openExternal: (url: string) => ipcRenderer.invoke("shell:openExternal", url),
   getGitPathStates: (worktreeId: string) => ipcRenderer.invoke("git:pathStates", worktreeId),
   getGitDiffDocument: (worktreeId: string, filePath: string, scope?: GitDiffScope) =>

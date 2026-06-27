@@ -1,4 +1,4 @@
-import { GitBranch } from "lucide-react";
+import { GitBranch, MoreVertical, Trash2 } from "lucide-react";
 import {
   useEffect,
   useRef,
@@ -17,7 +17,12 @@ import type {
 } from "../../shared/metadata";
 import type { AgentActivityState, TerminalRuntimeId, SessionProvider } from "../../shared/session";
 import { providerLabel } from "../utils/session";
+import { worktreeLabelText } from "../utils/worktree";
 import { GitHubBadge } from "./GitHubBadge";
+
+// カードに固定された popover は、新規 session を選ぶ action surface と削除メニューの 2 種類。
+// 同時に開くのは 1 つだけなので、どの worktree のどちらが開いているかを 1 つの state で持つ。
+type OpenCardSurface = { worktreeId: string; kind: "actions" | "menu" };
 
 interface RepoListProps {
   repos: RepoListItem[];
@@ -30,6 +35,7 @@ interface RepoListProps {
   onResumeSuggestedSession: (worktreeId: string, providerSessionKey: string) => void;
   onCreateSessionForWorktree: (worktreeId: string, provider: SessionProvider) => void;
   onOpenWorktreeTerminal: (worktreeId: string) => void;
+  onRequestRemoveWorktree: (worktreeId: string) => void;
 }
 
 export function RepoList({
@@ -43,12 +49,13 @@ export function RepoList({
   onResumeSuggestedSession,
   onCreateSessionForWorktree,
   onOpenWorktreeTerminal,
+  onRequestRemoveWorktree,
 }: RepoListProps) {
   const listRef = useRef<HTMLDivElement>(null);
-  const [openActionWorktreeId, setOpenActionWorktreeId] = useState<string | null>(null);
+  const [openSurface, setOpenSurface] = useState<OpenCardSurface | null>(null);
 
   useEffect(() => {
-    if (!openActionWorktreeId) {
+    if (!openSurface) {
       return;
     }
 
@@ -56,21 +63,21 @@ export function RepoList({
       if (listRef.current?.contains(event.target as Node)) {
         return;
       }
-      setOpenActionWorktreeId(null);
+      setOpenSurface(null);
     };
 
     window.addEventListener("pointerdown", handlePointerDown);
     return () => {
       window.removeEventListener("pointerdown", handlePointerDown);
     };
-  }, [openActionWorktreeId]);
+  }, [openSurface]);
 
   if (repos.length === 0) {
     return <div className="repo-list-empty">No repositories</div>;
   }
 
   return (
-    <div ref={listRef} className="repo-list" onClick={() => setOpenActionWorktreeId(null)}>
+    <div ref={listRef} className="repo-list" onClick={() => setOpenSurface(null)}>
       {repos.map((repo) => (
         <div key={repo.id} className="repo-group">
           <div className="repo-row" title={repo.repoPath}>
@@ -95,13 +102,16 @@ export function RepoList({
               providers={providers}
               selectedWorktreeId={selectedWorktreeId}
               isActionSurfaceOpen={false}
-              onCloseActionSurface={() => setOpenActionWorktreeId(null)}
+              isMenuOpen={false}
+              onCloseSurface={() => setOpenSurface(null)}
               onToggleActionSurface={() => undefined}
+              onToggleMenu={() => undefined}
               onSelectActiveSession={onSelectActiveSession}
               onResumePrimarySession={onResumePrimarySession}
               onResumeSuggestedSession={onResumeSuggestedSession}
               onCreateSessionForWorktree={onCreateSessionForWorktree}
               onOpenWorktreeTerminal={onOpenWorktreeTerminal}
+              onRequestRemoveWorktree={onRequestRemoveWorktree}
             />
             {repo.taskWorktrees.map((taskWorktree) => (
               <WorktreeCard
@@ -110,11 +120,26 @@ export function RepoList({
                 activityStates={activityStates}
                 providers={providers}
                 selectedWorktreeId={selectedWorktreeId}
-                isActionSurfaceOpen={openActionWorktreeId === taskWorktree.worktreeId}
-                onCloseActionSurface={() => setOpenActionWorktreeId(null)}
+                isActionSurfaceOpen={
+                  openSurface?.worktreeId === taskWorktree.worktreeId &&
+                  openSurface.kind === "actions"
+                }
+                isMenuOpen={
+                  openSurface?.worktreeId === taskWorktree.worktreeId && openSurface.kind === "menu"
+                }
+                onCloseSurface={() => setOpenSurface(null)}
                 onToggleActionSurface={() => {
-                  setOpenActionWorktreeId((prev) =>
-                    prev === taskWorktree.worktreeId ? null : taskWorktree.worktreeId,
+                  setOpenSurface((prev) =>
+                    prev?.worktreeId === taskWorktree.worktreeId && prev.kind === "actions"
+                      ? null
+                      : { worktreeId: taskWorktree.worktreeId, kind: "actions" },
+                  );
+                }}
+                onToggleMenu={() => {
+                  setOpenSurface((prev) =>
+                    prev?.worktreeId === taskWorktree.worktreeId && prev.kind === "menu"
+                      ? null
+                      : { worktreeId: taskWorktree.worktreeId, kind: "menu" },
                   );
                 }}
                 onSelectActiveSession={onSelectActiveSession}
@@ -122,6 +147,7 @@ export function RepoList({
                 onResumeSuggestedSession={onResumeSuggestedSession}
                 onCreateSessionForWorktree={onCreateSessionForWorktree}
                 onOpenWorktreeTerminal={onOpenWorktreeTerminal}
+                onRequestRemoveWorktree={onRequestRemoveWorktree}
               />
             ))}
           </div>
@@ -137,13 +163,16 @@ interface WorktreeCardProps {
   providers: AgentDefinition[];
   selectedWorktreeId: string | null;
   isActionSurfaceOpen: boolean;
-  onCloseActionSurface: () => void;
+  isMenuOpen: boolean;
+  onCloseSurface: () => void;
   onToggleActionSurface: () => void;
+  onToggleMenu: () => void;
   onSelectActiveSession: (worktreeId: string, terminalRuntimeId: TerminalRuntimeId) => void;
   onResumePrimarySession: (worktreeId: string, providerSessionKey: string) => void;
   onResumeSuggestedSession: (worktreeId: string, providerSessionKey: string) => void;
   onCreateSessionForWorktree: (worktreeId: string, provider: SessionProvider) => void;
   onOpenWorktreeTerminal: (worktreeId: string) => void;
+  onRequestRemoveWorktree: (worktreeId: string) => void;
 }
 
 function WorktreeCard({
@@ -152,18 +181,27 @@ function WorktreeCard({
   providers,
   selectedWorktreeId,
   isActionSurfaceOpen,
-  onCloseActionSurface,
+  isMenuOpen,
+  onCloseSurface,
   onToggleActionSurface,
+  onToggleMenu,
   onSelectActiveSession,
   onResumePrimarySession,
   onResumeSuggestedSession,
   onCreateSessionForWorktree,
   onOpenWorktreeTerminal,
+  onRequestRemoveWorktree,
 }: WorktreeCardProps) {
   const { primarySession, suggestedSessions } = worktree;
   const isSelected = selectedWorktreeId === worktree.worktreeId;
   const isPrimarySessionActive = isSelected || primarySession?.state === "active";
   const opensStandaloneTerminal = worktree.isMainWorktree === true;
+  // main worktree は削除対象外。task worktree にだけ ︙ メニューを出す。
+  const showOverflowMenu = !opensStandaloneTerminal;
+  // 追跡中の session (primary / suggested) が active な間は削除させない (メニュー段階でブロック)。
+  const hasActiveSession =
+    primarySession?.state === "active" ||
+    suggestedSessions.some((session) => session.state === "active");
 
   const selectPrimarySession = () => {
     if (!primarySession) {
@@ -181,12 +219,12 @@ function WorktreeCard({
   const handleCardClick = (event: MouseEvent<HTMLDivElement>) => {
     event.stopPropagation();
     if (primarySession) {
-      onCloseActionSurface();
+      onCloseSurface();
       selectPrimarySession();
       return;
     }
     if (opensStandaloneTerminal) {
-      onCloseActionSurface();
+      onCloseSurface();
       onOpenWorktreeTerminal(worktree.worktreeId);
       return;
     }
@@ -199,12 +237,12 @@ function WorktreeCard({
     }
     event.preventDefault();
     if (primarySession) {
-      onCloseActionSurface();
+      onCloseSurface();
       selectPrimarySession();
       return;
     }
     if (opensStandaloneTerminal) {
-      onCloseActionSurface();
+      onCloseSurface();
       onOpenWorktreeTerminal(worktree.worktreeId);
       return;
     }
@@ -218,7 +256,7 @@ function WorktreeCard({
         primarySession ? "has-primary" : "no-primary",
         isPrimarySessionActive ? "active" : "inactive",
         isSelected ? "selected" : "",
-        isActionSurfaceOpen ? "action-open" : "",
+        isActionSurfaceOpen || isMenuOpen ? "action-open" : "",
       ].join(" ")}
       title={worktree.worktreePath}
       role="button"
@@ -226,6 +264,30 @@ function WorktreeCard({
       onClick={handleCardClick}
       onKeyDown={handleCardKeyDown}
     >
+      {showOverflowMenu && (
+        <button
+          type="button"
+          className="task-worktree-overflow"
+          title="More actions"
+          aria-label="More actions"
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleMenu();
+          }}
+        >
+          <MoreVertical size={15} strokeWidth={2} aria-hidden="true" />
+        </button>
+      )}
+      {isMenuOpen && (
+        <WorktreeCardMenu
+          hasActiveSession={hasActiveSession}
+          onRemove={() => {
+            onCloseSurface();
+            onRequestRemoveWorktree(worktree.worktreeId);
+          }}
+          onClick={(event) => event.stopPropagation()}
+        />
+      )}
       <div className="task-worktree-summary">
         <span className="task-worktree-heading">
           <span className="task-worktree-name" title={worktreeLabelText(worktree)}>
@@ -348,6 +410,32 @@ function TaskWorktreeActionSurface({
   );
 }
 
+interface WorktreeCardMenuProps {
+  hasActiveSession: boolean;
+  onRemove: () => void;
+  onClick: (event: MouseEvent<HTMLDivElement>) => void;
+}
+
+function WorktreeCardMenu({ hasActiveSession, onRemove, onClick }: WorktreeCardMenuProps) {
+  return (
+    <div className="task-worktree-menu" onClick={onClick}>
+      <button
+        type="button"
+        className="task-worktree-menu-item danger"
+        onClick={onRemove}
+        disabled={hasActiveSession}
+        title={hasActiveSession ? "Stop the running session first" : "Remove this worktree"}
+      >
+        <Trash2 size={14} strokeWidth={2} aria-hidden="true" />
+        Remove worktree…
+      </button>
+      {hasActiveSession && (
+        <div className="task-worktree-menu-reason">Stop the running session first</div>
+      )}
+    </div>
+  );
+}
+
 interface SuggestedSessionActionProps {
   suggestedSession: SuggestedSessionListItem;
   activityStates: ReadonlyMap<TerminalRuntimeId, AgentActivityState>;
@@ -434,16 +522,6 @@ function SessionProviderDot({ kind, provider, state, activityState }: SessionPro
       aria-label={`${providerName} ${kindLabel} ${stateLabel}`}
     />
   );
-}
-
-function worktreeLabelText(worktree: WorktreeListItem): string {
-  if (!worktree.headSha) {
-    return "(no commits)";
-  }
-  if (worktree.branch) {
-    return worktree.branch;
-  }
-  return `detached @ ${worktree.headSha.slice(0, 7)}`;
 }
 
 function renderWorktreeLabel(worktree: WorktreeListItem): ReactNode {

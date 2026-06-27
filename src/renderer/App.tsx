@@ -12,6 +12,7 @@ import { type TerminalRuntimeId, type SessionProvider } from "../shared/session"
 import { BranchNameInput } from "./components/BranchNameInput";
 import { RepoList } from "./components/RepoList";
 import { SessionView } from "./components/SessionView";
+import { WorktreeRemovalDialog } from "./components/WorktreeRemovalDialog";
 import { useTerminalRuntimeActivityStates } from "./hooks/useTerminalRuntimeActivityStates";
 import { clamp } from "./utils/layout";
 
@@ -27,10 +28,12 @@ export function App() {
   } | null>(null);
   const [worktreeTarget, setWorktreeTarget] = useState<string | null>(null);
   const [worktreeError, setWorktreeError] = useState<string | null>(null);
+  const [removalTargetId, setRemovalTargetId] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(260);
   const selectedWorktreeId = selection?.worktreeId ?? null;
   const selectedTerminalRuntimeId = selection?.terminalRuntimeId ?? null;
   const selectedWorktree = findWorktree(repos, selectedWorktreeId);
+  const removalTarget = findWorktree(repos, removalTargetId);
   const activityStates = useTerminalRuntimeActivityStates(repos);
 
   const refreshRepos = useCallback(async (): Promise<RepoListItem[] | null> => {
@@ -199,6 +202,15 @@ export function App() {
     [refreshRepos],
   );
 
+  const handleWorktreeRemoved = useCallback(
+    (worktreeId: string): void => {
+      setRemovalTargetId(null);
+      setSelection((prev) => (prev?.worktreeId === worktreeId ? null : prev));
+      void refreshRepos();
+    },
+    [refreshRepos],
+  );
+
   const handleCreateWorktreeSession = useCallback(
     async (branchName: string, provider: SessionProvider): Promise<void> => {
       if (!worktreeTarget) {
@@ -254,6 +266,7 @@ export function App() {
             onResumeSuggestedSession={handleResumeSuggestedSession}
             onCreateSessionForWorktree={handleCreateSessionForWorktree}
             onOpenWorktreeTerminal={handleOpenWorktreeTerminal}
+            onRequestRemoveWorktree={setRemovalTargetId}
           />
         </div>
       </aside>
@@ -286,6 +299,14 @@ export function App() {
             setWorktreeTarget(null);
           }}
           error={worktreeError}
+        />
+      )}
+      {removalTarget && (
+        <WorktreeRemovalDialog
+          worktree={removalTarget}
+          topOffset={120}
+          onClose={() => setRemovalTargetId(null)}
+          onRemoved={handleWorktreeRemoved}
         />
       )}
     </div>

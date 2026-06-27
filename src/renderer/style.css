@@ -1662,3 +1662,238 @@ button.github-badge {
   color: #c79f52;
   font-weight: 600;
 }
+
+/* Worktree card overflow menu (removal entry) */
+.task-worktree-overflow {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-subtle);
+  background: rgba(17, 21, 29, 0.6);
+  border: 1px solid transparent;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.task-worktree-card:hover .task-worktree-overflow,
+.task-worktree-card.selected .task-worktree-overflow,
+.task-worktree-card.action-open .task-worktree-overflow {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.task-worktree-overflow:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+  border-color: var(--border);
+}
+
+.task-worktree-menu {
+  position: absolute;
+  top: 34px;
+  right: 7px;
+  z-index: 5;
+  min-width: 184px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.4);
+  padding: 5px;
+}
+
+.task-worktree-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--danger);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.task-worktree-menu-item:hover:not(:disabled) {
+  background: rgba(240, 143, 134, 0.12);
+}
+
+.task-worktree-menu-item:disabled {
+  color: var(--text-subtle);
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.task-worktree-menu-reason {
+  padding: 6px 9px 5px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-subtle);
+}
+
+/* Worktree removal confirmation dialog */
+.removal-dialog {
+  width: 430px;
+  max-width: 100%;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+}
+
+.removal-dialog-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 14px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+
+.removal-dialog-head svg {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.removal-dialog-head.danger svg {
+  color: var(--danger);
+}
+
+.removal-dialog-body {
+  padding: 16px 18px;
+}
+
+.removal-target {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-app);
+  margin-bottom: 14px;
+}
+
+.removal-target-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.removal-target-name svg {
+  color: var(--text-subtle);
+}
+
+.removal-target-dir {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-subtle);
+  font-size: 11px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.removal-text {
+  margin: 0;
+  line-height: 1.65;
+  color: var(--text-muted);
+}
+
+.removal-text b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.removal-note {
+  border-radius: 8px;
+  padding: 11px 13px;
+  margin: 0 0 12px;
+  line-height: 1.65;
+  font-size: 12px;
+}
+
+.removal-note.pr {
+  border: 1px solid rgba(122, 215, 161, 0.3);
+  background: rgba(59, 122, 81, 0.12);
+  color: var(--text);
+}
+
+.removal-note.pr b {
+  color: #aee9c2;
+}
+
+.removal-note.force {
+  border: 1px solid var(--danger);
+  background: rgba(240, 143, 134, 0.1);
+  color: var(--text);
+}
+
+.removal-note.force b {
+  color: #fff;
+}
+
+.removal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 13px 18px;
+  border-top: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.removal-btn {
+  padding: 7px 15px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text);
+}
+
+.removal-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.removal-btn.ghost {
+  color: var(--text-muted);
+}
+
+.removal-btn.ghost:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.removal-btn.danger {
+  border-color: rgba(240, 143, 134, 0.55);
+  background: rgba(240, 143, 134, 0.16);
+  color: #ffd2cc;
+}
+
+.removal-btn.danger:hover:not(:disabled) {
+  background: rgba(240, 143, 134, 0.26);
+}

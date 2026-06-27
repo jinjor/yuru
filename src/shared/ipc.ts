@@ -105,6 +105,16 @@ export interface WorktreeSessionSelection {
   terminalRuntimeId: TerminalRuntimeId;
 }
 
+// task worktree 削除の結果。エラーではない分岐 (削除直前のプロセスチェック / dirty 拒否) を
+// 確認ダイアログの差し替えに使うため、成功・ブロック理由を data として返す。
+export type WorktreeRemovalOutcome =
+  // worktree を削除し、一覧から項目を消した
+  | { status: "removed" }
+  // 生きたプロセスがあり削除しなかった (先に止める必要がある)
+  | { status: "process_alive" }
+  // dirty で通常削除が拒否された (force 確認が必要。force=false のときだけ返る)
+  | { status: "dirty" };
+
 export interface TerminalRuntimeActivityState {
   terminalRuntimeId: TerminalRuntimeId;
   activityState: AgentActivityState;
@@ -137,6 +147,7 @@ export interface ElectronAPI {
     repoPath: string,
     branchName: string,
   ) => Promise<Result<WorktreeSessionSelection>>;
+  removeWorktree: (worktreeId: string, force: boolean) => Promise<Result<WorktreeRemovalOutcome>>;
   openExternal: (url: string) => Promise<void>;
   getGitPathStates: (worktreeId: string) => Promise<Result<GitPathState[]>>;
   getGitDiffDocument: (
