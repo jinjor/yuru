@@ -26,7 +26,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 
 | ID | Type | Area | Item | Why now |
 |---|---|---|---|---|
-| F41 | feature | Worktrees | task worktree を削除できるようにする | 詳細: docs/backlog-details/F41-worktree-removal.md |
 | F42 | feature | Worktrees | remote branch から task worktree を作れるようにする | 他人や別環境で作った branch を Yuru の作業単位として開きたい |
 | F11 | feature | Diff | GitHub review のようにファイルごとに差分を確認済みにできるようにする | 大きめの差分で、どのファイルを見終わったかを失わずに確認したい |
 | F20 | feature | App | アプリのアイコンを付ける | テンションとプロダクト感を上げたい |
