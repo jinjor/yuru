@@ -1725,23 +1725,8 @@ button.github-badge {
   cursor: pointer;
 }
 
-.task-worktree-menu-item:hover:not(:disabled) {
+.task-worktree-menu-item:hover {
   background: rgba(240, 143, 134, 0.12);
-}
-
-.task-worktree-menu-item:disabled {
-  color: var(--text-subtle);
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.task-worktree-menu-reason {
-  padding: 6px 9px 5px;
-  margin-top: 4px;
-  border-top: 1px solid var(--border);
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--text-subtle);
 }
 
 /* Worktree removal confirmation dialog */

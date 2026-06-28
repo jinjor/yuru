@@ -503,9 +503,10 @@ export class YuruService {
     }
   }
 
-  // 削除フローは renderer 側が確認ダイアログを出し分け、実行直前のチェックと git 削除をここで行う。
-  // 生プロセスがいれば削除せず process_alive を、通常削除が dirty で拒否されたら dirty を返し、
-  // どちらも確認ダイアログの差し替えに使う (→ docs/backlog-details/F41-worktree-removal.md)。
+  // 削除フローは renderer 側が確認ダイアログを出し分け、実行直前の処理と git 削除をここで行う。
+  // Yuru が起動したセッションはこの worktree と運命を共にするので先に止める。残った Yuru 管理外の
+  // プロセスは勝手に kill できないので、見つかったら止めずに process_alive を返して警告に使う。
+  // 通常削除が dirty で拒否されたら dirty を返す。どちらも確認ダイアログの差し替えに使う。
   async removeWorktree(
     worktreeId: string,
     force: boolean,
@@ -517,6 +518,8 @@ export class YuruService {
         message: "This worktree no longer exists.",
       });
     }
+
+    await this.stopTerminalRuntimesForWorktree(worktree.worktreePath);
 
     if (await hasLiveProcessInWorktree(worktree.worktreePath, worktree.repoPath)) {
       return ok({ status: "process_alive" });
@@ -906,6 +909,24 @@ export class YuruService {
       worktreePath: pending.worktreePath,
       startedAt: pending.startedAt,
     });
+  }
+
+  // この worktree で Yuru が起動したセッション / standalone terminal を止める。kill すると pty の
+  // onExit が走り runtime の state も片付く。worktree 削除前に呼ぶことで、cwd を握る Yuru 製プロセスを
+  // 消してから生プロセスチェックにかけられる (チェックに残るのは Yuru 管理外のものだけになる)。
+  private async stopTerminalRuntimesForWorktree(worktreePath: string): Promise<void> {
+    const worktreePathKey = path.resolve(worktreePath);
+    const procs: pty.IPty[] = [];
+    for (const [terminalRuntimeId, info] of this.terminalRuntimeMap) {
+      if (path.resolve(info.worktreePath) !== worktreePathKey) {
+        continue;
+      }
+      const proc = this.ptyProcesses.get(terminalRuntimeId);
+      if (proc) {
+        procs.push(proc);
+      }
+    }
+    await Promise.all(procs.map((proc) => killPtyAndWait(proc)));
   }
 
   private findStandaloneTerminalRuntimeId(worktreePath: string): string | null {

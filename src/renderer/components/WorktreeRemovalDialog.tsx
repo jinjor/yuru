@@ -11,9 +11,9 @@ interface WorktreeRemovalDialogProps {
   onRemoved: (worktreeId: string) => void;
 }
 
-// 削除フロー (→ docs/backlog-details/F41-worktree-removal.md) の確認ダイアログ。
-// 通常 (A) / open PR 警告付き (B) / force (C) を出し分け、削除直前のチェックで生プロセスが
-// 判明したときは新しいモーダルを開かず本文をブロック表示に差し替える。
+// 削除フローの確認ダイアログ。通常 (A) / open PR 警告付き (B) / force (C) を出し分ける。
+// Yuru が起動したセッションは削除時に自動で止まるが、Yuru 管理外のプロセスが worktree を握って
+// いるときは止められないので、新しいモーダルを開かず本文をブロック表示に差し替える。
 export function WorktreeRemovalDialog({
   worktree,
   topOffset,

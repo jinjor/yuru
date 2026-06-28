@@ -198,10 +198,6 @@ function WorktreeCard({
   const opensStandaloneTerminal = worktree.isMainWorktree === true;
   // main worktree は削除対象外。task worktree にだけ ︙ メニューを出す。
   const showOverflowMenu = !opensStandaloneTerminal;
-  // 追跡中の session (primary / suggested) が active な間は削除させない (メニュー段階でブロック)。
-  const hasActiveSession =
-    primarySession?.state === "active" ||
-    suggestedSessions.some((session) => session.state === "active");
 
   const selectPrimarySession = () => {
     if (!primarySession) {
@@ -280,7 +276,6 @@ function WorktreeCard({
       )}
       {isMenuOpen && (
         <WorktreeCardMenu
-          hasActiveSession={hasActiveSession}
           onRemove={() => {
             onCloseSurface();
             onRequestRemoveWorktree(worktree.worktreeId);
@@ -411,27 +406,22 @@ function TaskWorktreeActionSurface({
 }
 
 interface WorktreeCardMenuProps {
-  hasActiveSession: boolean;
   onRemove: () => void;
   onClick: (event: MouseEvent<HTMLDivElement>) => void;
 }
 
-function WorktreeCardMenu({ hasActiveSession, onRemove, onClick }: WorktreeCardMenuProps) {
+function WorktreeCardMenu({ onRemove, onClick }: WorktreeCardMenuProps) {
   return (
     <div className="task-worktree-menu" onClick={onClick}>
       <button
         type="button"
         className="task-worktree-menu-item danger"
         onClick={onRemove}
-        disabled={hasActiveSession}
-        title={hasActiveSession ? "Stop the running session first" : "Remove this worktree"}
+        title="Remove this worktree"
       >
         <Trash2 size={14} strokeWidth={2} aria-hidden="true" />
         Remove worktree…
       </button>
-      {hasActiveSession && (
-        <div className="task-worktree-menu-reason">Stop the running session first</div>
-      )}
     </div>
   );
 }
