@@ -7,5 +7,5 @@ export interface PreviewSelection {
   scope?: GitDiffScope;
 }
 
-// 将来プレビューを 3 つ目に足せるよう union にする (edit: boolean の二値にはしない)。
-export type FileViewMode = "view" | "edit";
+// preview は markdown ファイルのときだけ選べる描画プレビュー。閲覧 (view)・編集 (edit) と排他。
+export type FileViewMode = "preview" | "view" | "edit";

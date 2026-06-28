@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { diffArrays } from "diff";
-import type { GitDiffDocument, GitDiffScope, GitLineStat } from "../../shared/ipc";
+import type { GitDiffDocument, GitDiffScope } from "../../shared/ipc";
 import type { FileViewMode } from "../types";
 import { computeLineChanges } from "./CodeEditor/lineChanges";
 import { SourceViewer, type SourceLine } from "./SourceViewer";
@@ -9,6 +9,14 @@ import { PreviewHeader } from "./PreviewHeader";
 import { resultDataOrNull } from "../utils/result";
 
 const EditModeEditor = lazy(() => import("./CodeEditor/EditModeEditor"));
+const MarkdownPreview = lazy(() => import("./MarkdownPreview"));
+
+const markdownExtensions = new Set(["md", "markdown"]);
+
+function isMarkdownPath(path: string): boolean {
+  const ext = path.split(".").pop()?.toLowerCase();
+  return ext ? markdownExtensions.has(ext) : false;
+}
 
 function isPageVisible(): boolean {
   return document.visibilityState === "visible";
@@ -36,14 +44,16 @@ export function DiffPreviewPanel({
   const [diffDocument, setDiffDocument] = useState<GitDiffDocument | null>(null);
   const [isLoadingDiff, setIsLoadingDiff] = useState(false);
   const [lines, setLines] = useState<SourceLine[]>([]);
-  const [mode, setMode] = useState<FileViewMode>("view");
+  // markdown はプレビューを既定にし、それ以外は閲覧を既定にする。
+  const isMarkdown = isMarkdownPath(path);
+  const [mode, setMode] = useState<FileViewMode>(isMarkdown ? "preview" : "view");
 
-  // ファイルが変わったら閲覧モードに戻す。パネルは再マウントしたくない (前の diff を出し続けて
+  // ファイルが変わったら既定モードに戻す。パネルは再マウントしたくない (前の diff を出し続けて
   // チラつきを防ぐため key にしていない) ので、effect ではなく描画中に直接調整する React の方式。
   const [prevPath, setPrevPath] = useState(path);
   if (path !== prevPath) {
     setPrevPath(path);
-    setMode("view");
+    setMode(isMarkdown ? "preview" : "view");
   }
 
   // While a new file's diff is being fetched, `diffDocument` still holds the
@@ -66,12 +76,31 @@ export function DiffPreviewPanel({
       : undefined;
   const canEdit = diffDocument !== null && diffDocument.path === path && !editDisabledReason;
   const isEditing = mode === "edit" && canEdit;
-  // ヘッダの +/- はポーリング中の diff から算出する (編集中の数値は autosave 後に追従する)。
-  const headerLineStat = useMemo<GitLineStat>(
+  // ヘッダの +/- と、プレビューで変更ブロックに印を付けるための変更行を 1 回の計算から導く。
+  // (編集中の数値は autosave 後に追従する)。
+  const lineChanges = useMemo(
     () =>
-      computeLineChanges((originalContent ?? "").split("\n"), (currentContent ?? "").split("\n"))
-        .stat,
+      computeLineChanges((originalContent ?? "").split("\n"), (currentContent ?? "").split("\n")),
     [originalContent, currentContent],
+  );
+  const headerLineStat = lineChanges.stat;
+  // プレビューは現在の内容を描画するので、追加 (緑) 側は行に印を付けられる。削除は中身を出せない
+  // ので、純粋な削除箇所だけ位置マーカーとして渡す。
+  const changedLines = useMemo(() => {
+    const set = new Set<number>();
+    for (const mark of lineChanges.marks) {
+      if (mark.kind === "added") {
+        set.add(mark.line);
+      }
+    }
+    return set;
+  }, [lineChanges]);
+  const deletions = useMemo(
+    () =>
+      lineChanges.marks
+        .filter((mark) => mark.kind === "deleted" || mark.kind === "deleted-end")
+        .map((mark) => ({ line: mark.line, atEnd: mark.kind === "deleted-end" })),
+    [lineChanges],
   );
 
   useEffect(() => {
@@ -147,6 +176,7 @@ export function DiffPreviewPanel({
         path={displayPath}
         mode={mode}
         onModeChange={setMode}
+        showPreview={isMarkdown}
         canEdit={canEdit}
         editDisabledReason={editDisabledReason}
         lineStat={headerLineStat}
@@ -166,6 +196,20 @@ export function DiffPreviewPanel({
             }
           >
             <EditModeEditor key={path} worktreeId={worktreeId} path={path} />
+          </Suspense>
+        ) : mode === "preview" ? (
+          <Suspense
+            fallback={
+              <div className="code-panel-empty">
+                <p>Loading preview…</p>
+              </div>
+            }
+          >
+            <MarkdownPreview
+              content={currentContent ?? ""}
+              changedLines={changedLines}
+              deletions={deletions}
+            />
           </Suspense>
         ) : isBinary ? (
           <div className="code-panel-empty">

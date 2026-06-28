@@ -1,4 +1,4 @@
-import { Eye, Pencil, X } from "lucide-react";
+import { BookOpen, Eye, Pencil, X } from "lucide-react";
 import type { GitLineStat } from "../../shared/ipc";
 import type { FileViewMode } from "../types";
 import { LineStatLabel } from "./LineStatLabel";
@@ -8,6 +8,8 @@ interface PreviewHeaderProps {
   path: string;
   mode: FileViewMode;
   onModeChange: (mode: FileViewMode) => void;
+  // markdown のときだけ閲覧の左にプレビューモードを出す。
+  showPreview: boolean;
   canEdit: boolean;
   // canEdit が false のときに編集アイコンへ出す理由 (tooltip)。
   editDisabledReason?: string;
@@ -27,6 +29,7 @@ export function PreviewHeader({
   path,
   mode,
   onModeChange,
+  showPreview,
   canEdit,
   editDisabledReason,
   lineStat,
@@ -45,6 +48,17 @@ export function PreviewHeader({
         )}
       </div>
       <div className="preview-mode-segment" role="group" aria-label="View mode">
+        {showPreview && (
+          <button
+            type="button"
+            className={`preview-mode-btn ${mode === "preview" ? "active" : ""}`}
+            onClick={() => onModeChange("preview")}
+            aria-pressed={mode === "preview"}
+            title="Preview"
+          >
+            <BookOpen size={15} strokeWidth={2} />
+          </button>
+        )}
         <button
           type="button"
           className={`preview-mode-btn ${mode === "view" ? "active" : ""}`}
