@@ -24,6 +24,24 @@ test("createTerminalEnv は既存の COLORTERM を維持する", () => {
   assert.equal(env.COLORTERM, "24bit");
 });
 
+test("createTerminalEnv は親の Claude セッションの子セッションマーカーを渡さない", () => {
+  const env = createTerminalEnv({
+    HOME: "/tmp/example",
+    CLAUDECODE: "1",
+    CLAUDE_CODE_CHILD_SESSION: "1",
+    CLAUDE_CODE_ENTRYPOINT: "cli",
+    CLAUDE_CODE_SESSION_ID: "parent-session",
+    CLAUDE_CODE_EXECPATH: "/parent/claude",
+  });
+
+  assert.equal(env.HOME, "/tmp/example");
+  assert.equal(env.CLAUDECODE, undefined);
+  assert.equal(env.CLAUDE_CODE_CHILD_SESSION, undefined);
+  assert.equal(env.CLAUDE_CODE_ENTRYPOINT, undefined);
+  assert.equal(env.CLAUDE_CODE_SESSION_ID, undefined);
+  assert.equal(env.CLAUDE_CODE_EXECPATH, undefined);
+});
+
 test("createTerminalEnv は Codex 起動時に親の Codex thread/session 情報を渡さない", () => {
   const env = createTerminalEnv(
     {
