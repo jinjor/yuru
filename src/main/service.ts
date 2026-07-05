@@ -13,11 +13,7 @@ import {
   upsertTaskWorktree,
 } from "./metadata.js";
 import { loadRepoList } from "./repo-list.js";
-import {
-  loadStoredSessionActivity,
-  loadStoredSessionPreviews,
-  loadSuggestedWorktreeSessions,
-} from "./sessions.js";
+import { loadStoredSessionPreviews, loadSuggestedWorktreeSessions } from "./sessions.js";
 import { toWorktreeId } from "./worktree-identity.js";
 import {
   branchExists,
@@ -88,6 +84,11 @@ import { buildShellStartupCommand, createInteractiveShellLaunchCommand } from ".
 const STARTUP_OUTPUT_LIMIT = 4000;
 const TERMINAL_SCROLLBACK_LIMIT = 200000;
 const OUTPUT_ACTIVE_GRACE_MS = 1500;
+// Focus, resize, and keystrokes make the agent's TUI repaint. That repaint is
+// real PTY output but a reaction to us poking the terminal, not the agent
+// working. So output arriving this soon after we write/resize is ignored; only
+// output the agent emits on its own (e.g. its spinner) counts as "working".
+const OUTPUT_REACTION_WINDOW_MS = 1000;
 // On shutdown we SIGHUP every PTY and wait for node-pty to finish reaping the
 // child before letting the process tear down; otherwise node-pty's native exit
 // callback fires during environment cleanup and aborts. If a child ignores
@@ -249,6 +250,7 @@ export class YuruService {
   private readonly ptyScrollback = new Map<string, string>();
   private readonly ptyAttachments = new Map<string, { ready: boolean; pendingChunks: string[] }>();
   private readonly terminalRuntimeLastOutputAt = new Map<string, number>();
+  private readonly terminalRuntimeLastInputAt = new Map<string, number>();
   private readonly pendingProcesses = new Set<pty.IPty>();
   private readonly terminalRuntimeMap = new Map<string, TerminalRuntimeInfo>();
   private readonly activeCodeSearches = new Map<string, AbortController>();
@@ -261,10 +263,8 @@ export class YuruService {
   }
 
   async getRepos() {
-    const [previewsByKey, agentActivityStates] = await Promise.all([
-      loadStoredSessionPreviews(),
-      this.loadAgentActivityStatesByTerminalRuntimeId(),
-    ]);
+    const previewsByKey = await loadStoredSessionPreviews();
+    const agentActivityStates = this.loadAgentActivityStatesByTerminalRuntimeId();
     return loadRepoList(
       this.getTerminalRuntimeIdsBySessionKey(),
       undefined,
@@ -279,7 +279,7 @@ export class YuruService {
   async getTerminalRuntimeActivityStates(
     terminalRuntimeIds: string[],
   ): Promise<TerminalRuntimeActivityState[]> {
-    const statesByTerminalRuntimeId = await this.loadAgentActivityStatesByTerminalRuntimeId(
+    const statesByTerminalRuntimeId = this.loadAgentActivityStatesByTerminalRuntimeId(
       new Set(terminalRuntimeIds),
     );
     return terminalRuntimeIds.flatMap((terminalRuntimeId) => {
@@ -697,6 +697,7 @@ export class YuruService {
     const proc = this.ptyProcesses.get(terminalRuntimeId);
     if (proc) {
       proc.write(data);
+      this.markTerminalRuntimeInput(terminalRuntimeId);
     }
   }
 
@@ -704,6 +705,7 @@ export class YuruService {
     const proc = this.ptyProcesses.get(terminalRuntimeId);
     if (proc) {
       proc.resize(cols, rows);
+      this.markTerminalRuntimeInput(terminalRuntimeId);
     }
   }
 
@@ -832,7 +834,9 @@ export class YuruService {
       if (!this.ptyProcesses.has(pending.terminalRuntimeId)) {
         return;
       }
-      this.terminalRuntimeLastOutputAt.set(pending.terminalRuntimeId, Date.now());
+      if (!this.isTerminalRuntimeReacting(pending.terminalRuntimeId)) {
+        this.terminalRuntimeLastOutputAt.set(pending.terminalRuntimeId, Date.now());
+      }
       this.ptyScrollback.set(
         pending.terminalRuntimeId,
         appendTerminalOutput(this.ptyScrollback.get(pending.terminalRuntimeId) ?? "", data),
@@ -881,6 +885,7 @@ export class YuruService {
       proc.write(
         `${buildShellStartupCommand(request.startupCommand.command, request.startupCommand.args)}\r`,
       );
+      this.markTerminalRuntimeInput(terminalRuntimeId);
     }
 
     return pending;
@@ -957,10 +962,12 @@ export class YuruService {
 
   private clearTerminalRuntimeState(terminalRuntimeId: string): void {
     this.terminalRuntimeLastOutputAt.delete(terminalRuntimeId);
+    this.terminalRuntimeLastInputAt.delete(terminalRuntimeId);
   }
 
   private clearTerminalRuntimeStates(): void {
     this.terminalRuntimeLastOutputAt.clear();
+    this.terminalRuntimeLastInputAt.clear();
   }
 
   private async resolveLazySessionId(
@@ -1001,38 +1008,43 @@ export class YuruService {
     await Promise.all(procs.map((proc) => killPtyAndWait(proc)));
   }
 
-  private async loadAgentActivityStatesByTerminalRuntimeId(
+  // The session dot blinks ("working") while the agent's terminal keeps
+  // producing output (its TUI animates a spinner while busy) and is solid
+  // ("waiting") once output stops — which covers both end-of-turn and waiting
+  // for a permission prompt, where the user is the one expected to act.
+  private loadAgentActivityStatesByTerminalRuntimeId(
     terminalRuntimeIds?: ReadonlySet<string>,
-  ): Promise<Map<string, AgentActivityState>> {
-    const entries = await Promise.all(
-      Array.from(this.terminalRuntimeMap.entries()).map(async ([terminalRuntimeId, runtime]) => {
-        if (terminalRuntimeIds && !terminalRuntimeIds.has(terminalRuntimeId)) {
-          return null;
-        }
-        if (!runtime.provider) {
-          return null;
-        }
-        if (!runtime.providerSessionId) {
-          return [terminalRuntimeId, "waiting"] as const;
-        }
-        const activityState = await loadStoredSessionActivity(
-          runtime.provider,
-          runtime.providerSessionId,
-          {
-            outputActive: this.isTerminalRuntimeOutputActive(terminalRuntimeId),
-          },
-        );
-        return activityState ? ([terminalRuntimeId, activityState] as const) : null;
-      }),
-    );
-    return new Map(
-      entries.filter((entry): entry is [string, AgentActivityState] => entry !== null),
-    );
+  ): Map<string, AgentActivityState> {
+    const states = new Map<string, AgentActivityState>();
+    for (const [terminalRuntimeId, runtime] of this.terminalRuntimeMap) {
+      if (terminalRuntimeIds && !terminalRuntimeIds.has(terminalRuntimeId)) {
+        continue;
+      }
+      if (!runtime.provider) {
+        continue;
+      }
+      states.set(
+        terminalRuntimeId,
+        this.isTerminalRuntimeOutputActive(terminalRuntimeId) ? "working" : "waiting",
+      );
+    }
+    return states;
   }
 
   private isTerminalRuntimeOutputActive(terminalRuntimeId: string): boolean {
     const lastOutputAt = this.terminalRuntimeLastOutputAt.get(terminalRuntimeId);
     return lastOutputAt !== undefined && Date.now() - lastOutputAt < OUTPUT_ACTIVE_GRACE_MS;
+  }
+
+  private markTerminalRuntimeInput(terminalRuntimeId: string): void {
+    this.terminalRuntimeLastInputAt.set(terminalRuntimeId, Date.now());
+  }
+
+  // True while output is likely a repaint reacting to our own write/resize
+  // rather than the agent working on its own.
+  private isTerminalRuntimeReacting(terminalRuntimeId: string): boolean {
+    const lastInputAt = this.terminalRuntimeLastInputAt.get(terminalRuntimeId);
+    return lastInputAt !== undefined && Date.now() - lastInputAt < OUTPUT_REACTION_WINDOW_MS;
   }
 
   private async findPrimarySessionResumeTarget(

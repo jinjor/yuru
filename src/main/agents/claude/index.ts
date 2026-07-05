@@ -8,10 +8,8 @@ import type {
   SessionPreview,
   SessionProviderAdapter,
   SessionSnapshot,
-  StoredSessionActivityContext,
   WorktreeContext,
 } from "../../agent.js";
-import type { AgentActivityState } from "../../../shared/session.js";
 import { parseJsonLinesAs, readTextFileIfExists } from "../../agent-store-utils.js";
 import { type WorktreeSessionHint } from "../../worktree-session-detection.js";
 import {
@@ -92,149 +90,6 @@ function parseClaudeAssistantPreviewEntry(entry: unknown): SessionPreview | null
   };
 }
 
-interface ClaudeActivityLogEntry {
-  type: string;
-  subtype: string | null;
-  isMeta: boolean;
-  promptSource: string | null;
-  interruptedMessageId: string | null;
-  content: unknown;
-}
-
-function parseClaudeActivityLogEntry(entry: unknown): ClaudeActivityLogEntry | null {
-  if (typeof entry !== "object" || entry === null) {
-    return null;
-  }
-
-  const maybeEntry = entry as {
-    type?: unknown;
-    subtype?: unknown;
-    isMeta?: unknown;
-    promptSource?: unknown;
-    interruptedMessageId?: unknown;
-    message?: {
-      content?: unknown;
-    };
-  };
-  if (typeof maybeEntry.type !== "string") {
-    return null;
-  }
-
-  return {
-    type: maybeEntry.type,
-    subtype: typeof maybeEntry.subtype === "string" ? maybeEntry.subtype : null,
-    isMeta: maybeEntry.isMeta === true,
-    promptSource: typeof maybeEntry.promptSource === "string" ? maybeEntry.promptSource : null,
-    interruptedMessageId:
-      typeof maybeEntry.interruptedMessageId === "string" ? maybeEntry.interruptedMessageId : null,
-    content: maybeEntry.message?.content,
-  };
-}
-
-function readClaudeActivityState(
-  entries: readonly ClaudeActivityLogEntry[],
-  context: StoredSessionActivityContext = { outputActive: false },
-): AgentActivityState | null {
-  let activity: AgentActivityState | null = null;
-  let pendingUserPrompt = false;
-
-  for (const entry of entries) {
-    if (entry.type === "system" && entry.subtype === "turn_duration") {
-      activity = "waiting";
-      pendingUserPrompt = false;
-      continue;
-    }
-
-    if (entry.type === "user") {
-      if (isClaudeInterruptedPromptEntry(entry)) {
-        activity = "waiting";
-        pendingUserPrompt = false;
-        continue;
-      }
-      if (entry.isMeta) {
-        continue;
-      }
-      if (readClaudeToolResultContent(entry.content)) {
-        activity = "working";
-        pendingUserPrompt = false;
-        continue;
-      }
-      if (isClaudeHumanPromptEntry(entry)) {
-        activity ??= "waiting";
-        pendingUserPrompt = true;
-      }
-      continue;
-    }
-
-    if (entry.type === "assistant" && pendingUserPrompt) {
-      activity = "working";
-      pendingUserPrompt = false;
-    }
-  }
-
-  if (pendingUserPrompt && context.outputActive) {
-    return "working";
-  }
-  return activity;
-}
-
-function readClaudeToolResultContent(content: unknown): boolean {
-  return (
-    Array.isArray(content) &&
-    content.some((item) => {
-      if (typeof item !== "object" || item === null) {
-        return false;
-      }
-      return (item as { type?: unknown }).type === "tool_result";
-    })
-  );
-}
-
-function isClaudeInterruptedPromptEntry(entry: ClaudeActivityLogEntry): boolean {
-  if (entry.interruptedMessageId) {
-    return true;
-  }
-
-  const text = readClaudeTextContent(entry.content)?.trim();
-  return (
-    text === "[Request interrupted by user]" ||
-    text === "[Request interrupted by user for tool use]"
-  );
-}
-
-function isClaudeHumanPromptEntry(entry: ClaudeActivityLogEntry): boolean {
-  const text = readClaudeTextContent(entry.content);
-  if (text !== null) {
-    const trimmed = text.trimStart();
-    return !(
-      trimmed === "" ||
-      trimmed.startsWith("/") ||
-      trimmed.startsWith("<command-name>") ||
-      trimmed.startsWith("<local-command-")
-    );
-  }
-
-  return entry.promptSource !== null;
-}
-
-function readClaudeTextContent(content: unknown): string | null {
-  if (typeof content === "string") {
-    return content;
-  }
-  if (!Array.isArray(content)) {
-    return null;
-  }
-
-  const texts = content.flatMap((item) => {
-    if (typeof item !== "object" || item === null) {
-      return [];
-    }
-    const maybeText = item as { type?: unknown; text?: unknown };
-    return maybeText.type === "text" && typeof maybeText.text === "string" ? [maybeText.text] : [];
-  });
-  return texts.length > 0 ? texts.join("\n") : null;
-}
-
 function extractClaudeMessageText(content: unknown): string {
   const texts: string[] = [];
   if (typeof content === "string") {
@@ -304,22 +159,6 @@ async function loadStoredSessions(): Promise<SessionSnapshot[]> {
 async function loadStoredSessionPreview(providerSessionId: string): Promise<SessionPreview | null> {
   const sessionFilePath = await findClaudeSessionFile(providerSessionId);
   return sessionFilePath ? readClaudeSessionPreview(sessionFilePath) : null;
-}
-
-async function loadStoredSessionActivity(
-  providerSessionId: string,
-  context?: StoredSessionActivityContext,
-): Promise<AgentActivityState | null> {
-  const sessionFilePath = await findClaudeSessionFile(providerSessionId);
-  if (!sessionFilePath) {
-    return null;
-  }
-  const content = await readTextFileIfExists(sessionFilePath);
-  if (!content) {
-    return null;
-  }
-
-  return readClaudeActivityState(parseJsonLinesAs(content, parseClaudeActivityLogEntry), context);
 }
 
 async function readClaudeHistoryEntries(): Promise<ClaudeHistoryEntry[]> {
@@ -518,7 +357,6 @@ export const sessionProvider: SessionProviderAdapter = {
   resolvesSessionIdLazily: false,
   loadStoredSessions,
   loadStoredSessionPreview,
-  loadStoredSessionActivity,
   loadWorktreeSessionHints,
   hasStoredSession,
   async createResumeLaunch(session) {
