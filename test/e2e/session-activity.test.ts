@@ -93,15 +93,21 @@ async function runNormalConversation(
   repoDir: string,
 ): Promise<void> {
   const marker = `ACTIVITY_NORMAL_${provider.id.toUpperCase()}`;
+  // marker は返答の末尾に置かせる。preview は最後の assistant メッセージだけを表示する
+  // ため、返答が複数メッセージに分割されても末尾なら preview に残る。
   await submitPrompt(
     window,
-    `Start with ${marker}, then write a 20-line numbered reply. Do not use tools.`,
+    `List the numbers 1 to 20, one per line, then end your reply with ${marker}. Do not use tools.`,
   );
   await expectActivity(window, provider, "working", 30_000);
   await expect(() => {
     expect(provider.hasAssistantReply(context.tmpHome, repoDir)).toBe(true);
   }).toPass({ timeout: 90_000 });
   await expectActivity(window, provider, "waiting", 30_000);
+  // カードのプレビューが、操作なしで最新の assistant メッセージに更新される
+  await expect(
+    worktreeCard(window, provider.branchName).locator(".task-worktree-session-preview"),
+  ).toContainText(marker, { timeout: 15_000 });
 }
 
 async function runModelCommand(window: Page, provider: ProviderActivityE2e): Promise<void> {

@@ -7,13 +7,13 @@ import {
 } from "react";
 import "@xterm/xterm/css/xterm.css";
 import type { AgentDefinition } from "../shared/agent";
+import type { SessionUpdate } from "../shared/ipc";
 import type { RepoListItem, WorktreeListItem } from "../shared/metadata";
 import { type TerminalRuntimeId, type SessionProvider } from "../shared/session";
 import { BranchNameInput } from "./components/BranchNameInput";
 import { RepoList } from "./components/RepoList";
 import { SessionView } from "./components/SessionView";
 import { WorktreeRemovalDialog } from "./components/WorktreeRemovalDialog";
-import { useTerminalRuntimeActivityStates } from "./hooks/useTerminalRuntimeActivityStates";
 import { clamp } from "./utils/layout";
 
 export function App() {
@@ -34,7 +34,6 @@ export function App() {
   const selectedTerminalRuntimeId = selection?.terminalRuntimeId ?? null;
   const selectedWorktree = findWorktree(repos, selectedWorktreeId);
   const removalTarget = findWorktree(repos, removalTargetId);
-  const activityStates = useTerminalRuntimeActivityStates(repos);
 
   const refreshRepos = useCallback(async (): Promise<RepoListItem[] | null> => {
     const requestId = ++repoRefreshRequestRef.current;
@@ -80,9 +79,15 @@ export function App() {
         void refreshRepos();
       },
     );
+    const disposeSessionChanged = window.electronAPI.onSessionChanged(
+      (terminalRuntimeId, update) => {
+        setRepos((prev) => applySessionUpdate(prev, terminalRuntimeId, update));
+      },
+    );
     return () => {
       disposeRepoListChanged();
       disposeTerminalRuntimeExited();
+      disposeSessionChanged();
     };
   }, [refreshRepos]);
 
@@ -252,7 +257,6 @@ export function App() {
           </div>
           <RepoList
             repos={repos}
-            activityStates={activityStates}
             providers={availableProviders}
             selectedWorktreeId={selectedWorktreeId}
             onCreateWorktreeSession={(repoPath) => {
@@ -327,6 +331,27 @@ function findWorktree(repos: RepoListItem[], worktreeId: string | null): Worktre
     }
   }
   return null;
+}
+
+// メインプロセスから push されたセッション更新を、該当セッションを表示している項目に merge する。
+function applySessionUpdate(
+  repos: RepoListItem[],
+  terminalRuntimeId: TerminalRuntimeId,
+  update: SessionUpdate,
+): RepoListItem[] {
+  return repos.map((repo) => ({
+    ...repo,
+    taskWorktrees: repo.taskWorktrees.map((worktree) => ({
+      ...worktree,
+      primarySession:
+        worktree.primarySession?.activeTerminalRuntimeId === terminalRuntimeId
+          ? { ...worktree.primarySession, ...update }
+          : worktree.primarySession,
+      suggestedSessions: worktree.suggestedSessions.map((session) =>
+        session.activeTerminalRuntimeId === terminalRuntimeId ? { ...session, ...update } : session,
+      ),
+    })),
+  }));
 }
 
 function findActiveTerminalRuntimeId(

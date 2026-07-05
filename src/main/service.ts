@@ -13,7 +13,11 @@ import {
   upsertTaskWorktree,
 } from "./metadata.js";
 import { loadRepoList } from "./repo-list.js";
-import { loadStoredSessionPreviews, loadSuggestedWorktreeSessions } from "./sessions.js";
+import {
+  loadStoredSessionPreview,
+  loadStoredSessionPreviews,
+  loadSuggestedWorktreeSessions,
+} from "./sessions.js";
 import { toWorktreeId } from "./worktree-identity.js";
 import {
   branchExists,
@@ -61,7 +65,7 @@ import {
   type AppErrorNotice,
   type GitDiffScope,
   type Result,
-  type TerminalRuntimeActivityState,
+  type SessionUpdate,
   type WorktreeRemovalOutcome,
   type WorktreeSessionSelection,
 } from "../shared/ipc.js";
@@ -89,6 +93,7 @@ const OUTPUT_ACTIVE_GRACE_MS = 1500;
 // working. So output arriving this soon after we write/resize is ignored; only
 // output the agent emits on its own (e.g. its spinner) counts as "working".
 const OUTPUT_REACTION_WINDOW_MS = 1000;
+const SESSION_MONITOR_INTERVAL_MS = 1000;
 // On shutdown we SIGHUP every PTY and wait for node-pty to finish reaping the
 // child before letting the process tear down; otherwise node-pty's native exit
 // callback fires during environment cleanup and aborts. If a child ignores
@@ -117,10 +122,18 @@ export interface YuruServiceEvents {
   fileTreeChanged(worktreeId: string, relativePath: string): void;
   ptyData(terminalRuntimeId: string, data: string): void;
   terminalRuntimeExited(terminalRuntimeId: string): void;
+  sessionChanged(terminalRuntimeId: string, update: SessionUpdate): void;
   repoListChanged(): void;
   errorAdded(notice: AppErrorNotice): void;
   refreshWorktreeWatcher(): Promise<void>;
   addWorktreeWatcherRepo(repoPath: string): void;
+}
+
+// Agent session ごとに「前回 renderer へ push した値」を覚えておき、変わった時だけ push する。
+interface SessionMonitorState {
+  activityState: AgentActivityState;
+  preview: string | null;
+  checkingPreview: boolean;
 }
 
 function ok<T>(data: T): Result<T> {
@@ -251,6 +264,8 @@ export class YuruService {
   private readonly ptyAttachments = new Map<string, { ready: boolean; pendingChunks: string[] }>();
   private readonly terminalRuntimeLastOutputAt = new Map<string, number>();
   private readonly terminalRuntimeLastInputAt = new Map<string, number>();
+  private readonly sessionMonitorStates = new Map<string, SessionMonitorState>();
+  private sessionMonitorTimer: ReturnType<typeof setInterval> | null = null;
   private readonly pendingProcesses = new Set<pty.IPty>();
   private readonly terminalRuntimeMap = new Map<string, TerminalRuntimeInfo>();
   private readonly activeCodeSearches = new Map<string, AbortController>();
@@ -274,18 +289,6 @@ export class YuruService {
       getGitHubPullRequestForBranch,
       agentActivityStates,
     );
-  }
-
-  async getTerminalRuntimeActivityStates(
-    terminalRuntimeIds: string[],
-  ): Promise<TerminalRuntimeActivityState[]> {
-    const statesByTerminalRuntimeId = this.loadAgentActivityStatesByTerminalRuntimeId(
-      new Set(terminalRuntimeIds),
-    );
-    return terminalRuntimeIds.flatMap((terminalRuntimeId) => {
-      const activityState = statesByTerminalRuntimeId.get(terminalRuntimeId);
-      return activityState ? [{ terminalRuntimeId, activityState }] : [];
-    });
   }
 
   getSessionProviders() {
@@ -903,6 +906,7 @@ export class YuruService {
       worktreePath: pending.worktreePath,
       startedAt: pending.startedAt,
     });
+    this.ensureSessionMonitor();
   }
 
   private registerStandaloneTerminalRuntime(pending: PendingTerminal, repoPath: string): void {
@@ -963,11 +967,14 @@ export class YuruService {
   private clearTerminalRuntimeState(terminalRuntimeId: string): void {
     this.terminalRuntimeLastOutputAt.delete(terminalRuntimeId);
     this.terminalRuntimeLastInputAt.delete(terminalRuntimeId);
+    this.sessionMonitorStates.delete(terminalRuntimeId);
   }
 
   private clearTerminalRuntimeStates(): void {
     this.terminalRuntimeLastOutputAt.clear();
     this.terminalRuntimeLastInputAt.clear();
+    this.sessionMonitorStates.clear();
+    this.stopSessionMonitor();
   }
 
   private async resolveLazySessionId(
@@ -1012,14 +1019,9 @@ export class YuruService {
   // producing output (its TUI animates a spinner while busy) and is solid
   // ("waiting") once output stops — which covers both end-of-turn and waiting
   // for a permission prompt, where the user is the one expected to act.
-  private loadAgentActivityStatesByTerminalRuntimeId(
-    terminalRuntimeIds?: ReadonlySet<string>,
-  ): Map<string, AgentActivityState> {
+  private loadAgentActivityStatesByTerminalRuntimeId(): Map<string, AgentActivityState> {
     const states = new Map<string, AgentActivityState>();
     for (const [terminalRuntimeId, runtime] of this.terminalRuntimeMap) {
-      if (terminalRuntimeIds && !terminalRuntimeIds.has(terminalRuntimeId)) {
-        continue;
-      }
       if (!runtime.provider) {
         continue;
       }
@@ -1034,6 +1036,94 @@ export class YuruService {
   private isTerminalRuntimeOutputActive(terminalRuntimeId: string): boolean {
     const lastOutputAt = this.terminalRuntimeLastOutputAt.get(terminalRuntimeId);
     return lastOutputAt !== undefined && Date.now() - lastOutputAt < OUTPUT_ACTIVE_GRACE_MS;
+  }
+
+  private ensureSessionMonitor(): void {
+    if (this.sessionMonitorTimer === null) {
+      this.sessionMonitorTimer = setInterval(() => {
+        this.handleSessionMonitorTick();
+      }, SESSION_MONITOR_INTERVAL_MS);
+    }
+  }
+
+  private stopSessionMonitor(): void {
+    if (this.sessionMonitorTimer !== null) {
+      clearInterval(this.sessionMonitorTimer);
+      this.sessionMonitorTimer = null;
+    }
+  }
+
+  // 動作中セッションの活動状態 (working/waiting) とプレビュー (最新メッセージ) の変化を
+  // 検知して、変わった時だけ renderer にセッション単位で push する。renderer が取りに
+  // 来るのは初期表示などの getRepos だけで、以降の更新はすべてこの push で届く。
+  private handleSessionMonitorTick(): void {
+    let hasAgentRuntime = false;
+    for (const [terminalRuntimeId, runtime] of this.terminalRuntimeMap) {
+      if (!runtime.provider) {
+        continue;
+      }
+      hasAgentRuntime = true;
+      const state = this.getSessionMonitorState(terminalRuntimeId);
+      const activityState: AgentActivityState = this.isTerminalRuntimeOutputActive(
+        terminalRuntimeId,
+      )
+        ? "working"
+        : "waiting";
+      const activityChanged = activityState !== state.activityState;
+      if (activityChanged) {
+        state.activityState = activityState;
+        this.events.sessionChanged(terminalRuntimeId, { activityState });
+      }
+      // working 中はログが伸びるので毎 tick 確認する。working → waiting の遷移直後の
+      // 1 回は、ターン終了時に書かれた最後のメッセージを取りこぼさないための確認。
+      if (activityState === "working" || activityChanged) {
+        void this.checkSessionPreview(
+          terminalRuntimeId,
+          runtime.provider,
+          runtime.providerSessionId ?? null,
+          state,
+        );
+      }
+    }
+    if (!hasAgentRuntime) {
+      this.stopSessionMonitor();
+    }
+  }
+
+  private getSessionMonitorState(terminalRuntimeId: string): SessionMonitorState {
+    const existing = this.sessionMonitorStates.get(terminalRuntimeId);
+    if (existing) {
+      return existing;
+    }
+    const state: SessionMonitorState = {
+      activityState: "waiting",
+      preview: null,
+      checkingPreview: false,
+    };
+    this.sessionMonitorStates.set(terminalRuntimeId, state);
+    return state;
+  }
+
+  private async checkSessionPreview(
+    terminalRuntimeId: string,
+    provider: SessionProvider,
+    providerSessionId: string | null,
+    state: SessionMonitorState,
+  ): Promise<void> {
+    if (!providerSessionId || state.checkingPreview) {
+      return;
+    }
+    state.checkingPreview = true;
+    try {
+      const preview = (await loadStoredSessionPreview(provider, providerSessionId)) ?? "";
+      if (preview === state.preview) {
+        return;
+      }
+      state.preview = preview;
+      this.events.sessionChanged(terminalRuntimeId, { preview });
+    } finally {
+      state.checkingPreview = false;
+    }
   }
 
   private markTerminalRuntimeInput(terminalRuntimeId: string): void {

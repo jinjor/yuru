@@ -26,7 +26,6 @@ type OpenCardSurface = { worktreeId: string; kind: "actions" | "menu" };
 
 interface RepoListProps {
   repos: RepoListItem[];
-  activityStates: ReadonlyMap<TerminalRuntimeId, AgentActivityState>;
   providers: AgentDefinition[];
   selectedWorktreeId: string | null;
   onCreateWorktreeSession: (repoPath: string) => void;
@@ -40,7 +39,6 @@ interface RepoListProps {
 
 export function RepoList({
   repos,
-  activityStates,
   providers,
   selectedWorktreeId,
   onCreateWorktreeSession,
@@ -98,7 +96,6 @@ export function RepoList({
             <WorktreeCard
               key={repo.mainWorktree.worktreeId}
               worktree={repo.mainWorktree}
-              activityStates={activityStates}
               providers={providers}
               selectedWorktreeId={selectedWorktreeId}
               isActionSurfaceOpen={false}
@@ -117,7 +114,6 @@ export function RepoList({
               <WorktreeCard
                 key={taskWorktree.worktreeId}
                 worktree={taskWorktree}
-                activityStates={activityStates}
                 providers={providers}
                 selectedWorktreeId={selectedWorktreeId}
                 isActionSurfaceOpen={
@@ -159,7 +155,6 @@ export function RepoList({
 
 interface WorktreeCardProps {
   worktree: WorktreeListItem;
-  activityStates: ReadonlyMap<TerminalRuntimeId, AgentActivityState>;
   providers: AgentDefinition[];
   selectedWorktreeId: string | null;
   isActionSurfaceOpen: boolean;
@@ -177,7 +172,6 @@ interface WorktreeCardProps {
 
 function WorktreeCard({
   worktree,
-  activityStates,
   providers,
   selectedWorktreeId,
   isActionSurfaceOpen,
@@ -294,7 +288,6 @@ function WorktreeCard({
           <PrimarySessionSummary
             isActive={isPrimarySessionActive}
             primarySession={primarySession}
-            activityStates={activityStates}
           />
         ) : (
           <span className="task-worktree-hint">
@@ -309,7 +302,6 @@ function WorktreeCard({
           worktreeId={worktree.worktreeId}
           providers={providers}
           suggestedSessions={suggestedSessions}
-          activityStates={activityStates}
           onResumeSuggestedSession={onResumeSuggestedSession}
           onCreateSessionForWorktree={onCreateSessionForWorktree}
           onClick={(event) => event.stopPropagation()}
@@ -322,17 +314,12 @@ function WorktreeCard({
 interface PrimarySessionSummaryProps {
   isActive: boolean;
   primarySession: PrimarySessionListItem;
-  activityStates: ReadonlyMap<TerminalRuntimeId, AgentActivityState>;
 }
 
-function PrimarySessionSummary({
-  isActive,
-  primarySession,
-  activityStates,
-}: PrimarySessionSummaryProps) {
+function PrimarySessionSummary({ isActive, primarySession }: PrimarySessionSummaryProps) {
   const preview = primarySession.preview || "(no messages)";
   const state = isActive ? "active" : primarySession.state;
-  const activityState = sessionActivityState(primarySession, activityStates);
+  const activityState = primarySession.activityState;
   return (
     <span className="task-worktree-session-row">
       <SessionProviderDot
@@ -352,7 +339,6 @@ interface TaskWorktreeActionSurfaceProps {
   worktreeId: string;
   providers: AgentDefinition[];
   suggestedSessions: SuggestedSessionListItem[];
-  activityStates: ReadonlyMap<TerminalRuntimeId, AgentActivityState>;
   onResumeSuggestedSession: (worktreeId: string, providerSessionKey: string) => void;
   onCreateSessionForWorktree: (worktreeId: string, provider: SessionProvider) => void;
   onClick: (event: MouseEvent<HTMLDivElement>) => void;
@@ -362,7 +348,6 @@ function TaskWorktreeActionSurface({
   worktreeId,
   providers,
   suggestedSessions,
-  activityStates,
   onResumeSuggestedSession,
   onCreateSessionForWorktree,
   onClick,
@@ -376,7 +361,6 @@ function TaskWorktreeActionSurface({
             <SuggestedSessionAction
               key={suggestedSession.providerSessionKey}
               suggestedSession={suggestedSession}
-              activityStates={activityStates}
               onSelect={() =>
                 onResumeSuggestedSession(worktreeId, suggestedSession.providerSessionKey)
               }
@@ -428,19 +412,14 @@ function WorktreeCardMenu({ onRemove, onClick }: WorktreeCardMenuProps) {
 
 interface SuggestedSessionActionProps {
   suggestedSession: SuggestedSessionListItem;
-  activityStates: ReadonlyMap<TerminalRuntimeId, AgentActivityState>;
   onSelect: () => void;
 }
 
-function SuggestedSessionAction({
-  suggestedSession,
-  activityStates,
-  onSelect,
-}: SuggestedSessionActionProps) {
+function SuggestedSessionAction({ suggestedSession, onSelect }: SuggestedSessionActionProps) {
   const preview = suggestedSession.preview || "(no messages)";
   const providerName = providerLabel(suggestedSession.provider);
   const isActive = suggestedSession.state === "active";
-  const activityState = sessionActivityState(suggestedSession, activityStates);
+  const activityState = suggestedSession.activityState;
   const timestamp = formatSessionTimestamp(suggestedSession.timestamp);
   const meta = [providerName, isActive ? "active" : null, timestamp]
     .filter((value) => value !== null && value !== "")
@@ -473,18 +452,6 @@ interface SessionProviderDotProps {
   provider: SessionProvider;
   state: WorktreeSessionState;
   activityState: AgentActivityState;
-}
-
-function sessionActivityState(
-  session: {
-    activeTerminalRuntimeId: TerminalRuntimeId | null;
-    activityState: AgentActivityState;
-  },
-  activityStates: ReadonlyMap<TerminalRuntimeId, AgentActivityState>,
-): AgentActivityState {
-  return session.activeTerminalRuntimeId
-    ? (activityStates.get(session.activeTerminalRuntimeId) ?? session.activityState)
-    : session.activityState;
 }
 
 function SessionProviderDot({ kind, provider, state, activityState }: SessionProviderDotProps) {

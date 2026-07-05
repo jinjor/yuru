@@ -6,7 +6,7 @@ import { cleanupStaleTaskWorktrees } from "./task-worktree-maintenance.js";
 import { WorktreeWatcher } from "./worktree-watcher.js";
 import { YuruService } from "./service.js";
 import { APP_NAME, getWindowTitleForAppPath } from "./app-title.js";
-import type { AppErrorNotice, GitDiffScope } from "../shared/ipc.js";
+import type { AppErrorNotice, GitDiffScope, SessionUpdate } from "../shared/ipc.js";
 import type { SessionProvider } from "../shared/session.js";
 
 let mainWindow: BrowserWindow | null = null;
@@ -21,6 +21,7 @@ const service = new YuruService({
   fileTreeChanged: sendFileTreeChanged,
   ptyData: sendPtyData,
   terminalRuntimeExited: sendTerminalRuntimeExited,
+  sessionChanged: sendSessionChanged,
   repoListChanged: sendRepoListChanged,
   errorAdded: sendErrorAdded,
   refreshWorktreeWatcher,
@@ -44,6 +45,10 @@ function sendPtyData(terminalRuntimeId: string, data: string): void {
 
 function sendTerminalRuntimeExited(terminalRuntimeId: string): void {
   sendToRenderer("terminalRuntime:exited", terminalRuntimeId);
+}
+
+function sendSessionChanged(terminalRuntimeId: string, update: SessionUpdate): void {
+  sendToRenderer("session:changed", terminalRuntimeId, update);
 }
 
 function sendRepoListChanged(): void {
@@ -154,9 +159,6 @@ async function stopApplicationServices(): Promise<void> {
 
 function registerIpcHandlers(): void {
   ipcMain.handle("metadata:listRepos", () => service.getRepos());
-  ipcMain.handle("terminalRuntime:activityStates", (_event, terminalRuntimeIds: string[]) => {
-    return service.getTerminalRuntimeActivityStates(terminalRuntimeIds);
-  });
   ipcMain.handle("providers:list", () => service.getSessionProviders());
 
   ipcMain.handle("pty:attach", (_event, terminalRuntimeId: string) => {

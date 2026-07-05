@@ -115,16 +115,15 @@ export type WorktreeRemovalOutcome =
   // dirty で通常削除が拒否された (force 確認が必要。force=false のときだけ返る)
   | { status: "dirty" };
 
-export interface TerminalRuntimeActivityState {
-  terminalRuntimeId: TerminalRuntimeId;
-  activityState: AgentActivityState;
+// メインプロセスが検知した、動作中セッションの変化 (活動状態・最新メッセージ)。
+// 変わったフィールドだけが載る部分更新。
+export interface SessionUpdate {
+  activityState?: AgentActivityState;
+  preview?: string;
 }
 
 export interface ElectronAPI {
   getRepos: () => Promise<RepoListItem[]>;
-  getTerminalRuntimeActivityStates: (
-    terminalRuntimeIds: TerminalRuntimeId[],
-  ) => Promise<TerminalRuntimeActivityState[]>;
   getSessionProviders: () => Promise<AgentDefinition[]>;
   getErrors: () => Promise<AppErrorNotice[]>;
   dismissError: (id: string) => Promise<void>;
@@ -168,6 +167,9 @@ export interface ElectronAPI {
   onErrorsCleared: (callback: () => void) => void;
   onRepoListChanged: (callback: () => void) => () => void;
   onTerminalRuntimeExited: (callback: (terminalRuntimeId: TerminalRuntimeId) => void) => () => void;
+  onSessionChanged: (
+    callback: (terminalRuntimeId: TerminalRuntimeId, update: SessionUpdate) => void,
+  ) => () => void;
   onFileTreeChanged: (callback: (worktreeId: string, relativePath: string) => void) => () => void;
   attachPty: (terminalRuntimeId: TerminalRuntimeId) => Promise<string>;
   readyPty: (terminalRuntimeId: TerminalRuntimeId) => Promise<void>;

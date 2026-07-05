@@ -1,11 +1,9 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { ElectronAPI, GitDiffScope } from "../shared/ipc.js";
+import type { ElectronAPI, GitDiffScope, SessionUpdate } from "../shared/ipc.js";
 import type { SessionProvider } from "../shared/session.js";
 
 const electronAPI: ElectronAPI = {
   getRepos: () => ipcRenderer.invoke("metadata:listRepos"),
-  getTerminalRuntimeActivityStates: (terminalRuntimeIds) =>
-    ipcRenderer.invoke("terminalRuntime:activityStates", terminalRuntimeIds),
   getSessionProviders: () => ipcRenderer.invoke("providers:list"),
   getErrors: () => ipcRenderer.invoke("errors:list"),
   dismissError: (id: string) => ipcRenderer.invoke("errors:dismiss", id),
@@ -56,6 +54,17 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.on("terminalRuntime:exited", listener);
     return () => {
       ipcRenderer.removeListener("terminalRuntime:exited", listener);
+    };
+  },
+  onSessionChanged: (callback) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      terminalRuntimeId: string,
+      update: SessionUpdate,
+    ) => callback(terminalRuntimeId, update);
+    ipcRenderer.on("session:changed", listener);
+    return () => {
+      ipcRenderer.removeListener("session:changed", listener);
     };
   },
   onFileTreeChanged: (callback) => {
