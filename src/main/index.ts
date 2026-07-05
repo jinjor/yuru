@@ -5,6 +5,7 @@ import { loadRepos } from "./metadata.js";
 import { cleanupStaleTaskWorktrees } from "./task-worktree-maintenance.js";
 import { WorktreeWatcher } from "./worktree-watcher.js";
 import { YuruService } from "./service.js";
+import { APP_NAME, getWindowTitleForAppPath } from "./app-title.js";
 import type { AppErrorNotice, GitDiffScope } from "../shared/ipc.js";
 import type { SessionProvider } from "../shared/session.js";
 
@@ -12,7 +13,6 @@ let mainWindow: BrowserWindow | null = null;
 let worktreeWatcher: WorktreeWatcher | null = null;
 let servicesStopped = false;
 
-const APP_NAME = "Yuru";
 const HIDE_WINDOW_FOR_E2E = process.env.YURU_E2E_HIDE_WINDOW === "1";
 
 app.setName(APP_NAME);
@@ -113,8 +113,10 @@ function installApplicationMenu(): void {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-function createWindow(): void {
+async function createWindow(): Promise<void> {
+  const windowTitle = await getWindowTitleForAppPath(app.getAppPath());
   mainWindow = new BrowserWindow({
+    title: windowTitle,
     width: 1400,
     height: 900,
     show: !HIDE_WINDOW_FOR_E2E,
@@ -126,7 +128,12 @@ function createWindow(): void {
     },
   });
 
-  mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
+  mainWindow.on("page-title-updated", (event) => {
+    event.preventDefault();
+    mainWindow?.setTitle(windowTitle);
+  });
+
+  await mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
 }
 
 async function refreshWorktreeWatcher(): Promise<void> {
@@ -286,7 +293,7 @@ app.whenReady().then(async () => {
     logStartupMaintenanceError(skippedRepo.repoPath, skippedRepo.error);
   }
   installApplicationMenu();
-  createWindow();
+  await createWindow();
 
   worktreeWatcher = new WorktreeWatcher();
   worktreeWatcher.onChange(() => {
