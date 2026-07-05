@@ -120,11 +120,12 @@ export function TerminalPanel({
     } satisfies ILinkProvider);
 
     term.attachCustomKeyEventHandler((event) => {
-      if (event.key === "Enter" && event.shiftKey) {
+      const sequence = terminalKeySequence(event);
+      if (sequence) {
         if (event.type === "keydown") {
           event.preventDefault();
           event.stopPropagation();
-          window.electronAPI.ptyWrite(terminalRuntimeId, "\x1b[13;2u");
+          window.electronAPI.ptyWrite(terminalRuntimeId, sequence);
         }
         return false;
       }
@@ -252,4 +253,24 @@ function stringIndexToCellIndex(
     cellIndex += width > 0 ? width : 1;
   }
   return cellIndex;
+}
+
+function terminalKeySequence(event: KeyboardEvent): string | null {
+  if (event.key === "Enter" && event.shiftKey) {
+    return "\x1b[13;2u";
+  }
+
+  if (!event.metaKey || event.shiftKey || event.ctrlKey || event.altKey) {
+    return null;
+  }
+
+  if (event.key === "ArrowLeft") {
+    return "\x1bOH";
+  }
+
+  if (event.key === "ArrowRight") {
+    return "\x1bOF";
+  }
+
+  return null;
 }
