@@ -8,7 +8,7 @@
     "package:local": "node ./scripts/package-local-app.mjs",
     "run": "electron .",
     "app:restart": "./scripts/restart-app-macos.sh",
-    "test": "node --test --experimental-strip-types --import ./scripts/register-test-loader.mjs test/**/*.test.mjs",
+    "test": "node --test --experimental-strip-types --import ./scripts/register-test-loader.mjs 'test/**/*.test.mjs'",
     "test:e2e": "playwright test",
     "lint": "oxlint --react-plugin --deny-warnings src/",
     "format": "oxfmt src/",
