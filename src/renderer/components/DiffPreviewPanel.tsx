@@ -6,6 +6,7 @@ import { computeLineChanges } from "./CodeEditor/lineChanges";
 import { SourceViewer, type SourceLine } from "./SourceViewer";
 import { tokenizeCode, type TokenizedLine } from "../highlight";
 import { PreviewHeader } from "./PreviewHeader";
+import { startPollingLoop } from "../utils/polling";
 import { resultDataOrNull } from "../utils/result";
 
 const EditModeEditor = lazy(() => import("./CodeEditor/EditModeEditor"));
@@ -16,10 +17,6 @@ const markdownExtensions = new Set(["md", "markdown"]);
 function isMarkdownPath(path: string): boolean {
   const ext = path.split(".").pop()?.toLowerCase();
   return ext ? markdownExtensions.has(ext) : false;
-}
-
-function isPageVisible(): boolean {
-  return document.visibilityState === "visible";
 }
 
 interface DiffPreviewPanelProps {
@@ -106,8 +103,9 @@ export function DiffPreviewPanel({
   useEffect(() => {
     let cancelled = false;
     setIsLoadingDiff(true);
+    let showLoader = true;
 
-    const fetchDiff = async (showLoader: boolean): Promise<void> => {
+    const fetchDiff = async (): Promise<void> => {
       const result = await window.electronAPI.getGitDiffDocument(worktreeId, path, scope);
       if (cancelled) {
         return;
@@ -115,29 +113,23 @@ export function DiffPreviewPanel({
 
       setDiffDocument(resultDataOrNull(result));
       if (showLoader) {
+        showLoader = false;
         setIsLoadingDiff(false);
       }
     };
 
-    void fetchDiff(true);
-
     if (!pathChanged) {
+      void fetchDiff();
       return () => {
         cancelled = true;
       };
     }
 
-    const interval = setInterval(() => {
-      if (!isPageVisible()) {
-        return;
-      }
-
-      void fetchDiff(false);
-    }, 3000);
+    const stopPolling = startPollingLoop(fetchDiff, 3000);
 
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      stopPolling();
     };
   }, [path, scope, pathChanged, worktreeId]);
 

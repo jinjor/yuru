@@ -8,6 +8,7 @@ import { FileSearch } from "./FileSearch";
 import { TerminalPanel } from "./TerminalPanel";
 import { usePaneLayout } from "../hooks/usePaneLayout";
 import type { PreviewSelection } from "../types";
+import { startPollingLoop } from "../utils/polling";
 import { resultDataOrNull } from "../utils/result";
 
 interface SessionViewProps {
@@ -27,10 +28,6 @@ function isPathChanged(states: readonly GitPathState[], path: string): boolean {
       (entry.conflicted || entry.indexStatus || entry.worktreeStatus) &&
       entry.path === path,
   );
-}
-
-function isPageVisible(): boolean {
-  return document.visibilityState === "visible";
 }
 
 export function SessionView({
@@ -106,19 +103,11 @@ export function SessionView({
       setGitPathStates(resultDataOrNull(pathStatesResult) ?? []);
     };
 
-    void fetchPathStates();
-
-    const interval = setInterval(() => {
-      if (!isPageVisible()) {
-        return;
-      }
-
-      void fetchPathStates();
-    }, 3000);
+    const stopPolling = startPollingLoop(fetchPathStates, 3000);
 
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      stopPolling();
     };
   }, [worktreeId]);
 
