@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-07-06
+Last updated: 2026-07-08
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -26,20 +26,22 @@ UI 改善も機能追加も同じ土俵で扱う。
 
 | ID | Type | Area | Item | Why now |
 |---|---|---|---|---|
+| B9 | bug | Terminal / Sessions | セッション作成直後に agent 起動コマンドがターミナルに残る | Codex で長い `exec codex ...` が残り、Claude も一瞬見える。作業開始直後の画面が壊れて見えるため最優先で直したい |
+| B10 | bug | Terminal | セッション再表示時にターミナル画面が大きく崩れることがある | B9 と同根かもしれないが未確定なので別件として追う。再表示で作業状態を読み直せないと実用上かなり困る |
+| B11 | bug | Errors / App | アプリ内でエラーログを確認できるようにする | 画面が急に消える、会社環境で無反応になる等の原因を後から究明したい。main 側の error center / IPC はあるが、画面上で確認する導線がない |
+| B12 | bug | Updates / Packaging | `yuru latest` が `npm run package:local` で落ちる原因を直す | 会社環境で今日 `yuru latest` したら packaging 中に落ちた。最新化できないと普段使いに戻せないので優先して調べたい |
 | F42 | feature | Worktrees | remote branch から task worktree を作れるようにする | 他人や別環境で作った branch を Yuru の作業単位として開きたい |
 | F11 | feature | Diff | GitHub review のようにファイルごとに差分を確認済みにできるようにする | 大きめの差分で、どのファイルを見終わったかを失わずに確認したい |
-| F20 | feature | App | アプリのアイコンを付ける | テンションとプロダクト感を上げたい |
-| I18 | investigate | Events / Worktree Context | worktree 表示情報の更新タイミングを matrix で整理する | 詳細: docs/backlog-details/I18-worktree-refresh-policy.md |
 | F37 | feature | Diff | ブランチの任意のコミット間で diff を表示できるようにする | 複数コミットある作業で差分の範囲を切り替えて確認したい |
-| F32 | feature | Terminal | task worktree 外の作業を standalone terminal として分離する | task worktree list に混ぜない補助導線として欲しい |
 | I21 | investigate | Diff / Changes | merge conflict 中のファイルの diff 表示を考える | conflict はすぐ出てくるシナリオ。scope 付き diff (staged/unstaged) は conflict 中の index を読めず全行追加に見える。具体的な対応は着手時に具体化する |
-| P14 | polish | Changes / Diff | ポーリングを自走ループにして巨大 repo で処理が積み上がらないようにする | 巨大 repo はすぐ出てくるシナリオ。3 秒固定発火だと 1 回が 3 秒を超えた時に並走してさらに重くなる。前回完了後に 3 秒待つ形にし、失敗しても必ず次を予約する |
 
 ## Next
 
 | ID | Type | Area | Item | Notes |
 |---|---|---|---|---|
-| F1 | feature | Sessions | active なセッションの作業中/応答待ちを区別して表示する | 詳細: docs/backlog-details/F1-session-activity-state.md |
+| F20 | feature | App | アプリのアイコンを付ける | テンションとプロダクト感を上げたい |
+| I18 | investigate | Events / Worktree Context | worktree 表示情報の更新タイミングを matrix で整理する | 詳細: docs/backlog-details/I18-worktree-refresh-policy.md |
+| F32 | feature | Terminal | task worktree 外の作業を standalone terminal として分離する | task worktree list に混ぜない補助導線として欲しい |
 | P9 | polish | New Session | 長い repo path の省略ルールを見直す | 折りたたみが不自然 |
 | P13 | polish | Files | Files タブのアクション UI を整える | 階層感が弱く見た目もまだ野暮ったい |
 | P16 | polish | Worktrees / Changes | 左ペインで worktree の Git 変更状態を分かるようにする | いま選択していない worktree に unstaged/staged/untracked 変更があることに気づけない |
