@@ -166,6 +166,9 @@ primary がない task worktree では suggested session を表示し、ユー�
 右側の `Terminal`, `Files`, `Changes`, preview は選択中の task worktree に連動する。
 どの terminal runtime を見ているかと、どの task worktree のファイルを見ているかがずれないように、UI の選択状態は `worktreeId` と `terminalRuntimeId` の組み合わせで持つ。
 
+Terminal の描画には xterm.js を使う。
+stable 6.0.0 には IME の変換位置がずれて過去に入力したテキストの断片が再送されるバグがあるため、修正済みの 6.1.0-beta 系(VS Code が本番で使っているのと同じ系列)を使っている。stable 6.0.0 系に戻すと再発する。6.1.0 stable が出たらそちらに移行する。
+
 ## Appendix
 
 2026-05-16 までアーキテクチャ刷新を行なっていたため、このドキュメントに沿わない古い実装が残っている可能性がある。
