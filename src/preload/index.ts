@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { ElectronAPI, GitDiffScope, SessionUpdate } from "../shared/ipc.js";
+import type { AppErrorNotice, ElectronAPI, GitDiffScope, SessionUpdate } from "../shared/ipc.js";
 import type { SessionProvider } from "../shared/session.js";
 
 const electronAPI: ElectronAPI = {
@@ -8,6 +8,8 @@ const electronAPI: ElectronAPI = {
   getErrors: () => ipcRenderer.invoke("errors:list"),
   dismissError: (id: string) => ipcRenderer.invoke("errors:dismiss", id),
   clearErrors: () => ipcRenderer.invoke("errors:clear"),
+  reportRendererError: (message: string, detail?: string) =>
+    ipcRenderer.send("errors:reportRenderer", message, detail),
   resumePrimarySession: (worktreeId: string, providerSessionKey: string) =>
     ipcRenderer.invoke("worktreeSession:resumePrimary", worktreeId, providerSessionKey),
   resumeSuggestedSession: (worktreeId: string, providerSessionKey: string) =>
@@ -38,9 +40,14 @@ const electronAPI: ElectronAPI = {
   searchCode: (worktreeId: string, query: string) =>
     ipcRenderer.invoke("search:code", worktreeId, query),
   cancelCodeSearch: (worktreeId: string) => ipcRenderer.invoke("search:cancelCode", worktreeId),
-  onErrorAdded: (callback) => ipcRenderer.on("errors:added", (_event, error) => callback(error)),
-  onErrorRemoved: (callback) => ipcRenderer.on("errors:removed", (_event, id) => callback(id)),
-  onErrorsCleared: (callback) => ipcRenderer.on("errors:cleared", () => callback()),
+  onErrorNoticesChanged: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, notices: AppErrorNotice[]) =>
+      callback(notices);
+    ipcRenderer.on("errors:changed", listener);
+    return () => {
+      ipcRenderer.removeListener("errors:changed", listener);
+    };
+  },
   onRepoListChanged: (callback) => {
     const listener = () => callback();
     ipcRenderer.on("repos:changed", listener);

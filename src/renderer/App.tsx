@@ -6,11 +6,13 @@ import {
   useState,
 } from "react";
 import "@xterm/xterm/css/xterm.css";
+import { AlertTriangle } from "lucide-react";
 import type { AgentDefinition } from "../shared/agent";
-import type { SessionUpdate } from "../shared/ipc";
+import type { AppErrorNotice, SessionUpdate } from "../shared/ipc";
 import type { RepoListItem, WorktreeListItem } from "../shared/metadata";
 import { type TerminalRuntimeId, type SessionProvider } from "../shared/session";
 import { BranchNameInput } from "./components/BranchNameInput";
+import { ErrorLogModal } from "./components/ErrorLogModal";
 import { RepoList } from "./components/RepoList";
 import { SessionView } from "./components/SessionView";
 import { WorktreeRemovalDialog } from "./components/WorktreeRemovalDialog";
@@ -30,6 +32,8 @@ export function App() {
   const [worktreeError, setWorktreeError] = useState<string | null>(null);
   const [removalTargetId, setRemovalTargetId] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(260);
+  const [errorNotices, setErrorNotices] = useState<AppErrorNotice[]>([]);
+  const [isErrorLogOpen, setIsErrorLogOpen] = useState(false);
   const selectedWorktreeId = selection?.worktreeId ?? null;
   const selectedTerminalRuntimeId = selection?.terminalRuntimeId ?? null;
   const selectedWorktree = findWorktree(repos, selectedWorktreeId);
@@ -90,6 +94,17 @@ export function App() {
       disposeSessionChanged();
     };
   }, [refreshRepos]);
+
+  // error center (main 側) の一覧をミラーする。初期表示は取得、以降は変更の push で置き換える。
+  useEffect(() => {
+    window.electronAPI
+      .getErrors()
+      .then(setErrorNotices)
+      .catch((error) => {
+        console.error("Failed to load error notices.", error);
+      });
+    return window.electronAPI.onErrorNoticesChanged(setErrorNotices);
+  }, []);
 
   const handleSidebarResizeStart = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>): void => {
@@ -248,6 +263,9 @@ export function App() {
     [refreshRepos, worktreeTarget],
   );
 
+  const errorCount = errorNotices.filter((notice) => notice.severity === "error").length;
+  const warningCount = errorNotices.length - errorCount;
+
   return (
     <div className="app" ref={appRef}>
       <aside className="sidebar" style={{ width: sidebarWidth, minWidth: sidebarWidth }}>
@@ -273,6 +291,18 @@ export function App() {
             onRequestRemoveWorktree={setRemovalTargetId}
           />
         </div>
+        <button
+          type="button"
+          className={`sidebar-errors-row${errorCount > 0 ? " has-errors" : ""}`}
+          onClick={() => setIsErrorLogOpen(true)}
+        >
+          <AlertTriangle size={12} strokeWidth={2} aria-hidden="true" />
+          <span>Errors</span>
+          <span className="sidebar-errors-badges">
+            {errorCount > 0 && <span className="error-count-badge">{errorCount}</span>}
+            {warningCount > 0 && <span className="error-count-badge warning">{warningCount}</span>}
+          </span>
+        </button>
       </aside>
       <div
         className="pane-resize-handle vertical"
@@ -312,6 +342,9 @@ export function App() {
           onClose={() => setRemovalTargetId(null)}
           onRemoved={handleWorktreeRemoved}
         />
+      )}
+      {isErrorLogOpen && (
+        <ErrorLogModal notices={errorNotices} onClose={() => setIsErrorLogOpen(false)} />
       )}
     </div>
   );

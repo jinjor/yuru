@@ -81,6 +81,7 @@ import {
   dismissErrorNotice,
   listErrorNotices,
   recordAppError,
+  recordAppWarning,
 } from "./error-center.js";
 import { createTerminalEnv } from "./terminal-env.js";
 import { buildShellStartupCommand, createInteractiveShellLaunchCommand } from "./shell-launch.js";
@@ -124,7 +125,6 @@ export interface YuruServiceEvents {
   terminalRuntimeExited(terminalRuntimeId: string): void;
   sessionChanged(terminalRuntimeId: string, update: SessionUpdate): void;
   repoListChanged(): void;
-  errorAdded(notice: AppErrorNotice): void;
   refreshWorktreeWatcher(): Promise<void>;
   addWorktreeWatcherRepo(repoPath: string): void;
 }
@@ -148,14 +148,6 @@ function fail<T>(error: AppError): Result<T> {
     ok: false,
     error,
   };
-}
-
-function logAppError(error: AppError): void {
-  if (error.detail) {
-    console.error(`[Yuru] ${error.message}`, error.detail);
-    return;
-  }
-  console.error(`[Yuru] ${error.message}`);
 }
 
 function isAppError(error: unknown): error is AppError {
@@ -566,7 +558,9 @@ export class YuruService {
     }
     try {
       return ok(await loadGitPathStates(workingRoot));
-    } catch {
+    } catch (error) {
+      // 3 秒ポーリングで呼ばれるため、失敗は警告として記録しつつ Changes は空表示にする。
+      recordAppWarning(toAppError(error, { command: "git" }));
       return ok([]);
     }
   }
@@ -717,14 +711,9 @@ export class YuruService {
     await this.killAllPty();
   }
 
-  private reportError(error: AppError): AppError {
-    logAppError(error);
-    this.events.errorAdded(recordAppError(error));
-    return error;
-  }
-
   private failAndReport<T>(error: AppError): Result<T> {
-    return fail(this.reportError(error));
+    recordAppError(error);
+    return fail(error);
   }
 
   private cancelActiveCodeSearch(worktreeId: string): void {
@@ -871,7 +860,7 @@ export class YuruService {
       this.pendingProcesses.delete(proc);
       if (!pending.startupSettled && !pending.startupFailureReported) {
         pending.startupFailureReported = true;
-        this.reportError(startupFailureMessage(pending, exitCode, signal));
+        recordAppError(startupFailureMessage(pending, exitCode, signal));
       }
       if (!this.ptyProcesses.has(pending.terminalRuntimeId)) {
         return;

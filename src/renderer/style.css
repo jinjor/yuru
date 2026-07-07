@@ -150,6 +150,60 @@ body,
   overflow: hidden;
 }
 
+/* エラーログへの常設導線。0 件でも見えるように置き、エラーがある時だけ danger 色にする */
+.sidebar-errors-row {
+  height: 32px;
+  flex-shrink: 0;
+  border: none;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-subtle);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.sidebar-errors-row:hover {
+  background: var(--bg-hover);
+}
+
+.sidebar-errors-row.has-errors {
+  color: var(--text-muted);
+}
+
+.sidebar-errors-row.has-errors svg {
+  color: var(--danger);
+}
+
+.sidebar-errors-badges {
+  margin-left: auto;
+  display: flex;
+  gap: 5px;
+}
+
+.error-count-badge {
+  min-width: 18px;
+  height: 17px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(240, 143, 134, 0.16);
+  color: var(--danger);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.error-count-badge.warning {
+  background: rgba(226, 192, 141, 0.14);
+  color: var(--warning);
+}
+
 /* Repo list */
 .repo-list {
   flex: 1;
@@ -2046,4 +2100,255 @@ button.github-badge {
 
 .removal-btn.danger:hover:not(:disabled) {
   background: rgba(240, 143, 134, 0.26);
+}
+
+/* Error log modal */
+.error-log {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  width: 560px;
+  overflow: hidden;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  max-height: 60vh;
+}
+
+.error-log-header {
+  padding: 10px 12px 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.error-log-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.error-log-header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.error-log-clear-btn {
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.error-log-clear-btn:hover {
+  background: var(--bg-hover);
+}
+
+.error-log-close-btn {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--text-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.error-log-close-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.error-log-empty {
+  padding: 44px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-subtle);
+}
+
+.error-log-list {
+  overflow-y: auto;
+}
+
+.error-log-row {
+  padding: 10px 12px 10px 16px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.error-log-row + .error-log-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.error-log-row:hover {
+  background: var(--bg-hover);
+}
+
+.error-log-time {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  padding-top: 2px;
+}
+
+.error-log-sev {
+  min-width: 20px;
+  display: flex;
+  justify-content: center;
+  padding-top: 2px;
+}
+
+.error-log-sev.error {
+  color: var(--danger);
+}
+
+.error-log-sev.warning {
+  color: var(--warning);
+}
+
+.error-log-count-pill {
+  min-width: 20px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(240, 143, 134, 0.16);
+  color: var(--danger);
+}
+
+.error-log-sev.warning .error-log-count-pill {
+  background: rgba(226, 192, 141, 0.14);
+  color: var(--warning);
+}
+
+.error-log-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.error-log-message {
+  font-size: 13px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.error-log-detail {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+.error-log-dismiss-btn {
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 5px;
+  flex-shrink: 0;
+  opacity: 0;
+}
+
+.error-log-row:hover .error-log-dismiss-btn {
+  opacity: 1;
+}
+
+.error-log-dismiss-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+/* 描画エラー時に ErrorBoundary が白画面の代わりに出す画面 */
+.crash-screen {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-app);
+}
+
+.crash-screen-inner {
+  width: 480px;
+  max-width: calc(100% - 48px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+}
+
+.crash-icon {
+  color: var(--danger);
+}
+
+.crash-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.crash-text {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.crash-error {
+  width: 100%;
+  margin-top: 6px;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 40vh;
+  overflow-y: auto;
+  user-select: text;
+}
+
+.crash-reload-btn {
+  margin-top: 8px;
+  padding: 6px 22px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: #27344d;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.crash-reload-btn:hover {
+  background: #30405d;
 }

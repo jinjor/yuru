@@ -1,11 +1,13 @@
 import { app, BrowserWindow, Menu, ipcMain } from "electron";
-import type { MenuItemConstructorOptions } from "electron";
+import type { IpcMainInvokeEvent, MenuItemConstructorOptions } from "electron";
 import path from "path";
 import { loadRepos } from "./metadata.js";
 import { cleanupStaleTaskWorktrees } from "./task-worktree-maintenance.js";
 import { WorktreeWatcher } from "./worktree-watcher.js";
 import { YuruService } from "./service.js";
 import { APP_NAME, getWindowTitleForAppPath } from "./app-title.js";
+import { recordAppError, recordAppWarning, setErrorNoticesListener } from "./error-center.js";
+import { toAppError } from "./errors.js";
 import type { AppErrorNotice, GitDiffScope, SessionUpdate } from "../shared/ipc.js";
 import type { SessionProvider } from "../shared/session.js";
 
@@ -23,10 +25,11 @@ const service = new YuruService({
   terminalRuntimeExited: sendTerminalRuntimeExited,
   sessionChanged: sendSessionChanged,
   repoListChanged: sendRepoListChanged,
-  errorAdded: sendErrorAdded,
   refreshWorktreeWatcher,
   addWorktreeWatcherRepo,
 });
+
+setErrorNoticesListener(sendErrorNoticesChanged);
 
 function sendToRenderer(channel: string, ...args: unknown[]): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
@@ -55,24 +58,12 @@ function sendRepoListChanged(): void {
   sendToRenderer("repos:changed");
 }
 
-function sendErrorAdded(notice: AppErrorNotice): void {
-  sendToRenderer("errors:added", notice);
-}
-
-function sendErrorRemoved(id: string): void {
-  sendToRenderer("errors:removed", id);
-}
-
-function sendErrorsCleared(): void {
-  sendToRenderer("errors:cleared");
+function sendErrorNoticesChanged(notices: AppErrorNotice[]): void {
+  sendToRenderer("errors:changed", notices);
 }
 
 function addWorktreeWatcherRepo(repoPath: string): void {
   worktreeWatcher?.addRepo(repoPath);
-}
-
-function logStartupMaintenanceError(repoPath: string, error: unknown): void {
-  console.warn(`[Yuru] Skipped stale task worktree cleanup for ${repoPath}.`, error);
 }
 
 function installApplicationMenu(): void {
@@ -138,6 +129,22 @@ async function createWindow(): Promise<void> {
     mainWindow?.setTitle(windowTitle);
   });
 
+  // 画面が急に消える・固まる系の後追い調査用。error center は main 側なので、
+  // renderer が死んでもリロード後にエラーログから確認できる。
+  mainWindow.webContents.on("render-process-gone", (_event, details) => {
+    recordAppError({
+      code: "unknown",
+      message: "The screen process crashed.",
+      detail: `reason: ${details.reason}, exitCode: ${details.exitCode}`,
+    });
+  });
+  mainWindow.on("unresponsive", () => {
+    recordAppError({
+      code: "unknown",
+      message: "The screen became unresponsive.",
+    });
+  });
+
   await mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
 }
 
@@ -157,122 +164,132 @@ async function stopApplicationServices(): Promise<void> {
   await service.stop();
 }
 
-function registerIpcHandlers(): void {
-  ipcMain.handle("metadata:listRepos", () => service.getRepos());
-  ipcMain.handle("providers:list", () => service.getSessionProviders());
+// service は失敗を Result で返すルールだが、ルール外の例外が投げられた場合も
+// error center に記録してから投げ直し、エラーログで気づけるようにする。
+function handleIpc<Args extends unknown[]>(
+  channel: string,
+  handler: (event: IpcMainInvokeEvent, ...args: Args) => unknown,
+): void {
+  ipcMain.handle(channel, async (event, ...args) => {
+    try {
+      return await handler(event, ...(args as Args));
+    } catch (error) {
+      recordAppError(toAppError(error));
+      throw error;
+    }
+  });
+}
 
-  ipcMain.handle("pty:attach", (_event, terminalRuntimeId: string) => {
+function registerIpcHandlers(): void {
+  handleIpc("metadata:listRepos", () => service.getRepos());
+  handleIpc("providers:list", () => service.getSessionProviders());
+
+  handleIpc("pty:attach", (_event, terminalRuntimeId: string) => {
     return service.attachPty(terminalRuntimeId);
   });
 
-  ipcMain.handle("pty:ready", (_event, terminalRuntimeId: string) => {
+  handleIpc("pty:ready", (_event, terminalRuntimeId: string) => {
     const pendingChunk = service.readyPty(terminalRuntimeId);
     if (pendingChunk) {
       sendPtyData(terminalRuntimeId, pendingChunk);
     }
   });
 
-  ipcMain.handle("pty:detach", (_event, terminalRuntimeId: string) => {
+  handleIpc("pty:detach", (_event, terminalRuntimeId: string) => {
     service.detachPty(terminalRuntimeId);
   });
 
-  ipcMain.handle("errors:list", () => service.getErrors());
+  handleIpc("errors:list", () => service.getErrors());
 
-  ipcMain.handle("errors:dismiss", (_event, id: string) => {
-    if (service.dismissError(id)) {
-      sendErrorRemoved(id);
-    }
+  handleIpc("errors:dismiss", (_event, id: string) => {
+    service.dismissError(id);
   });
 
-  ipcMain.handle("errors:clear", () => {
-    if (service.clearErrors()) {
-      sendErrorsCleared();
-    }
+  handleIpc("errors:clear", () => {
+    service.clearErrors();
   });
 
-  ipcMain.handle(
+  ipcMain.on("errors:reportRenderer", (_event, message: string, detail?: string) => {
+    recordAppError({ code: "unknown", message, detail });
+  });
+
+  handleIpc(
     "worktreeSession:resumePrimary",
     (_event, worktreeId: string, providerSessionKey: string) => {
       return service.resumePrimarySession(worktreeId, providerSessionKey);
     },
   );
 
-  ipcMain.handle(
+  handleIpc(
     "worktreeSession:resumeSuggested",
     (_event, worktreeId: string, providerSessionKey: string) => {
       return service.resumeSuggestedSession(worktreeId, providerSessionKey);
     },
   );
 
-  ipcMain.handle(
-    "worktreeSession:create",
-    (_event, worktreeId: string, provider: SessionProvider) => {
-      return service.createSessionForWorktree(worktreeId, provider);
-    },
-  );
+  handleIpc("worktreeSession:create", (_event, worktreeId: string, provider: SessionProvider) => {
+    return service.createSessionForWorktree(worktreeId, provider);
+  });
 
-  ipcMain.handle("worktreeTerminal:open", (_event, worktreeId: string) => {
+  handleIpc("worktreeTerminal:open", (_event, worktreeId: string) => {
     return service.openWorktreeTerminal(worktreeId);
   });
 
-  ipcMain.handle(
+  handleIpc(
     "session:createWorktree",
     (_event, provider: SessionProvider, repoPath: string, branchName: string) => {
       return service.createWorktreeSession(provider, repoPath, branchName);
     },
   );
 
-  ipcMain.handle("worktree:remove", (_event, worktreeId: string, force: boolean) => {
+  handleIpc("worktree:remove", (_event, worktreeId: string, force: boolean) => {
     return service.removeWorktree(worktreeId, force);
   });
 
-  ipcMain.handle("shell:openExternal", (_event, url: string) => {
+  handleIpc("shell:openExternal", (_event, url: string) => {
     return service.openExternal(url);
   });
 
-  ipcMain.handle("git:pathStates", (_event, worktreeId: string) => {
+  handleIpc("git:pathStates", (_event, worktreeId: string) => {
     return service.getGitPathStates(worktreeId);
   });
 
-  ipcMain.handle(
+  handleIpc(
     "git:diffDocument",
     (_event, worktreeId: string, filePath: string, scope?: GitDiffScope) => {
       return service.getGitDiffDocument(worktreeId, filePath, scope);
     },
   );
 
-  ipcMain.handle("files:list", (_event, worktreeId: string, relativePath?: string) => {
+  handleIpc("files:list", (_event, worktreeId: string, relativePath?: string) => {
     return service.listFiles(worktreeId, relativePath);
   });
 
-  ipcMain.handle("files:listAll", (_event, worktreeId: string) => {
+  handleIpc("files:listAll", (_event, worktreeId: string) => {
     return service.listAllFiles(worktreeId);
   });
 
-  ipcMain.handle("files:resolveRepoFile", (_event, worktreeId: string, filePath: string) => {
+  handleIpc("files:resolveRepoFile", (_event, worktreeId: string, filePath: string) => {
     return service.resolveRepoFile(worktreeId, filePath);
   });
 
-  ipcMain.handle("files:readWorktree", (_event, worktreeId: string, filePath: string) => {
+  handleIpc("files:readWorktree", (_event, worktreeId: string, filePath: string) => {
     return service.readWorktreeFile(worktreeId, filePath);
   });
 
-  ipcMain.handle("files:write", (_event, worktreeId: string, filePath: string, content: string) => {
+  handleIpc("files:write", (_event, worktreeId: string, filePath: string, content: string) => {
     return service.writeFile(worktreeId, filePath, content);
   });
 
-  ipcMain.handle(
-    "files:syncWatchTargets",
-    (_event, worktreeId: string, relativePaths: string[]) => {
-      return service.syncFileWatchTargets(worktreeId, relativePaths);
-    },
-  );
+  handleIpc("files:syncWatchTargets", (_event, worktreeId: string, relativePaths: string[]) => {
+    return service.syncFileWatchTargets(worktreeId, relativePaths);
+  });
 
-  ipcMain.handle("search:code", (_event, worktreeId: string, query: string) => {
+  handleIpc("search:code", (_event, worktreeId: string, query: string) => {
     return service.searchCode(worktreeId, query);
   });
 
-  ipcMain.handle("search:cancelCode", (_event, worktreeId: string) => {
+  handleIpc("search:cancelCode", (_event, worktreeId: string) => {
     service.cancelCodeSearch(worktreeId);
   });
 
@@ -292,7 +309,12 @@ app.whenReady().then(async () => {
   });
   const cleanupResult = await cleanupStaleTaskWorktrees();
   for (const skippedRepo of cleanupResult.skippedRepos) {
-    logStartupMaintenanceError(skippedRepo.repoPath, skippedRepo.error);
+    const appError = toAppError(skippedRepo.error);
+    recordAppWarning({
+      ...appError,
+      message: `Skipped stale task worktree cleanup for ${skippedRepo.repoPath}.`,
+      detail: appError.message,
+    });
   }
   installApplicationMenu();
   await createWindow();

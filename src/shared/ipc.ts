@@ -14,10 +14,16 @@ export interface AppError {
   detail?: string;
 }
 
+// error = ユーザー操作の失敗やルール外の例外。warning = バックグラウンド処理の失敗。
+export type AppErrorSeverity = "error" | "warning";
+
 export interface AppErrorNotice {
   id: string;
+  severity: AppErrorSeverity;
   message: string;
   detail?: string;
+  // 同一内容が連続した回数 (DevTools と同様に 1 行へまとめる)。timestamp は最終発生時刻。
+  count: number;
   timestamp: number;
 }
 
@@ -128,6 +134,7 @@ export interface ElectronAPI {
   getErrors: () => Promise<AppErrorNotice[]>;
   dismissError: (id: string) => Promise<void>;
   clearErrors: () => Promise<void>;
+  reportRendererError: (message: string, detail?: string) => void;
   resumePrimarySession: (
     worktreeId: string,
     providerSessionKey: string,
@@ -162,9 +169,7 @@ export interface ElectronAPI {
   syncFileWatchTargets: (worktreeId: string, relativePaths: string[]) => Promise<void>;
   searchCode: (worktreeId: string, query: string) => Promise<Result<CodeSearchResult>>;
   cancelCodeSearch: (worktreeId: string) => Promise<void>;
-  onErrorAdded: (callback: (error: AppErrorNotice) => void) => void;
-  onErrorRemoved: (callback: (id: string) => void) => void;
-  onErrorsCleared: (callback: () => void) => void;
+  onErrorNoticesChanged: (callback: (notices: AppErrorNotice[]) => void) => () => void;
   onRepoListChanged: (callback: () => void) => () => void;
   onTerminalRuntimeExited: (callback: (terminalRuntimeId: TerminalRuntimeId) => void) => () => void;
   onSessionChanged: (

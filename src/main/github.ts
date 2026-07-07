@@ -1,4 +1,6 @@
 import type { GitHubPullRequest } from "../shared/session.js";
+import { recordAppWarning } from "./error-center.js";
+import { toAppError } from "./errors.js";
 import { exec } from "./exec.js";
 
 interface TimedValue<T> {
@@ -193,7 +195,9 @@ export async function getGitHubPullRequestForBranch(
       repoPath,
     );
     value = parsePullRequest(output);
-  } catch {
+  } catch (error) {
+    // gh が使える前提での失敗 (ネットワーク断など)。PR バッジは出せないが記録は残す。
+    recordAppWarning(toAppError(error, { command: "gh" }));
     value = null;
   }
 
