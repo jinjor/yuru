@@ -75,6 +75,8 @@ test("Changes タブで変更ファイルと未追跡ファイルを表示し di
 
     await window.locator(".change-item", { hasText: "README.md" }).click();
     await expectPreviewPath(window, "README.md");
+    // markdown は既定でプレビューモードになるので、diff を見るために閲覧モードへ切り替える。
+    await window.locator(".preview-mode-segment").getByTitle("View", { exact: true }).click();
     await expect(window.locator(".source-line.diff-deleted")).toContainText("# original");
     await expect(window.locator(".source-line.diff-added")).toContainText("# changed");
 
@@ -185,6 +187,9 @@ test("Changes タブは staged と unstaged を別セクションで表示し、
     // Staged の行は HEAD ↔ index の diff を出す
     await stagedReadme.click();
     await expectPreviewPath(window, "README.md");
+    // markdown は既定でプレビューモードになるので、diff を見るために閲覧モードへ切り替える。
+    // (unstaged 行へ移ってもパスが同じなのでモードは維持される)
+    await window.locator(".preview-mode-segment").getByTitle("View", { exact: true }).click();
     await expect(window.locator(".source-line.diff-deleted")).toContainText("# original");
     await expect(window.locator(".source-line.diff-added")).toContainText("# staged");
     await expect(window.locator(".preview-header .line-stat")).toHaveText("+1-1");

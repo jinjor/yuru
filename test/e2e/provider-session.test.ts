@@ -91,6 +91,14 @@ const providers: ProviderE2e[] = [
   },
 ];
 
+// active な primary session のドット。aria-label は "active · waiting" のように
+// その時々の activity 状態が付くので、前方一致で active であることだけを見る。
+function primarySessionActiveDot(window: Page, cardText: string, provider: ProviderE2e) {
+  return worktreeCard(window, cardText).locator(
+    `[aria-label^="${provider.label} primary session active"]`,
+  );
+}
+
 // Creates a worktree session through the UI and drives one real turn so the
 // provider persists a resumable conversation containing the marker. Returns once
 // the conversation has landed in the isolated store.
@@ -179,11 +187,7 @@ for (const provider of providers) {
 
         await expect(window.locator(".xterm")).toBeVisible({ timeout: 30_000 });
         await expect(window.locator(".xterm")).toContainText("RESUME_OK", { timeout: 30_000 });
-        await expect(
-          worktreeCard(window, provider.branchName).locator(
-            `[aria-label="${provider.label} primary session active"]`,
-          ),
-        ).toBeVisible();
+        await expect(primarySessionActiveDot(window, provider.branchName, provider)).toBeVisible();
       } finally {
         await closeYuru(app);
         await context.cleanup();
@@ -267,11 +271,7 @@ for (const provider of providers) {
         // Promoting resumes the session in the worktree where it was created and
         // restores its conversation.
         await expect(window.locator(".xterm")).toContainText("PROMOTE_OK", { timeout: 30_000 });
-        await expect(
-          worktreeCard(window, "feat-external").locator(
-            `[aria-label="${provider.label} primary session active"]`,
-          ),
-        ).toBeVisible();
+        await expect(primarySessionActiveDot(window, "feat-external", provider)).toBeVisible();
       } finally {
         await closeYuru(app);
         await context.cleanup();
