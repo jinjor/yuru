@@ -13,6 +13,14 @@ const backupAppPath = path.join(appsDir, "Yuru.app.old");
 const packageVersion = JSON.parse(fs.readFileSync(path.join(repoDir, "package.json"), "utf8")).version;
 const arch = process.arch === "arm64" ? "arm64" : process.arch === "x64" ? "x64" : process.arch;
 
+// Without explicit checksums, @electron/get fetches SHASUMS256.txt from GitHub on
+// every run even when the Electron zip is already cached, so packaging fails on
+// networks that block direct GitHub access. Electron's own installer validates
+// against this bundled file, so packaging works offline once the zip is cached.
+const electronChecksums = JSON.parse(
+  fs.readFileSync(path.join(repoDir, "node_modules", "electron", "checksums.json"), "utf8"),
+);
+
 // @electron/packager applies ignore patterns to root-relative paths such as
 // "/src/main.ts". Anchor them so we exclude only top-level project entries.
 const ignorePatterns = [
@@ -84,6 +92,7 @@ async function main() {
       prune: true,
       quiet: true,
       ignore: ignorePatterns,
+      download: { checksums: electronChecksums },
     });
 
     const stagedRootPath = outputs[0];
