@@ -1,5 +1,6 @@
 import type * as pty from "node-pty";
 import type { SessionProvider } from "../shared/session.js";
+import type { TerminalScreen } from "./terminal-screen.js";
 
 export type TerminalRuntimeKind = SessionProvider | "standalone";
 
@@ -30,7 +31,7 @@ export interface PendingTerminal {
   command: string;
   launchCwd: string;
   launchLabel: string;
-  outputBuffer: string;
+  screen: TerminalScreen;
   startupOutput: string;
   worktreePath: string;
   terminalRuntimeId: string;

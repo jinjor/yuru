@@ -84,10 +84,10 @@ import {
   recordAppWarning,
 } from "./error-center.js";
 import { createTerminalEnv } from "./terminal-env.js";
+import { TerminalScreen } from "./terminal-screen.js";
 import { buildShellStartupCommand, createInteractiveShellLaunchCommand } from "./shell-launch.js";
 
 const STARTUP_OUTPUT_LIMIT = 4000;
-const TERMINAL_SCROLLBACK_LIMIT = 200000;
 const OUTPUT_ACTIVE_GRACE_MS = 1500;
 // Focus, resize, and keystrokes make the agent's TUI repaint. That repaint is
 // real PTY output but a reaction to us poking the terminal, not the agent
@@ -164,14 +164,6 @@ function appendStartupOutput(existing: string, chunk: string): string {
     return combined;
   }
   return combined.slice(-STARTUP_OUTPUT_LIMIT);
-}
-
-function appendTerminalOutput(existing: string, chunk: string): string {
-  const combined = `${existing}${chunk}`;
-  if (combined.length <= TERMINAL_SCROLLBACK_LIMIT) {
-    return combined;
-  }
-  return combined.slice(-TERMINAL_SCROLLBACK_LIMIT);
 }
 
 function stripAnsi(text: string): string {
@@ -252,7 +244,7 @@ function killPtyAndWait(proc: pty.IPty): Promise<void> {
 
 export class YuruService {
   private readonly ptyProcesses = new Map<string, pty.IPty>();
-  private readonly ptyScrollback = new Map<string, string>();
+  private readonly ptyScreens = new Map<string, TerminalScreen>();
   private readonly ptyAttachments = new Map<string, { ready: boolean; pendingChunks: string[] }>();
   private readonly terminalRuntimeLastOutputAt = new Map<string, number>();
   private readonly terminalRuntimeLastInputAt = new Map<string, number>();
@@ -287,12 +279,18 @@ export class YuruService {
     return listSessionProviderDefinitions();
   }
 
-  attachPty(terminalRuntimeId: string): string {
+  // attach 登録から serialize 開始までを同期的に行うことで、attach 前に届いた出力は
+  // 必ず復元スナップショットに、attach 後に届いた出力は必ず pendingChunks に入る。
+  async attachPty(terminalRuntimeId: string): Promise<string> {
     this.ptyAttachments.set(terminalRuntimeId, {
       ready: false,
       pendingChunks: [],
     });
-    return this.ptyScrollback.get(terminalRuntimeId) ?? "";
+    const screen = this.ptyScreens.get(terminalRuntimeId);
+    if (!screen) {
+      return "";
+    }
+    return screen.serialize();
   }
 
   readyPty(terminalRuntimeId: string): string | null {
@@ -700,8 +698,10 @@ export class YuruService {
 
   ptyResize(terminalRuntimeId: string, cols: number, rows: number): void {
     const proc = this.ptyProcesses.get(terminalRuntimeId);
-    if (proc) {
+    const screen = this.ptyScreens.get(terminalRuntimeId);
+    if (proc && screen) {
       proc.resize(cols, rows);
+      screen.resize(cols, rows);
       this.markTerminalRuntimeInput(terminalRuntimeId);
     }
   }
@@ -791,10 +791,12 @@ export class YuruService {
     const startedAt = Date.now();
     const terminalRuntimeId = createTerminalRuntimeId(request.runtimeKind);
     const launchCommand = createInteractiveShellLaunchCommand(request.env);
+    const initialCols = 80;
+    const initialRows = 24;
     const proc = pty.spawn(launchCommand.command, launchCommand.args, {
       name: "xterm-256color",
-      cols: 80,
-      rows: 24,
+      cols: initialCols,
+      rows: initialRows,
       cwd: request.cwd,
       env: request.env,
     });
@@ -804,7 +806,7 @@ export class YuruService {
       command: request.startupCommand?.command ?? launchCommand.command,
       launchCwd: request.cwd,
       launchLabel: request.launchLabel,
-      outputBuffer: "",
+      screen: new TerminalScreen(initialCols, initialRows),
       startupOutput: "",
       worktreePath: request.worktreePath,
       terminalRuntimeId,
@@ -819,7 +821,7 @@ export class YuruService {
     }, 1500);
 
     proc.onData((data: string) => {
-      pending.outputBuffer = appendTerminalOutput(pending.outputBuffer, data);
+      pending.screen.write(data);
       if (!pending.startupSettled) {
         pending.startupOutput = appendStartupOutput(pending.startupOutput, data);
       }
@@ -829,10 +831,6 @@ export class YuruService {
       if (!this.isTerminalRuntimeReacting(pending.terminalRuntimeId)) {
         this.terminalRuntimeLastOutputAt.set(pending.terminalRuntimeId, Date.now());
       }
-      this.ptyScrollback.set(
-        pending.terminalRuntimeId,
-        appendTerminalOutput(this.ptyScrollback.get(pending.terminalRuntimeId) ?? "", data),
-      );
       const attachment = this.ptyAttachments.get(pending.terminalRuntimeId);
       if (!attachment) {
         return;
@@ -858,6 +856,7 @@ export class YuruService {
         startupSettled: pending.startupSettled,
       });
       this.pendingProcesses.delete(proc);
+      pending.screen.dispose();
       if (!pending.startupSettled && !pending.startupFailureReported) {
         pending.startupFailureReported = true;
         recordAppError(startupFailureMessage(pending, exitCode, signal));
@@ -867,6 +866,7 @@ export class YuruService {
       }
       this.clearTerminalRuntimeState(pending.terminalRuntimeId);
       this.ptyProcesses.delete(pending.terminalRuntimeId);
+      this.ptyScreens.delete(pending.terminalRuntimeId);
       this.ptyAttachments.delete(pending.terminalRuntimeId);
       this.terminalRuntimeMap.delete(pending.terminalRuntimeId);
       this.events.terminalRuntimeExited(pending.terminalRuntimeId);
@@ -887,7 +887,7 @@ export class YuruService {
     pending.providerSessionId = providerSessionId;
     this.pendingProcesses.delete(pending.proc);
     this.ptyProcesses.set(pending.terminalRuntimeId, pending.proc);
-    this.ptyScrollback.set(pending.terminalRuntimeId, pending.outputBuffer);
+    this.ptyScreens.set(pending.terminalRuntimeId, pending.screen);
     this.terminalRuntimeMap.set(pending.terminalRuntimeId, {
       provider: pending.provider,
       providerSessionId,
@@ -901,7 +901,7 @@ export class YuruService {
   private registerStandaloneTerminalRuntime(pending: PendingTerminal, repoPath: string): void {
     this.pendingProcesses.delete(pending.proc);
     this.ptyProcesses.set(pending.terminalRuntimeId, pending.proc);
-    this.ptyScrollback.set(pending.terminalRuntimeId, pending.outputBuffer);
+    this.ptyScreens.set(pending.terminalRuntimeId, pending.screen);
     this.terminalRuntimeMap.set(pending.terminalRuntimeId, {
       repoPath,
       worktreePath: pending.worktreePath,
@@ -999,7 +999,8 @@ export class YuruService {
     this.ptyProcesses.clear();
     this.ptyAttachments.clear();
     this.pendingProcesses.clear();
-    this.ptyScrollback.clear();
+    // screen の dispose は各 PTY の onExit で行われる。
+    this.ptyScreens.clear();
     this.clearTerminalRuntimeStates();
     await Promise.all(procs.map((proc) => killPtyAndWait(proc)));
   }
