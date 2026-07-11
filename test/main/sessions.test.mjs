@@ -308,6 +308,43 @@ test("loadSuggestedWorktreeSessions は suggested session を worktree ごとに
   ]);
 });
 
+test("loadSuggestedWorktreeSessions は 10MB を超える検索結果でも session を返す", async () => {
+  const worktreePath = path.join(tempDir, "large-output-repo", ".yuru", "worktrees", "task-a");
+  const codexSessionsDir = path.join(codexDir, "sessions", "2026", "05", "10");
+  fs.mkdirSync(codexSessionsDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(codexSessionsDir, "large-output.jsonl"),
+    jsonl(
+      {
+        type: "session_meta",
+        payload: {
+          id: "codex-large-output",
+          cwd: path.join(tempDir, "large-output-repo"),
+        },
+      },
+      {
+        type: "event_msg",
+        payload: {
+          type: "exec_command_end",
+          cwd: worktreePath,
+          output: "x".repeat(10 * 1024 * 1024),
+        },
+      },
+    ),
+  );
+
+  const suggestions = await loadSuggestedWorktreeSessions([worktreePath]);
+
+  assert.deepEqual(suggestions.get(worktreePath), [
+    {
+      provider: "codex",
+      providerSessionId: "codex-large-output",
+      cwd: path.join(tempDir, "large-output-repo"),
+      timestamp: 0,
+    },
+  ]);
+});
+
 test("loadSuggestedWorktreeSessions は rg が無ければ失敗する", async () => {
   const previousPath = process.env.PATH;
   const emptyBinDir = path.join(tempDir, "empty-bin");

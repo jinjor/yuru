@@ -1,7 +1,7 @@
 import { setTimeout } from "node:timers/promises";
 import fs from "fs";
 import path from "path";
-import { exec } from "../../exec.js";
+import { streamRipgrepLineMatches } from "../../ripgrep.js";
 import { createWorktree } from "../../git.js";
 import type {
   PendingSession,
@@ -12,10 +12,7 @@ import type {
 } from "../../agent.js";
 import { parseJsonLinesAs, readTextFileIfExists } from "../../agent-store-utils.js";
 import { type WorktreeSessionHint } from "../../worktree-session-detection.js";
-import {
-  detectClaudeWorktreeSessionLines,
-  type ClaudeSessionLine,
-} from "./worktree-session-detection.js";
+import { detectClaudeWorktreeSessionLines } from "./worktree-session-detection.js";
 import {
   claudeHistoryPath,
   claudeProjectsPath,
@@ -203,55 +200,31 @@ async function loadWorktreeSessionHints(
     return [];
   }
 
+  const projectsDir = claudeProjectsPath();
+  if (!fs.existsSync(projectsDir)) {
+    return [];
+  }
+
   const worktreePathKeys = new Set(worktreePaths.map((worktreePath) => path.resolve(worktreePath)));
   const hints: WorktreeSessionHint[] = [];
-  await Promise.all(
-    Array.from(await listClaudeSessionLineMatches(worktreePaths)).map(
-      async ([_filePath, lines]) => {
-        hints.push(
-          ...detectClaudeWorktreeSessionLines(lines, worktreePaths).filter((hint) =>
-            worktreePathKeys.has(path.resolve(hint.worktreePath)),
-          ),
-        );
-      },
-    ),
+  await streamRipgrepLineMatches(
+    [
+      "--hidden",
+      ...buildClaudeEvidencePatterns(worktreePaths).flatMap((pattern) => ["--regexp", pattern]),
+      "--",
+      projectsDir,
+    ],
+    projectsDir,
+    (_filePath, lines) => {
+      hints.push(
+        ...detectClaudeWorktreeSessionLines(lines, worktreePaths).filter((hint) =>
+          worktreePathKeys.has(path.resolve(hint.worktreePath)),
+        ),
+      );
+    },
   );
 
   return hints;
-}
-
-async function listClaudeSessionLineMatches(
-  worktreePaths: readonly string[],
-): Promise<Map<string, ClaudeSessionLine[]>> {
-  const projectsDir = claudeProjectsPath();
-  if (!fs.existsSync(projectsDir)) {
-    return new Map();
-  }
-
-  const patterns = buildClaudeEvidencePatterns(worktreePaths);
-  if (patterns.length === 0) {
-    return new Map();
-  }
-
-  try {
-    const output = await exec(
-      "rg",
-      [
-        "--json",
-        "--hidden",
-        ...patterns.flatMap((pattern) => ["--regexp", pattern]),
-        "--",
-        projectsDir,
-      ],
-      projectsDir,
-    );
-    return parseRipgrepJsonLineMatches(output);
-  } catch (error) {
-    if ((error as { code?: string | number }).code === 1) {
-      return new Map();
-    }
-    throw error;
-  }
 }
 
 function buildClaudeEvidencePatterns(worktreePaths: readonly string[]): string[] {
@@ -263,64 +236,6 @@ function buildClaudeEvidencePatterns(worktreePaths: readonly string[]): string[]
 
 function escapeRegex(value: string): string {
   return value.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
-}
-
-function parseRipgrepJsonLineMatches(output: string): Map<string, ClaudeSessionLine[]> {
-  const matchesByFilePath = new Map<string, ClaudeSessionLine[]>();
-
-  for (const line of output.split("\n")) {
-    if (!line) {
-      continue;
-    }
-
-    let message: unknown;
-    try {
-      message = JSON.parse(line) as unknown;
-    } catch {
-      continue;
-    }
-
-    if (typeof message !== "object" || message === null) {
-      continue;
-    }
-
-    const match = message as {
-      type?: unknown;
-      data?: {
-        path?: { text?: unknown };
-        lines?: { text?: unknown };
-        line_number?: unknown;
-      };
-    };
-    if (match.type !== "match") {
-      continue;
-    }
-    if (
-      typeof match.data?.path?.text !== "string" ||
-      typeof match.data?.lines?.text !== "string" ||
-      typeof match.data?.line_number !== "number"
-    ) {
-      continue;
-    }
-
-    const filePath = match.data.path.text;
-    const lines = matchesByFilePath.get(filePath) ?? [];
-    lines.push({
-      text: stripTrailingLineBreak(match.data.lines.text),
-      lineIndex: match.data.line_number - 1,
-    });
-    matchesByFilePath.set(filePath, lines);
-  }
-
-  for (const lines of matchesByFilePath.values()) {
-    lines.sort((a, b) => a.lineIndex - b.lineIndex);
-  }
-
-  return matchesByFilePath;
-}
-
-function stripTrailingLineBreak(line: string): string {
-  return line.replace(/\r?\n$/, "");
 }
 
 async function hasStoredSession(providerSessionId: string): Promise<boolean> {

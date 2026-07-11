@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import readline from "readline";
 import { createWorktree } from "../../git.js";
-import { exec } from "../../exec.js";
+import { streamRipgrepLineMatches } from "../../ripgrep.js";
 import type {
   PendingSession,
   SessionPreview,
@@ -24,10 +24,7 @@ import {
   getCodexSessionsDir,
 } from "./paths.js";
 import { loadWorktreeContextPrompt } from "../../worktree-context-prompt.js";
-import {
-  detectCodexWorktreeSessionLines,
-  type CodexSessionLine,
-} from "./worktree-session-detection.js";
+import { detectCodexWorktreeSessionLines } from "./worktree-session-detection.js";
 
 interface CodexSessionMeta {
   providerSessionId: string;
@@ -268,10 +265,23 @@ async function loadWorktreeSessionHints(
     return [];
   }
 
+  const sessionsDir = getCodexSessionsDir();
+  if (!fs.existsSync(sessionsDir)) {
+    return [];
+  }
+
   const worktreePathKeys = new Set(worktreePaths.map((worktreePath) => path.resolve(worktreePath)));
   const hints: WorktreeSessionHint[] = [];
-  await Promise.all(
-    Array.from(await listCodexSessionLineMatches(worktreePaths)).map(async ([filePath, lines]) => {
+  await streamRipgrepLineMatches(
+    [
+      "--fixed-strings",
+      "--hidden",
+      ...Array.from(worktreePathKeys).flatMap((worktreePath) => ["--regexp", worktreePath]),
+      "--",
+      sessionsDir,
+    ],
+    sessionsDir,
+    async (filePath, lines) => {
       const meta = await readCodexSessionMeta(filePath);
       if (!meta) {
         return;
@@ -283,7 +293,7 @@ async function loadWorktreeSessionHints(
           worktreePaths,
         ).filter((hint) => worktreePathKeys.has(path.resolve(hint.worktreePath))),
       );
-    }),
+    },
   );
 
   return hints;
@@ -317,104 +327,6 @@ async function readCodexSessionMeta(filePath: string): Promise<CodexSessionMeta 
   }
 
   return null;
-}
-
-async function listCodexSessionLineMatches(
-  worktreePaths: readonly string[],
-): Promise<Map<string, CodexSessionLine[]>> {
-  const sessionsDir = getCodexSessionsDir();
-  if (!fs.existsSync(sessionsDir)) {
-    return new Map();
-  }
-
-  const worktreePathPatterns = Array.from(
-    new Set(
-      worktreePaths
-        .map((worktreePath) => path.resolve(worktreePath))
-        .filter((worktreePath) => worktreePath.length > 0),
-    ),
-  );
-  if (worktreePathPatterns.length === 0) {
-    return new Map();
-  }
-
-  const args = [
-    "--json",
-    "--fixed-strings",
-    "--hidden",
-    ...worktreePathPatterns.flatMap((worktreePath) => ["--regexp", worktreePath]),
-    "--",
-    sessionsDir,
-  ];
-
-  try {
-    const output = await exec("rg", args, sessionsDir);
-    return parseRipgrepJsonLineMatches(output);
-  } catch (error) {
-    const code = (error as { code?: string | number }).code;
-    if (code === 1) {
-      return new Map();
-    }
-    throw error;
-  }
-}
-
-function parseRipgrepJsonLineMatches(output: string): Map<string, CodexSessionLine[]> {
-  const matchesByFilePath = new Map<string, CodexSessionLine[]>();
-
-  for (const line of output.split("\n")) {
-    if (!line) {
-      continue;
-    }
-
-    let message: unknown;
-    try {
-      message = JSON.parse(line) as unknown;
-    } catch {
-      continue;
-    }
-
-    if (typeof message !== "object" || message === null) {
-      continue;
-    }
-
-    const match = message as {
-      type?: unknown;
-      data?: {
-        path?: { text?: unknown };
-        lines?: { text?: unknown };
-        line_number?: unknown;
-      };
-    };
-    if (match.type !== "match") {
-      continue;
-    }
-    if (
-      typeof match.data?.path?.text !== "string" ||
-      typeof match.data?.lines?.text !== "string" ||
-      typeof match.data?.line_number !== "number"
-    ) {
-      continue;
-    }
-
-    const filePath = match.data.path.text;
-    const lines = matchesByFilePath.get(filePath) ?? [];
-    lines.push({
-      text: stripTrailingLineBreak(match.data.lines.text),
-      lineIndex: match.data.line_number - 1,
-    });
-    matchesByFilePath.set(filePath, lines);
-  }
-
-  for (const lines of matchesByFilePath.values()) {
-    lines.sort((a, b) => a.lineIndex - b.lineIndex);
-  }
-
-  return matchesByFilePath;
-}
-
-function stripTrailingLineBreak(line: string): string {
-  return line.replace(/\r?\n$/, "");
 }
 
 async function findSessionForLaunch(
