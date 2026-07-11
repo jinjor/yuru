@@ -7,6 +7,7 @@ import {
   createCommittedRepo,
   createE2eContext,
   createGitWorktree,
+  git,
   gitOutput,
   launchWindow,
   readMetadata,
@@ -82,6 +83,33 @@ test("worktree を cwd にした生きたプロセスがあると Remove はブ�
     expect(worktreePaths(context, repoDir)).toContain(worktreePath);
   } finally {
     blocker.kill("SIGKILL");
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+test("残留ロックのある worktree は unlock を挟んで削除できる", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context);
+    const worktreePath = await createGitWorktree(context, repoDir, "feature/stale-lock");
+    // ロックをかけたプロセスが異常終了した状況を再現する (ロックは .git 配下のファイルとして残る)
+    git(["worktree", "lock", "--reason", "claude session stale (pid 1 start now)", worktreePath], repoDir);
+    await registerRepo(context, repoDir, [{ worktreePath }]);
+
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+
+    await openRemovalDialog(window, "feature/stale-lock");
+    await window.locator(".removal-btn.danger").click();
+
+    await expect(worktreeCard(window, "feature/stale-lock")).toHaveCount(0);
+    expect(worktreePaths(context, repoDir)).not.toContain(worktreePath);
+    const metadata = await readMetadata(context);
+    expect(metadata.taskWorktrees).toHaveLength(0);
+  } finally {
     await closeYuru(app);
     await context.cleanup();
   }

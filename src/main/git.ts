@@ -9,6 +9,7 @@ export interface WorktreeInfo {
   path: string;
   branch: string | null;
   headSha: string;
+  locked: boolean;
 }
 
 export async function getCurrentBranch(cwd: string): Promise<string | null> {
@@ -259,6 +260,7 @@ export function parseWorktreeListPorcelain(
     let wtPath: string | null = null;
     let branch: string | null = null;
     let headSha: string | null = null;
+    let locked = false;
     for (const line of lines) {
       if (line.startsWith("worktree ")) {
         wtPath = line.substring("worktree ".length);
@@ -266,10 +268,12 @@ export function parseWorktreeListPorcelain(
         branch = parseWorktreeBranch(line.substring("branch ".length));
       } else if (line.startsWith("HEAD ")) {
         headSha = line.substring("HEAD ".length).trim() || null;
+      } else if (line === "locked" || line.startsWith("locked ")) {
+        locked = true;
       }
     }
     if (wtPath && headSha && toWorktreePathKey(wtPath) !== mainWorktreePathKey) {
-      worktrees.push({ path: wtPath, branch, headSha });
+      worktrees.push({ path: wtPath, branch, headSha, locked });
     }
   }
   return worktrees;
@@ -308,6 +312,10 @@ export async function createWorktree(
 
 export async function removeWorktree(repoPath: string, worktreePath: string): Promise<void> {
   await exec("git", ["worktree", "remove", worktreePath], repoPath);
+}
+
+export async function unlockWorktree(repoPath: string, worktreePath: string): Promise<void> {
+  await exec("git", ["worktree", "unlock", worktreePath], repoPath);
 }
 
 // 未コミット変更や untracked file があると `git worktree remove` は拒否する。`--force` でそれらを捨てて消す。

@@ -114,7 +114,7 @@ test("parseNameStatusZ は rename を移動元つきで返す", () => {
   ]);
 });
 
-test("parseWorktreeListPorcelain は main worktree を除外し detached worktree も返す", () => {
+test("parseWorktreeListPorcelain は main worktree を除外し detached worktree や locked 状態も返す", () => {
   const output = [
     "worktree /repo",
     "HEAD 1111111111111111111111111111111111111111",
@@ -133,6 +133,11 @@ test("parseWorktreeListPorcelain は main worktree を除外し detached worktre
     "detached",
     "locked testing",
     "",
+    "worktree /repo/.yuru/worktrees/locked-no-reason-task",
+    "HEAD 5555555555555555555555555555555555555555",
+    "detached",
+    "locked",
+    "",
   ].join("\n");
 
   assert.deepEqual(parseWorktreeListPorcelain(output, "/repo"), [
@@ -140,16 +145,25 @@ test("parseWorktreeListPorcelain は main worktree を除外し detached worktre
       path: "/repo/.yuru/worktrees/task-a",
       branch: "task-a",
       headSha: "2222222222222222222222222222222222222222",
+      locked: false,
     },
     {
       path: "/repo/.yuru/worktrees/detached-task",
       branch: null,
       headSha: "3333333333333333333333333333333333333333",
+      locked: false,
     },
     {
       path: "/repo/.yuru/worktrees/locked-task",
       branch: null,
       headSha: "4444444444444444444444444444444444444444",
+      locked: true,
+    },
+    {
+      path: "/repo/.yuru/worktrees/locked-no-reason-task",
+      branch: null,
+      headSha: "5555555555555555555555555555555555555555",
+      locked: true,
     },
   ]);
 });

@@ -30,6 +30,7 @@ import {
   listWorktrees,
   removeWorktree as removeGitWorktree,
   removeWorktreeForce as removeGitWorktreeForce,
+  unlockWorktree as unlockGitWorktree,
 } from "./git.js";
 import { hasLiveProcessInWorktree } from "./worktree-process-check.js";
 import { getGitHubPullRequestForBranch } from "./github.js";
@@ -519,6 +520,11 @@ export class YuruService {
     }
 
     try {
+      // git worktree のロックは .git 配下に残るファイルで、かけたプロセス (Claude Code など) が
+      // 異常終了すると残留する。上で生きたプロセスがないことを確認済みなので、解除してから消す。
+      if (worktree.locked) {
+        await unlockGitWorktree(worktree.repoPath, worktree.worktreePath);
+      }
       if (force) {
         await removeGitWorktreeForce(worktree.repoPath, worktree.worktreePath);
       } else {
@@ -1181,6 +1187,7 @@ export class YuruService {
     worktreePath: string;
     branch: string | null;
     headSha: string | null;
+    locked: boolean;
   } | null> {
     for (const repo of loadRepos()) {
       if (!(await isSupportedGitRepo(repo.repoPath))) {
@@ -1197,6 +1204,8 @@ export class YuruService {
           worktreePath: repo.repoPath,
           branch,
           headSha,
+          // main worktree は git の仕様上ロックできない
+          locked: false,
         };
       }
       const worktrees = await listWorktrees(repo.repoPath);
@@ -1208,6 +1217,7 @@ export class YuruService {
           worktreePath: worktree.path,
           branch: worktree.branch,
           headSha: worktree.headSha,
+          locked: worktree.locked,
         };
       }
     }
