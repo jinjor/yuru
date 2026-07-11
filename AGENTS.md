@@ -2,89 +2,43 @@
 
 ## Development
 
-After editing files on macOS, rebuild and restart the app:
+After editing files on macOS, rebuild and restart the app to check behavior changes:
 
 ```sh
 npm run build
 npm run app:restart
 ```
 
-Run these commands from the active task worktree, not from the repository root.
-
-This is for checking behavior changes. Documentation-only edits do not need a rebuild or restart.
+Run these from the active task worktree, not from the repository root. Documentation-only edits need no rebuild or restart.
 
 ## E2E
 
 Electron/Playwright e2e launches a real macOS GUI app. In Codex, do not run it in the default sandbox; use an approved/escalated `npm run test:e2e` command. Running `_electron.launch()` in `CODEX_SANDBOX=seatbelt` can abort Electron during macOS app registration and leave a system crash/reopen dialog.
 
-E2E runs hide the BrowserWindow by default with `YURU_E2E_HIDE_WINDOW=1`. Use `YURU_E2E_SHOW_WINDOW=1 npm run test:e2e -- ...` only when visible debugging is needed.
+E2E runs hide the BrowserWindow by default (`YURU_E2E_HIDE_WINDOW=1`). Use `YURU_E2E_SHOW_WINDOW=1 npm run test:e2e -- ...` only when visible debugging is needed.
 
 ## Docs
+
+継続的にメンテされる最新情報は次の 4 つだけ:
 
 - Purpose: `docs/purpose.md`
 - Product backlog: `docs/backlog.md`
 - Architecture notes: `docs/architecture.md`
 - Coding guidelines: `docs/coding-guidelines.md`
-- 継続的にメンテする前提で最新情報として読んでよいのは上の 4 つだけ
-- それ以外の docs は、書いた時点での調査・設計・検討の記録であり、最新情報が書かれていることを期待して読んではいけない。
-  - 実装や現在の設計とズレていても、更新しないこと。
-  - 現在の設計として残すべき内容は architecture など、メンテ対象のドキュメントに書くこと。
-  - ADR は過去の大きな設計判断の記録として読むこと。
+
+それ以外の docs（ADR を含む）は書いた時点での調査・設計・検討の記録。現在の実装とズレていても更新しない。現在の設計として残すべき内容は architecture などメンテ対象のドキュメントに書く。
 
 ## Communication
 
-- 人間はざっくりとしかコードを読んでいない前提で話すこと。
-  - 設計やバグの原因を説明する時は、変数名や関数名を細かく並べずに「つまりどういうことか」を伝えること。
-  - 詳細な変数名や関数名が必要な場合は、それが何を表すものかを丁寧に説明すること。
-  - 悪い例: `x` が `y` で初期化されず `z` が不定になっています。
-  - 良い例: セッション ID が初期化時に取得できないのでポーリングしています。
-- 勝手に独自用語を生み出さず、既存のコード・ドキュメント・ユーザーの言葉に合わせること。
+- 読み手はコードをざっくりとしか読んでいない前提で、設計やバグの説明は「つまりどういうことか」から伝える。変数名・関数名を出すときは、それが何を表すかを添える。
+- 独自用語を作らず、既存のコード・ドキュメント・ユーザーの言葉に合わせる。
 
 ## Design
 
-- シンプルは正義、複雑さは悪。
-  - 可能な限り複雑さを導入せず、シンプルな方法で解決すること。
-  - コードが複雑になりそうな時、まず根本原因を改善できないかを考えること。
-  - やむをえず実装が汚くなる場合は、そのまま進めずに何が汚くなるのか、なぜ避けられないのかを説明して事前に相談すること。
-  - 将来の可能性を考えて余計なコードを書かないこと（YAGNI）。
-  - 限りなく可能性の低い状況に対応するために大量のコードを書かないこと。
-
-- 失敗時のフォールバックを勝手に実装しないこと。
-  - 失敗した時にどういう挙動をするかは重要な設計判断である。
-  - 失敗する具体的な条件が分かっており、現実的に十分起こりうる場合、どのような例外処理をするかをまず相談すること。
-  - 余計なフォールバックは失敗（ほとんどプログラムのミス）に気づくのを遅らせるだけである。
-  - catch を使う場合は、 try する範囲をなるべく狭め、ハンドリング出来ない例外は投げ直すこと。
-  - 勝手に「空配列にしておこう」「空文字にしておこう」などと考えないこと。
-  - 滅多に起こり得ない `| null` なども分岐を増やしてプログラムを複雑にするのでやめること。
-
-- 状態の居場所を考えること。
-  - single source of truth を重視すること。
-  - ある状態変化が別の状態変化を生む時、後者はキャッシュであり、不要なら削除すべきである。
-  - selected な状態は、その選択を一意に表す ID だけを持つことを基本にする。選択対象のオブジェクト全体を state に持たないこと。
-
-- 嫌なコードの臭いを感じとり、設計の改善で解決できないかを考えること。
-  - 例
-    - useRef の多用
-    - useEffect の多用
-    - set しか使っていない useState
-    - requestAnimationFrame, setTimeout の使用
-    - deps list の一部をあえて抜いている
-    - 抽象度の高いレイヤーに具体的すぎるロジックが書かれている
-    - `selectedXXX` が ID ではなくオブジェクトになっている
-    - 選択時のコールバックが ID ではなくオブジェクトを渡している
-    - `id` フィールドに複数の意味の値を入れている
-  - 上記のようなパターンを避けることが目的なのではなく、これらの現象を生む設計の歪みを修正するのが目的。これらを避けるために設計が汚くなったら本末転倒。
-
-- コンポーネントを適切な粒度で切り分けること。
-  - 1つのコンポーネントに全く性質の違う複数の状態を同居させないこと。
-  - 1つのコンポーネントでしか利用しないロジックは、そのコンポーネントに入れるか、ディレクトリ化してまとめること。
-
-- ライブラリの挙動を勝手に推測せずに調べること。
-  - 「こういう挙動をする可能性があるから」と防御的なコードを書かずに、ドキュメント・コード・実際の挙動を調べること。
-
-- 既存のコード・設計を疑うこと。
-  - 機能を実装しにくい時、既存のコード・設計に問題がある場合があるので、その場合は何が問題かを指摘すること。
-  - ただし、既存の設計を大幅に変えるときは事前に相談すること。
-
-- 場当たり的な修正をしないこと。
-  - 「最小修正」で進める理由はどこにもない。真の原因を突き止め、問題を根本から直すこと。
+- 現在確認できている要件を満たす、最もシンプルな設計を選ぶ。将来の可能性のためのコードや抽象化は書かない（YAGNI）。
+- 問題は根本原因から直す。ただし、無関係なリファクタリングへ変更を広げない。機能を実装しづらいときは既存設計の問題を疑い、問題があれば指摘する。
+- 失敗時の挙動は重要な設計判断。フォールバック（リトライ、空値での代替、エラーの握りつぶし、防御目的の nullable 化）を勝手に追加しない。
+- 状態は single source of truth を保つ。他の状態から導出できる値を state に持たない。選択状態はオブジェクトではなく ID で持つ。
+- コンポーネントは性質の違う状態が同居しない粒度で切り分け、単一コンポーネント専用のロジックはその近くに置く。
+- ライブラリの挙動を推測して防御的なコードを書かない。ドキュメント・コード・実際の挙動で確かめる。
+- 次の場合は実装前に相談する: 既存設計の大幅な変更、避けられない複雑さや汚さの導入、現実的に起こりうる失敗のハンドリング方針の決定。
