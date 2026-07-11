@@ -134,22 +134,20 @@ async function loadMainWorktree(repoPath: string): Promise<WorktreeListSource> {
 async function loadGitHubPullRequests(
   repoEntries: readonly {
     repo: RepoMetadata;
-    mainWorktree: WorktreeListSource;
     gitWorktrees: readonly WorktreeInfo[];
   }[],
   loadGitHubPullRequest: LoadGitHubPullRequest,
 ): Promise<Map<string, GitHubPullRequest | null>> {
   const entries = await Promise.all(
-    repoEntries.flatMap(({ repo, mainWorktree, gitWorktrees }) => {
-      const worktrees = [mainWorktree, ...gitWorktrees];
-      return worktrees.map(
+    repoEntries.flatMap(({ repo, gitWorktrees }) =>
+      gitWorktrees.map(
         async (gitWorktree) =>
           [
             gitWorktree.path,
             await loadGitHubPullRequest(repo.repoPath, gitWorktree.branch),
           ] as const,
-      );
-    }),
+      ),
+    ),
   );
   return new Map(entries);
 }
