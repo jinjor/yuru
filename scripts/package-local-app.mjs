@@ -93,6 +93,11 @@ async function main() {
       quiet: true,
       ignore: ignorePatterns,
       download: { checksums: electronChecksums },
+      // @electron/packager 20 enables asar by default, but its default unpack
+      // rule only extracts "*.node" files. node-pty also needs its extensionless
+      // "spawn-helper" executable on the real filesystem — with it stuck inside
+      // app.asar, every terminal launch fails with posix_spawn ENOENT.
+      asar: false,
     });
 
     const stagedRootPath = outputs[0];
