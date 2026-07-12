@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!--
+    Yuru app icon: two open rings (large repo ring, small session ring)
+    interlocked like a loose chain, tilted 40°. Each ring opens at one of
+    the two circle intersections so the strokes never overlap.
+    Colors come from the editor theme (src/renderer/style.css):
+    bg #262f3f -> #11151d, rings #d8e1ef (text) and #7bc1ff (accent).
+  -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#262f3f"/>
+      <stop offset="1" stop-color="#11151d"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+    <g transform="rotate(-40 512 512)">
+      <g fill="none" stroke-width="72" stroke-linecap="round">
+        <g transform="rotate(-8.6 427 512)">
+          <circle cx="427" cy="512" r="200" stroke="#d8e1ef" stroke-dasharray="1056.6 200.1"/>
+        </g>
+        <g transform="rotate(-198.8 657 512)">
+          <circle cx="657" cy="512" r="140" stroke="#7bc1ff" stroke-dasharray="679.6 200.0"/>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>

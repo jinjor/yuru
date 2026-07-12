@@ -34,7 +34,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 
 | ID | Type | Area | Item | Notes |
 |---|---|---|---|---|
-| F20 | feature | App | アプリのアイコンを付ける | テンションとプロダクト感を上げたい |
 | I18 | investigate | Events / Worktree Context | worktree 表示情報の更新タイミングを matrix で整理する | 詳細: docs/backlog-details/I18-worktree-refresh-policy.md |
 | F32 | feature | Terminal | task worktree 外の作業を standalone terminal として分離する | task worktree list に混ぜない補助導線として欲しい |
 | P9 | polish | New Session | 長い repo path の省略ルールを見直す | 折りたたみが不自然 |

@@ -303,6 +303,11 @@ function registerIpcHandlers(): void {
 }
 
 app.whenReady().then(async () => {
+  if (!app.isPackaged) {
+    // Dev runs launch the stock Electron.app bundle, so the packaged .icns
+    // never applies; set the Dock icon at runtime instead.
+    app.dock?.setIcon(path.join(app.getAppPath(), "assets", "icon.png"));
+  }
   app.setAboutPanelOptions({
     applicationName: APP_NAME,
     applicationVersion: app.getVersion(),

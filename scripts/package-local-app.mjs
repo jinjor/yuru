@@ -26,6 +26,7 @@ const electronChecksums = JSON.parse(
 const ignorePatterns = [
   /^\/\.claude(?:$|\/)/,
   /^\/\.git(?:$|\/)/,
+  /^\/assets(?:$|\/)/,
   /^\/\.yuru(?:$|\/)/,
   /^\/bin(?:$|\/)/,
   /^\/docs(?:$|\/)/,
@@ -86,6 +87,7 @@ async function main() {
       appCategoryType: "public.app-category.developer-tools",
       appVersion: packageVersion,
       arch,
+      icon: path.join(repoDir, "assets", "icon.icns"),
       overwrite: true,
       out: packageRoot,
       platform: "darwin",
