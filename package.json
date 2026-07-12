@@ -1,6 +1,6 @@
 {
   "name": "yuru",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Vibe Coding editor for Claude Code and Codex CLI",
   "main": "dist/main/index.js",
   "scripts": {
