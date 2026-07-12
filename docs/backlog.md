@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-07-08
+Last updated: 2026-07-12
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -29,7 +29,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F42 | feature | Worktrees | remote branch から task worktree を作れるようにする | 他人や別環境で作った branch を Yuru の作業単位として開きたい |
 | F11 | feature | Diff | GitHub review のようにファイルごとに差分を確認済みにできるようにする | 大きめの差分で、どのファイルを見終わったかを失わずに確認したい |
 | F37 | feature | Diff | ブランチの任意のコミット間で diff を表示できるようにする | 複数コミットある作業で差分の範囲を切り替えて確認したい |
-| I21 | investigate | Diff / Changes | merge conflict 中のファイルの diff 表示を考える | conflict はすぐ出てくるシナリオ。scope 付き diff (staged/unstaged) は conflict 中の index を読めず全行追加に見える。具体的な対応は着手時に具体化する |
 
 ## Next
 
