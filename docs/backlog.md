@@ -26,10 +26,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 
 | ID | Type | Area | Item | Why now |
 |---|---|---|---|---|
-| B9 | bug | Terminal / Sessions | セッション作成直後に agent 起動コマンドがターミナルに残る | Codex で長い `exec codex ...` が残り、Claude も一瞬見える。作業開始直後の画面が壊れて見えるため最優先で直したい |
-| B10 | bug | Terminal | セッション再表示時にターミナル画面が大きく崩れることがある | B9 と同根かもしれないが未確定なので別件として追う。再表示で作業状態を読み直せないと実用上かなり困る |
-| B11 | bug | Errors / App | アプリ内でエラーログを確認できるようにする | 画面が急に消える、会社環境で無反応になる等の原因を後から究明したい。main 側の error center / IPC はあるが、画面上で確認する導線がない |
-| B12 | bug | Updates / Packaging | `yuru latest` が `npm run package:local` で落ちる原因を直す | 会社環境で今日 `yuru latest` したら packaging 中に落ちた。最新化できないと普段使いに戻せないので優先して調べたい |
 | F42 | feature | Worktrees | remote branch から task worktree を作れるようにする | 他人や別環境で作った branch を Yuru の作業単位として開きたい |
 | F11 | feature | Diff | GitHub review のようにファイルごとに差分を確認済みにできるようにする | 大きめの差分で、どのファイルを見終わったかを失わずに確認したい |
 | F37 | feature | Diff | ブランチの任意のコミット間で diff を表示できるようにする | 複数コミットある作業で差分の範囲を切り替えて確認したい |
