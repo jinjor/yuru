@@ -14,7 +14,12 @@ const PR_CACHE_TTL_MS = 15_000;
 let ghAvailableCache: TimedValue<boolean> | null = null;
 let ghAuthenticatedCache: TimedValue<boolean> | null = null;
 const repoSlugCache = new Map<string, string | null>();
-const pullRequestCache = new Map<string, TimedValue<GitHubPullRequest | null>>();
+const pullRequestCache = new Map<string, TimedValue<FetchedPullRequest | null>>();
+
+interface FetchedPullRequest {
+  pullRequest: GitHubPullRequest;
+  headRefOid: string;
+}
 
 function getCachedValue<T>(entry: TimedValue<T> | null): T | null {
   if (!entry || entry.expiresAt <= Date.now()) {
@@ -108,7 +113,7 @@ async function getRepoSlug(repoPath: string): Promise<string | null> {
   return slug;
 }
 
-function parsePullRequest(raw: string): GitHubPullRequest | null {
+function parsePullRequest(raw: string): FetchedPullRequest | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -125,10 +130,15 @@ function parsePullRequest(raw: string): GitHubPullRequest | null {
     state?: unknown;
     isDraft?: unknown;
     mergedAt?: unknown;
+    headRefOid?: unknown;
     url: unknown;
   };
 
-  if (typeof first.number !== "number" || typeof first.url !== "string") {
+  if (
+    typeof first.number !== "number" ||
+    typeof first.url !== "string" ||
+    typeof first.headRefOid !== "string"
+  ) {
     return null;
   }
 
@@ -149,15 +159,36 @@ function parsePullRequest(raw: string): GitHubPullRequest | null {
   }
 
   return {
-    prNumber: first.number,
-    state,
-    url: first.url,
+    pullRequest: {
+      prNumber: first.number,
+      state,
+      url: first.url,
+    },
+    headRefOid: first.headRefOid,
   };
+}
+
+// ブランチ名は使い回されることがあるので、名前一致だけでは過去の PR を誤って拾う。
+// open/draft は同名ブランチへの push で同じ PR が更新されるため名前一致で十分だが、
+// merged/closed は PR の head コミットが worktree の head と一致するときだけこのブランチの PR とみなす。
+function toVisiblePullRequest(
+  fetched: FetchedPullRequest | null,
+  headSha: string,
+): GitHubPullRequest | null {
+  if (!fetched) {
+    return null;
+  }
+  const { pullRequest, headRefOid } = fetched;
+  if (pullRequest.state === "merged" || pullRequest.state === "closed") {
+    return headRefOid === headSha ? pullRequest : null;
+  }
+  return pullRequest;
 }
 
 export async function getGitHubPullRequestForBranch(
   repoPath: string,
   branch: string | null,
+  headSha: string,
 ): Promise<GitHubPullRequest | null> {
   if (!branch || branch === "HEAD") {
     return null;
@@ -174,10 +205,10 @@ export async function getGitHubPullRequestForBranch(
   const cacheKey = `${repoSlug}:${branch}`;
   const cached = pullRequestCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
-    return cached.value;
+    return toVisiblePullRequest(cached.value, headSha);
   }
 
-  let value: GitHubPullRequest | null = null;
+  let value: FetchedPullRequest | null = null;
   try {
     const output = await exec(
       "gh",
@@ -193,7 +224,7 @@ export async function getGitHubPullRequestForBranch(
         "--limit",
         "1",
         "--json",
-        "number,state,isDraft,mergedAt,url",
+        "number,state,isDraft,mergedAt,headRefOid,url",
       ],
       repoPath,
     );
@@ -208,5 +239,5 @@ export async function getGitHubPullRequestForBranch(
     value,
     expiresAt: Date.now() + PR_CACHE_TTL_MS,
   });
-  return value;
+  return toVisiblePullRequest(value, headSha);
 }

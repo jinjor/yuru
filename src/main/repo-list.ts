@@ -32,6 +32,7 @@ type LoadSuggestedSessions = (
 type LoadGitHubPullRequest = (
   repoPath: string,
   branch: string | null,
+  headSha: string,
 ) => Promise<GitHubPullRequest | null>;
 
 interface WorktreeListSource {
@@ -144,7 +145,7 @@ async function loadGitHubPullRequests(
         async (gitWorktree) =>
           [
             gitWorktree.path,
-            await loadGitHubPullRequest(repo.repoPath, gitWorktree.branch),
+            await loadGitHubPullRequest(repo.repoPath, gitWorktree.branch, gitWorktree.headSha),
           ] as const,
       ),
     ),

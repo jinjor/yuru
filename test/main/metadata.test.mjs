@@ -574,13 +574,16 @@ test("loadRepoList は worktree branch の GitHub PR を返す", async () => {
     undefined,
     undefined,
     undefined,
-    async (_repoPath, branch) => {
-      loadedBranches.push(branch);
+    async (_repoPath, branch, headSha) => {
+      loadedBranches.push([branch, headSha]);
       return branch === "task-a" ? pullRequest : null;
     },
   );
 
-  assert.deepEqual(loadedBranches, ["task-a", "task-b"]);
+  assert.deepEqual(loadedBranches, [
+    ["task-a", "abc1234abc1234abc1234abc1234abc12"],
+    ["task-b", "abc1234abc1234abc1234abc1234abc12"],
+  ]);
   assert.equal(result[0].mainWorktree.githubPullRequest, undefined);
   assert.deepEqual(result[0].taskWorktrees[0].githubPullRequest, pullRequest);
   assert.equal(result[0].taskWorktrees[1].githubPullRequest, null);
