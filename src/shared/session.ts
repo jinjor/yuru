@@ -13,7 +13,7 @@ export interface SuggestedWorktreeSession {
 
 export interface GitHubPullRequest {
   prNumber: number;
-  state: "open" | "merged" | "closed";
+  state: "open" | "draft" | "merged" | "closed";
   url: string;
 }
 

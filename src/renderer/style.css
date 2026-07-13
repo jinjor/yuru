@@ -661,6 +661,12 @@ button.github-badge {
   border-color: rgba(122, 215, 161, 0.28);
 }
 
+.github-badge.draft {
+  color: #c2cad2;
+  background: rgba(110, 119, 129, 0.22);
+  border-color: rgba(160, 170, 180, 0.26);
+}
+
 .github-badge.merged {
   color: #bfc5ff;
   background: rgba(70, 78, 150, 0.22);

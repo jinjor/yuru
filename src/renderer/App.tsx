@@ -31,7 +31,7 @@ export function App() {
   const [worktreeTarget, setWorktreeTarget] = useState<string | null>(null);
   const [worktreeError, setWorktreeError] = useState<string | null>(null);
   const [removalTargetId, setRemovalTargetId] = useState<string | null>(null);
-  const [sidebarWidth, setSidebarWidth] = useState(260);
+  const [sidebarWidth, setSidebarWidth] = useState(390);
   const [errorNotices, setErrorNotices] = useState<AppErrorNotice[]>([]);
   const [isErrorLogOpen, setIsErrorLogOpen] = useState(false);
   const selectedWorktreeId = selection?.worktreeId ?? null;

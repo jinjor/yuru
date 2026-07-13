@@ -59,7 +59,8 @@ export function WorktreeRemovalDialog({
   };
 
   const isForce = mode === "force";
-  const hasOpenPullRequest = worktree.githubPullRequest?.state === "open";
+  const hasOpenPullRequest =
+    worktree.githubPullRequest?.state === "open" || worktree.githubPullRequest?.state === "draft";
 
   return (
     <Modal onClose={onClose} topOffset={topOffset}>

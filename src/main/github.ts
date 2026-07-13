@@ -123,6 +123,7 @@ function parsePullRequest(raw: string): GitHubPullRequest | null {
   const first = parsed[0] as {
     number?: unknown;
     state?: unknown;
+    isDraft?: unknown;
     mergedAt?: unknown;
     url: unknown;
   };
@@ -136,7 +137,9 @@ function parsePullRequest(raw: string): GitHubPullRequest | null {
     state = "merged";
   } else if (typeof first.state === "string") {
     const normalized = first.state.toLowerCase();
-    if (normalized === "open" || normalized === "closed" || normalized === "merged") {
+    if (normalized === "open") {
+      state = first.isDraft === true ? "draft" : "open";
+    } else if (normalized === "closed" || normalized === "merged") {
       state = normalized;
     }
   }
@@ -190,7 +193,7 @@ export async function getGitHubPullRequestForBranch(
         "--limit",
         "1",
         "--json",
-        "number,state,mergedAt,url",
+        "number,state,isDraft,mergedAt,url",
       ],
       repoPath,
     );
