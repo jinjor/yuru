@@ -63,7 +63,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 
 | ID | Type | Area | Item | Notes |
 |---|---|---|---|---|
-| I9 | investigate | App Runtime | build/restart 後にたまに白画面になる原因を調べる | 開発中の再起動ループで不安になる |
 | B3 | bug | Sessions | 古いセッション選択時の `No conversation found with ID: ...` のちらつきを消す | 誤解を生む |
 | F10 | feature | Terminal | ターミナル内文字列検索 | 独立機能として実装したい |
 | F12 | feature | Diff | Split mode | 面積と複雑さが増える |
@@ -75,6 +74,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | I7 | investigate | Sessions / Persistence | セッション終了メッセージの再到達性をどう担保するか決める | あとから確認できる保証がないと次の操作で迷いやすい |
 | I8 | investigate | Dependencies | 依存更新の安全運用を決める | minimum release age や通知方針を整理したい |
 | I20 | investigate | Workspace | repo ではない作業場所のサポート | 現在は Git repo 前提が強いため、standalone terminal / Files / Changes の扱いを分けて設計する |
+| B9 | bug | App Runtime / Build | 起動中の画面が参照する動的 import chunk を再ビルドで消さない | Reload で復旧でき、PTY も継続するため低優先。詳細: docs/backlog-details/B9-stale-dynamic-import.md |
 
 ## Open decisions
 
