@@ -1,6 +1,11 @@
 import type { AgentDefinition } from "./agent.js";
 import type { RepoListItem } from "./metadata.js";
-import type { AgentActivityState, TerminalRuntimeId, SessionProvider } from "./session.js";
+import type {
+  AgentActivityState,
+  GitHubPullRequest,
+  TerminalRuntimeId,
+  SessionProvider,
+} from "./session.js";
 
 export interface AppError {
   code:
@@ -128,6 +133,13 @@ export interface SessionUpdate {
   preview?: string;
 }
 
+// メインプロセスの PR ポーリングが検知した、worktree ごとの PR 情報の更新。
+// null は「この branch に PR が無い」こと。
+export interface PullRequestUpdate {
+  worktreeId: string;
+  pullRequest: GitHubPullRequest | null;
+}
+
 export interface ElectronAPI {
   getRepos: () => Promise<RepoListItem[]>;
   getSessionProviders: () => Promise<AgentDefinition[]>;
@@ -175,6 +187,7 @@ export interface ElectronAPI {
   onSessionChanged: (
     callback: (terminalRuntimeId: TerminalRuntimeId, update: SessionUpdate) => void,
   ) => () => void;
+  onPullRequestsChanged: (callback: (updates: PullRequestUpdate[]) => void) => () => void;
   onFileTreeChanged: (callback: (worktreeId: string, relativePath: string) => void) => () => void;
   attachPty: (terminalRuntimeId: TerminalRuntimeId) => Promise<string>;
   readyPty: (terminalRuntimeId: TerminalRuntimeId) => Promise<void>;

@@ -8,9 +8,13 @@ import {
 import "@xterm/xterm/css/xterm.css";
 import { AlertTriangle } from "lucide-react";
 import type { AgentDefinition } from "../shared/agent";
-import type { AppErrorNotice, SessionUpdate } from "../shared/ipc";
+import type { AppErrorNotice, PullRequestUpdate, SessionUpdate } from "../shared/ipc";
 import type { RepoListItem, WorktreeListItem } from "../shared/metadata";
-import { type TerminalRuntimeId, type SessionProvider } from "../shared/session";
+import {
+  type GitHubPullRequest,
+  type TerminalRuntimeId,
+  type SessionProvider,
+} from "../shared/session";
 import { BranchNameInput } from "./components/BranchNameInput";
 import { ErrorLogModal } from "./components/ErrorLogModal";
 import { RepoList } from "./components/RepoList";
@@ -88,10 +92,14 @@ export function App() {
         setRepos((prev) => applySessionUpdate(prev, terminalRuntimeId, update));
       },
     );
+    const disposePullRequestsChanged = window.electronAPI.onPullRequestsChanged((updates) => {
+      setRepos((prev) => applyPullRequestUpdates(prev, updates));
+    });
     return () => {
       disposeRepoListChanged();
       disposeTerminalRuntimeExited();
       disposeSessionChanged();
+      disposePullRequestsChanged();
     };
   }, [refreshRepos]);
 
@@ -385,6 +393,43 @@ function applySessionUpdate(
       ),
     })),
   }));
+}
+
+// メインプロセスの PR ポーリングから push された PR 情報を該当 worktree に merge する。
+// フォーカス直後は変化のない全量 push が来るので、値が同じ項目はオブジェクトを
+// 差し替えず、何も変わらなければ prev をそのまま返して再描画を避ける。
+function applyPullRequestUpdates(
+  repos: RepoListItem[],
+  updates: PullRequestUpdate[],
+): RepoListItem[] {
+  const pullRequestsByWorktreeId = new Map(
+    updates.map((update) => [update.worktreeId, update.pullRequest]),
+  );
+  let changed = false;
+  const next = repos.map((repo) => {
+    const taskWorktrees = repo.taskWorktrees.map((worktree) => {
+      if (!pullRequestsByWorktreeId.has(worktree.worktreeId)) {
+        return worktree;
+      }
+      const pullRequest = pullRequestsByWorktreeId.get(worktree.worktreeId) ?? null;
+      if (samePullRequest(worktree.githubPullRequest ?? null, pullRequest)) {
+        return worktree;
+      }
+      changed = true;
+      return { ...worktree, githubPullRequest: pullRequest };
+    });
+    return taskWorktrees.some((worktree, i) => worktree !== repo.taskWorktrees[i])
+      ? { ...repo, taskWorktrees }
+      : repo;
+  });
+  return changed ? next : repos;
+}
+
+function samePullRequest(a: GitHubPullRequest | null, b: GitHubPullRequest | null): boolean {
+  if (a === null || b === null) {
+    return a === b;
+  }
+  return a.prNumber === b.prNumber && a.state === b.state && a.url === b.url;
 }
 
 function findActiveTerminalRuntimeId(

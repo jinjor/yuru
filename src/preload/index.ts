@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { AppErrorNotice, ElectronAPI, GitDiffScope, SessionUpdate } from "../shared/ipc.js";
+import type {
+  AppErrorNotice,
+  ElectronAPI,
+  GitDiffScope,
+  PullRequestUpdate,
+  SessionUpdate,
+} from "../shared/ipc.js";
 import type { SessionProvider } from "../shared/session.js";
 
 const electronAPI: ElectronAPI = {
@@ -72,6 +78,14 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.on("session:changed", listener);
     return () => {
       ipcRenderer.removeListener("session:changed", listener);
+    };
+  },
+  onPullRequestsChanged: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, updates: PullRequestUpdate[]) =>
+      callback(updates);
+    ipcRenderer.on("pullRequests:changed", listener);
+    return () => {
+      ipcRenderer.removeListener("pullRequests:changed", listener);
     };
   },
   onFileTreeChanged: (callback) => {

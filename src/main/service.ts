@@ -18,7 +18,7 @@ import {
   loadStoredSessionPreviews,
   loadSuggestedWorktreeSessions,
 } from "./sessions.js";
-import { toWorktreeId } from "./worktree-identity.js";
+import { isPathWithin, toWorktreeId } from "./worktree-identity.js";
 import {
   branchExists,
   getCurrentBranch,
@@ -33,7 +33,7 @@ import {
   unlockWorktree as unlockGitWorktree,
 } from "./git.js";
 import { hasLiveProcessInWorktree } from "./worktree-process-check.js";
-import { getGitHubPullRequestForBranch } from "./github.js";
+import { getLastKnownGitHubPullRequest } from "./github.js";
 import {
   listAllFiles as listAllRepoFiles,
   listFiles as listRepoFiles,
@@ -271,7 +271,7 @@ export class YuruService {
       previewsByKey,
       loadSuggestedWorktreeSessions,
       this.getTerminalRuntimesByWorktreePath(),
-      getGitHubPullRequestForBranch,
+      getLastKnownGitHubPullRequest,
       agentActivityStates,
     );
   }
@@ -404,7 +404,7 @@ export class YuruService {
         runtimeKind: "standalone",
         worktreePath: worktree.worktreePath,
       });
-      this.registerStandaloneTerminalRuntime(pending, worktree.repoPath);
+      this.registerStandaloneTerminalRuntime(pending);
       pending.startupSettled = true;
       return ok({ worktreeId, terminalRuntimeId: pending.terminalRuntimeId });
     } catch (error) {
@@ -741,6 +741,18 @@ export class YuruService {
     return idsByKey;
   }
 
+  // PullRequestMonitor がリポジトリごとのポーリング間隔を決めるのに使う。
+  // task worktree は必ず repo 配下に作られ、main worktree のセッションは
+  // worktreePath = repoPath なので、worktreePath の位置で repo への所属を判定できる。
+  hasAliveTerminalRuntimeInRepo(repoPath: string): boolean {
+    for (const info of this.terminalRuntimeMap.values()) {
+      if (isPathWithin(repoPath, info.worktreePath)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private getTerminalRuntimesByWorktreePath(): Map<
     string,
     { provider: SessionProvider; terminalRuntimeId: string }
@@ -897,19 +909,17 @@ export class YuruService {
     this.terminalRuntimeMap.set(pending.terminalRuntimeId, {
       provider: pending.provider,
       providerSessionId,
-      repoPath: pending.launchCwd,
       worktreePath: pending.worktreePath,
       startedAt: pending.startedAt,
     });
     this.ensureSessionMonitor();
   }
 
-  private registerStandaloneTerminalRuntime(pending: PendingTerminal, repoPath: string): void {
+  private registerStandaloneTerminalRuntime(pending: PendingTerminal): void {
     this.pendingProcesses.delete(pending.proc);
     this.ptyProcesses.set(pending.terminalRuntimeId, pending.proc);
     this.ptyScreens.set(pending.terminalRuntimeId, pending.screen);
     this.terminalRuntimeMap.set(pending.terminalRuntimeId, {
-      repoPath,
       worktreePath: pending.worktreePath,
       startedAt: pending.startedAt,
     });

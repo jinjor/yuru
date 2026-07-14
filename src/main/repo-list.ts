@@ -29,11 +29,12 @@ type ListWorktrees = (repoPath: string) => Promise<readonly WorktreeInfo[]>;
 type LoadSuggestedSessions = (
   worktreePaths: readonly string[],
 ) => Promise<ReadonlyMap<string, readonly SuggestedWorktreeSession[]>>;
-type LoadGitHubPullRequest = (
+// PullRequestMonitor が最後に取得した PR を読むだけ (GitHub へは行かない)。
+type GetGitHubPullRequest = (
   repoPath: string,
-  branch: string | null,
+  branch: string,
   headSha: string,
-) => Promise<GitHubPullRequest | null>;
+) => GitHubPullRequest | null | undefined;
 
 interface WorktreeListSource {
   path: string;
@@ -59,7 +60,7 @@ export async function loadRepoList(
   primarySessionPreviewsByKey?: ReadonlyMap<string, string>,
   loadSuggestedSessions?: LoadSuggestedSessions,
   activeTerminalRuntimesByWorktreePath?: ReadonlyMap<string, ActiveTerminalRuntimeWorktreeSession>,
-  loadGitHubPullRequest?: LoadGitHubPullRequest,
+  getGitHubPullRequest?: GetGitHubPullRequest,
   agentActivityStatesByTerminalRuntimeId?: ReadonlyMap<TerminalRuntimeId, AgentActivityState>,
 ): Promise<RepoListItem[]> {
   const metadata = loadMetadata();
@@ -86,9 +87,6 @@ export async function loadRepoList(
   const suggestedSessionsByWorktreePath = loadSuggestedSessions
     ? await loadSuggestedSessions(worktreePaths)
     : undefined;
-  const githubPullRequestsByWorktreePath = loadGitHubPullRequest
-    ? await loadGitHubPullRequests(repoEntries, loadGitHubPullRequest)
-    : undefined;
 
   return repoEntries.map(({ repo, taskWorktreeMetadataByPath, gitWorktrees, mainWorktree }) => {
     const taskWorktrees = gitWorktrees.map((gitWorktree) =>
@@ -100,7 +98,9 @@ export async function loadRepoList(
         activeTerminalRuntimesByWorktreePath,
         primarySessionPreviewsByKey,
         suggestedSessionsByWorktreePath?.get(gitWorktree.path) ?? [],
-        githubPullRequestsByWorktreePath?.get(gitWorktree.path),
+        gitWorktree.branch
+          ? getGitHubPullRequest?.(repo.repoPath, gitWorktree.branch, gitWorktree.headSha)
+          : undefined,
         agentActivityStatesByTerminalRuntimeId,
       ),
     );
@@ -114,7 +114,7 @@ export async function loadRepoList(
         undefined,
         undefined,
         [],
-        githubPullRequestsByWorktreePath?.get(mainWorktree.path),
+        undefined,
         undefined,
         true,
       ),
@@ -130,27 +130,6 @@ async function loadMainWorktree(repoPath: string): Promise<WorktreeListSource> {
     branch,
     headSha,
   };
-}
-
-async function loadGitHubPullRequests(
-  repoEntries: readonly {
-    repo: RepoMetadata;
-    gitWorktrees: readonly WorktreeInfo[];
-  }[],
-  loadGitHubPullRequest: LoadGitHubPullRequest,
-): Promise<Map<string, GitHubPullRequest | null>> {
-  const entries = await Promise.all(
-    repoEntries.flatMap(({ repo, gitWorktrees }) =>
-      gitWorktrees.map(
-        async (gitWorktree) =>
-          [
-            gitWorktree.path,
-            await loadGitHubPullRequest(repo.repoPath, gitWorktree.branch, gitWorktree.headSha),
-          ] as const,
-      ),
-    ),
-  );
-  return new Map(entries);
 }
 
 function toWorktreeListItem(

@@ -8,18 +8,26 @@ interface TimedValue<T> {
   value: T;
 }
 
-const GH_STATUS_TTL_MS = 30_000;
-const PR_CACHE_TTL_MS = 15_000;
+// PR に加えて、その head コミットを持ち回る。ブランチ名の一致だけでは
+// 「このブランチの PR」と確定できないため (toVisiblePullRequest を参照)。
+export interface FetchedPullRequest {
+  pullRequest: GitHubPullRequest;
+  headRefOid: string;
+}
+
+// gh の存在・認証は滅多に変わらないので長めに覚える。gh auth status は
+// GitHub API を叩くため、ポーリングのたびに確認するとそれ自体がリクエストになる。
+const GH_STATUS_TTL_MS = 5 * 60_000;
 
 let ghAvailableCache: TimedValue<boolean> | null = null;
 let ghAuthenticatedCache: TimedValue<boolean> | null = null;
 const repoSlugCache = new Map<string, string | null>();
-const pullRequestCache = new Map<string, TimedValue<FetchedPullRequest | null>>();
-
-interface FetchedPullRequest {
-  pullRequest: GitHubPullRequest;
-  headRefOid: string;
-}
+// 最後に GitHub から取得できた branch -> PR。取得は PullRequestMonitor だけが行い、
+// repo list の組み立てはここから読むだけ (GitHub へのリクエストは発生しない)。
+const lastKnownPullRequestsByRepoPath = new Map<
+  string,
+  ReadonlyMap<string, FetchedPullRequest | null>
+>();
 
 function getCachedValue<T>(entry: TimedValue<T> | null): T | null {
   if (!entry || entry.expiresAt <= Date.now()) {
@@ -113,7 +121,66 @@ async function getRepoSlug(repoPath: string): Promise<string | null> {
   return slug;
 }
 
-function parsePullRequest(raw: string): FetchedPullRequest | null {
+// branch ごとの「最新の PR を 1 件」をエイリアスで束ねて 1 クエリにする。
+// 何 branch 載せてもレート消費は 1 クエリ分 (実測でエイリアス 120 個まで cost 1)。
+export function buildGitHubPullRequestQuery(repoSlug: string, branches: readonly string[]): string {
+  const [owner, name] = repoSlug.split("/");
+  const aliases = branches.map(
+    (branch, index) =>
+      `b${index}: pullRequests(headRefName: ${JSON.stringify(branch)}, first: 1, ` +
+      `orderBy: {field: CREATED_AT, direction: DESC}) { nodes { number state isDraft headRefOid url } }`,
+  );
+  return (
+    `query { repository(owner: ${JSON.stringify(owner)}, name: ${JSON.stringify(name)}) ` +
+    `{ ${aliases.join(" ")} } }`
+  );
+}
+
+function toFetchedPullRequest(node: unknown): FetchedPullRequest | null {
+  if (typeof node !== "object" || node === null) {
+    return null;
+  }
+  const pr = node as {
+    number?: unknown;
+    state?: unknown;
+    isDraft?: unknown;
+    headRefOid?: unknown;
+    url?: unknown;
+  };
+  if (
+    typeof pr.number !== "number" ||
+    typeof pr.url !== "string" ||
+    typeof pr.headRefOid !== "string"
+  ) {
+    return null;
+  }
+
+  let state: GitHubPullRequest["state"] | null = null;
+  if (pr.state === "MERGED") {
+    state = "merged";
+  } else if (pr.state === "CLOSED") {
+    state = "closed";
+  } else if (pr.state === "OPEN") {
+    state = pr.isDraft === true ? "draft" : "open";
+  }
+  if (!state) {
+    return null;
+  }
+
+  return {
+    pullRequest: {
+      prNumber: pr.number,
+      state,
+      url: pr.url,
+    },
+    headRefOid: pr.headRefOid,
+  };
+}
+
+export function parseGitHubPullRequestsResponse(
+  raw: string,
+  branches: readonly string[],
+): Map<string, FetchedPullRequest | null> | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -121,57 +188,25 @@ function parsePullRequest(raw: string): FetchedPullRequest | null {
     return null;
   }
 
-  if (!Array.isArray(parsed) || parsed.length === 0) {
+  const repository = (parsed as { data?: { repository?: unknown } })?.data?.repository;
+  if (typeof repository !== "object" || repository === null) {
     return null;
   }
 
-  const first = parsed[0] as {
-    number?: unknown;
-    state?: unknown;
-    isDraft?: unknown;
-    mergedAt?: unknown;
-    headRefOid?: unknown;
-    url: unknown;
-  };
-
-  if (
-    typeof first.number !== "number" ||
-    typeof first.url !== "string" ||
-    typeof first.headRefOid !== "string"
-  ) {
-    return null;
+  const result = new Map<string, FetchedPullRequest | null>();
+  for (const [index, branch] of branches.entries()) {
+    const alias = (repository as Record<string, unknown>)[`b${index}`];
+    const nodes = (alias as { nodes?: unknown })?.nodes;
+    const first = Array.isArray(nodes) ? nodes[0] : null;
+    result.set(branch, toFetchedPullRequest(first));
   }
-
-  let state: GitHubPullRequest["state"] | null = null;
-  if (first.mergedAt) {
-    state = "merged";
-  } else if (typeof first.state === "string") {
-    const normalized = first.state.toLowerCase();
-    if (normalized === "open") {
-      state = first.isDraft === true ? "draft" : "open";
-    } else if (normalized === "closed" || normalized === "merged") {
-      state = normalized;
-    }
-  }
-
-  if (!state) {
-    return null;
-  }
-
-  return {
-    pullRequest: {
-      prNumber: first.number,
-      state,
-      url: first.url,
-    },
-    headRefOid: first.headRefOid,
-  };
+  return result;
 }
 
 // ブランチ名は使い回されることがあるので、名前一致だけでは過去の PR を誤って拾う。
 // open/draft は同名ブランチへの push で同じ PR が更新されるため名前一致で十分だが、
 // merged/closed は PR の head コミットが worktree の head と一致するときだけこのブランチの PR とみなす。
-function toVisiblePullRequest(
+export function toVisiblePullRequest(
   fetched: FetchedPullRequest | null,
   headSha: string,
 ): GitHubPullRequest | null {
@@ -185,59 +220,64 @@ function toVisiblePullRequest(
   return pullRequest;
 }
 
-export async function getGitHubPullRequestForBranch(
+// 指定 branch 群の PR を GitHub から取得し、成功したら最終取得値を更新して返す。
+// null は「取得しなかった/できなかった」(gh が使えない・GitHub リポジトリでない・通信失敗)。
+// その場合、最終取得値は前のまま残る。
+export async function fetchGitHubPullRequests(
   repoPath: string,
-  branch: string | null,
-  headSha: string,
-): Promise<GitHubPullRequest | null> {
-  if (!branch || branch === "HEAD") {
-    return null;
-  }
+  branches: readonly string[],
+): Promise<ReadonlyMap<string, FetchedPullRequest | null> | null> {
+  const uniqueBranches = [...new Set(branches.filter((branch) => branch && branch !== "HEAD"))];
   if (!(await hasGhAuthenticated(repoPath))) {
     return null;
   }
-
   const repoSlug = await getRepoSlug(repoPath);
   if (!repoSlug) {
     return null;
   }
 
-  const cacheKey = `${repoSlug}:${branch}`;
-  const cached = pullRequestCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) {
-    return toVisiblePullRequest(cached.value, headSha);
+  if (uniqueBranches.length === 0) {
+    const empty = new Map<string, FetchedPullRequest | null>();
+    lastKnownPullRequestsByRepoPath.set(repoPath, empty);
+    return empty;
   }
 
-  let value: FetchedPullRequest | null = null;
+  let output: string;
   try {
-    const output = await exec(
+    output = await exec(
       "gh",
-      [
-        "pr",
-        "list",
-        "--repo",
-        repoSlug,
-        "--head",
-        branch,
-        "--state",
-        "all",
-        "--limit",
-        "1",
-        "--json",
-        "number,state,isDraft,mergedAt,headRefOid,url",
-      ],
+      ["api", "graphql", "-f", `query=${buildGitHubPullRequestQuery(repoSlug, uniqueBranches)}`],
       repoPath,
     );
-    value = parsePullRequest(output);
   } catch (error) {
-    // gh が使える前提での失敗 (ネットワーク断など)。PR バッジは出せないが記録は残す。
+    // gh が使える前提での失敗 (ネットワーク断など)。PR バッジは前回値のまま、記録は残す。
     recordAppWarning(toAppError(error, { command: "gh" }));
-    value = null;
+    return null;
   }
 
-  pullRequestCache.set(cacheKey, {
-    value,
-    expiresAt: Date.now() + PR_CACHE_TTL_MS,
-  });
-  return toVisiblePullRequest(value, headSha);
+  const result = parseGitHubPullRequestsResponse(output, uniqueBranches);
+  if (!result) {
+    recordAppWarning({
+      code: "command_failed",
+      message: "Could not read the GitHub pull request response.",
+      detail: `gh api graphql for ${repoSlug} returned an unexpected shape.`,
+    });
+    return null;
+  }
+
+  lastKnownPullRequestsByRepoPath.set(repoPath, result);
+  return result;
+}
+
+// undefined は「この branch をまだ取得していない」、null は「PR が無い (または隠す)」。
+export function getLastKnownGitHubPullRequest(
+  repoPath: string,
+  branch: string,
+  headSha: string,
+): GitHubPullRequest | null | undefined {
+  const fetched = lastKnownPullRequestsByRepoPath.get(repoPath)?.get(branch);
+  if (fetched === undefined) {
+    return undefined;
+  }
+  return toVisiblePullRequest(fetched, headSha);
 }

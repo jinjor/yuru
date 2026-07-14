@@ -8,7 +8,15 @@ import { YuruService } from "./service.js";
 import { APP_NAME, getWindowTitleForAppPath } from "./app-title.js";
 import { recordAppError, recordAppWarning, setErrorNoticesListener } from "./error-center.js";
 import { toAppError } from "./errors.js";
-import type { AppErrorNotice, GitDiffScope, SessionUpdate } from "../shared/ipc.js";
+import { fetchGitHubPullRequests } from "./github.js";
+import { listWorktrees } from "./git.js";
+import { PullRequestMonitor } from "./pull-request-monitor.js";
+import type {
+  AppErrorNotice,
+  GitDiffScope,
+  PullRequestUpdate,
+  SessionUpdate,
+} from "../shared/ipc.js";
 import type { SessionProvider } from "../shared/session.js";
 
 let mainWindow: BrowserWindow | null = null;
@@ -31,6 +39,16 @@ const service = new YuruService({
 
 setErrorNoticesListener(sendErrorNoticesChanged);
 
+// PR バッジの鮮度はこのポーリングが担う。ウィンドウのフォーカスに合わせて
+// 起動・停止するので、誰も見ていない間は GitHub へのリクエストが発生しない。
+const pullRequestMonitor = new PullRequestMonitor({
+  listRepos: loadRepos,
+  listWorktrees,
+  fetchPullRequests: fetchGitHubPullRequests,
+  hasAliveTerminalRuntimeInRepo: (repoPath) => service.hasAliveTerminalRuntimeInRepo(repoPath),
+  pullRequestsChanged: sendPullRequestsChanged,
+});
+
 function sendToRenderer(channel: string, ...args: unknown[]): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return;
@@ -52,6 +70,10 @@ function sendTerminalRuntimeExited(terminalRuntimeId: string): void {
 
 function sendSessionChanged(terminalRuntimeId: string, update: SessionUpdate): void {
   sendToRenderer("session:changed", terminalRuntimeId, update);
+}
+
+function sendPullRequestsChanged(updates: PullRequestUpdate[]): void {
+  sendToRenderer("pullRequests:changed", updates);
 }
 
 function sendRepoListChanged(): void {
@@ -160,6 +182,7 @@ async function stopApplicationServices(): Promise<void> {
     return;
   }
   servicesStopped = true;
+  pullRequestMonitor.stop();
   worktreeWatcher?.stop();
   await service.stop();
 }
@@ -331,6 +354,17 @@ app.whenReady().then(async () => {
   });
   void refreshWorktreeWatcher();
   registerIpcHandlers();
+
+  app.on("browser-window-focus", () => {
+    pullRequestMonitor.start();
+  });
+  app.on("browser-window-blur", () => {
+    pullRequestMonitor.stop();
+  });
+  // 起動時にすでにフォーカスされていると focus イベントが来ないことがあるため。
+  if (mainWindow?.isFocused()) {
+    pullRequestMonitor.start();
+  }
 });
 
 app.on("before-quit", (event) => {

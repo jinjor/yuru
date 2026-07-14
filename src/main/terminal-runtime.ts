@@ -5,7 +5,6 @@ import type { TerminalScreen } from "./terminal-screen.js";
 export type TerminalRuntimeKind = SessionProvider | "standalone";
 
 export interface TerminalRuntimeInfo {
-  repoPath: string;
   worktreePath: string;
   startedAt: number;
   provider?: SessionProvider;
