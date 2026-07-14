@@ -159,3 +159,42 @@ test("code search は空クエリと no results を表示する", async () => {
     await context.cleanup();
   }
 });
+
+test("code search は入力を続けた時に直前の大量の結果を残さない", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const files = Object.fromEntries(
+      Array.from({ length: 500 }, (_, index) => [
+        `src/broad-${String(index).padStart(3, "0")}.ts`,
+        `${"a ".repeat(80)}\n`,
+      ]),
+    );
+    files["src/narrow.ts"] = "ab\n";
+    const repoDir = await createCommittedRepo(context, files);
+    await registerRepo(context, repoDir);
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+    await openMainTerminal(window);
+
+    await window.keyboard.press("Meta+Shift+F");
+    const input = window.locator(".code-search-input");
+    await input.fill("a");
+    await expect(window.locator(".code-search-status")).toHaveText("Showing first 500 matches", {
+      timeout: 10_000,
+    });
+    await expect(window.locator(".code-search-match-row")).toHaveCount(500);
+
+    await input.fill("ab");
+    await expect(window.locator(".code-search-match-row")).toHaveCount(0);
+    await expect(window.locator(".code-search-status")).toHaveText("Searching...");
+    await expect(window.locator(".code-search-status")).toHaveText("1 matches", {
+      timeout: 10_000,
+    });
+    await expect(window.locator(".code-search-file-header")).toContainText("narrow.ts");
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});

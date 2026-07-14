@@ -93,7 +93,6 @@ export function SearchPane({
       setResult(null);
       setError(null);
       setIsSearching(false);
-      void window.electronAPI.cancelCodeSearch(worktreeId);
       return;
     }
 
@@ -130,7 +129,6 @@ export function SearchPane({
 
     return () => {
       window.clearTimeout(timeout);
-      void window.electronAPI.cancelCodeSearch(worktreeId);
     };
   }, [query, worktreeId]);
 
@@ -163,6 +161,17 @@ export function SearchPane({
     });
   };
 
+  const handleQueryChange = (nextQuery: string): void => {
+    // effect cleanup は描画後なので、大量の直前結果を再描画してからではキャンセルが遅い。
+    // 入力イベントの時点で古い検索リクエストと結果を無効にして、rg もすぐ停止する。
+    requestIdRef.current += 1;
+    void window.electronAPI.cancelCodeSearch(worktreeId);
+    setQuery(nextQuery);
+    setResult(null);
+    setError(null);
+    setIsSearching(nextQuery.trim().length > 0);
+  };
+
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>): void => {
     if (event.key === "ArrowDown") {
       event.preventDefault();
@@ -187,7 +196,7 @@ export function SearchPane({
           ref={inputRef}
           autoFocus
           className="code-search-input"
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => handleQueryChange(event.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Search code"
           value={query}
