@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-07-12
+Last updated: 2026-07-15
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -34,6 +34,8 @@ UI 改善も機能追加も同じ土俵で扱う。
 
 | ID | Type | Area | Item | Notes |
 |---|---|---|---|---|
+| F43 | feature | Worktrees / Terminal | worktree の作成・選択と session の操作を分離する | 詳細: docs/backlog-details/F43-worktree-session-responsibilities.md |
+| F44 | feature | Sessions / Terminal | primary session と worktree の紐付けを解除できるようにする | F43 完了後。worktree と session 履歴は残し、別 provider へ引き継げるようにする |
 | I18 | investigate | Events / Worktree Context | worktree 表示情報の更新タイミングを matrix で整理する | 詳細: docs/backlog-details/I18-worktree-refresh-policy.md |
 | F32 | feature | Terminal | task worktree 外の作業を standalone terminal として分離する | task worktree list に混ぜない補助導線として欲しい |
 | P9 | polish | New Session | 長い repo path の省略ルールを見直す | 折りたたみが不自然 |
@@ -46,7 +48,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F33 | feature | App Runtime | 起動元ごとに `start/stop/restart` できるようにする | 複数起動時に別の Yuru を巻き込まないようにしたい |
 | F36 | feature | Repos | `yuru add` の結果を実行中の画面に反映する | 詳細: docs/backlog-details/F36-yuru-add-refresh.md |
 | F40 | feature | Files / Editor | ファイルを埋め込みエディタで編集できるようにする (編集モード) | 詳細: docs/backlog-details/F40-edit-mode.md |
-| B7 | bug | Worktrees | repo 内の `.yuru` ディレクトリをやめる | 既存プロダクトは `.yuru` を ignore していないため、Yuru 利用だけで未追跡ファイルが出る |
+| B7 | bug | Worktrees / Git | repo 内の `/.yuru/` を Git の local exclude に登録する | tracked な `.gitignore` は変更せず、Yuru の worktree が未追跡表示や `git add .` の対象になることを防ぐ |
 | B8 | bug | Sessions | claude で `/clear` するとセッションが迷子になる | 詳細: docs/backlog-details/B8-clear-session-lost.md |
 | I10 | investigate | Files | 自前 tree で大量のファイルを表示した時の重さ対策を考える | 切り替え後に実測して判断したい |
 | I14 | investigate | Persistence | metadata が壊れていた時の救済を考える | 単一ファイルの一部破損で全体が読めなくなるため |
