@@ -26,6 +26,9 @@ UI 改善も機能追加も同じ土俵で扱う。
 
 | ID | Type | Area | Item | Why now |
 |---|---|---|---|---|
+| F45 | feature | App | 文字を拡大・縮小できるようにする | 読みやすい大きさに調整して使いたい |
+| P18 | polish | Worktrees | worktree を作成順に並べる | 作業を始めた順序で一覧を追いたい |
+| P19 | polish | Layout | 右ペインを広くする | 作業内容を表示する領域を広く使いたい |
 | F42 | feature | Worktrees | remote branch から task worktree を作れるようにする | 他人や別環境で作った branch を Yuru の作業単位として開きたい |
 | F11 | feature | Diff | GitHub review のようにファイルごとに差分を確認済みにできるようにする | 大きめの差分で、どのファイルを見終わったかを失わずに確認したい |
 | F37 | feature | Diff | ブランチの任意のコミット間で diff を表示できるようにする | 複数コミットある作業で差分の範囲を切り替えて確認したい |
@@ -34,6 +37,8 @@ UI 改善も機能追加も同じ土俵で扱う。
 
 | ID | Type | Area | Item | Notes |
 |---|---|---|---|---|
+| B10 | bug | Repos / Sessions | 新しいリポジトリで Claude session を開始できない | 初回起動時に trust の確認が必要になるため |
+| F46 | feature | Repos | リポジトリを管理対象から削除できるようにする | `yuru add` と対になる機能として欲しい |
 | F43 | feature | Worktrees / Terminal | worktree の作成・選択と session の操作を分離する | 詳細: docs/backlog-details/F43-worktree-session-responsibilities.md |
 | F44 | feature | Sessions / Terminal | primary session と worktree の紐付けを解除できるようにする | F43 完了後。worktree と session 履歴は残し、別 provider へ引き継げるようにする |
 | I18 | investigate | Events / Worktree Context | worktree 表示情報の更新タイミングを matrix で整理する | 詳細: docs/backlog-details/I18-worktree-refresh-policy.md |
