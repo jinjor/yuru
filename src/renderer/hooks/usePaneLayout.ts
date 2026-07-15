@@ -19,7 +19,7 @@ export function usePaneLayout({
   sidebarWidth,
   sessionViewColumnRef,
 }: UsePaneLayoutOptions): PaneLayout {
-  const [changesPanelWidth, setChangesPanelWidth] = useState(250);
+  const [changesPanelWidth, setChangesPanelWidth] = useState(375);
   const [previewRatio, setPreviewRatio] = useState(0.6);
 
   const runPointerDrag = useCallback(

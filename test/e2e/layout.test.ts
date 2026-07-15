@@ -10,6 +10,26 @@ import {
   writeFiles,
 } from "./helpers";
 
+test("初期表示ではターミナルの幅を保ったまま右ペインが広い", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context);
+    await registerRepo(context, repoDir);
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+    await openMainTerminal(window);
+
+    await expect(window.locator(".changes-panel")).toBeVisible();
+    expect(await elementWidth(window.locator(".changes-panel"))).toBe(375);
+    expect(await elementWidth(window.locator(".session-view-column"))).toBe(758);
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
 test("サイドバーのリサイズで幅が clamp 範囲内で変わる", async () => {
   const context = await createE2eContext();
   let app: ElectronApplication | null = null;

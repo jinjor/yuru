@@ -142,7 +142,7 @@ async function createWindow(): Promise<void> {
   const windowTitle = await getWindowTitleForAppPath(app.getAppPath());
   mainWindow = new BrowserWindow({
     title: windowTitle,
-    width: 1400,
+    width: 1525,
     height: 900,
     show: !HIDE_WINDOW_FOR_E2E,
     webPreferences: {
