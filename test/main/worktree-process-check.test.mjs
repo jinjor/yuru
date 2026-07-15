@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseLsofCwdPaths } from "../../src/main/worktree-process-check.ts";
+import { parseLsofCwdPaths, parseLsofCwdProcesses } from "../../src/main/worktree-process-check.ts";
 import { isPathWithin } from "../../src/main/worktree-identity.ts";
 
 test("parseLsofCwdPaths は lsof -F pn 出力から cwd パス (n 行) だけ取り出す", () => {
@@ -22,6 +22,25 @@ test("parseLsofCwdPaths は lsof -F pn 出力から cwd パス (n 行) だけ取
 
 test("parseLsofCwdPaths は空出力で空配列を返す", () => {
   assert.deepEqual(parseLsofCwdPaths(""), []);
+});
+
+test("parseLsofCwdProcesses は lsof 出力をプロセス単位にまとめる", () => {
+  const output = [
+    "p411",
+    "fcwd",
+    "n/",
+    "p31631",
+    "fcwd",
+    "n/Users/jinjor/projects/yuru/.yuru/worktrees/update-icon-2",
+  ].join("\n");
+
+  assert.deepEqual(parseLsofCwdProcesses(output), [
+    { pid: 411, cwd: "/" },
+    {
+      pid: 31631,
+      cwd: "/Users/jinjor/projects/yuru/.yuru/worktrees/update-icon-2",
+    },
+  ]);
 });
 
 test("isPathWithin は同一パスと配下のみ true にする", () => {

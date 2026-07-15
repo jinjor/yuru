@@ -60,7 +60,7 @@ test("clean な worktree を ︙ メニューから削除すると一覧・metad
   }
 });
 
-test("worktree を cwd にした生きたプロセスがあると Remove はブロックされる", async () => {
+test("worktree を cwd にしたプロセスの詳細を確認して停止・削除できる", async () => {
   const context = await createE2eContext();
   let app: ElectronApplication | null = null;
   const repoDir = await createCommittedRepo(context);
@@ -77,12 +77,71 @@ test("worktree を cwd にした生きたプロセスがあると Remove はブ�
     await openRemovalDialog(window, "feature/busy");
     await window.locator(".removal-btn.danger").click();
 
-    // 新しいモーダルを開かず、ダイアログ本文をブロック表示に差し替える
-    await expect(window.locator(".removal-text")).toContainText("running process");
+    // 同じダイアログ内で、worktree を使っているプロセスと判断材料を確認できる。
+    await expect(window.locator(".removal-process-summary")).toContainText(
+      "1 process is still using this worktree",
+    );
+    await expect(window.locator(".removal-process-item")).toHaveCount(1);
+    await expect(window.locator(".removal-process-command")).toContainText("sleep 60");
+    await expect(window.locator(".removal-process-meta")).toHaveText(/^PID \d+$/);
     await expect(worktreeCard(window, "feature/busy")).toBeVisible();
     expect(worktreePaths(context, repoDir)).toContain(worktreePath);
+
+    await expect(window.locator(".removal-btn.danger")).toHaveText("Stop and remove");
+    await window.locator(".removal-btn.danger").click();
+
+    await expect(worktreeCard(window, "feature/busy")).toHaveCount(0);
+    expect(worktreePaths(context, repoDir)).not.toContain(worktreePath);
+    await expect.poll(() => blocker.exitCode !== null || blocker.signalCode !== null).toBe(true);
   } finally {
-    blocker.kill("SIGKILL");
+    if (blocker.exitCode === null && blocker.signalCode === null) {
+      blocker.kill("SIGKILL");
+    }
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+test("複数の残存プロセスを一覧で確認してすべて停止・削除できる", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  const repoDir = await createCommittedRepo(context);
+  const worktreePath = await createGitWorktree(context, repoDir, "feature/multiple-busy");
+  const blockers = [
+    spawn("sleep", ["60"], { cwd: worktreePath, stdio: "ignore" }),
+    spawn("sleep", ["61"], { cwd: worktreePath, stdio: "ignore" }),
+  ];
+  try {
+    await registerRepo(context, repoDir, [{ worktreePath }]);
+
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+
+    await openRemovalDialog(window, "feature/multiple-busy");
+    await window.locator(".removal-btn.danger").click();
+
+    await expect(window.locator(".removal-process-summary")).toContainText(
+      "2 processes are still using this worktree",
+    );
+    await expect(window.locator(".removal-process-item")).toHaveCount(2);
+    await expect(window.locator(".removal-btn.danger")).toHaveText("Stop all and remove");
+
+    await window.locator(".removal-btn.danger").click();
+
+    await expect(worktreeCard(window, "feature/multiple-busy")).toHaveCount(0);
+    expect(worktreePaths(context, repoDir)).not.toContain(worktreePath);
+    await expect
+      .poll(() =>
+        blockers.every((blocker) => blocker.exitCode !== null || blocker.signalCode !== null),
+      )
+      .toBe(true);
+  } finally {
+    for (const blocker of blockers) {
+      if (blocker.exitCode === null && blocker.signalCode === null) {
+        blocker.kill("SIGKILL");
+      }
+    }
     await closeYuru(app);
     await context.cleanup();
   }
@@ -95,7 +154,10 @@ test("残留ロックのある worktree は unlock を挟んで削除できる",
     const repoDir = await createCommittedRepo(context);
     const worktreePath = await createGitWorktree(context, repoDir, "feature/stale-lock");
     // ロックをかけたプロセスが異常終了した状況を再現する (ロックは .git 配下のファイルとして残る)
-    git(["worktree", "lock", "--reason", "claude session stale (pid 1 start now)", worktreePath], repoDir);
+    git(
+      ["worktree", "lock", "--reason", "claude session stale (pid 1 start now)", worktreePath],
+      repoDir,
+    );
     await registerRepo(context, repoDir, [{ worktreePath }]);
 
     const launched = await launchWindow(context);

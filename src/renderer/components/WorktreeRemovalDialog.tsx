@@ -1,5 +1,6 @@
 import { AlertTriangle, GitBranch, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import type { WorktreeProcessInfo } from "../../shared/ipc";
 import type { WorktreeListItem } from "../../shared/metadata";
 import { worktreeLabelText } from "../utils/worktree";
 import { Modal } from "./Modal";
@@ -12,8 +13,8 @@ interface WorktreeRemovalDialogProps {
 }
 
 // 削除フローの確認ダイアログ。通常 (A) / open PR 警告付き (B) / force (C) を出し分ける。
-// Yuru が起動したセッションは削除時に自動で止まるが、Yuru 管理外のプロセスが worktree を握って
-// いるときは止められないので、新しいモーダルを開かず本文をブロック表示に差し替える。
+// Yuru が起動したセッションは削除時に自動で止める。その後もプロセスが worktree を握って
+// いるときは詳細一覧へ差し替え、全件の停止と削除を一つの明示操作として確認する。
 export function WorktreeRemovalDialog({
   worktree,
   topOffset,
@@ -21,7 +22,7 @@ export function WorktreeRemovalDialog({
   onRemoved,
 }: WorktreeRemovalDialogProps) {
   const [mode, setMode] = useState<"confirm" | "force">("confirm");
-  const [blockedByProcess, setBlockedByProcess] = useState(false);
+  const [blockingProcesses, setBlockingProcesses] = useState<WorktreeProcessInfo[] | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -36,9 +37,16 @@ export function WorktreeRemovalDialog({
     };
   }, [busy, onClose]);
 
-  const requestRemove = async (force: boolean): Promise<void> => {
+  const requestRemove = async (
+    force: boolean,
+    processesToStop?: WorktreeProcessInfo[],
+  ): Promise<void> => {
     setBusy(true);
-    const result = await window.electronAPI.removeWorktree(worktree.worktreeId, force);
+    const result = await window.electronAPI.removeWorktree(
+      worktree.worktreeId,
+      force,
+      processesToStop?.map(({ pid, command }) => ({ pid, command })),
+    );
     setBusy(false);
     if (!result.ok) {
       // git/unknown の失敗は error center に出るので、ここはダイアログを閉じるだけ。
@@ -50,10 +58,11 @@ export function WorktreeRemovalDialog({
         onRemoved(worktree.worktreeId);
         return;
       case "dirty":
+        setBlockingProcesses(null);
         setMode("force");
         return;
       case "process_alive":
-        setBlockedByProcess(true);
+        setBlockingProcesses(result.data.processes);
         return;
     }
   };
@@ -64,7 +73,7 @@ export function WorktreeRemovalDialog({
 
   return (
     <Modal onClose={onClose} topOffset={topOffset}>
-      <div className="removal-dialog">
+      <div className={`removal-dialog ${blockingProcesses ? "processes" : ""}`}>
         <div className={`removal-dialog-head ${isForce ? "danger" : ""}`}>
           {isForce ? (
             <AlertTriangle size={16} strokeWidth={2} aria-hidden="true" />
@@ -83,10 +92,32 @@ export function WorktreeRemovalDialog({
               {worktree.worktreePath}
             </span>
           </div>
-          {blockedByProcess ? (
-            <p className="removal-text">
-              This worktree still has a <b>running process</b> using it. Stop it first, then remove.
-            </p>
+          {blockingProcesses ? (
+            <>
+              <p className="removal-text removal-process-summary">
+                <b>
+                  {blockingProcesses.length} process{blockingProcesses.length === 1 ? "" : "es"}{" "}
+                  {blockingProcesses.length === 1 ? "is" : "are"} still using this worktree.
+                </b>{" "}
+                {blockingProcesses.length === 1 ? "It" : "They"} must be stopped before the worktree
+                can be removed.
+              </p>
+              <ul className="removal-process-list">
+                {blockingProcesses.map((processInfo) => (
+                  <li key={processInfo.pid} className="removal-process-item">
+                    <span className="removal-process-mark" aria-hidden="true" />
+                    <div className="removal-process-content">
+                      <code className="removal-process-command">{processInfo.command}</code>
+                      <span className="removal-process-meta">PID {processInfo.pid}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <p className="removal-process-caution">
+                <AlertTriangle size={13} strokeWidth={2} aria-hidden="true" />
+                Stopping {blockingProcesses.length === 1 ? "it" : "them"} may discard unsaved work.
+              </p>
+            </>
           ) : isForce ? (
             <>
               <div className="removal-note force">
@@ -117,10 +148,21 @@ export function WorktreeRemovalDialog({
           )}
         </div>
         <div className="removal-foot">
-          {blockedByProcess ? (
-            <button type="button" className="removal-btn ghost" onClick={onClose}>
-              Close
-            </button>
+          {blockingProcesses ? (
+            <>
+              <button type="button" className="removal-btn ghost" onClick={onClose} disabled={busy}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="removal-btn danger"
+                onClick={() => void requestRemove(isForce, blockingProcesses)}
+                disabled={busy}
+              >
+                {blockingProcesses.length === 1 ? "Stop" : "Stop all"}
+                {isForce ? " and force remove" : " and remove"}
+              </button>
+            </>
           ) : (
             <>
               <button type="button" className="removal-btn ghost" onClick={onClose} disabled={busy}>

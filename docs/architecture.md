@@ -146,7 +146,8 @@ worktree context prompt は `~/.yuru/worktree-context-prompt.txt` で差し替�
   - 同じ provider session が別 task worktree の primary だった場合は、元の strong link を外す
 - remove worktree
   - 追跡中の session (primary / suggested) が active な worktree はメニュー段階で削除させない
-  - 削除の直前に、その worktree を cwd にした生きたプロセスがないか OS に問い合わせる (lsof)。いれば削除しない
+  - 削除の直前に、その worktree を cwd にした生きたプロセスがないか OS に問い合わせる (lsof)
+  - セッションを止めた後も worktree を使用中のプロセスがいれば、command と PID を一覧表示する。明示確認後は、表示時になかったプロセスを止めないよう再照合して全件へ SIGTERM を送り、終了を確認してから削除する
   - 通常は `git worktree remove`、dirty で拒否されたら明示確認のうえ `--force`
   - 削除が成功したら metadata の task worktree record も削除する。branch と provider session 履歴は残す
 - startup maintenance

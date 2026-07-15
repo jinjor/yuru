@@ -32,7 +32,7 @@ import {
   removeWorktreeForce as removeGitWorktreeForce,
   unlockWorktree as unlockGitWorktree,
 } from "./git.js";
-import { hasLiveProcessInWorktree } from "./worktree-process-check.js";
+import { hasLiveProcessInWorktree, listLiveProcessesInWorktree } from "./worktree-process-check.js";
 import { getLastKnownGitHubPullRequest } from "./github.js";
 import {
   listAllFiles as listAllRepoFiles,
@@ -67,6 +67,7 @@ import {
   type GitDiffScope,
   type Result,
   type SessionUpdate,
+  type WorktreeProcessRef,
   type WorktreeRemovalOutcome,
   type WorktreeSessionSelection,
 } from "../shared/ipc.js";
@@ -101,6 +102,8 @@ const SESSION_MONITOR_INTERVAL_MS = 1000;
 // callback fires during environment cleanup and aborts. If a child ignores
 // SIGHUP we escalate to SIGKILL after this grace period so quit can never hang.
 const PTY_SHUTDOWN_GRACE_MS = 2000;
+const WORKTREE_PROCESS_TERMINATION_GRACE_MS = 2000;
+const WORKTREE_PROCESS_POLL_INTERVAL_MS = 100;
 const ESCAPE_CHARACTER = String.fromCharCode(0x1b);
 const ANSI_ESCAPE_PATTERN = new RegExp(`${ESCAPE_CHARACTER}\\[[0-9;]*[A-Za-z]`, "g");
 
@@ -241,6 +244,21 @@ function killPtyAndWait(proc: pty.IPty): Promise<void> {
     });
     proc.kill();
   });
+}
+
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+}
+
+function isNoSuchProcessError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "ESRCH"
+  );
 }
 
 export class YuruService {
@@ -498,12 +516,14 @@ export class YuruService {
   }
 
   // 削除フローは renderer 側が確認ダイアログを出し分け、実行直前の処理と git 削除をここで行う。
-  // Yuru が起動したセッションはこの worktree と運命を共にするので先に止める。残った Yuru 管理外の
-  // プロセスは勝手に kill できないので、見つかったら止めずに process_alive を返して警告に使う。
-  // 通常削除が dirty で拒否されたら dirty を返す。どちらも確認ダイアログの差し替えに使う。
+  // Yuru が起動したセッションはこの worktree と運命を共にするので先に止める。それでも残った
+  // プロセスは、詳細を process_alive で返して明示確認を取る。確認後は、表示時になかったプロセスを
+  // 勝手に止めないよう PID と command を照合してから SIGTERM を送り、全件の終了を確認して削除する。
+  // 通常削除が dirty で拒否されたら dirty を返し、別の force 確認に使う。
   async removeWorktree(
     worktreeId: string,
     force: boolean,
+    processesToStop?: WorktreeProcessRef[],
   ): Promise<Result<WorktreeRemovalOutcome>> {
     const worktree = await this.findGitWorktree(worktreeId);
     if (!worktree) {
@@ -515,8 +535,44 @@ export class YuruService {
 
     await this.stopTerminalRuntimesForWorktree(worktree.worktreePath);
 
-    if (await hasLiveProcessInWorktree(worktree.worktreePath, worktree.repoPath)) {
-      return ok({ status: "process_alive" });
+    let liveProcesses = await listLiveProcessesInWorktree(worktree.worktreePath, worktree.repoPath);
+    if (liveProcesses.length > 0) {
+      if (!processesToStop) {
+        return ok({ status: "process_alive", processes: liveProcesses });
+      }
+
+      const approvedProcesses = new Map(
+        processesToStop.map((processInfo) => [processInfo.pid, processInfo.command]),
+      );
+      const hasUnapprovedProcess = liveProcesses.some(
+        (processInfo) => approvedProcesses.get(processInfo.pid) !== processInfo.command,
+      );
+      if (hasUnapprovedProcess) {
+        return ok({ status: "process_alive", processes: liveProcesses });
+      }
+
+      for (const processInfo of liveProcesses) {
+        try {
+          process.kill(processInfo.pid, "SIGTERM");
+        } catch (error) {
+          if (!isNoSuchProcessError(error)) {
+            throw error;
+          }
+        }
+      }
+
+      const deadline = Date.now() + WORKTREE_PROCESS_TERMINATION_GRACE_MS;
+      while (
+        Date.now() < deadline &&
+        (await hasLiveProcessInWorktree(worktree.worktreePath, worktree.repoPath))
+      ) {
+        await wait(WORKTREE_PROCESS_POLL_INTERVAL_MS);
+      }
+
+      liveProcesses = await listLiveProcessesInWorktree(worktree.worktreePath, worktree.repoPath);
+      if (liveProcesses.length > 0) {
+        return ok({ status: "process_alive", processes: liveProcesses });
+      }
     }
 
     try {
@@ -927,7 +983,7 @@ export class YuruService {
 
   // この worktree で Yuru が起動したセッション / standalone terminal を止める。kill すると pty の
   // onExit が走り runtime の state も片付く。worktree 削除前に呼ぶことで、cwd を握る Yuru 製プロセスを
-  // 消してから生プロセスチェックにかけられる (チェックに残るのは Yuru 管理外のものだけになる)。
+  // 消してから生プロセスチェックにかけられる。
   private async stopTerminalRuntimesForWorktree(worktreePath: string): Promise<void> {
     const worktreePathKey = path.resolve(worktreePath);
     const procs: pty.IPty[] = [];

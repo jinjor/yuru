@@ -16,6 +16,7 @@ import type {
   GitDiffScope,
   PullRequestUpdate,
   SessionUpdate,
+  WorktreeProcessRef,
 } from "../shared/ipc.js";
 import type { SessionProvider } from "../shared/session.js";
 
@@ -265,9 +266,12 @@ function registerIpcHandlers(): void {
     },
   );
 
-  handleIpc("worktree:remove", (_event, worktreeId: string, force: boolean) => {
-    return service.removeWorktree(worktreeId, force);
-  });
+  handleIpc(
+    "worktree:remove",
+    (_event, worktreeId: string, force: boolean, processesToStop?: WorktreeProcessRef[]) => {
+      return service.removeWorktree(worktreeId, force, processesToStop);
+    },
+  );
 
   handleIpc("shell:openExternal", (_event, url: string) => {
     return service.openExternal(url);

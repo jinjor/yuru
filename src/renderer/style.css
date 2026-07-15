@@ -1965,6 +1965,10 @@ button.github-badge {
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
 }
 
+.removal-dialog.processes {
+  width: 500px;
+}
+
 .removal-dialog-head {
   display: flex;
   align-items: center;
@@ -2035,6 +2039,75 @@ button.github-badge {
 .removal-text b {
   color: var(--text);
   font-weight: 600;
+}
+
+.removal-process-summary {
+  margin-bottom: 12px;
+}
+
+.removal-process-list {
+  max-height: 280px;
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.removal-process-item {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr);
+  gap: 9px;
+  padding: 10px 11px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.removal-process-mark {
+  width: 6px;
+  height: 6px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--text-subtle);
+}
+
+.removal-process-content {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.removal-process-meta {
+  color: var(--text-subtle);
+  font-size: 10.5px;
+}
+
+.removal-process-command {
+  display: block;
+  padding: 0;
+  color: var(--text);
+  background: transparent;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.removal-process-caution {
+  display: flex;
+  gap: 6px;
+  margin: 12px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.removal-process-caution svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--warning);
 }
 
 .removal-note {

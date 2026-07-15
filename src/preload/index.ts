@@ -5,6 +5,7 @@ import type {
   GitDiffScope,
   PullRequestUpdate,
   SessionUpdate,
+  WorktreeProcessRef,
 } from "../shared/ipc.js";
 import type { SessionProvider } from "../shared/session.js";
 
@@ -26,8 +27,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke("worktreeTerminal:open", worktreeId),
   createWorktreeSession: (provider: SessionProvider, repoPath: string, branchName: string) =>
     ipcRenderer.invoke("session:createWorktree", provider, repoPath, branchName),
-  removeWorktree: (worktreeId: string, force: boolean) =>
-    ipcRenderer.invoke("worktree:remove", worktreeId, force),
+  removeWorktree: (worktreeId: string, force: boolean, processesToStop?: WorktreeProcessRef[]) =>
+    ipcRenderer.invoke("worktree:remove", worktreeId, force, processesToStop),
   openExternal: (url: string) => ipcRenderer.invoke("shell:openExternal", url),
   getGitPathStates: (worktreeId: string) => ipcRenderer.invoke("git:pathStates", worktreeId),
   getGitDiffDocument: (worktreeId: string, filePath: string, scope?: GitDiffScope) =>
