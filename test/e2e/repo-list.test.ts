@@ -1,4 +1,6 @@
 import { expect, test, type ElectronApplication } from "@playwright/test";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   closeYuru,
@@ -6,6 +8,7 @@ import {
   createEmptyRepo,
   createE2eContext,
   createGitWorktree,
+  git,
   gitOutput,
   launchWindow,
   readMetadata,
@@ -125,6 +128,34 @@ test("branch・detached・metadata 無しの task worktree を一覧表示する
     await expect(featureCard).toHaveAttribute("title", featurePath);
     await expect(worktreeCard(window, `detached @ ${head}`)).toBeVisible();
     await expect(window.locator(".task-worktree-card")).toHaveCount(3);
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+test("task worktree を path の辞書順ではなく作成順で表示する", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context);
+    const worktreesDir = await mkdtemp(path.join(tmpdir(), "yuru-e2e-ordered-worktrees-"));
+    context.addCleanupDir(worktreesDir);
+    for (const branch of ["z-created-first", "a-created-second", "m-created-third"]) {
+      git(["worktree", "add", "-b", branch, path.join(worktreesDir, branch)], repoDir);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    await registerRepo(context, repoDir);
+
+    const launched = await launchWindow(context);
+    app = launched.app;
+
+    await expect(launched.window.locator(".task-worktree-name")).toHaveText([
+      "main",
+      "z-created-first",
+      "a-created-second",
+      "m-created-third",
+    ]);
   } finally {
     await closeYuru(app);
     await context.cleanup();

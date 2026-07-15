@@ -89,6 +89,7 @@ Git 上には存在するが、まだ Yuru metadata に strong link を持たな
 
 各 repo の task worktree 一覧は、その repo に対して Git から worktree 群を読んで組み立てる。
 main worktree は task worktree として表示しない。
+task worktree は Git の管理ディレクトリの作成日時が古い順に表示する。
 その上に Yuru metadata、provider store、active terminal runtime を重ねる。
 
 - metadata の `primarySession` が有効なら、その session を task worktree の primary として表示する

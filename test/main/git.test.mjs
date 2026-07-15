@@ -1,8 +1,26 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
-import { parseWorktreeListPorcelain } from "../../src/main/git.ts";
+import { listWorktrees, parseWorktreeListPorcelain } from "../../src/main/git.ts";
 import { parseNameStatusZ, parseNumstatZ, parsePorcelainLine } from "../../src/main/git-status.ts";
+
+function runGit(args, cwd) {
+  execFileSync("git", args, {
+    cwd,
+    stdio: "ignore",
+    env: {
+      ...process.env,
+      GIT_AUTHOR_NAME: "Yuru Test",
+      GIT_AUTHOR_EMAIL: "yuru@example.test",
+      GIT_COMMITTER_NAME: "Yuru Test",
+      GIT_COMMITTER_EMAIL: "yuru@example.test",
+    },
+  });
+}
 
 test("parsePorcelainLine は staged と unstaged を分けて解釈する", () => {
   assert.deepEqual(parsePorcelainLine("M  src/app.ts"), {
@@ -166,4 +184,30 @@ test("parseWorktreeListPorcelain は main worktree を除外し detached worktre
       locked: true,
     },
   ]);
+});
+
+test("listWorktrees は path の辞書順ではなく作成順で返す", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-worktree-order-test-"));
+  const repoPath = path.join(root, "repo");
+  fs.mkdirSync(repoPath);
+
+  try {
+    runGit(["init", "-b", "main"], repoPath);
+    fs.writeFileSync(path.join(repoPath, "README.md"), "# test\n");
+    runGit(["add", "README.md"], repoPath);
+    runGit(["commit", "-m", "initial"], repoPath);
+
+    for (const branch of ["z-created-first", "a-created-second", "m-created-third"]) {
+      runGit(["worktree", "add", "-b", branch, path.join(root, branch)], repoPath);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
+    const worktrees = await listWorktrees(repoPath);
+    assert.deepEqual(
+      worktrees.map((worktree) => worktree.branch),
+      ["z-created-first", "a-created-second", "m-created-third"],
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });

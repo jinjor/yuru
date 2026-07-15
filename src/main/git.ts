@@ -5,11 +5,15 @@ import { exec, execBuffer } from "./exec.js";
 import { parseNameStatusZ, parseNumstatZ, parsePorcelainLine } from "./git-status.js";
 import { getUntrackedLineStats } from "./untracked-line-stats.js";
 
-export interface WorktreeInfo {
+interface WorktreeListPorcelainEntry {
   path: string;
   branch: string | null;
   headSha: string;
   locked: boolean;
+}
+
+export interface WorktreeInfo extends WorktreeListPorcelainEntry {
+  createdAt: number;
 }
 
 export async function getCurrentBranch(cwd: string): Promise<string | null> {
@@ -239,20 +243,37 @@ export async function getGitDiffDocument(
 }
 
 export async function listWorktrees(cwd: string): Promise<WorktreeInfo[]> {
-  const output = await exec("git", ["worktree", "list", "--porcelain"], cwd);
-  const mainWorktreePath = await getRepoRootForProject(cwd);
-  return parseWorktreeListPorcelain(output, mainWorktreePath);
+  const [output, commonGitDirOutput] = await Promise.all([
+    exec("git", ["worktree", "list", "--porcelain"], cwd),
+    exec("git", ["rev-parse", "--git-common-dir"], cwd),
+  ]);
+  const commonGitDir = await fs.promises.realpath(path.resolve(cwd, commonGitDirOutput.trim()));
+  const worktrees = parseWorktreeListPorcelain(output, path.dirname(commonGitDir));
+  if (worktrees.length === 0) {
+    return [];
+  }
+
+  const createdAtByPath = await loadWorktreeCreatedAtByPath(commonGitDir);
+  return worktrees
+    .map((worktree) => {
+      const createdAt = createdAtByPath.get(toWorktreePathKey(worktree.path));
+      if (createdAt === undefined) {
+        throw new Error(`Git worktree metadata is missing for "${worktree.path}".`);
+      }
+      return { ...worktree, createdAt };
+    })
+    .sort((a, b) => a.createdAt - b.createdAt);
 }
 
 export function parseWorktreeListPorcelain(
   output: string,
   mainWorktreePath: string | null,
-): WorktreeInfo[] {
+): WorktreeListPorcelainEntry[] {
   if (!output.trim()) {
     return [];
   }
 
-  const worktrees: WorktreeInfo[] = [];
+  const worktrees: WorktreeListPorcelainEntry[] = [];
   const mainWorktreePathKey = mainWorktreePath ? toWorktreePathKey(mainWorktreePath) : null;
   const blocks = output.trim().split("\n\n");
   for (const block of blocks) {
@@ -277,6 +298,25 @@ export function parseWorktreeListPorcelain(
     }
   }
   return worktrees;
+}
+
+async function loadWorktreeCreatedAtByPath(commonGitDir: string): Promise<Map<string, number>> {
+  const worktreesDir = path.join(commonGitDir, "worktrees");
+  const adminEntries = (await fs.promises.readdir(worktreesDir, { withFileTypes: true })).filter(
+    (entry) => entry.isDirectory(),
+  );
+  const worktreeCreatedAtEntries = await Promise.all(
+    adminEntries.map(async (entry) => {
+      const adminDir = path.join(worktreesDir, entry.name);
+      const [gitDir, stats] = await Promise.all([
+        fs.promises.readFile(path.join(adminDir, "gitdir"), "utf8"),
+        fs.promises.stat(adminDir),
+      ]);
+      const worktreePath = path.dirname(path.resolve(adminDir, gitDir.trim()));
+      return [toWorktreePathKey(worktreePath), stats.birthtimeMs] as const;
+    }),
+  );
+  return new Map(worktreeCreatedAtEntries);
 }
 
 function parseWorktreeBranch(ref: string): string {
