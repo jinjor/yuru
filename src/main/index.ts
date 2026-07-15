@@ -153,6 +153,15 @@ async function createWindow(): Promise<void> {
     },
   });
 
+  // renderer 内（ライブラリ内部を含む）の window.open で Electron の子ウインドウを
+  // 開かせず、既定ブラウザに流す。
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    service.openExternal(url).catch((error: unknown) => {
+      recordAppError(toAppError(error));
+    });
+    return { action: "deny" };
+  });
+
   mainWindow.on("page-title-updated", (event) => {
     event.preventDefault();
     mainWindow?.setTitle(windowTitle);

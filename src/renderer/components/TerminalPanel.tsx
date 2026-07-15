@@ -66,6 +66,13 @@ export function TerminalPanel({
       cursorBlink: true,
       fontSize: 12,
       fontFamily: "Menlo, Monaco, monospace",
+      // OSC 8 ハイパーリンクも既定ブラウザで開く。未設定だと xterm.js 内蔵の
+      // confirm ダイアログ + window.open が走り、Electron の子ウインドウが開いてしまう。
+      linkHandler: {
+        activate(_event, uri): void {
+          onOpenExternalRef.current(uri);
+        },
+      },
       theme: {
         background: "#0f141c",
         foreground: "#d8e1ef",
