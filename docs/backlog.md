@@ -27,7 +27,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | ID | Type | Area | Item | Why now |
 |---|---|---|---|---|
 | B11 | bug | Preview | プレビュー画面がリフレッシュされて文字列をコピーしにくい | 表示更新にコピー操作を妨げられたくない |
-| F45 | feature | App | 文字を拡大・縮小できるようにする | 読みやすい大きさに調整して使いたい |
 | P18 | polish | Worktrees | worktree を作成順に並べる | 作業を始めた順序で一覧を追いたい |
 | P19 | polish | Layout | 右ペインを広くする | 作業内容を表示する領域を広く使いたい |
 | F42 | feature | Worktrees | remote branch から task worktree を作れるようにする | 他人や別環境で作った branch を Yuru の作業単位として開きたい |

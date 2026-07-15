@@ -119,14 +119,20 @@ function installApplicationMenu(): void {
         { role: "selectAll" },
       ],
     },
-    ...(isDev
-      ? [
-          {
-            label: "View",
-            submenu: [{ role: "toggleDevTools" }],
-          } satisfies MenuItemConstructorOptions,
-        ]
-      : []),
+    {
+      label: "View",
+      submenu: [
+        { role: "resetZoom" },
+        { role: "zoomIn" },
+        { role: "zoomOut" },
+        ...(isDev
+          ? ([
+              { type: "separator" },
+              { role: "toggleDevTools" },
+            ] satisfies MenuItemConstructorOptions[])
+          : []),
+      ],
+    },
   ];
 
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
