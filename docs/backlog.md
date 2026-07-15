@@ -26,7 +26,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 
 | ID | Type | Area | Item | Why now |
 |---|---|---|---|---|
-| B11 | bug | Preview | プレビュー画面がリフレッシュされて文字列をコピーしにくい | 表示更新にコピー操作を妨げられたくない |
 | P18 | polish | Worktrees | worktree を作成順に並べる | 作業を始めた順序で一覧を追いたい |
 | F42 | feature | Worktrees | remote branch から task worktree を作れるようにする | 他人や別環境で作った branch を Yuru の作業単位として開きたい |
 | F11 | feature | Diff | GitHub review のようにファイルごとに差分を確認済みにできるようにする | 大きめの差分で、どのファイルを見終わったかを失わずに確認したい |
