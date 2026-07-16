@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-07-16
+Last updated: 2026-07-17
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -44,6 +44,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F50 | feature | Files | 変更ファイルだけをツリー表示できるようにする | 変更箇所に絞ってファイルを確認したい |
 | B10 | bug | Repos / Sessions | 新しいリポジトリで Claude session を開始できない | 初回起動時に trust の確認が必要になるため |
 | F46 | feature | Repos | リポジトリを管理対象から削除できるようにする | `yuru add` と対になる機能として欲しい |
+| P20 | polish | App / Sessions | 表示中 terminal runtime の状態と session 操作を SessionView に移す | F44 の前にやる。詳細: docs/backlog-details/P20-session-view-owns-runtime.md |
 | F44 | feature | Sessions / Terminal | primary session と worktree の紐付けを解除できるようにする | 詳細: docs/backlog-details/F44-detach-primary-session.md |
 | I18 | investigate | Events / Worktree Context | worktree 表示情報の更新タイミングを matrix で整理する | 詳細: docs/backlog-details/I18-worktree-refresh-policy.md |
 | F32 | feature | Terminal | task worktree 外の作業を standalone terminal として分離する | task worktree list に混ぜない補助導線として欲しい |
