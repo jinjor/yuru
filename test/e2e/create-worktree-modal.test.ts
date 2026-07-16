@@ -8,7 +8,9 @@ import {
   createE2eContext,
   git,
   launchWindow,
+  readMetadata,
   registerRepo,
+  worktreeCard,
 } from "./helpers";
 
 test("＋ボタンで Create Worktree モーダルが開き Escape と外側クリックで閉じる", async () => {
@@ -23,8 +25,6 @@ test("＋ボタンで Create Worktree モーダルが開き Escape と外側ク�
 
     await window.locator(".repo-row-new-btn").click();
     await expect(window.locator(".repo-picker-header")).toHaveText("Create Worktree");
-    await expect(window.locator(".provider-picker-btn", { hasText: "Claude" })).toBeVisible();
-    await expect(window.locator(".provider-picker-btn", { hasText: "Codex" })).toBeVisible();
 
     const input = window.locator(".worktree-name-input");
     await expect(input).toHaveValue(/^work-\d{4}-\d{6}$/);
@@ -58,6 +58,47 @@ test("＋ボタンで Create Worktree モーダルが開き Escape と外側ク�
   }
 });
 
+// worktree の作成に provider は関与しない。作成した worktree は session なしで
+// 選択され、Terminal に session start surface (New Session の選択肢) が出る。
+test("provider を選ばず worktree を作成でき、Terminal に session の選択肢が出る", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context);
+    await registerRepo(context, repoDir);
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+
+    await window.locator(".repo-row-new-btn").click();
+    await window.locator(".worktree-name-input").fill("feature/f43-create");
+    await window.locator(".worktree-create-btn").click();
+
+    await expect(window.locator(".repo-picker")).toBeHidden();
+    // branch 名の `/` は worktree 名では `-` になり、provider によらず .yuru/worktrees に掘られる。
+    expect(existsSync(path.join(repoDir, ".yuru", "worktrees", "feature-f43-create"))).toBe(true);
+    await expect(worktreeCard(window, "feature/f43-create")).toHaveClass(/selected/);
+
+    // session はまだ始まっていない: PTY はなく、Terminal に Claude / Codex の選択肢が出る。
+    await expect(window.locator(".terminal-session-start")).toBeVisible();
+    await expect(window.locator(".new-session-action", { hasText: "Claude" })).toBeVisible();
+    await expect(window.locator(".new-session-action", { hasText: "Codex" })).toBeVisible();
+    await expect(window.locator(".xterm")).toHaveCount(0);
+
+    // session がなくても右ペイン (Files / Changes) は選択中 worktree に対して使える。
+    await expect(window.locator(".changes-panel")).toBeVisible();
+
+    const metadata = await readMetadata(context);
+    expect(metadata.taskWorktrees.map((entry) => entry.worktreePath)).toEqual([
+      path.join(repoDir, ".yuru", "worktrees", "feature-f43-create"),
+    ]);
+    expect(metadata.taskWorktrees[0].primarySession).toBeUndefined();
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
 test("既存 branch 名で作成するとエラーを出してモーダルを維持する", async () => {
   const context = await createE2eContext();
   let app: ElectronApplication | null = null;
@@ -80,7 +121,7 @@ test("既存 branch 名で作成するとエラーを出してモーダルを維
     await expect(
       window.locator(".task-worktree-card", { hasText: "already-there" }),
     ).toHaveCount(0);
-    expect(existsSync(path.join(repoDir, ".claude", "worktrees", "already-there"))).toBe(false);
+    expect(existsSync(path.join(repoDir, ".yuru", "worktrees", "already-there"))).toBe(false);
   } finally {
     await closeYuru(app);
     await context.cleanup();
@@ -113,7 +154,7 @@ test("worktree directory が既にあるとエラーを出して作成しない"
   let app: ElectronApplication | null = null;
   try {
     const repoDir = await createCommittedRepo(context);
-    const existingWorktreeDir = path.join(repoDir, ".claude", "worktrees", "directory-exists");
+    const existingWorktreeDir = path.join(repoDir, ".yuru", "worktrees", "directory-exists");
     await mkdir(existingWorktreeDir, { recursive: true });
     await registerRepo(context, repoDir);
     const launched = await launchWindow(context);

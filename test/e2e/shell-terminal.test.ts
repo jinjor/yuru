@@ -28,12 +28,16 @@ test("main worktree の standalone terminal を開いて入力と exit を扱え
     await window.keyboard.press("Enter");
     await expect(window.locator(".xterm")).toContainText("YURU_ECHO_OK", { timeout: 10_000 });
 
+    // terminal が終了しても worktree の選択は保たれ、Terminal は
+    // Open Terminal を出す session start surface に戻る。
     await window.keyboard.type("exit");
     await window.keyboard.press("Enter");
-    await expect(window.locator(".terminal-empty-state")).toContainText(
-      "Select a session to resume",
-      { timeout: 10_000 },
-    );
+    await expect(window.locator(".open-terminal-action")).toBeVisible({ timeout: 10_000 });
+    await expect(window.locator(".xterm")).toHaveCount(0);
+
+    // Open Terminal で同じ worktree に新しい terminal を開き直せる。
+    await window.locator(".open-terminal-action").click();
+    await expect(window.locator(".xterm")).toBeVisible({ timeout: 10_000 });
   } finally {
     await closeYuru(app);
     await context.cleanup();

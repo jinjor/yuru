@@ -52,7 +52,6 @@ interface ProviderE2e {
   // Waits until the provider's TUI has finished booting and is ready to accept
   // typed input. Sending keystrokes earlier gets them dropped.
   waitForReady(window: Page): Promise<void>;
-  worktreeDir(repoDir: string, worktreeName: string): string;
 }
 
 const providers: ProviderE2e[] = [
@@ -68,9 +67,6 @@ const providers: ProviderE2e[] = [
     async waitForReady(window) {
       await window.waitForTimeout(9000);
     },
-    worktreeDir(repoDir, worktreeName) {
-      return path.join(repoDir, ".claude", "worktrees", worktreeName);
-    },
   },
   {
     label: "Codex",
@@ -85,11 +81,13 @@ const providers: ProviderE2e[] = [
       await expect(window.locator(".xterm")).toContainText("OpenAI Codex", { timeout: 20_000 });
       await window.waitForTimeout(1000);
     },
-    worktreeDir(repoDir, worktreeName) {
-      return path.join(repoDir, ".yuru", "worktrees", worktreeName);
-    },
   },
 ];
+
+// 新規 worktree は provider によらず .yuru/worktrees に掘られる。
+function worktreeDir(repoDir: string, worktreeName: string): string {
+  return path.join(repoDir, ".yuru", "worktrees", worktreeName);
+}
 
 // active な primary session のドット。aria-label は "active · waiting" のように
 // その時々の activity 状態が付くので、前方一致で active であることだけを見る。
@@ -99,9 +97,10 @@ function primarySessionActiveDot(window: Page, cardText: string, provider: Provi
   );
 }
 
-// Creates a worktree session through the UI and drives one real turn so the
-// provider persists a resumable conversation containing the marker. Returns once
-// the conversation has landed in the isolated store.
+// Creates a worktree through the UI, starts a provider session from the
+// Terminal's session start surface (creation and session start are separate
+// steps), and drives one real turn so the provider persists a resumable
+// conversation containing the marker.
 async function createSessionWithTurn(
   provider: ProviderE2e,
   context: E2eContext,
@@ -111,8 +110,8 @@ async function createSessionWithTurn(
 ): Promise<void> {
   await window.locator(".repo-row-new-btn").click();
   await window.locator(".worktree-name-input").fill(provider.branchName);
-  await window.locator(".provider-picker-btn", { hasText: provider.label }).click();
   await window.locator(".worktree-create-btn").click();
+  await window.locator(".new-session-action", { hasText: provider.label }).click();
   await expect(window.locator(".xterm")).toBeVisible({ timeout: 30_000 });
 
   await provider.waitForReady(window);
@@ -149,7 +148,7 @@ for (const provider of providers) {
 
         // Yuru derives the worktree directory from the branch name, mapping
         // slashes to dashes.
-        expect(existsSync(provider.worktreeDir(repoDir, provider.worktreeName))).toBe(true);
+        expect(existsSync(worktreeDir(repoDir, provider.worktreeName))).toBe(true);
         await expect(worktreeCard(window, provider.branchName)).toHaveClass(/selected/);
       } finally {
         await closeYuru(app);
@@ -183,7 +182,11 @@ for (const provider of providers) {
           card.locator(`[aria-label="${provider.label} primary session inactive"]`),
         ).toBeVisible();
 
+        // card クリックは worktree の選択だけ。inactive primary の復元は
+        // Terminal の session start surface からの明示操作になる。
         await card.click();
+        await expect(window.locator(".terminal-session-start")).toBeVisible();
+        await window.locator(".resume-primary-action").click();
 
         await expect(window.locator(".xterm")).toBeVisible({ timeout: 30_000 });
         await expect(window.locator(".xterm")).toContainText("RESUME_OK", { timeout: 30_000 });

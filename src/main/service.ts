@@ -21,6 +21,7 @@ import {
 import { isPathWithin, toWorktreeId } from "./worktree-identity.js";
 import {
   branchExists,
+  createWorktree,
   getCurrentBranch,
   getGitDiffDocument as loadGitDiffDocument,
   getGitPathStates as loadGitPathStates,
@@ -64,6 +65,7 @@ import { FileTreeWatcher } from "./file-tree-watcher.js";
 import {
   type AppError,
   type AppErrorNotice,
+  type CreatedTaskWorktree,
   type GitDiffScope,
   type Result,
   type SessionUpdate,
@@ -121,6 +123,10 @@ interface WorktreeSessionResumeTarget {
   providerSessionId: string;
   cwd: string;
   project: string;
+}
+
+function resolveTaskWorktreePath(repoPath: string, worktreeName: string): string {
+  return path.join(repoPath, ".yuru", "worktrees", worktreeName);
 }
 
 export interface YuruServiceEvents {
@@ -436,29 +442,21 @@ export class YuruService {
     }
   }
 
-  async createWorktreeSession(
-    provider: SessionProvider,
+  async createTaskWorktree(
     repoPath: string,
     branchName: string,
-  ): Promise<Result<WorktreeSessionSelection>> {
-    const providerAdapter = getSessionProvider(provider);
+  ): Promise<Result<CreatedTaskWorktree>> {
     const worktreeName = branchName.replace(/\//g, "-");
-    const worktreePath = providerAdapter.resolveWorktreePath(repoPath, worktreeName);
-    const worktreeContext: WorktreeContext = {
-      repoPath,
-      worktreePath,
-      worktreeName,
-      branchName,
-    };
+    const worktreePath = resolveTaskWorktreePath(repoPath, worktreeName);
 
     if (fs.existsSync(worktreePath)) {
-      return this.failAndReport<WorktreeSessionSelection>({
+      return this.failAndReport<CreatedTaskWorktree>({
         code: "filesystem_failed",
         message: `Worktree "${worktreeName}" already exists`,
       });
     }
     if (await branchExists(repoPath, branchName)) {
-      return this.failAndReport<WorktreeSessionSelection>({
+      return this.failAndReport<CreatedTaskWorktree>({
         code: "git_failed",
         message: `Branch "${branchName}" already exists`,
       });
@@ -466,53 +464,20 @@ export class YuruService {
 
     const repo = findRepoByPath(repoPath);
     if (!repo) {
-      return this.failAndReport<WorktreeSessionSelection>({
+      return this.failAndReport<CreatedTaskWorktree>({
         code: "unknown",
         message: `Repository "${repoPath}" is not registered in Yuru. Run \`yuru add\` first.`,
       });
     }
 
-    let pending: PendingSession | null = null;
     try {
-      await providerAdapter.prepareWorktree(worktreeContext);
-      upsertTaskWorktree(repo.id, worktreePath);
-
-      pending = this.launchPendingSession(
-        providerAdapter,
-        await providerAdapter.createWorktreeLaunch(worktreeContext),
-        "Failed to create worktree session",
-      );
-      const { terminalRuntimeId, providerSessionId } = await this.startSession(
-        providerAdapter,
-        pending,
-      );
-      pending.startupSettled = true;
-      if (providerSessionId) {
-        attachPrimarySessionByPath(worktreePath, {
-          provider,
-          providerSessionId,
-        });
-      }
-      await providerAdapter.finalizeWorktree(worktreeContext);
-      this.events.addWorktreeWatcherRepo(repoPath);
-      return ok({
-        worktreeId: toWorktreeId(repo.id, worktreePath),
-        terminalRuntimeId,
-      });
+      await createWorktree(repoPath, worktreePath, branchName);
     } catch (error) {
-      if (pending && !pending.exited) {
-        pending.proc.kill();
-      }
-      if (fs.existsSync(worktreePath)) {
-        await removeGitWorktree(repoPath, worktreePath).catch(() => undefined);
-      }
-      removeTaskWorktreeByPath(worktreePath);
-      const command = providerAdapter.command === "codex" ? "git" : providerAdapter.command;
-      const appError = toAppError(error, { command });
-      return pending?.startupFailureReported
-        ? fail<WorktreeSessionSelection>(appError)
-        : this.failAndReport<WorktreeSessionSelection>(appError);
+      return this.failAndReport<CreatedTaskWorktree>(toAppError(error, { command: "git" }));
     }
+    upsertTaskWorktree(repo.id, worktreePath);
+    this.events.addWorktreeWatcherRepo(repoPath);
+    return ok({ worktreeId: toWorktreeId(repo.id, worktreePath) });
   }
 
   // 削除フローは renderer 側が確認ダイアログを出し分け、実行直前の処理と git 削除をここで行う。

@@ -2,14 +2,12 @@ import { setTimeout } from "node:timers/promises";
 import fs from "fs";
 import path from "path";
 import readline from "readline";
-import { createWorktree } from "../../git.js";
 import { streamRipgrepLineMatches } from "../../ripgrep.js";
 import type {
   PendingSession,
   SessionPreview,
   SessionProviderAdapter,
   SessionSnapshot,
-  WorktreeContext,
 } from "../../agent.js";
 import {
   listFilesRecursive,
@@ -17,12 +15,7 @@ import {
   readTextFileIfExists,
 } from "../../agent-store-utils.js";
 import type { WorktreeSessionHint } from "../../worktree-session-detection.js";
-import {
-  codexSessionDateDirFromId,
-  codexWorktreeCwd,
-  getCodexHistoryPath,
-  getCodexSessionsDir,
-} from "./paths.js";
+import { codexSessionDateDirFromId, getCodexHistoryPath, getCodexSessionsDir } from "./paths.js";
 import { loadWorktreeContextPrompt } from "../../worktree-context-prompt.js";
 import { detectCodexWorktreeSessionLines } from "./worktree-session-detection.js";
 
@@ -393,15 +386,6 @@ export const sessionProvider: SessionProviderAdapter = {
       worktreePath: context.worktreePath,
       existingProviderSessionIds: await listExistingSessionIds(),
     };
-  },
-  async prepareWorktree(context: WorktreeContext) {
-    await createWorktree(context.repoPath, context.worktreePath, context.branchName);
-  },
-  async finalizeWorktree() {
-    return;
-  },
-  resolveWorktreePath(repoPath, worktreeName) {
-    return codexWorktreeCwd(repoPath, worktreeName);
   },
   waitForSessionId,
 };

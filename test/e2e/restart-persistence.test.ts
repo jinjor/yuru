@@ -34,7 +34,7 @@ test("再起動後も metadata は残るが terminal runtime は復元しない"
     // absence only after the app reaches its post-restart resting state avoids
     // passing before a (hypothetical) late restore.
     await expect(launched.window.locator(".terminal-empty-state")).toContainText(
-      "Select a session to resume",
+      "Select a worktree",
     );
     await expect(launched.window.locator(".xterm")).toHaveCount(0);
   } finally {

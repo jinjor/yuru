@@ -4,7 +4,6 @@ import path from "path";
 const codexDir = path.join(os.homedir(), ".codex");
 const codexHistoryPath = path.join(codexDir, "history.jsonl");
 const codexSessionsDir = path.join(codexDir, "sessions");
-const worktreeSegment = ".yuru/worktrees";
 const UUID_V7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function getCodexHistoryPath(): string {
@@ -27,10 +26,6 @@ export function codexSessionDateDirFromId(sessionId: string): string | null {
     padDatePart(date.getMonth() + 1),
     padDatePart(date.getDate()),
   );
-}
-
-export function codexWorktreeCwd(repoPath: string, worktreeName: string): string {
-  return path.join(repoPath, worktreeSegment, worktreeName);
 }
 
 function uuidV7Timestamp(sessionId: string): number | null {

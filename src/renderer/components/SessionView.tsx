@@ -1,11 +1,14 @@
 import type { RefObject } from "react";
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
+import type { AgentDefinition } from "../../shared/agent";
 import type { GitPathState } from "../../shared/ipc";
-import type { GitHubPullRequest } from "../../shared/session";
+import type { WorktreeListItem } from "../../shared/metadata";
+import type { SessionProvider } from "../../shared/session";
 import { DiffPreviewPanel } from "./DiffPreviewPanel";
 import { ExplorerPanel, type ExplorerTab } from "./ExplorerPanel";
 import { FileSearch } from "./FileSearch";
 import { TerminalPanel } from "./TerminalPanel";
+import { TerminalSessionStart } from "./TerminalSessionStart";
 import { usePaneLayout } from "../hooks/usePaneLayout";
 import type { PreviewSelection } from "../types";
 import { startPollingLoop } from "../utils/polling";
@@ -13,12 +16,17 @@ import { resultDataOrNull } from "../utils/result";
 
 interface SessionViewProps {
   appRef: RefObject<HTMLDivElement | null>;
-  currentBranch: string | null;
-  currentGitHub: GitHubPullRequest | null;
   onOpenExternal: (url: string) => void;
-  terminalRuntimeId: string;
+  providers: AgentDefinition[];
+  // 表示すべき terminal runtime がない間は null。その間 Terminal は session start surface を出す。
+  terminalRuntimeId: string | null;
   sidebarWidth: number;
+  worktree: WorktreeListItem | null;
   worktreeId: string;
+  onResumePrimarySession: (worktreeId: string, providerSessionKey: string) => void;
+  onResumeSuggestedSession: (worktreeId: string, providerSessionKey: string) => void;
+  onCreateSessionForWorktree: (worktreeId: string, provider: SessionProvider) => void;
+  onOpenWorktreeTerminal: (worktreeId: string) => void;
 }
 
 function isPathChanged(states: readonly GitPathState[], path: string): boolean {
@@ -32,12 +40,16 @@ function isPathChanged(states: readonly GitPathState[], path: string): boolean {
 
 export function SessionView({
   appRef,
-  currentBranch,
-  currentGitHub,
   onOpenExternal,
+  providers,
   terminalRuntimeId,
   sidebarWidth,
+  worktree,
   worktreeId,
+  onResumePrimarySession,
+  onResumeSuggestedSession,
+  onCreateSessionForWorktree,
+  onOpenWorktreeTerminal,
 }: SessionViewProps) {
   const sessionViewColumnRef = useRef<HTMLDivElement>(null);
   const [previewSelection, setPreviewSelection] = useState<PreviewSelection | null>(null);
@@ -50,6 +62,8 @@ export function SessionView({
     sidebarWidth,
     sessionViewColumnRef,
   });
+  const currentBranch = worktree?.branch ?? null;
+  const currentGitHub = worktree?.githubPullRequest ?? null;
   const previewPath = previewSelection?.path ?? null;
   const previewPathChanged = previewPath ? isPathChanged(gitPathStates, previewPath) : false;
 
@@ -139,44 +153,54 @@ export function SessionView({
             aria-hidden="true"
           />
         )}
-        <TerminalPanel
-          changesPanelWidth={paneLayout.changesPanelWidth}
-          currentBranch={currentBranch}
-          currentGitHub={currentGitHub}
-          isPreviewOpen={previewSelection !== null}
-          onFileLinkActivate={(filePath, line) => {
-            void handleFileLinkActivate(filePath, line);
-          }}
-          onOpenExternal={onOpenExternal}
-          previewRatio={paneLayout.previewRatio}
-          terminalRuntimeId={terminalRuntimeId}
-        />
-      </div>
-      {terminalRuntimeId && (
-        <>
-          <div
-            className="pane-resize-handle vertical"
-            onMouseDown={paneLayout.handleChangesResizeStart}
-            aria-hidden="true"
-          />
-          <ExplorerPanel
-            activeTab={explorerTab}
-            gitPathStates={gitPathStates}
-            onPreviewSelectionChange={setPreviewSelection}
-            onTabChange={(tab) => {
-              setExplorerTab(tab);
-              if (tab === "search") {
-                setSearchFocusRequest((prev) => prev + 1);
-              }
+        {terminalRuntimeId ? (
+          <TerminalPanel
+            changesPanelWidth={paneLayout.changesPanelWidth}
+            currentBranch={currentBranch}
+            currentGitHub={currentGitHub}
+            isPreviewOpen={previewSelection !== null}
+            onFileLinkActivate={(filePath, line) => {
+              void handleFileLinkActivate(filePath, line);
             }}
-            previewSelection={previewSelection}
-            searchFocusRequest={searchFocusRequest}
-            width={paneLayout.changesPanelWidth}
-            worktreeId={worktreeId}
+            onOpenExternal={onOpenExternal}
+            previewRatio={paneLayout.previewRatio}
+            terminalRuntimeId={terminalRuntimeId}
           />
-        </>
-      )}
-      {terminalRuntimeId && isFileSearchOpen && (
+        ) : (
+          <TerminalSessionStart
+            currentBranch={currentBranch}
+            currentGitHub={currentGitHub}
+            onOpenExternal={onOpenExternal}
+            providers={providers}
+            worktree={worktree}
+            onResumePrimarySession={onResumePrimarySession}
+            onResumeSuggestedSession={onResumeSuggestedSession}
+            onCreateSessionForWorktree={onCreateSessionForWorktree}
+            onOpenWorktreeTerminal={onOpenWorktreeTerminal}
+          />
+        )}
+      </div>
+      <div
+        className="pane-resize-handle vertical"
+        onMouseDown={paneLayout.handleChangesResizeStart}
+        aria-hidden="true"
+      />
+      <ExplorerPanel
+        activeTab={explorerTab}
+        gitPathStates={gitPathStates}
+        onPreviewSelectionChange={setPreviewSelection}
+        onTabChange={(tab) => {
+          setExplorerTab(tab);
+          if (tab === "search") {
+            setSearchFocusRequest((prev) => prev + 1);
+          }
+        }}
+        previewSelection={previewSelection}
+        searchFocusRequest={searchFocusRequest}
+        width={paneLayout.changesPanelWidth}
+        worktreeId={worktreeId}
+      />
+      {isFileSearchOpen && (
         <FileSearch
           onClose={() => setIsFileSearchOpen(false)}
           onSelectFile={(path) => setPreviewSelection({ path })}

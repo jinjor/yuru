@@ -2,13 +2,11 @@ import { setTimeout } from "node:timers/promises";
 import fs from "fs";
 import path from "path";
 import { streamRipgrepLineMatches } from "../../ripgrep.js";
-import { createWorktree } from "../../git.js";
 import type {
   PendingSession,
   SessionPreview,
   SessionProviderAdapter,
   SessionSnapshot,
-  WorktreeContext,
 } from "../../agent.js";
 import { parseJsonLinesAs, readTextFileIfExists } from "../../agent-store-utils.js";
 import { type WorktreeSessionHint } from "../../worktree-session-detection.js";
@@ -17,7 +15,6 @@ import {
   claudeHistoryPath,
   claudeProjectsPath,
   claudeSessionFilePath,
-  claudeWorktreeCwd,
   pidFilePath,
 } from "./paths.js";
 import { loadWorktreeContextPrompt } from "../../worktree-context-prompt.js";
@@ -287,15 +284,6 @@ export const sessionProvider: SessionProviderAdapter = {
       args: ["--append-system-prompt", await loadWorktreeContextPrompt(context)],
       worktreePath: context.worktreePath,
     };
-  },
-  async prepareWorktree(context: WorktreeContext) {
-    await createWorktree(context.repoPath, context.worktreePath, context.branchName);
-  },
-  async finalizeWorktree() {
-    return;
-  },
-  resolveWorktreePath(repoPath, worktreeName) {
-    return claudeWorktreeCwd(repoPath, worktreeName);
   },
   waitForSessionId,
 };

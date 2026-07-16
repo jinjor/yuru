@@ -1,6 +1,6 @@
 # Architecture Notes
 
-Last updated: 2026-05-27
+Last updated: 2026-07-16
 
 この文書は現在の Yuru のアーキテクチャをまとめる。
 実装の細部、型定義、処理手順の正確な姿はコードを正とする。
@@ -111,7 +111,8 @@ provider ごとの session store や resume command の違いは adapter に閉�
 worktree session の create / resume は、Claude / Codex とも cwd = repo root で起動する。
 PTY 内で `cd` しても、`Files`, `Changes`, diff の作業ルートは runtime cwd ではなく選択中 task worktree の `worktreePath` で決まる。
 
-新規 worktree session 作成時は、まず Git worktree を作り、その場で provider session を開始する。
+worktree の作成と provider session の開始は別の操作である (F43)。
+session が紐づいていない task worktree に対して新規 session を開始すると、
 provider session id が起動時に取れる場合はその場で primary に attach し、遅れて分かる provider は session id 解決後に attach する。
 初回起動時だけ worktree context を hidden prompt として注入する。
 この prompt は「provider session は repo root で起動しているが、実際の作業場所は task worktree である」ことを明示し、ファイル操作・コマンド実行・build/test は `worktreePath` で行うよう指示する。
@@ -130,14 +131,19 @@ worktree context prompt は `~/.yuru/worktree-context-prompt.txt` で差し替�
 - `yuru add`
   - 現在の cwd から Git repo root を解決し、Yuru metadata に repo を登録する
   - すでに登録済みなら重複登録しない
-- create worktree session
-  - repo row から branch name と provider を選ぶ
+- create task worktree
+  - repo row の `+` から branch name だけを入力する。provider は選ばない
   - branch name の `/` は worktree name では `-` に置き換える
-  - worktree path は provider adapter が決める
-    - Claude: `<repo>/.claude/worktrees/<worktreeName>`
-    - Codex: `<repo>/.yuru/worktrees/<worktreeName>`
+  - worktree path は provider によらず `<repo>/.yuru/worktrees/<worktreeName>` (Yuru が決める)
   - 既存 directory や既存 branch がある場合は作成しない
-  - Git worktree 作成、provider 起動、primary attach を 1 つの作成フローとして扱う
+  - session は開始せず、作成した worktree を選択した状態にする
+  - 過去に provider 別の配置 (`.claude/worktrees` / `.yuru/worktrees`) で作られた worktree は
+    移行せず、そのまま Git worktree として扱う
+- start session for worktree
+  - session が紐づいていない task worktree を選択すると、Terminal に
+    既存 session (suggested) と新規 session (Claude / Codex) の選択肢が出る
+  - 新規作成した worktree も既存の Git worktree も、この同じ flow で session を開始する
+  - session の起動に失敗しても worktree は削除しない
 - resume primary session
   - primary session がすでに active terminal runtime を持つ場合は、その terminal runtime を選択する
   - inactive の場合は provider store の session を確認してから resume する
@@ -162,11 +168,23 @@ worktree context prompt は `~/.yuru/worktree-context-prompt.txt` で差し替�
 repo row は task worktree が 0 件でも表示し、新規 worktree session の起点になる。
 
 task worktree row は branch、primary session の状態、provider、preview、suggested session の存在を表示する。
-primary session が active なら選択し、inactive なら resume する。
-primary がない task worktree では suggested session を表示し、ユーザー操作で primary に昇格できる。
+row のクリックは常に worktree の選択で、session やプロセスの起動は行わない (F43)。
+primary session に active な terminal runtime があれば、その terminal を添えて選択する。
+row に残る操作は選択と `︙ → Remove worktree` (worktree lifecycle) だけである。
+
+session lifecycle の操作は選択中 worktree の Terminal が担う。
+表示すべき terminal runtime がない間、Terminal は session start surface を表示する。
+
+- primary がない worktree: suggested session の一覧 (クリックで primary へ昇格して resume) と、
+  新規 session (Claude / Codex) の選択肢
+- inactive primary がある worktree: primary の preview と resume 操作
+- main worktree: standalone terminal を開く操作
 
 右側の `Terminal`, `Files`, `Changes`, preview は選択中の task worktree に連動する。
 どの terminal runtime を見ているかと、どの task worktree のファイルを見ているかがずれないように、UI の選択状態は `worktreeId` と `terminalRuntimeId` の組み合わせで持つ。
+`terminalRuntimeId` は null を取り、その間 Terminal は session start surface を出す。
+session がなくても `Files`, `Changes`, preview は worktree に対して使える。
+terminal runtime の exit では worktree の選択を保ち、`terminalRuntimeId` だけを null に戻す。
 
 Terminal の描画には xterm.js を使う。
 stable 6.0.0 には IME の変換位置がずれて過去に入力したテキストの断片が再送されるバグがあるため、修正済みの 6.1.0-beta 系(VS Code が本番で使っているのと同じ系列)を使っている。stable 6.0.0 系に戻すと再発する。6.1.0 stable が出たらそちらに移行する。

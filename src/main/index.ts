@@ -274,12 +274,9 @@ function registerIpcHandlers(): void {
     return service.openWorktreeTerminal(worktreeId);
   });
 
-  handleIpc(
-    "session:createWorktree",
-    (_event, provider: SessionProvider, repoPath: string, branchName: string) => {
-      return service.createWorktreeSession(provider, repoPath, branchName);
-    },
-  );
+  handleIpc("worktree:create", (_event, repoPath: string, branchName: string) => {
+    return service.createTaskWorktree(repoPath, branchName);
+  });
 
   handleIpc(
     "worktree:remove",

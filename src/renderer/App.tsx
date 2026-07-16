@@ -22,16 +22,22 @@ import { SessionView } from "./components/SessionView";
 import { WorktreeRemovalDialog } from "./components/WorktreeRemovalDialog";
 import { clamp } from "./utils/layout";
 
+// 選択は worktree が主。terminalRuntimeId は「その worktree でいま表示している端末」で、
+// session 未開始や終了直後は null になる。
+interface WorktreeSelection {
+  worktreeId: string;
+  terminalRuntimeId: TerminalRuntimeId | null;
+}
+
 export function App() {
   const appRef = useRef<HTMLDivElement>(null);
-  const resumeRequestRef = useRef(0);
+  // 選択を変える操作ごとに進める。resume / session 開始の完了時にこの値を確認することで、
+  // 完了前に別の worktree を選択した場合に古い結果が選択を引き戻すのを防ぐ。
+  const selectionRequestRef = useRef(0);
   const repoRefreshRequestRef = useRef(0);
   const [repos, setRepos] = useState<RepoListItem[]>([]);
   const [availableProviders, setAvailableProviders] = useState<AgentDefinition[]>([]);
-  const [selection, setSelection] = useState<{
-    worktreeId: string;
-    terminalRuntimeId: TerminalRuntimeId;
-  } | null>(null);
+  const [selection, setSelection] = useState<WorktreeSelection | null>(null);
   const [worktreeTarget, setWorktreeTarget] = useState<string | null>(null);
   const [worktreeError, setWorktreeError] = useState<string | null>(null);
   const [removalTargetId, setRemovalTargetId] = useState<string | null>(null);
@@ -51,6 +57,9 @@ export function App() {
         return null;
       }
       setRepos(nextRepos);
+      // requestId ガードの内側で行うことで、古い一覧が遅れて届いた時に
+      // 作成直後の worktree の選択を誤って解除しない。
+      setSelection((prev) => (prev && !findWorktree(nextRepos, prev.worktreeId) ? null : prev));
       return nextRepos;
     } catch (error) {
       if (repoRefreshRequestRef.current !== requestId) {
@@ -83,7 +92,11 @@ export function App() {
     });
     const disposeTerminalRuntimeExited = window.electronAPI.onTerminalRuntimeExited(
       (terminalRuntimeId) => {
-        setSelection((prev) => (prev?.terminalRuntimeId === terminalRuntimeId ? null : prev));
+        setSelection((prev) =>
+          prev?.terminalRuntimeId === terminalRuntimeId
+            ? { ...prev, terminalRuntimeId: null }
+            : prev,
+        );
         void refreshRepos();
       },
     );
@@ -150,9 +163,9 @@ export function App() {
 
   const handleResumePrimarySession = useCallback(
     async (worktreeId: string, providerSessionKey: string): Promise<void> => {
-      const requestId = ++resumeRequestRef.current;
+      const requestId = ++selectionRequestRef.current;
       const result = await window.electronAPI.resumePrimarySession(worktreeId, providerSessionKey);
-      if (resumeRequestRef.current !== requestId) {
+      if (selectionRequestRef.current !== requestId) {
         return;
       }
       if (!result.ok) {
@@ -167,12 +180,12 @@ export function App() {
 
   const handleResumeSuggestedSession = useCallback(
     async (worktreeId: string, providerSessionKey: string): Promise<void> => {
-      const requestId = ++resumeRequestRef.current;
+      const requestId = ++selectionRequestRef.current;
       const result = await window.electronAPI.resumeSuggestedSession(
         worktreeId,
         providerSessionKey,
       );
-      if (resumeRequestRef.current !== requestId) {
+      if (selectionRequestRef.current !== requestId) {
         return;
       }
       if (!result.ok) {
@@ -187,9 +200,9 @@ export function App() {
 
   const handleCreateSessionForWorktree = useCallback(
     async (worktreeId: string, provider: SessionProvider): Promise<void> => {
-      const requestId = ++resumeRequestRef.current;
+      const requestId = ++selectionRequestRef.current;
       const result = await window.electronAPI.createSessionForWorktree(worktreeId, provider);
-      if (resumeRequestRef.current !== requestId) {
+      if (selectionRequestRef.current !== requestId) {
         return;
       }
       if (!result.ok) {
@@ -215,9 +228,9 @@ export function App() {
 
   const handleOpenWorktreeTerminal = useCallback(
     async (worktreeId: string): Promise<void> => {
-      const requestId = ++resumeRequestRef.current;
+      const requestId = ++selectionRequestRef.current;
       const result = await window.electronAPI.openWorktreeTerminal(worktreeId);
-      if (resumeRequestRef.current !== requestId) {
+      if (selectionRequestRef.current !== requestId) {
         return;
       }
       if (!result.ok) {
@@ -228,6 +241,21 @@ export function App() {
       void refreshRepos();
     },
     [refreshRepos],
+  );
+
+  const handleSelectWorktree = useCallback(
+    (worktree: WorktreeListItem): void => {
+      if (worktree.isMainWorktree === true) {
+        void handleOpenWorktreeTerminal(worktree.worktreeId);
+        return;
+      }
+      selectionRequestRef.current++;
+      setSelection({
+        worktreeId: worktree.worktreeId,
+        terminalRuntimeId: worktree.primarySession?.activeTerminalRuntimeId ?? null,
+      });
+    },
+    [handleOpenWorktreeTerminal],
   );
 
   const handleWorktreeRemoved = useCallback(
@@ -239,34 +267,23 @@ export function App() {
     [refreshRepos],
   );
 
-  const handleCreateWorktreeSession = useCallback(
-    async (branchName: string, provider: SessionProvider): Promise<void> => {
+  const handleCreateWorktree = useCallback(
+    async (branchName: string): Promise<void> => {
       if (!worktreeTarget) {
         return;
       }
 
       const repoPath = worktreeTarget;
       setWorktreeError(null);
-      const result = await window.electronAPI.createWorktreeSession(provider, repoPath, branchName);
+      const result = await window.electronAPI.createTaskWorktree(repoPath, branchName);
       if (!result.ok) {
         setWorktreeError(result.error.detail ?? result.error.message);
         return;
       }
 
-      setSelection(result.data);
+      setSelection({ worktreeId: result.data.worktreeId, terminalRuntimeId: null });
       setWorktreeTarget(null);
-      void refreshRepos().then((nextRepos) => {
-        if (!nextRepos) {
-          return;
-        }
-        setSelection((prev) => {
-          if (prev?.worktreeId !== result.data.worktreeId) {
-            return prev;
-          }
-          const terminalRuntimeId = findActiveTerminalRuntimeId(nextRepos, prev.worktreeId);
-          return terminalRuntimeId ? { worktreeId: prev.worktreeId, terminalRuntimeId } : prev;
-        });
-      });
+      void refreshRepos();
     },
     [refreshRepos, worktreeTarget],
   );
@@ -283,19 +300,12 @@ export function App() {
           </div>
           <RepoList
             repos={repos}
-            providers={availableProviders}
             selectedWorktreeId={selectedWorktreeId}
-            onCreateWorktreeSession={(repoPath) => {
+            onCreateWorktree={(repoPath) => {
               setWorktreeError(null);
               setWorktreeTarget(repoPath);
             }}
-            onSelectActiveSession={(worktreeId, terminalRuntimeId) =>
-              setSelection({ worktreeId, terminalRuntimeId })
-            }
-            onResumePrimarySession={handleResumePrimarySession}
-            onResumeSuggestedSession={handleResumeSuggestedSession}
-            onCreateSessionForWorktree={handleCreateSessionForWorktree}
-            onOpenWorktreeTerminal={handleOpenWorktreeTerminal}
+            onSelectWorktree={handleSelectWorktree}
             onRequestRemoveWorktree={setRemovalTargetId}
           />
         </div>
@@ -317,24 +327,27 @@ export function App() {
         onMouseDown={handleSidebarResizeStart}
         aria-hidden="true"
       />
-      {selectedWorktreeId && selectedTerminalRuntimeId ? (
+      {selectedWorktreeId ? (
         <SessionView
-          key={`${selectedWorktreeId}:${selectedTerminalRuntimeId}`}
+          key={selectedWorktreeId}
           appRef={appRef}
-          currentBranch={selectedWorktree?.branch ?? null}
-          currentGitHub={selectedWorktree?.githubPullRequest ?? null}
           onOpenExternal={openExternal}
+          providers={availableProviders}
           terminalRuntimeId={selectedTerminalRuntimeId}
           sidebarWidth={sidebarWidth}
+          worktree={selectedWorktree}
           worktreeId={selectedWorktreeId}
+          onResumePrimarySession={handleResumePrimarySession}
+          onResumeSuggestedSession={handleResumeSuggestedSession}
+          onCreateSessionForWorktree={handleCreateSessionForWorktree}
+          onOpenWorktreeTerminal={handleOpenWorktreeTerminal}
         />
       ) : (
         <SessionPlaceholder />
       )}
       {worktreeTarget && (
         <BranchNameInput
-          providers={availableProviders}
-          onSubmit={handleCreateWorktreeSession}
+          onSubmit={handleCreateWorktree}
           onChange={() => setWorktreeError(null)}
           onCancel={() => {
             setWorktreeError(null);
@@ -449,7 +462,7 @@ function SessionPlaceholder() {
   return (
     <main className="terminal-container">
       <div className="empty-state terminal-empty-state">
-        <p>Select a session to resume</p>
+        <p>Select a worktree</p>
       </div>
     </main>
   );

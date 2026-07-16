@@ -1,26 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import type { AgentDefinition } from "../../shared/agent";
-import type { SessionProvider } from "../../shared/session";
 import { generateDefaultBranch } from "../utils/branch";
 import { Modal } from "./Modal";
 
 interface BranchNameInputProps {
   error: string | null;
-  providers: AgentDefinition[];
   onCancel: () => void;
   onChange: () => void;
-  onSubmit: (branchName: string, provider: SessionProvider) => void;
+  onSubmit: (branchName: string) => void;
 }
 
-export function BranchNameInput({
-  error,
-  providers,
-  onCancel,
-  onChange,
-  onSubmit,
-}: BranchNameInputProps) {
+export function BranchNameInput({ error, onCancel, onChange, onSubmit }: BranchNameInputProps) {
   const [name, setName] = useState(generateDefaultBranch);
-  const [provider, setProvider] = useState<SessionProvider | null>(providers[0]?.id ?? null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -33,8 +23,8 @@ export function BranchNameInput({
 
   const handleSubmit = (): void => {
     const trimmed = name.trim();
-    if (trimmed && isValid && provider) {
-      onSubmit(trimmed, provider);
+    if (trimmed && isValid) {
+      onSubmit(trimmed);
     }
   };
 
@@ -42,17 +32,6 @@ export function BranchNameInput({
     <Modal onClose={onCancel} topOffset={120}>
       <div className="repo-picker">
         <div className="repo-picker-header">Create Worktree</div>
-        <div className="provider-picker">
-          {providers.map((p) => (
-            <button
-              key={p.id}
-              className={`provider-picker-btn ${provider === p.id ? "active" : ""}`}
-              onClick={() => setProvider(p.id)}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
         <div className="worktree-input-row">
           <input
             ref={inputRef}
@@ -72,11 +51,7 @@ export function BranchNameInput({
             }}
             autoFocus
           />
-          <button
-            className="worktree-create-btn"
-            onClick={handleSubmit}
-            disabled={!isValid || !provider}
-          >
+          <button className="worktree-create-btn" onClick={handleSubmit} disabled={!isValid}>
             Create
           </button>
         </div>

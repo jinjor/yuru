@@ -59,8 +59,5 @@ export interface SessionProviderAdapter {
   hasStoredSession(providerSessionId: string): Promise<boolean>;
   createResumeLaunch(session: ResumeSessionTarget): Promise<LaunchRequest>;
   createWorktreeLaunch(context: WorktreeContext): Promise<LaunchRequest>;
-  prepareWorktree(context: WorktreeContext): Promise<void>;
-  finalizeWorktree(context: WorktreeContext): Promise<void>;
-  resolveWorktreePath(repoPath: string, worktreeName: string): string;
   waitForSessionId(pending: PendingSession): Promise<string>;
 }

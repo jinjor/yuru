@@ -116,6 +116,10 @@ export interface WorktreeSessionSelection {
   terminalRuntimeId: TerminalRuntimeId;
 }
 
+export interface CreatedTaskWorktree {
+  worktreeId: string;
+}
+
 export interface WorktreeProcessInfo {
   pid: number;
   command: string;
@@ -170,11 +174,10 @@ export interface ElectronAPI {
     provider: SessionProvider,
   ) => Promise<Result<WorktreeSessionSelection>>;
   openWorktreeTerminal: (worktreeId: string) => Promise<Result<WorktreeSessionSelection>>;
-  createWorktreeSession: (
-    provider: SessionProvider,
+  createTaskWorktree: (
     repoPath: string,
     branchName: string,
-  ) => Promise<Result<WorktreeSessionSelection>>;
+  ) => Promise<Result<CreatedTaskWorktree>>;
   removeWorktree: (
     worktreeId: string,
     force: boolean,

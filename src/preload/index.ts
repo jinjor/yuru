@@ -25,8 +25,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke("worktreeSession:create", worktreeId, provider),
   openWorktreeTerminal: (worktreeId: string) =>
     ipcRenderer.invoke("worktreeTerminal:open", worktreeId),
-  createWorktreeSession: (provider: SessionProvider, repoPath: string, branchName: string) =>
-    ipcRenderer.invoke("session:createWorktree", provider, repoPath, branchName),
+  createTaskWorktree: (repoPath: string, branchName: string) =>
+    ipcRenderer.invoke("worktree:create", repoPath, branchName),
   removeWorktree: (worktreeId: string, force: boolean, processesToStop?: WorktreeProcessRef[]) =>
     ipcRenderer.invoke("worktree:remove", worktreeId, force, processesToStop),
   openExternal: (url: string) => ipcRenderer.invoke("shell:openExternal", url),

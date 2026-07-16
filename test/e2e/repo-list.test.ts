@@ -27,9 +27,7 @@ test("repo 未登録なら空状態とセッション未選択メッセージが
     const window = launched.window;
 
     await expect(window.locator(".repo-list-empty")).toHaveText("No repositories");
-    await expect(window.locator(".terminal-empty-state")).toContainText(
-      "Select a session to resume",
-    );
+    await expect(window.locator(".terminal-empty-state")).toContainText("Select a worktree");
   } finally {
     await closeYuru(app);
     await context.cleanup();
@@ -255,7 +253,9 @@ test("provider store から消えた primary session は選択時に detach さ�
 
     const card = worktreeCard(window, "(no messages)");
     await expect(card.locator('[aria-label="Claude primary session inactive"]')).toBeVisible();
+    // 選択では resume しないため、detach は Terminal からの明示 resume で起こる。
     await card.click();
+    await window.locator(".resume-primary-action").click();
 
     await expect(
       worktreeCard(window, "missing-primary").locator('[aria-label="Claude primary session inactive"]'),
