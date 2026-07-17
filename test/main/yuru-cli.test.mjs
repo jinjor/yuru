@@ -19,6 +19,7 @@ function read(command, args, cwd) {
 function cleanGitEnv(env) {
   const next = { ...env };
   delete next.GIT_DIR;
+  delete next.GIT_WORK_TREE;
   return next;
 }
 

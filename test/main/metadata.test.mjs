@@ -36,17 +36,18 @@ function listGitWorktreesFrom(worktreesByRepoPath) {
 }
 
 function runGit(args, cwd) {
-  execFileSync("git", args, {
-    cwd,
-    stdio: "ignore",
-    env: {
-      ...process.env,
-      GIT_AUTHOR_NAME: "Yuru Test",
-      GIT_AUTHOR_EMAIL: "yuru@example.test",
-      GIT_COMMITTER_NAME: "Yuru Test",
-      GIT_COMMITTER_EMAIL: "yuru@example.test",
-    },
-  });
+  // git hook 経由でテストが走ると GIT_DIR / GIT_WORK_TREE が設定されており、
+  // そのまま継承すると一時リポジトリではなく本物のリポジトリを操作してしまう
+  const env = {
+    ...process.env,
+    GIT_AUTHOR_NAME: "Yuru Test",
+    GIT_AUTHOR_EMAIL: "yuru@example.test",
+    GIT_COMMITTER_NAME: "Yuru Test",
+    GIT_COMMITTER_EMAIL: "yuru@example.test",
+  };
+  delete env.GIT_DIR;
+  delete env.GIT_WORK_TREE;
+  execFileSync("git", args, { cwd, stdio: "ignore", env });
 }
 
 let repoSequence = 0;
