@@ -1,6 +1,6 @@
 # Architecture Notes
 
-Last updated: 2026-07-16
+Last updated: 2026-07-17
 
 この文書は現在の Yuru のアーキテクチャをまとめる。
 実装の細部、型定義、処理手順の正確な姿はコードを正とする。
@@ -169,7 +169,6 @@ repo row は task worktree が 0 件でも表示し、新規 worktree session �
 
 task worktree row は branch、primary session の状態、provider、preview、suggested session の存在を表示する。
 row のクリックは常に worktree の選択で、session やプロセスの起動は行わない (F43)。
-primary session に active な terminal runtime があれば、その terminal を添えて選択する。
 row に残る操作は選択と `︙ → Remove worktree` (worktree lifecycle) だけである。
 
 session lifecycle の操作は選択中 worktree の Terminal が担う。
@@ -181,10 +180,17 @@ session lifecycle の操作は選択中 worktree の Terminal が担う。
 - main worktree: standalone terminal を開く操作
 
 右側の `Terminal`, `Files`, `Changes`, preview は選択中の task worktree に連動する。
-どの terminal runtime を見ているかと、どの task worktree のファイルを見ているかがずれないように、UI の選択状態は `worktreeId` と `terminalRuntimeId` の組み合わせで持つ。
-`terminalRuntimeId` は null を取り、その間 Terminal は session start surface を出す。
+App が持つ選択状態は `worktreeId` だけで、右ペイン (SessionView) は worktree ごとに作り直す (P20)。
+「その worktree でいま表示している terminal runtime」は SessionView のローカル state で、
+session 未開始や終了直後は null になり、その間 Terminal は session start surface を出す。
+mount 時は primary session の active な terminal runtime があればそれを表示し、
+main worktree では standalone terminal を自動で開く (生きている runtime は IPC 側が再利用する)。
+session 操作 (resume / promote / 新規 session / standalone terminal 開始) も SessionView が担う。
+進行中の操作は worktree を切り替えると SessionView ごと破棄されるので、
+古い結果が表示を引き戻すことはない。
 session がなくても `Files`, `Changes`, preview は worktree に対して使える。
-terminal runtime の exit では worktree の選択を保ち、`terminalRuntimeId` だけを null に戻す。
+terminal runtime の exit では worktree の選択を保ち、表示中 runtime だけを外して
+session start surface に戻す。main worktree でも自動では開き直さない。
 
 Terminal の描画には xterm.js を使う。
 stable 6.0.0 には IME の変換位置がずれて過去に入力したテキストの断片が再送されるバグがあるため、修正済みの 6.1.0-beta 系(VS Code が本番で使っているのと同じ系列)を使っている。stable 6.0.0 系に戻すと再発する。6.1.0 stable が出たらそちらに移行する。

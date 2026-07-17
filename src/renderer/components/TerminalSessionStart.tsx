@@ -16,10 +16,10 @@ interface TerminalSessionStartProps {
   onOpenExternal: (url: string) => void;
   providers: AgentDefinition[];
   worktree: WorktreeListItem | null;
-  onResumePrimarySession: (worktreeId: string, providerSessionKey: string) => void;
-  onResumeSuggestedSession: (worktreeId: string, providerSessionKey: string) => void;
-  onCreateSessionForWorktree: (worktreeId: string, provider: SessionProvider) => void;
-  onOpenWorktreeTerminal: (worktreeId: string) => void;
+  onResumePrimarySession: (providerSessionKey: string) => void;
+  onResumeSuggestedSession: (providerSessionKey: string) => void;
+  onCreateSessionForWorktree: (provider: SessionProvider) => void;
+  onOpenWorktreeTerminal: () => void;
 }
 
 // 選択中 worktree に表示すべき terminal runtime がない時に、Terminal パネルの本文に出す
@@ -46,13 +46,11 @@ export function TerminalSessionStart({
         {worktree && (
           <div className="terminal-session-start-panel">
             {worktree.isMainWorktree ? (
-              <OpenTerminalSection onOpen={() => onOpenWorktreeTerminal(worktree.worktreeId)} />
+              <OpenTerminalSection onOpen={onOpenWorktreeTerminal} />
             ) : worktree.primarySession ? (
               <ResumePrimarySection
                 primarySession={worktree.primarySession}
-                onResume={(providerSessionKey) =>
-                  onResumePrimarySession(worktree.worktreeId, providerSessionKey)
-                }
+                onResume={onResumePrimarySession}
               />
             ) : (
               <>
@@ -64,10 +62,7 @@ export function TerminalSessionStart({
                         key={suggestedSession.providerSessionKey}
                         suggestedSession={suggestedSession}
                         onSelect={() =>
-                          onResumeSuggestedSession(
-                            worktree.worktreeId,
-                            suggestedSession.providerSessionKey,
-                          )
+                          onResumeSuggestedSession(suggestedSession.providerSessionKey)
                         }
                       />
                     ))}
@@ -81,7 +76,7 @@ export function TerminalSessionStart({
                         type="button"
                         key={provider.id}
                         className="action-surface-row new-session-action"
-                        onClick={() => onCreateSessionForWorktree(worktree.worktreeId, provider.id)}
+                        onClick={() => onCreateSessionForWorktree(provider.id)}
                         title={`Start new ${provider.label} session`}
                       >
                         <span

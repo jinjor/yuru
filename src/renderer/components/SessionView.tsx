@@ -1,9 +1,9 @@
 import type { RefObject } from "react";
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
 import type { AgentDefinition } from "../../shared/agent";
-import type { GitPathState } from "../../shared/ipc";
+import type { GitPathState, Result, WorktreeSessionSelection } from "../../shared/ipc";
 import type { WorktreeListItem } from "../../shared/metadata";
-import type { SessionProvider } from "../../shared/session";
+import type { TerminalRuntimeId } from "../../shared/session";
 import { DiffPreviewPanel } from "./DiffPreviewPanel";
 import { ExplorerPanel, type ExplorerTab } from "./ExplorerPanel";
 import { FileSearch } from "./FileSearch";
@@ -18,15 +18,12 @@ interface SessionViewProps {
   appRef: RefObject<HTMLDivElement | null>;
   onOpenExternal: (url: string) => void;
   providers: AgentDefinition[];
-  // 表示すべき terminal runtime がない間は null。その間 Terminal は session start surface を出す。
-  terminalRuntimeId: string | null;
   sidebarWidth: number;
   worktree: WorktreeListItem | null;
   worktreeId: string;
-  onResumePrimarySession: (worktreeId: string, providerSessionKey: string) => void;
-  onResumeSuggestedSession: (worktreeId: string, providerSessionKey: string) => void;
-  onCreateSessionForWorktree: (worktreeId: string, provider: SessionProvider) => void;
-  onOpenWorktreeTerminal: (worktreeId: string) => void;
+  // session の開始・終了で変わる左ペインの dot / preview を更新するため、
+  // App に repos の再取得を頼む。
+  onSessionsChanged: () => void;
 }
 
 function isPathChanged(states: readonly GitPathState[], path: string): boolean {
@@ -42,16 +39,17 @@ export function SessionView({
   appRef,
   onOpenExternal,
   providers,
-  terminalRuntimeId,
   sidebarWidth,
   worktree,
   worktreeId,
-  onResumePrimarySession,
-  onResumeSuggestedSession,
-  onCreateSessionForWorktree,
-  onOpenWorktreeTerminal,
+  onSessionsChanged,
 }: SessionViewProps) {
   const sessionViewColumnRef = useRef<HTMLDivElement>(null);
+  // この worktree でいま表示している terminal runtime。session 未開始や終了直後は null で、
+  // その間 Terminal は session start surface を出す。
+  const [terminalRuntimeId, setTerminalRuntimeId] = useState<TerminalRuntimeId | null>(
+    () => worktree?.primarySession?.activeTerminalRuntimeId ?? null,
+  );
   const [previewSelection, setPreviewSelection] = useState<PreviewSelection | null>(null);
   const [gitPathStates, setGitPathStates] = useState<GitPathState[]>([]);
   const [isFileSearchOpen, setIsFileSearchOpen] = useState(false);
@@ -70,6 +68,48 @@ export function SessionView({
   const resetPreviewState = useCallback((): void => {
     setPreviewSelection(null);
   }, []);
+
+  // resume / promote / 新規 session / standalone terminal 開始の共通処理。
+  // 実行中は後続の開始操作を無視して、session や terminal の二重起動を防ぐ。
+  // 完了前に別の worktree へ切り替えた場合はこの SessionView ごと unmount されるので、
+  // 古い結果が表示を引き戻すことはない。
+  const isStartingRef = useRef(false);
+  const startTerminalRuntime = useCallback(
+    async (start: () => Promise<Result<WorktreeSessionSelection>>): Promise<void> => {
+      if (isStartingRef.current) {
+        return;
+      }
+      isStartingRef.current = true;
+      try {
+        const result = await start();
+        if (!result.ok) {
+          return;
+        }
+        setTerminalRuntimeId(result.data.terminalRuntimeId);
+        onSessionsChanged();
+      } finally {
+        isStartingRef.current = false;
+      }
+    },
+    [onSessionsChanged],
+  );
+
+  useEffect(() => {
+    return window.electronAPI.onTerminalRuntimeExited((exitedTerminalRuntimeId) => {
+      setTerminalRuntimeId((prev) => (prev === exitedTerminalRuntimeId ? null : prev));
+    });
+  }, []);
+
+  // main worktree は選択しただけで standalone terminal を開く (生きている runtime の再利用は
+  // openWorktreeTerminal の IPC 側が行う)。terminal の exit 後に自動で開き直すことはせず、
+  // session start surface の Open Terminal から開く。
+  const isMainWorktree = worktree?.isMainWorktree === true;
+  useEffect(() => {
+    if (!isMainWorktree) {
+      return;
+    }
+    void startTerminalRuntime(() => window.electronAPI.openWorktreeTerminal(worktreeId));
+  }, [isMainWorktree, startTerminalRuntime, worktreeId]);
 
   const handleFileLinkActivate = useCallback(
     async (filePath: string, line?: number): Promise<void> => {
@@ -173,10 +213,24 @@ export function SessionView({
             onOpenExternal={onOpenExternal}
             providers={providers}
             worktree={worktree}
-            onResumePrimarySession={onResumePrimarySession}
-            onResumeSuggestedSession={onResumeSuggestedSession}
-            onCreateSessionForWorktree={onCreateSessionForWorktree}
-            onOpenWorktreeTerminal={onOpenWorktreeTerminal}
+            onResumePrimarySession={(providerSessionKey) => {
+              void startTerminalRuntime(() =>
+                window.electronAPI.resumePrimarySession(worktreeId, providerSessionKey),
+              );
+            }}
+            onResumeSuggestedSession={(providerSessionKey) => {
+              void startTerminalRuntime(() =>
+                window.electronAPI.resumeSuggestedSession(worktreeId, providerSessionKey),
+              );
+            }}
+            onCreateSessionForWorktree={(provider) => {
+              void startTerminalRuntime(() =>
+                window.electronAPI.createSessionForWorktree(worktreeId, provider),
+              );
+            }}
+            onOpenWorktreeTerminal={() => {
+              void startTerminalRuntime(() => window.electronAPI.openWorktreeTerminal(worktreeId));
+            }}
           />
         )}
       </div>

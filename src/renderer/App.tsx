@@ -10,11 +10,7 @@ import { AlertTriangle } from "lucide-react";
 import type { AgentDefinition } from "../shared/agent";
 import type { AppErrorNotice, PullRequestUpdate, SessionUpdate } from "../shared/ipc";
 import type { RepoListItem, WorktreeListItem } from "../shared/metadata";
-import {
-  type GitHubPullRequest,
-  type TerminalRuntimeId,
-  type SessionProvider,
-} from "../shared/session";
+import { type GitHubPullRequest, type TerminalRuntimeId } from "../shared/session";
 import { BranchNameInput } from "./components/BranchNameInput";
 import { ErrorLogModal } from "./components/ErrorLogModal";
 import { RepoList } from "./components/RepoList";
@@ -22,30 +18,18 @@ import { SessionView } from "./components/SessionView";
 import { WorktreeRemovalDialog } from "./components/WorktreeRemovalDialog";
 import { clamp } from "./utils/layout";
 
-// 選択は worktree が主。terminalRuntimeId は「その worktree でいま表示している端末」で、
-// session 未開始や終了直後は null になる。
-interface WorktreeSelection {
-  worktreeId: string;
-  terminalRuntimeId: TerminalRuntimeId | null;
-}
-
 export function App() {
   const appRef = useRef<HTMLDivElement>(null);
-  // 選択を変える操作ごとに進める。resume / session 開始の完了時にこの値を確認することで、
-  // 完了前に別の worktree を選択した場合に古い結果が選択を引き戻すのを防ぐ。
-  const selectionRequestRef = useRef(0);
   const repoRefreshRequestRef = useRef(0);
   const [repos, setRepos] = useState<RepoListItem[]>([]);
   const [availableProviders, setAvailableProviders] = useState<AgentDefinition[]>([]);
-  const [selection, setSelection] = useState<WorktreeSelection | null>(null);
+  const [selectedWorktreeId, setSelectedWorktreeId] = useState<string | null>(null);
   const [worktreeTarget, setWorktreeTarget] = useState<string | null>(null);
   const [worktreeError, setWorktreeError] = useState<string | null>(null);
   const [removalTargetId, setRemovalTargetId] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(390);
   const [errorNotices, setErrorNotices] = useState<AppErrorNotice[]>([]);
   const [isErrorLogOpen, setIsErrorLogOpen] = useState(false);
-  const selectedWorktreeId = selection?.worktreeId ?? null;
-  const selectedTerminalRuntimeId = selection?.terminalRuntimeId ?? null;
   const selectedWorktree = findWorktree(repos, selectedWorktreeId);
   const removalTarget = findWorktree(repos, removalTargetId);
 
@@ -59,7 +43,7 @@ export function App() {
       setRepos(nextRepos);
       // requestId ガードの内側で行うことで、古い一覧が遅れて届いた時に
       // 作成直後の worktree の選択を誤って解除しない。
-      setSelection((prev) => (prev && !findWorktree(nextRepos, prev.worktreeId) ? null : prev));
+      setSelectedWorktreeId((prev) => (prev && !findWorktree(nextRepos, prev) ? null : prev));
       return nextRepos;
     } catch (error) {
       if (repoRefreshRequestRef.current !== requestId) {
@@ -90,16 +74,11 @@ export function App() {
     const disposeRepoListChanged = window.electronAPI.onRepoListChanged(() => {
       void refreshRepos();
     });
-    const disposeTerminalRuntimeExited = window.electronAPI.onTerminalRuntimeExited(
-      (terminalRuntimeId) => {
-        setSelection((prev) =>
-          prev?.terminalRuntimeId === terminalRuntimeId
-            ? { ...prev, terminalRuntimeId: null }
-            : prev,
-        );
-        void refreshRepos();
-      },
-    );
+    // 表示中 runtime の切り替えは SessionView が自分の購読で行う。ここでは左ペインの
+    // dot / preview を更新するために一覧を取り直すだけ。
+    const disposeTerminalRuntimeExited = window.electronAPI.onTerminalRuntimeExited(() => {
+      void refreshRepos();
+    });
     const disposeSessionChanged = window.electronAPI.onSessionChanged(
       (terminalRuntimeId, update) => {
         setRepos((prev) => applySessionUpdate(prev, terminalRuntimeId, update));
@@ -143,7 +122,7 @@ export function App() {
       document.body.style.userSelect = "none";
 
       const handleMouseMove = (moveEvent: globalThis.MouseEvent): void => {
-        const reservedSessionViewWidth = selectedTerminalRuntimeId ? 520 : 640;
+        const reservedSessionViewWidth = selectedWorktreeId ? 520 : 640;
         const maxWidth = Math.max(220, appWidth - reservedSessionViewWidth);
         setSidebarWidth(clamp(startWidth + moveEvent.clientX - startX, 220, maxWidth));
       };
@@ -158,110 +137,13 @@ export function App() {
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("mouseup", stopDragging);
     },
-    [selectedTerminalRuntimeId, sidebarWidth],
-  );
-
-  const handleResumePrimarySession = useCallback(
-    async (worktreeId: string, providerSessionKey: string): Promise<void> => {
-      const requestId = ++selectionRequestRef.current;
-      const result = await window.electronAPI.resumePrimarySession(worktreeId, providerSessionKey);
-      if (selectionRequestRef.current !== requestId) {
-        return;
-      }
-      if (!result.ok) {
-        return;
-      }
-
-      setSelection(result.data);
-      void refreshRepos();
-    },
-    [refreshRepos],
-  );
-
-  const handleResumeSuggestedSession = useCallback(
-    async (worktreeId: string, providerSessionKey: string): Promise<void> => {
-      const requestId = ++selectionRequestRef.current;
-      const result = await window.electronAPI.resumeSuggestedSession(
-        worktreeId,
-        providerSessionKey,
-      );
-      if (selectionRequestRef.current !== requestId) {
-        return;
-      }
-      if (!result.ok) {
-        return;
-      }
-
-      setSelection(result.data);
-      void refreshRepos();
-    },
-    [refreshRepos],
-  );
-
-  const handleCreateSessionForWorktree = useCallback(
-    async (worktreeId: string, provider: SessionProvider): Promise<void> => {
-      const requestId = ++selectionRequestRef.current;
-      const result = await window.electronAPI.createSessionForWorktree(worktreeId, provider);
-      if (selectionRequestRef.current !== requestId) {
-        return;
-      }
-      if (!result.ok) {
-        return;
-      }
-
-      setSelection(result.data);
-      void refreshRepos().then((nextRepos) => {
-        if (!nextRepos) {
-          return;
-        }
-        setSelection((prev) => {
-          if (prev?.worktreeId !== result.data.worktreeId) {
-            return prev;
-          }
-          const terminalRuntimeId = findActiveTerminalRuntimeId(nextRepos, prev.worktreeId);
-          return terminalRuntimeId ? { worktreeId: prev.worktreeId, terminalRuntimeId } : prev;
-        });
-      });
-    },
-    [refreshRepos],
-  );
-
-  const handleOpenWorktreeTerminal = useCallback(
-    async (worktreeId: string): Promise<void> => {
-      const requestId = ++selectionRequestRef.current;
-      const result = await window.electronAPI.openWorktreeTerminal(worktreeId);
-      if (selectionRequestRef.current !== requestId) {
-        return;
-      }
-      if (!result.ok) {
-        return;
-      }
-
-      setSelection(result.data);
-      void refreshRepos();
-    },
-    [refreshRepos],
-  );
-
-  const handleSelectWorktree = useCallback(
-    (worktree: WorktreeListItem): void => {
-      if (worktree.isMainWorktree === true) {
-        void handleOpenWorktreeTerminal(worktree.worktreeId);
-        return;
-      }
-      selectionRequestRef.current++;
-      setSelection({
-        worktreeId: worktree.worktreeId,
-        terminalRuntimeId: worktree.primarySession?.activeTerminalRuntimeId ?? null,
-      });
-    },
-    [handleOpenWorktreeTerminal],
+    [selectedWorktreeId, sidebarWidth],
   );
 
   const handleWorktreeRemoved = useCallback(
     (worktreeId: string): void => {
       setRemovalTargetId(null);
-      setSelection((prev) => (prev?.worktreeId === worktreeId ? null : prev));
+      setSelectedWorktreeId((prev) => (prev === worktreeId ? null : prev));
       void refreshRepos();
     },
     [refreshRepos],
@@ -281,7 +163,7 @@ export function App() {
         return;
       }
 
-      setSelection({ worktreeId: result.data.worktreeId, terminalRuntimeId: null });
+      setSelectedWorktreeId(result.data.worktreeId);
       setWorktreeTarget(null);
       void refreshRepos();
     },
@@ -305,7 +187,7 @@ export function App() {
               setWorktreeError(null);
               setWorktreeTarget(repoPath);
             }}
-            onSelectWorktree={handleSelectWorktree}
+            onSelectWorktree={(worktree) => setSelectedWorktreeId(worktree.worktreeId)}
             onRequestRemoveWorktree={setRemovalTargetId}
           />
         </div>
@@ -333,14 +215,10 @@ export function App() {
           appRef={appRef}
           onOpenExternal={openExternal}
           providers={availableProviders}
-          terminalRuntimeId={selectedTerminalRuntimeId}
           sidebarWidth={sidebarWidth}
           worktree={selectedWorktree}
           worktreeId={selectedWorktreeId}
-          onResumePrimarySession={handleResumePrimarySession}
-          onResumeSuggestedSession={handleResumeSuggestedSession}
-          onCreateSessionForWorktree={handleCreateSessionForWorktree}
-          onOpenWorktreeTerminal={handleOpenWorktreeTerminal}
+          onSessionsChanged={refreshRepos}
         />
       ) : (
         <SessionPlaceholder />
@@ -443,19 +321,6 @@ function samePullRequest(a: GitHubPullRequest | null, b: GitHubPullRequest | nul
     return a === b;
   }
   return a.prNumber === b.prNumber && a.state === b.state && a.url === b.url;
-}
-
-function findActiveTerminalRuntimeId(
-  repos: RepoListItem[],
-  worktreeId: string,
-): TerminalRuntimeId | null {
-  const taskWorktree = findWorktree(repos, worktreeId);
-  return (
-    taskWorktree?.primarySession?.activeTerminalRuntimeId ??
-    taskWorktree?.suggestedSessions.find((session) => session.activeTerminalRuntimeId)
-      ?.activeTerminalRuntimeId ??
-    null
-  );
 }
 
 function SessionPlaceholder() {
