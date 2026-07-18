@@ -35,6 +35,15 @@ export async function getHeadSha(cwd: string): Promise<string | null> {
   }
 }
 
+export async function getHeadCommittedAt(cwd: string): Promise<number | null> {
+  try {
+    const output = await exec("git", ["show", "-s", "--format=%ct", "HEAD"], cwd);
+    return Number(output.trim()) * 1000;
+  } catch {
+    return null;
+  }
+}
+
 export async function getRepoRootForProject(cwd: string): Promise<string | null> {
   try {
     const commonDir = await exec("git", ["rev-parse", "--git-common-dir"], cwd);

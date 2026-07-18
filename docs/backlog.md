@@ -27,7 +27,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | ID | Type | Area | Item | Why now |
 |---|---|---|---|---|
 | F52 | feature | Sessions / Agents | Kimi を session provider として追加する | 普段使いのエージェントを Kimi に移したので Yuru からも使いたい。詳細: docs/backlog-details/F52-kimi-support.md |
-| P19 | polish | Repos | メインブランチに HEAD の時刻を表示する | メインブランチの更新状況を一覧で把握したい |
 | P18 | polish | Changes | Changes のファイル表示順を最適化する | 確認したい変更へ素早くたどり着けるようにしたい |
 | F11 | feature | Diff | GitHub review のようにファイルごとに差分を確認済みにできるようにする | 大きめの差分で、どのファイルを見終わったかを失わずに確認したい |
 | F37 | feature | Diff | ブランチの任意のコミット間で diff を表示できるようにする | 複数コミットある作業で差分の範囲を切り替えて確認したい |

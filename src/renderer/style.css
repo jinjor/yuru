@@ -364,6 +364,13 @@ body,
   flex-shrink: 0;
 }
 
+.task-worktree-head-time {
+  flex-shrink: 0;
+  font-size: 11px;
+  line-height: 1.15;
+  color: var(--text-subtle);
+}
+
 .task-worktree-hint {
   font-size: 11px;
   line-height: 1.15;

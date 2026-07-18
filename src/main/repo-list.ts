@@ -17,6 +17,7 @@ import {
 } from "../shared/session.js";
 import {
   getCurrentBranch,
+  getHeadCommittedAt,
   getHeadSha,
   isSupportedGitRepo,
   listWorktrees,
@@ -40,6 +41,7 @@ interface WorktreeListSource {
   path: string;
   branch: string | null;
   headSha: string | null;
+  headCommittedAt?: number;
 }
 
 interface ActiveTerminalRuntimeWorktreeSession {
@@ -124,11 +126,16 @@ export async function loadRepoList(
 }
 
 async function loadMainWorktree(repoPath: string): Promise<WorktreeListSource> {
-  const [branch, headSha] = await Promise.all([getCurrentBranch(repoPath), getHeadSha(repoPath)]);
+  const [branch, headSha, headCommittedAt] = await Promise.all([
+    getCurrentBranch(repoPath),
+    getHeadSha(repoPath),
+    getHeadCommittedAt(repoPath),
+  ]);
   return {
     path: repoPath,
     branch,
     headSha,
+    headCommittedAt: headCommittedAt ?? undefined,
   };
 }
 
@@ -201,6 +208,7 @@ function toWorktreeListItem(
     name: path.basename(worktreePath),
     branch: gitWorktree.branch,
     headSha: gitWorktree.headSha,
+    headCommittedAt: gitWorktree.headCommittedAt,
     primarySession: primarySessionItem,
     suggestedSessions: suggestedSessionItems,
   };

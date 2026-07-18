@@ -48,6 +48,7 @@ export interface WorktreeListItem {
   name: string;
   branch: string | null;
   headSha: string | null;
+  headCommittedAt?: number;
   isMainWorktree?: boolean;
   githubPullRequest?: GitHubPullRequest | null;
   primarySession?: PrimarySessionListItem;

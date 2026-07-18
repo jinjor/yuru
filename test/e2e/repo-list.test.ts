@@ -51,12 +51,25 @@ test("登録済み repo は名前と path と main terminal カードを表示�
     const mainCard = worktreeCard(window, "terminal");
     await expect(mainCard).toContainText("main");
     await expect(mainCard).toContainText("terminal");
+    const headCommittedAt =
+      Number(gitOutput(["show", "-s", "--format=%ct", "HEAD"], repoDir).trim()) * 1000;
+    await expect(mainCard.locator(".task-worktree-head-time")).toHaveText(
+      formatHeadCommittedAt(headCommittedAt),
+    );
     await expect(window.locator(".task-worktree-card")).toHaveCount(1);
   } finally {
     await closeYuru(app);
     await context.cleanup();
   }
 });
+
+function formatHeadCommittedAt(timestamp: number): string {
+  const date = new Date(timestamp);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getMonth() + 1}/${date.getDate()} ${pad(date.getHours())}:${pad(
+    date.getMinutes(),
+  )}`;
+}
 
 test("コミット無し repo は main worktree を no commits 表示にする", async () => {
   const context = await createE2eContext();

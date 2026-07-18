@@ -36,7 +36,7 @@ function listGitWorktreesFrom(worktreesByRepoPath) {
   return async (repoPath) => worktreesByRepoPath.get(repoPath) ?? [];
 }
 
-function runGit(args, cwd) {
+function runGit(args, cwd, envOverrides = {}) {
   // git hook 経由でテストが走ると GIT_DIR / GIT_WORK_TREE が設定されており、
   // そのまま継承すると一時リポジトリではなく本物のリポジトリを操作してしまう
   const env = {
@@ -45,6 +45,7 @@ function runGit(args, cwd) {
     GIT_AUTHOR_EMAIL: "yuru@example.test",
     GIT_COMMITTER_NAME: "Yuru Test",
     GIT_COMMITTER_EMAIL: "yuru@example.test",
+    ...envOverrides,
   };
   delete env.GIT_DIR;
   delete env.GIT_WORK_TREE;
@@ -177,6 +178,7 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
         name: path.basename(repoA),
         branch: "main",
         headSha: null,
+        headCommittedAt: undefined,
         isMainWorktree: true,
         primarySession: undefined,
         suggestedSessions: [],
@@ -188,6 +190,7 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
           name: "task-a",
           branch: "task-a",
           headSha: "abc1234abc1234abc1234abc1234abc1234abc12",
+          headCommittedAt: undefined,
           primarySession: {
             provider: "codex",
             providerSessionKey: toSessionKey("codex", "codex-1"),
@@ -204,6 +207,7 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
           name: "task-b",
           branch: "task-b",
           headSha: "abc1234abc1234abc1234abc1234abc1234abc12",
+          headCommittedAt: undefined,
           primarySession: undefined,
           suggestedSessions: [],
         },
@@ -213,6 +217,7 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
           name: "git-only",
           branch: "git-only",
           headSha: "abc1234abc1234abc1234abc1234abc1234abc12",
+          headCommittedAt: undefined,
           primarySession: undefined,
           suggestedSessions: [],
         },
@@ -227,6 +232,7 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
         name: path.basename(repoB),
         branch: "main",
         headSha: null,
+        headCommittedAt: undefined,
         isMainWorktree: true,
         primarySession: undefined,
         suggestedSessions: [],
@@ -241,7 +247,10 @@ test("loadRepoList は main worktree を repo item に返す", async () => {
   fs.mkdirSync(repoPath);
   runGit(["init"], repoPath);
   runGit(["checkout", "-B", "main"], repoPath);
-  runGit(["commit", "--allow-empty", "-m", "init"], repoPath);
+  const committedAt = "2026-07-19T12:34:56+09:00";
+  runGit(["commit", "--allow-empty", "-m", "init"], repoPath, {
+    GIT_COMMITTER_DATE: committedAt,
+  });
   seed({
     repos: [{ id: "repo-1", repoPath }],
     taskWorktrees: [],
@@ -252,6 +261,7 @@ test("loadRepoList は main worktree を repo item に返す", async () => {
   assert.equal(result[0].mainWorktree.worktreeId, toWorktreeId("repo-1", repoPath));
   assert.equal(result[0].mainWorktree.worktreePath, repoPath);
   assert.equal(result[0].mainWorktree.branch, "main");
+  assert.equal(result[0].mainWorktree.headCommittedAt, Date.parse(committedAt));
   assert.equal(result[0].mainWorktree.isMainWorktree, true);
   assert.equal(result[0].mainWorktree.primarySession, undefined);
   assert.deepEqual(result[0].mainWorktree.suggestedSessions, []);
@@ -292,6 +302,7 @@ test("loadRepoList は HEAD がない main worktree も返す", async () => {
   assert.equal(result[0].mainWorktree.worktreeId, toWorktreeId("repo-1", repoPath));
   assert.equal(result[0].mainWorktree.branch, "main");
   assert.equal(result[0].mainWorktree.headSha, null);
+  assert.equal(result[0].mainWorktree.headCommittedAt, undefined);
   assert.equal(result[0].mainWorktree.isMainWorktree, true);
 });
 

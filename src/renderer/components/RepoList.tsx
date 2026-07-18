@@ -179,6 +179,14 @@ function WorktreeCard({
           <span className="task-worktree-name" title={worktreeLabelText(worktree)}>
             {renderWorktreeLabel(worktree)}
           </span>
+          {worktree.isMainWorktree === true && worktree.headCommittedAt !== undefined && (
+            <time
+              className="task-worktree-head-time"
+              dateTime={new Date(worktree.headCommittedAt).toISOString()}
+            >
+              {formatHeadCommittedAt(worktree.headCommittedAt)}
+            </time>
+          )}
           {worktree.githubPullRequest && <GitHubBadge github={worktree.githubPullRequest} />}
         </span>
         {primarySession ? (
@@ -260,4 +268,12 @@ function formatExistingSessionCount(count: number): string {
     return "empty";
   }
   return `${count} existing session${count === 1 ? "" : "s"}`;
+}
+
+function formatHeadCommittedAt(timestamp: number): string {
+  const date = new Date(timestamp);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getMonth() + 1}/${date.getDate()} ${pad(date.getHours())}:${pad(
+    date.getMinutes(),
+  )}`;
 }
