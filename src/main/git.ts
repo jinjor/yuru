@@ -282,6 +282,7 @@ export function parseWorktreeListPorcelain(
     let branch: string | null = null;
     let headSha: string | null = null;
     let locked = false;
+    let prunable = false;
     for (const line of lines) {
       if (line.startsWith("worktree ")) {
         wtPath = line.substring("worktree ".length);
@@ -291,9 +292,13 @@ export function parseWorktreeListPorcelain(
         headSha = line.substring("HEAD ".length).trim() || null;
       } else if (line === "locked" || line.startsWith("locked ")) {
         locked = true;
+      } else if (line === "prunable" || line.startsWith("prunable ")) {
+        prunable = true;
       }
     }
-    if (wtPath && headSha && toWorktreePathKey(wtPath) !== mainWorktreePathKey) {
+    // prunable はディレクトリが消えるなどして git が「もう存在しない」と
+    // 判定した worktree。git 操作の cwd に使えないため一覧から除外する
+    if (wtPath && headSha && !prunable && toWorktreePathKey(wtPath) !== mainWorktreePathKey) {
       worktrees.push({ path: wtPath, branch, headSha, locked });
     }
   }

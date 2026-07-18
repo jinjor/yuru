@@ -44,3 +44,12 @@ test("exec は存在しないコマンドの ENOENT を保つ", async () => {
     (error) => error.code === "ENOENT",
   );
 });
+
+test("exec は存在しない cwd をコマンド不在 (ENOENT) と区別する", async () => {
+  await assert.rejects(
+    () => exec(process.execPath, ["-e", ""], "/nonexistent-yuru-exec-cwd"),
+    (error) =>
+      error.message === "Working directory does not exist: /nonexistent-yuru-exec-cwd" &&
+      error.code === undefined,
+  );
+});

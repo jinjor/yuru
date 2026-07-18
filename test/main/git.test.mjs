@@ -187,6 +187,33 @@ test("parseWorktreeListPorcelain は main worktree を除外し detached worktre
   ]);
 });
 
+test("parseWorktreeListPorcelain は prunable な worktree を除外する", () => {
+  const output = [
+    "worktree /repo",
+    "HEAD 1111111111111111111111111111111111111111",
+    "branch refs/heads/main",
+    "",
+    "worktree /repo/.yuru/worktrees/task-a",
+    "HEAD 2222222222222222222222222222222222222222",
+    "branch refs/heads/task-a",
+    "",
+    "worktree /repo/.yuru/worktrees/gone-task",
+    "HEAD 3333333333333333333333333333333333333333",
+    "branch refs/heads/gone-task",
+    "prunable gitdir file points to non-existent location",
+    "",
+  ].join("\n");
+
+  assert.deepEqual(parseWorktreeListPorcelain(output, "/repo"), [
+    {
+      path: "/repo/.yuru/worktrees/task-a",
+      branch: "task-a",
+      headSha: "2222222222222222222222222222222222222222",
+      locked: false,
+    },
+  ]);
+});
+
 test("listWorktrees は path の辞書順ではなく作成順で返す", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-worktree-order-test-"));
   const repoPath = path.join(root, "repo");
@@ -207,6 +234,30 @@ test("listWorktrees は path の辞書順ではなく作成順で返す", async 
     assert.deepEqual(
       worktrees.map((worktree) => worktree.branch),
       ["z-created-first", "a-created-second", "m-created-third"],
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("listWorktrees はディレクトリが消えた (prunable) worktree を除外する", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-worktree-prunable-test-"));
+  const repoPath = path.join(root, "repo");
+  fs.mkdirSync(repoPath);
+
+  try {
+    runGit(["init", "-b", "main"], repoPath);
+    fs.writeFileSync(path.join(repoPath, "README.md"), "# test\n");
+    runGit(["add", "README.md"], repoPath);
+    runGit(["commit", "-m", "initial"], repoPath);
+    runGit(["worktree", "add", "-b", "alive", path.join(root, "alive")], repoPath);
+    runGit(["worktree", "add", "-b", "gone", path.join(root, "gone")], repoPath);
+    fs.rmSync(path.join(root, "gone"), { recursive: true, force: true });
+
+    const worktrees = await listWorktrees(repoPath);
+    assert.deepEqual(
+      worktrees.map((worktree) => worktree.branch),
+      ["alive"],
     );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
