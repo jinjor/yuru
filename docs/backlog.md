@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-07-17
+Last updated: 2026-07-19
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -67,6 +67,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F28 | feature | Files | ファイル検索の最近開いたファイル履歴 | Cmd+P 空入力時に履歴を出したい |
 | I11 | investigate | App | モーダルとショートカットの管理設計を決める (詳細: docs/backlog-details/I11-modal-management.md) | FileSearch 導入時に Cmd+P が他モーダル裏で発火する問題が出たため、場当たり対応せず設計として直したい |
 | P17 | polish | Repos / Sessions | getRepos が毎回全セッションのログを読むのをやめる | 一覧は ID と並び順程度に痩せさせ、プレビュー等のセッション表示状態はカード側が個別に取得する。session:changed push の続きで、将来のカード単位購読にも繋がる |
+| P21 | polish | App | UI をクリックした時のインタラクションを全体的に見直す | 詳細: docs/backlog-details/P21-ui-click-interaction.md |
 
 ## Later
 
