@@ -19,7 +19,7 @@ function editButton(window: Page) {
   return window.locator(".preview-mode-segment button").nth(1);
 }
 
-test("編集モードで編集するとディスクへ自動保存され、ガターに変更行が出る", async () => {
+test("編集モードで編集するとディスクへ自動保存され、ガターと overview ruler に変更行が出る", async () => {
   const context = await createE2eContext();
   let app: ElectronApplication | null = null;
   try {
@@ -52,6 +52,7 @@ test("編集モードで編集するとディスクへ自動保存され、ガ�
       .toContain("export const edited = true;");
 
     await expect(window.locator(".cm-change-mark-added").first()).toBeVisible();
+    await expect(window.locator(".cm-editor .diff-overview-mark.diff-added").first()).toBeVisible();
   } finally {
     await closeYuru(app);
     await context.cleanup();
