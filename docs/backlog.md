@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-07-19
+Last updated: 2026-07-20
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -26,7 +26,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 
 | ID | Type | Area | Item | Why now |
 |---|---|---|---|---|
-| F52 | feature | Sessions / Agents | Kimi を session provider として追加する | 普段使いのエージェントを Kimi に移したので Yuru からも使いたい。詳細: docs/backlog-details/F52-kimi-support.md |
 | P18 | polish | Changes | Changes のファイル表示順を最適化する | 確認したい変更へ素早くたどり着けるようにしたい |
 | F11 | feature | Diff | GitHub review のようにファイルごとに差分を確認済みにできるようにする | 大きめの差分で、どのファイルを見終わったかを失わずに確認したい |
 | F37 | feature | Diff | ブランチの任意のコミット間で diff を表示できるようにする | 複数コミットある作業で差分の範囲を切り替えて確認したい |
@@ -36,17 +35,13 @@ UI 改善も機能追加も同じ土俵で扱う。
 | ID | Type | Area | Item | Notes |
 |---|---|---|---|---|
 | F51 | feature | Files / Persistence | worktree ごとに開いていたファイルを覚えておく | worktree を切り替えて戻った時に、直前のファイルから作業を再開したい |
-| B11 | bug | Files / Editor / Diff | 編集モードで差分の位置がスクロールバーに表示されない | 長いファイルで変更箇所の位置を把握できない |
 | F48 | feature | Worktrees | 分岐した作業のために新しい task worktree を作成できるようにする | 現在の作業を残したまま別案や別タスクを進めたい |
 | F49 | feature | Updates | UI から `yuru latest` を実行できるようにする | ターミナルを開かずに Yuru を最新版へ更新したい |
 | F50 | feature | Files | 変更ファイルだけをツリー表示できるようにする | 変更箇所に絞ってファイルを確認したい |
-| B10 | bug | Repos / Sessions | 新しいリポジトリで Claude session を開始できない | 初回起動時に trust の確認が必要になるため |
 | F46 | feature | Repos | リポジトリを管理対象から削除できるようにする | `yuru add` と対になる機能として欲しい |
-| F44 | feature | Sessions / Terminal | primary session と worktree の紐付けを解除できるようにする | 詳細: docs/backlog-details/F44-detach-primary-session.md |
 | I18 | investigate | Events / Worktree Context | worktree 表示情報の更新タイミングを matrix で整理する | 詳細: docs/backlog-details/I18-worktree-refresh-policy.md |
 | F32 | feature | Terminal | task worktree 外の作業を standalone terminal として分離する | task worktree list に混ぜない補助導線として欲しい |
 | P9 | polish | New Session | 長い repo path の省略ルールを見直す | 折りたたみが不自然 |
-| P13 | polish | Files | Files タブのアクション UI を整える | 階層感が弱く見た目もまだ野暮ったい |
 | P16 | polish | Worktrees / Changes | 左ペインで worktree の Git 変更状態を分かるようにする | いま選択していない worktree に unstaged/staged/untracked 変更があることに気づけない |
 | F7 | feature | Terminal | ファイル名が改行を跨いでもリンクできるようにする | linkifier 改善 |
 | F8 | feature | Terminal | ファイルクリック時にツリー側も開く | navigation の連動 |
