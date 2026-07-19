@@ -5,11 +5,14 @@ import path from "node:path";
 import test from "node:test";
 
 const previousHome = process.env.HOME;
+const previousKimiCodeHome = process.env.KIMI_CODE_HOME;
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-sessions-test-"));
 process.env.HOME = tempDir;
 
 const claudeDir = path.join(tempDir, ".claude");
 const codexDir = path.join(tempDir, ".codex");
+const kimiDir = path.join(tempDir, ".kimi-code");
+process.env.KIMI_CODE_HOME = kimiDir;
 const staleProject = path.join(tempDir, "missing-worktree");
 const missingClaudeSessionId = "claude-missing-file";
 fs.mkdirSync(claudeDir, { recursive: true });
@@ -36,6 +39,7 @@ const {
 } = await import("../../src/main/sessions.ts");
 const { sessionProvider: codexProvider } = await import("../../src/main/agents/codex/index.ts");
 const { sessionProvider: claudeProvider } = await import("../../src/main/agents/claude/index.ts");
+const { sessionProvider: kimiProvider } = await import("../../src/main/agents/kimi/index.ts");
 const { toSessionKey } = await import("../../src/shared/session.ts");
 
 function jsonl(...entries) {
@@ -126,11 +130,43 @@ fs.writeFileSync(
   ),
 );
 
+const kimiSessionId = "session_kimi-1";
+const kimiSessionDir = path.join(
+  kimiDir,
+  "sessions",
+  "wd_missing-worktree_000000000000",
+  kimiSessionId,
+);
+fs.mkdirSync(path.join(kimiSessionDir, "agents", "main"), { recursive: true });
+fs.writeFileSync(
+  path.join(kimiDir, "session_index.jsonl"),
+  `${JSON.stringify({
+    sessionId: kimiSessionId,
+    sessionDir: kimiSessionDir,
+    workDir: staleProject,
+  })}\n`,
+);
+fs.writeFileSync(
+  path.join(kimiSessionDir, "state.json"),
+  JSON.stringify({
+    createdAt: "2026-05-24T00:00:00.000Z",
+    updatedAt: "2026-05-24T00:00:02.000Z",
+    title: "kimi session title",
+    lastPrompt: "kimi last prompt",
+    workDir: staleProject,
+  }),
+);
+
 test.after(() => {
   if (previousHome === undefined) {
     delete process.env.HOME;
   } else {
     process.env.HOME = previousHome;
+  }
+  if (previousKimiCodeHome === undefined) {
+    delete process.env.KIMI_CODE_HOME;
+  } else {
+    process.env.KIMI_CODE_HOME = previousKimiCodeHome;
   }
   fs.rmSync(tempDir, { recursive: true, force: true });
 });
@@ -140,6 +176,7 @@ test("loadStoredSessionPreviews は stored session の preview を key で返す
 
   assert.equal(previews.get(toSessionKey("claude", "claude-1")), "new claude assistant message");
   assert.equal(previews.get(toSessionKey("codex", codexSessionId)), "new codex assistant message");
+  assert.equal(previews.get(toSessionKey("kimi", kimiSessionId)), "kimi last prompt");
   assert.equal(previews.has(toSessionKey("claude", missingClaudeSessionId)), false);
 });
 
@@ -156,6 +193,8 @@ test("loadStoredSessionPreview は指定 session の preview だけを返す", a
   assert.equal(await loadStoredSessionPreview("claude", missingClaudeSessionId), null);
   assert.equal(await loadStoredSessionPreview("codex", codexSessionId), "new codex assistant message");
   assert.equal(await loadStoredSessionPreview("codex", "missing"), null);
+  assert.equal(await loadStoredSessionPreview("kimi", kimiSessionId), "kimi last prompt");
+  assert.equal(await loadStoredSessionPreview("kimi", "missing"), null);
 });
 
 test("Claude stored session の存在判定は session file の存在を見る", async () => {
@@ -193,6 +232,19 @@ test("provider resume launch は session の記録場所 (target.cwd) で起動�
       worktreePath,
     },
   );
+  assert.deepEqual(
+    await kimiProvider.createResumeLaunch({
+      provider: "kimi",
+      providerSessionId: "session_kimi-resume",
+      cwd: repoRoot,
+      project: repoRoot,
+    }),
+    {
+      cwd: repoRoot,
+      args: ["--session", "session_kimi-resume"],
+      worktreePath: repoRoot,
+    },
+  );
 });
 
 test("provider worktree launch は repo root で起動して hidden context を注入する", async () => {
@@ -224,6 +276,14 @@ test("provider worktree launch は repo root で起動して hidden context を�
   ]);
   assert.equal(codexLaunch.worktreePath, worktreePath);
   assert.ok(codexLaunch.existingProviderSessionIds instanceof Set);
+
+  const kimiLaunch = await kimiProvider.createWorktreeLaunch(context);
+  assert.equal(kimiLaunch.cwd, repoPath);
+  assert.deepEqual(kimiLaunch.args, []);
+  assert.equal(kimiLaunch.worktreePath, worktreePath);
+  assert.equal(kimiLaunch.initialInput, prompt);
+  assert.ok(kimiLaunch.existingProviderSessionIds instanceof Set);
+  assert.ok(kimiLaunch.existingProviderSessionIds.has(kimiSessionId));
 });
 
 test("loadSuggestedWorktreeSessions は suggested session を worktree ごとに dedup して並べる", async () => {

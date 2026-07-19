@@ -6,5 +6,7 @@ export function providerLabel(provider: SessionProvider): string {
       return "Claude";
     case "codex":
       return "Codex";
+    case "kimi":
+      return "Kimi";
   }
 }

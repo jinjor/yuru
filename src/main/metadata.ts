@@ -6,7 +6,7 @@ import type {
   TaskWorktreeMetadata,
   YuruMetadata,
 } from "../shared/metadata.js";
-import { type SessionProvider } from "../shared/session.js";
+import { SESSION_PROVIDER_IDS, type SessionProvider } from "../shared/session.js";
 import { toWorktreePathKey } from "./worktree-identity.js";
 import { getYuruHome } from "./yuru-home.js";
 
@@ -175,11 +175,11 @@ function parsePrimarySession(value: unknown): PrimarySessionMetadata {
   }
   const maybe = value as { provider?: unknown; providerSessionId?: unknown; cwd?: unknown };
   if (
-    (maybe.provider !== "claude" && maybe.provider !== "codex") ||
+    !SESSION_PROVIDER_IDS.includes(maybe.provider as SessionProvider) ||
     typeof maybe.providerSessionId !== "string"
   ) {
     throw new Error(
-      "Yuru metadata primarySession must have provider claude|codex and string providerSessionId.",
+      `Yuru metadata primarySession must have provider ${SESSION_PROVIDER_IDS.join("|")} and string providerSessionId.`,
     );
   }
   if (maybe.cwd !== undefined && typeof maybe.cwd !== "string") {

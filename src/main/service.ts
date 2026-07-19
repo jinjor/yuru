@@ -90,6 +90,7 @@ import {
   recordAppWarning,
 } from "./error-center.js";
 import { createTerminalEnv } from "./terminal-env.js";
+import { deliverInitialInput } from "./initial-input.js";
 import { TerminalScreen } from "./terminal-screen.js";
 import { buildShellStartupCommand, createInteractiveShellLaunchCommand } from "./shell-launch.js";
 
@@ -875,6 +876,7 @@ export class YuruService {
       provider: providerAdapter.definition.id,
       providerSessionId: null,
       existingProviderSessionIds: request.existingProviderSessionIds ?? new Set<string>(),
+      initialInput: request.initialInput ?? null,
     });
   }
 
@@ -1071,6 +1073,7 @@ export class YuruService {
       pending.providerSessionId = providerSessionId;
       pending.startupSettled = true;
       this.updateTerminalRuntimeProviderSessionId(terminalRuntimeId, providerSessionId);
+      this.deliverInitialInput(providerAdapter, pending);
       if (!this.terminalRuntimeMap.has(terminalRuntimeId)) {
         return;
       }
@@ -1438,6 +1441,56 @@ export class YuruService {
     return this.resumePrimaryWorktreeSession(worktreeId, providerSessionKey);
   }
 
+  private deliverInitialInput(
+    providerAdapter: SessionProviderAdapter,
+    pending: PendingSession,
+  ): void {
+    const initialInput = pending.initialInput;
+    if (!initialInput || pending.exited) {
+      return;
+    }
+    const providerSessionId = pending.providerSessionId;
+    const hasRecordedInitialInput = providerAdapter.hasRecordedInitialInput;
+    const verify =
+      hasRecordedInitialInput && providerSessionId
+        ? () => hasRecordedInitialInput(providerSessionId, initialInput)
+        : undefined;
+    // node-pty throws when writing to an exited process; guard each write.
+    const writer = {
+      write: (data: string) => {
+        if (!pending.exited) {
+          pending.proc.write(data);
+        }
+      },
+    };
+    this.markTerminalRuntimeInput(pending.terminalRuntimeId);
+    void deliverInitialInput(writer, initialInput, { verify })
+      .then((verified) => {
+        if (verified) {
+          return;
+        }
+        console.warn("[Yuru] initial input was not recorded by the provider", {
+          terminalRuntimeId: pending.terminalRuntimeId,
+          provider: pending.provider,
+          providerSessionId,
+        });
+        recordAppWarning({
+          code: "unknown",
+          message: `The worktree instructions may not have been delivered to the ${providerAdapter.definition.label} session.`,
+          detail:
+            "The session started in the repository root without its task worktree context. " +
+            "Confirm where it is working before relying on it, or restart the session.",
+        });
+      })
+      .catch((error: unknown) => {
+        console.warn("[Yuru] failed to deliver initial input", {
+          terminalRuntimeId: pending.terminalRuntimeId,
+          provider: pending.provider,
+          error,
+        });
+      });
+  }
+
   private async startSession(
     providerAdapter: SessionProviderAdapter,
     pending: PendingSession,
@@ -1455,6 +1508,7 @@ export class YuruService {
 
     const providerSessionId = await providerAdapter.waitForSessionId(pending);
     this.registerTerminalRuntime(pending, providerSessionId);
+    this.deliverInitialInput(providerAdapter, pending);
     return {
       terminalRuntimeId,
       providerSessionId,

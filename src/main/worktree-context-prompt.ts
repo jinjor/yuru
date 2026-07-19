@@ -12,6 +12,12 @@ const DEFAULT_WORKTREE_CONTEXT_PROMPT = [
 
 const TEMPLATE_PATH = "worktree-context-prompt.txt";
 
+// First sentence of the default template. Providers without launch-flag
+// injection record the prompt as a regular user message, so this marker is
+// used to find Yuru-injected prompts in session logs. A custom template that
+// drops this sentence loses that detection path.
+export const WORKTREE_CONTEXT_PROMPT_MARKER = "Yuru opened this session for the task worktree";
+
 export function worktreeContextPromptPath(): string {
   return path.join(getYuruHome(), TEMPLATE_PATH);
 }

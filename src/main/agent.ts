@@ -25,6 +25,7 @@ export interface PendingSession extends PendingTerminal {
   provider: SessionProvider;
   providerSessionId: string | null;
   existingProviderSessionIds: ReadonlySet<string>;
+  initialInput: string | null;
 }
 
 export interface LaunchRequest {
@@ -32,6 +33,9 @@ export interface LaunchRequest {
   args: string[];
   worktreePath: string;
   existingProviderSessionIds?: ReadonlySet<string>;
+  // Message typed into the PTY as the first user prompt once the session is
+  // up. Used by providers without a launch-flag injection mechanism.
+  initialInput?: string;
 }
 
 export interface WorktreeContext {
@@ -60,4 +64,8 @@ export interface SessionProviderAdapter {
   createResumeLaunch(session: ResumeSessionTarget): Promise<LaunchRequest>;
   createWorktreeLaunch(context: WorktreeContext): Promise<LaunchRequest>;
   waitForSessionId(pending: PendingSession): Promise<string>;
+  // Whether the provider recorded the injected initialInput into the session
+  // store. Only providers that launch with initialInput implement this; the
+  // runtime uses it to verify the injection did not get lost.
+  hasRecordedInitialInput?(providerSessionId: string, initialInput: string): Promise<boolean>;
 }

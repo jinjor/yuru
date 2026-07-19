@@ -1,4 +1,5 @@
 import { _electron as electron, expect, type ElectronApplication, type Page } from "@playwright/test";
+import type { SessionProvider } from "../../src/shared/session";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { appendFileSync, existsSync, readFileSync, realpathSync, readdirSync } from "node:fs";
@@ -25,7 +26,7 @@ export interface E2eContext {
 export interface TaskWorktreeMetadataSeed {
   worktreePath: string;
   primarySession?: {
-    provider: "claude" | "codex";
+    provider: SessionProvider;
     providerSessionId: string;
   };
 }
@@ -39,7 +40,7 @@ export interface MetadataSeed {
     repoId: string;
     worktreePath: string;
     primarySession?: {
-      provider: "claude" | "codex";
+      provider: SessionProvider;
       providerSessionId: string;
     };
   }>;

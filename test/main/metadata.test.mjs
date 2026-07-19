@@ -76,11 +76,20 @@ test("parseMetadata は taskWorktrees の primarySession を読み取る", () =>
         worktreePath: "/tmp/wt",
         primarySession: { provider: "claude", providerSessionId: "abc" },
       },
+      {
+        repoId: "repo-1",
+        worktreePath: "/tmp/wt2",
+        primarySession: { provider: "kimi", providerSessionId: "session_def" },
+      },
     ],
   });
   assert.deepEqual(result.taskWorktrees[0].primarySession, {
     provider: "claude",
     providerSessionId: "abc",
+  });
+  assert.deepEqual(result.taskWorktrees[1].primarySession, {
+    provider: "kimi",
+    providerSessionId: "session_def",
   });
 });
 

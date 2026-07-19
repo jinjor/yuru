@@ -7,6 +7,10 @@ import {
   detectCodexWorktreeSessions,
 } from "../../src/main/agents/codex/worktree-session-detection.ts";
 import {
+  detectKimiMentionHints,
+  detectKimiWorkDirHint,
+} from "../../src/main/agents/kimi/worktree-session-detection.ts";
+import {
   resolveContainingWorktreePath,
   resolveMentionedWorktreePaths,
 } from "../../src/main/worktree-session-detection.ts";
@@ -325,4 +329,81 @@ test("detectCodexWorktreeSessions は既知 worktree の絶対 path 文字列だ
   );
 
   assert.deepEqual(hints, []);
+});
+
+
+test("detectKimiWorkDirHint は workDir が一致する worktree を rank 0 で返す", () => {
+  const ref = {
+    providerSessionId: "session_1",
+    sessionDir: "/store/session_1",
+    workDir: "/repo/.yuru/worktrees/task-a",
+  };
+
+  assert.deepEqual(detectKimiWorkDirHint(ref, ["/repo", "/repo/.yuru/worktrees/task-a"]), {
+    provider: "kimi",
+    providerSessionId: "session_1",
+    worktreePath: "/repo/.yuru/worktrees/task-a",
+    worktreeRank: 0,
+  });
+});
+
+test("detectKimiWorkDirHint は worktree のサブディレクトリもその worktree に帰属させる", () => {
+  const ref = {
+    providerSessionId: "session_1",
+    sessionDir: "/store/session_1",
+    workDir: "/repo/.yuru/worktrees/task-a/src",
+  };
+
+  assert.deepEqual(
+    detectKimiWorkDirHint(ref, ["/repo/.yuru/worktrees/task-a"])?.worktreePath,
+    "/repo/.yuru/worktrees/task-a",
+  );
+});
+
+test("detectKimiWorkDirHint はどの worktree にも属さなければ null を返す", () => {
+  const ref = {
+    providerSessionId: "session_1",
+    sessionDir: "/store/session_1",
+    workDir: "/elsewhere",
+  };
+
+  assert.equal(detectKimiWorkDirHint(ref, ["/repo/.yuru/worktrees/task-a"]), null);
+});
+
+test("detectKimiMentionHints は注入プロンプトの言及から worktree を rank 1 で返す", () => {
+  const ref = {
+    providerSessionId: "session_2",
+    sessionDir: "/store/session_2",
+    workDir: "/repo",
+  };
+  const promptLine =
+    "Yuru opened this session for the task worktree 'task-a' on branch 'feature/task-a'. " +
+    "Use /repo/.yuru/worktrees/task-a as the working directory for this task.";
+
+  assert.deepEqual(detectKimiMentionHints(ref, [promptLine], ["/repo/.yuru/worktrees/task-a"]), [
+    {
+      provider: "kimi",
+      providerSessionId: "session_2",
+      worktreePath: "/repo/.yuru/worktrees/task-a",
+      worktreeRank: 1,
+    },
+  ]);
+  assert.deepEqual(detectKimiMentionHints(ref, ["no path here"], ["/repo/.yuru/worktrees/task-a"]), []);
+});
+
+test("detectKimiMentionHints は注入マーカーのない行の path 言及を hint にしない", () => {
+  const ref = {
+    providerSessionId: "session_2",
+    sessionDir: "/store/session_2",
+    workDir: "/repo",
+  };
+
+  assert.deepEqual(
+    detectKimiMentionHints(
+      ref,
+      ["Updated /repo/.yuru/worktrees/task-a/src/file.ts as discussed"],
+      ["/repo/.yuru/worktrees/task-a"],
+    ),
+    [],
+  );
 });

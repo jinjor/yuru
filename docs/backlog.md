@@ -26,6 +26,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 
 | ID | Type | Area | Item | Why now |
 |---|---|---|---|---|
+| F52 | feature | Sessions / Agents | Kimi を session provider として追加する | 普段使いのエージェントを Kimi に移したので Yuru からも使いたい。詳細: docs/backlog-details/F52-kimi-support.md |
 | P19 | polish | Repos | メインブランチに HEAD の時刻を表示する | メインブランチの更新状況を一覧で把握したい |
 | P18 | polish | Changes | Changes のファイル表示順を最適化する | 確認したい変更へ素早くたどり着けるようにしたい |
 | F11 | feature | Diff | GitHub review のようにファイルごとに差分を確認済みにできるようにする | 大きめの差分で、どのファイルを見終わったかを失わずに確認したい |
@@ -94,7 +95,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 このツールは作者個人のためのもので、作者の利用範囲から外れる用途はサポートしない。
 
 - macOS 以外のプラットフォーム（Windows / Linux）
-- Claude / Codex 以外のエージェント
+- Claude / Codex / Kimi 以外のエージェント
 - 外付けボリューム上での使用
 - bare repository
 - UTF-8 以外の文字コードで書かれたファイル

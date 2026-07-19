@@ -3,10 +3,12 @@ import type { AgentDefinition } from "../shared/agent.js";
 import type { SessionProviderAdapter } from "./agent.js";
 import { sessionProvider as claudeProvider } from "./agents/claude/index.js";
 import { sessionProvider as codexProvider } from "./agents/codex/index.js";
+import { sessionProvider as kimiProvider } from "./agents/kimi/index.js";
 
 export const sessionProviders: Record<SessionProvider, SessionProviderAdapter> = {
   claude: claudeProvider,
   codex: codexProvider,
+  kimi: kimiProvider,
 };
 
 export function getSessionProvider(providerId: SessionProvider): SessionProviderAdapter {

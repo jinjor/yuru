@@ -1,4 +1,5 @@
-export type SessionProvider = "claude" | "codex";
+export const SESSION_PROVIDER_IDS = ["claude", "codex", "kimi"] as const;
+export type SessionProvider = (typeof SESSION_PROVIDER_IDS)[number];
 export type TerminalRuntimeId = string;
 export type AgentActivityState = "working" | "waiting";
 
