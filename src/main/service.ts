@@ -22,6 +22,8 @@ import { isPathWithin, toWorktreeId } from "./worktree-identity.js";
 import {
   branchExists,
   createWorktree,
+  createWorktreeFromOriginBranch,
+  fetchOriginBranch,
   getCurrentBranch,
   getGitDiffDocument as loadGitDiffDocument,
   getGitPathStates as loadGitPathStates,
@@ -477,6 +479,28 @@ export class YuruService {
     repoPath: string,
     branchName: string,
   ): Promise<Result<CreatedTaskWorktree>> {
+    return this.createTaskWorktreeWithGit(repoPath, branchName, (worktreePath) =>
+      createWorktree(repoPath, worktreePath, branchName),
+    );
+  }
+
+  // 第 2 の worktree 作成方法 (F42)。branch を HEAD から切る代わりに origin から取り込む。
+  async createTaskWorktreeFromRemoteBranch(
+    repoPath: string,
+    branchName: string,
+  ): Promise<Result<CreatedTaskWorktree>> {
+    return this.createTaskWorktreeWithGit(repoPath, branchName, async (worktreePath) => {
+      await fetchOriginBranch(repoPath, branchName);
+      await createWorktreeFromOriginBranch(repoPath, worktreePath, branchName);
+    });
+  }
+
+  // 両方の作成方法で共通の、名前解決・事前チェック・作成後の登録。branch の作り方だけが違う。
+  private async createTaskWorktreeWithGit(
+    repoPath: string,
+    branchName: string,
+    runGitCreate: (worktreePath: string) => Promise<void>,
+  ): Promise<Result<CreatedTaskWorktree>> {
     const worktreeName = branchName.replace(/\//g, "-");
     const worktreePath = resolveTaskWorktreePath(repoPath, worktreeName);
 
@@ -502,7 +526,7 @@ export class YuruService {
     }
 
     try {
-      await createWorktree(repoPath, worktreePath, branchName);
+      await runGitCreate(worktreePath);
     } catch (error) {
       return this.failAndReport<CreatedTaskWorktree>(toAppError(error, { command: "git" }));
     }

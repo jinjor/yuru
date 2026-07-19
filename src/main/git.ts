@@ -335,7 +335,8 @@ function toWorktreePathKey(worktreePath: string): string {
 
 export async function branchExists(cwd: string, branchName: string): Promise<boolean> {
   try {
-    await exec("git", ["rev-parse", "--verify", branchName], cwd);
+    // 裸の名前だと同名の tag などにもマッチするため、local branch の ref だけを確認する
+    await exec("git", ["rev-parse", "--verify", `refs/heads/${branchName}`], cwd);
     return true;
   } catch {
     return false;
@@ -353,6 +354,27 @@ export async function createWorktree(
 ): Promise<void> {
   await fs.promises.mkdir(path.dirname(worktreePath), { recursive: true });
   await exec("git", ["worktree", "add", "-b", branchName, worktreePath], repoPath);
+}
+
+// origin から branch を取り込む。取り込みと存在確認を兼ね、標準の fetch refspec なら
+// remote-tracking ref (origin/<branch>) もこの fetch で更新される。`refs/heads/` を
+// 付けて渡すのは、branch 名がオプションとして解釈される余地をなくすため。
+export async function fetchOriginBranch(repoPath: string, branchName: string): Promise<void> {
+  await exec("git", ["fetch", "origin", `refs/heads/${branchName}`], repoPath);
+}
+
+// origin/<branch> を起点に、同名の local branch を upstream 付きで作って worktree を掘る。
+export async function createWorktreeFromOriginBranch(
+  repoPath: string,
+  worktreePath: string,
+  branchName: string,
+): Promise<void> {
+  await fs.promises.mkdir(path.dirname(worktreePath), { recursive: true });
+  await exec(
+    "git",
+    ["worktree", "add", "--track", "-b", branchName, worktreePath, `origin/${branchName}`],
+    repoPath,
+  );
 }
 
 export async function removeWorktree(repoPath: string, worktreePath: string): Promise<void> {

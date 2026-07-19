@@ -5,7 +5,13 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { listWorktrees, parseWorktreeListPorcelain } from "../../src/main/git.ts";
+import {
+  branchExists,
+  createWorktreeFromOriginBranch,
+  fetchOriginBranch,
+  listWorktrees,
+  parseWorktreeListPorcelain,
+} from "../../src/main/git.ts";
 import { parseNameStatusZ, parseNumstatZ, parsePorcelainLine } from "../../src/main/git-status.ts";
 
 function runGit(args, cwd) {
@@ -21,6 +27,23 @@ function runGit(args, cwd) {
   delete env.GIT_DIR;
   delete env.GIT_WORK_TREE;
   execFileSync("git", args, { cwd, stdio: "ignore", env });
+}
+
+function runGitOutput(args, cwd) {
+  const env = { ...process.env };
+  delete env.GIT_DIR;
+  delete env.GIT_WORK_TREE;
+  return execFileSync("git", args, { cwd, encoding: "utf8", env });
+}
+
+function createCommittedRepo(repoPath, files) {
+  fs.mkdirSync(repoPath);
+  runGit(["init", "-b", "main"], repoPath);
+  for (const [name, content] of Object.entries(files)) {
+    fs.writeFileSync(path.join(repoPath, name), content);
+  }
+  runGit(["add", "."], repoPath);
+  runGit(["commit", "-m", "initial"], repoPath);
 }
 
 test("parsePorcelainLine は staged と unstaged を分けて解釈する", () => {
@@ -235,6 +258,68 @@ test("listWorktrees は path の辞書順ではなく作成順で返す", async 
       worktrees.map((worktree) => worktree.branch),
       ["z-created-first", "a-created-second", "m-created-third"],
     );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("branchExists は local branch だけを見て同名の tag に反応しない", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-branch-exists-test-"));
+  const repoPath = path.join(root, "repo");
+
+  try {
+    createCommittedRepo(repoPath, { "README.md": "# test\n" });
+    runGit(["tag", "release-note"], repoPath);
+
+    assert.equal(await branchExists(repoPath, "release-note"), false);
+
+    runGit(["branch", "release-note"], repoPath);
+    assert.equal(await branchExists(repoPath, "release-note"), true);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("fetchOriginBranch と createWorktreeFromOriginBranch で remote branch から worktree を作る", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-remote-branch-test-"));
+  const remotePath = path.join(root, "remote");
+  const repoPath = path.join(root, "repo");
+
+  try {
+    createCommittedRepo(remotePath, { "README.md": "# remote\n" });
+    runGit(["switch", "-c", "feature/pr-head"], remotePath);
+    fs.writeFileSync(path.join(remotePath, "pr.txt"), "from pr\n");
+    runGit(["add", "pr.txt"], remotePath);
+    runGit(["commit", "-m", "pr work"], remotePath);
+
+    createCommittedRepo(repoPath, { "README.md": "# local\n" });
+    runGit(["remote", "add", "origin", remotePath], repoPath);
+
+    await fetchOriginBranch(repoPath, "feature/pr-head");
+    const worktreePath = path.join(repoPath, ".yuru", "worktrees", "feature-pr-head");
+    await createWorktreeFromOriginBranch(repoPath, worktreePath, "feature/pr-head");
+
+    assert.equal(fs.readFileSync(path.join(worktreePath, "pr.txt"), "utf8"), "from pr\n");
+    assert.equal(
+      runGitOutput(["rev-parse", "--abbrev-ref", "feature/pr-head@{upstream}"], worktreePath).trim(),
+      "origin/feature/pr-head",
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("fetchOriginBranch は origin に無い branch で失敗する", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-remote-branch-missing-test-"));
+  const remotePath = path.join(root, "remote");
+  const repoPath = path.join(root, "repo");
+
+  try {
+    createCommittedRepo(remotePath, { "README.md": "# remote\n" });
+    createCommittedRepo(repoPath, { "README.md": "# local\n" });
+    runGit(["remote", "add", "origin", remotePath], repoPath);
+
+    await assert.rejects(fetchOriginBranch(repoPath, "no-such-branch"), /no-such-branch/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

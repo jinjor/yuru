@@ -28,8 +28,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 |---|---|---|---|---|
 | P19 | polish | Repos | メインブランチに HEAD の時刻を表示する | メインブランチの更新状況を一覧で把握したい |
 | P18 | polish | Changes | Changes のファイル表示順を最適化する | 確認したい変更へ素早くたどり着けるようにしたい |
-| F47 | feature | GitHub / Worktrees | PR を取り込んで task worktree を作成できるようにする | PR の確認や修正を Yuru の作業単位としてすぐに始めたい |
-| F42 | feature | Worktrees | remote branch から task worktree を作れるようにする | 他人や別環境で作った branch を Yuru の作業単位として開きたい |
 | F11 | feature | Diff | GitHub review のようにファイルごとに差分を確認済みにできるようにする | 大きめの差分で、どのファイルを見終わったかを失わずに確認したい |
 | F37 | feature | Diff | ブランチの任意のコミット間で diff を表示できるようにする | 複数コミットある作業で差分の範囲を切り替えて確認したい |
 
@@ -74,6 +72,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | ID | Type | Area | Item | Notes |
 |---|---|---|---|---|
 | B3 | bug | Sessions | 古いセッション選択時の `No conversation found with ID: ...` のちらつきを消す | 誤解を生む |
+| F47 | feature | GitHub / Worktrees | PR を取り込んで task worktree を作成できるようにする | 自分が reviewer になっている PR から選ぶ、fork PR (`refs/pull/<n>/head`) の取り込みなどの拡張。remote branch の取り込み (F42、詳細: docs/backlog-details/F42-remote-branch-worktree.md) で当面カバーできるため Later |
 | F10 | feature | Terminal | ターミナル内文字列検索 | 独立機能として実装したい |
 | F12 | feature | Diff | Split mode | 面積と複雑さが増える |
 | F13 | feature | Files / Code | 選択範囲をターミナルに貼り付ける | editor と terminal の連携が必要 |

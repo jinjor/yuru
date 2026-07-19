@@ -11,7 +11,7 @@ import type { AgentDefinition } from "../shared/agent";
 import type { AppErrorNotice, PullRequestUpdate, SessionUpdate } from "../shared/ipc";
 import type { RepoListItem, WorktreeListItem } from "../shared/metadata";
 import { type GitHubPullRequest, type TerminalRuntimeId } from "../shared/session";
-import { BranchNameInput } from "./components/BranchNameInput";
+import { BranchNameInput, type CreateWorktreeMode } from "./components/BranchNameInput";
 import { ErrorLogModal } from "./components/ErrorLogModal";
 import { RepoList } from "./components/RepoList";
 import { SessionView } from "./components/SessionView";
@@ -21,6 +21,7 @@ import { clamp } from "./utils/layout";
 export function App() {
   const appRef = useRef<HTMLDivElement>(null);
   const repoRefreshRequestRef = useRef(0);
+  const worktreeCreateRequestRef = useRef(0);
   const [repos, setRepos] = useState<RepoListItem[]>([]);
   const [availableProviders, setAvailableProviders] = useState<AgentDefinition[]>([]);
   const [selectedWorktreeId, setSelectedWorktreeId] = useState<string | null>(null);
@@ -150,14 +151,23 @@ export function App() {
   );
 
   const handleCreateWorktree = useCallback(
-    async (branchName: string): Promise<void> => {
+    async (mode: CreateWorktreeMode, branchName: string): Promise<void> => {
       if (!worktreeTarget) {
         return;
       }
 
       const repoPath = worktreeTarget;
+      const requestId = ++worktreeCreateRequestRef.current;
       setWorktreeError(null);
-      const result = await window.electronAPI.createTaskWorktree(repoPath, branchName);
+      const result =
+        mode === "from-origin"
+          ? await window.electronAPI.createTaskWorktreeFromRemoteBranch(repoPath, branchName)
+          : await window.electronAPI.createTaskWorktree(repoPath, branchName);
+      // fetch 中にモーダルを閉じて開き直せるため、その後に届いた古い結果は反映しない。
+      // 作成が成功していれば worktree watcher の push で一覧に現れ、失敗は error center に残る。
+      if (worktreeCreateRequestRef.current !== requestId) {
+        return;
+      }
       if (!result.ok) {
         setWorktreeError(result.error.detail ?? result.error.message);
         return;
@@ -228,6 +238,7 @@ export function App() {
           onSubmit={handleCreateWorktree}
           onChange={() => setWorktreeError(null)}
           onCancel={() => {
+            worktreeCreateRequestRef.current++;
             setWorktreeError(null);
             setWorktreeTarget(null);
           }}

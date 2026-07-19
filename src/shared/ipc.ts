@@ -179,6 +179,10 @@ export interface ElectronAPI {
     repoPath: string,
     branchName: string,
   ) => Promise<Result<CreatedTaskWorktree>>;
+  createTaskWorktreeFromRemoteBranch: (
+    repoPath: string,
+    branchName: string,
+  ) => Promise<Result<CreatedTaskWorktree>>;
   removeWorktree: (
     worktreeId: string,
     force: boolean,

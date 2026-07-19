@@ -133,6 +133,11 @@ worktree context prompt は `~/.yuru/worktree-context-prompt.txt` で差し替�
   - すでに登録済みなら重複登録しない
 - create task worktree
   - repo row の `+` から branch name だけを入力する。provider は選ばない
+  - 作成方法は 2 つあり、モーダルのタブで選ぶ (F42)
+    - New branch: HEAD から新しい branch を切る
+    - From origin: origin の branch を fetch して同名の local branch で取り込み、
+      upstream を `origin/<branch>` にする。PR の head branch 名を貼り付けて、
+      その PR を task worktree として開く用途
   - branch name の `/` は worktree name では `-` に置き換える
   - worktree path は provider によらず `<repo>/.yuru/worktrees/<worktreeName>` (Yuru が決める)
   - 既存 directory や既存 branch がある場合は作成しない

@@ -1742,6 +1742,38 @@ button.github-badge {
   border-bottom: 1px solid var(--border);
 }
 
+.worktree-mode-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 10px 16px 0;
+}
+
+.worktree-mode-tab {
+  padding: 5px 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.worktree-mode-tab:hover {
+  color: var(--text);
+}
+
+.worktree-mode-tab.active {
+  color: var(--text);
+  background: var(--bg-app);
+  border-color: var(--border-strong);
+}
+
+.worktree-mode-hint {
+  padding: 0 16px 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
 .worktree-input-row {
   display: flex;
   align-items: center;

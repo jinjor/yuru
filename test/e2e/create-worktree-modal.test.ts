@@ -1,5 +1,5 @@
 import { expect, test, type ElectronApplication } from "@playwright/test";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -7,10 +7,12 @@ import {
   createCommittedRepo,
   createE2eContext,
   git,
+  gitOutput,
   launchWindow,
   readMetadata,
   registerRepo,
   worktreeCard,
+  writeFiles,
 } from "./helpers";
 
 test("＋ボタンで Create Worktree モーダルが開き Escape と外側クリックで閉じる", async () => {
@@ -143,6 +145,73 @@ test("空の branch 名では Create が無効になる", async () => {
 
     await expect(window.locator(".worktree-create-btn")).toBeDisabled();
     await expect(window.locator(".worktree-error")).toHaveCount(0);
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+// From origin モード (F42): origin の branch 名をペーストして取り込む第 2 の作成方法。
+// origin は local path の Git repo で代用する (fetch の挙動は URL の種類によらない)。
+test("From origin モードで remote branch から worktree を作成する", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const remoteDir = await createCommittedRepo(context);
+    git(["switch", "-c", "feature/pr-head"], remoteDir);
+    await writeFiles(remoteDir, { "pr.txt": "from pr\n" });
+    git(["add", "."], remoteDir);
+    git(["commit", "-m", "pr work"], remoteDir);
+
+    const repoDir = await createCommittedRepo(context);
+    git(["remote", "add", "origin", remoteDir], repoDir);
+    await registerRepo(context, repoDir);
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+
+    await window.locator(".repo-row-new-btn").click();
+    await window.locator(".worktree-mode-tab", { hasText: "From origin" }).click();
+    const input = window.locator(".worktree-name-input");
+    await expect(input).toHaveValue("");
+    await input.fill("feature/pr-head");
+    await window.locator(".worktree-create-btn").click();
+
+    await expect(window.locator(".repo-picker")).toBeHidden();
+    const worktreePath = path.join(repoDir, ".yuru", "worktrees", "feature-pr-head");
+    expect(readFileSync(path.join(worktreePath, "pr.txt"), "utf8")).toBe("from pr\n");
+    await expect(worktreeCard(window, "feature/pr-head")).toHaveClass(/selected/);
+
+    // local branch は remote と同名で、upstream が origin/<branch> になっている。
+    expect(
+      gitOutput(["rev-parse", "--abbrev-ref", "feature/pr-head@{upstream}"], worktreePath).trim(),
+    ).toBe("origin/feature/pr-head");
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+test("origin に無い branch を指定するとエラーを出してモーダルを維持する", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const remoteDir = await createCommittedRepo(context);
+    const repoDir = await createCommittedRepo(context);
+    git(["remote", "add", "origin", remoteDir], repoDir);
+    await registerRepo(context, repoDir);
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+
+    await window.locator(".repo-row-new-btn").click();
+    await window.locator(".worktree-mode-tab", { hasText: "From origin" }).click();
+    await window.locator(".worktree-name-input").fill("no-such-branch");
+    await window.locator(".worktree-create-btn").click();
+
+    await expect(window.locator(".repo-picker")).toBeVisible();
+    await expect(window.locator(".worktree-error")).toContainText("no-such-branch");
+    expect(existsSync(path.join(repoDir, ".yuru", "worktrees", "no-such-branch"))).toBe(false);
   } finally {
     await closeYuru(app);
     await context.cleanup();

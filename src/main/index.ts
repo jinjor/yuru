@@ -285,6 +285,10 @@ function registerIpcHandlers(): void {
     return service.createTaskWorktree(repoPath, branchName);
   });
 
+  handleIpc("worktree:createFromRemoteBranch", (_event, repoPath: string, branchName: string) => {
+    return service.createTaskWorktreeFromRemoteBranch(repoPath, branchName);
+  });
+
   handleIpc(
     "worktree:remove",
     (_event, worktreeId: string, force: boolean, processesToStop?: WorktreeProcessRef[]) => {
