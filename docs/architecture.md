@@ -1,6 +1,6 @@
 # Architecture Notes
 
-Last updated: 2026-07-17
+Last updated: 2026-07-19
 
 この文書は現在の Yuru のアーキテクチャをまとめる。
 実装の細部、型定義、処理手順の正確な姿はコードを正とする。
@@ -98,7 +98,7 @@ task worktree は Git の管理ディレクトリの作成日時が古い順に�
 - metadata にない Git worktree も、primary なしの task worktree として表示する
 
 provider の path hint は candidate 推測にだけ使う。
-task worktree と primary session の strong link は、作成または昇格の明示操作でだけ変わる。
+task worktree と primary session の strong link は、作成・昇格・解除 (detach) の明示操作でだけ変わる。
 
 worktree の外部 rename は自動追跡しない。
 古い path の strong link は起動時 maintenance で削除され、新しい path は primary なしの Git worktree として再発見される。
@@ -151,6 +151,10 @@ worktree context prompt は `~/.yuru/worktree-context-prompt.txt` で差し替�
 - promote suggested session
   - suggested session を primary に昇格し、resume / select する
   - 同じ provider session が別 task worktree の primary だった場合は、元の strong link を外す
+- detach primary session
+  - inactive な primary session の strong link だけを外す。worktree・Git の変更・provider store の session 履歴は消さない
+  - active な terminal runtime を持つ間は detach できない。先に terminal 内でセッションを終了する
+  - 外した session は provider store の path hint があれば suggested として再発見される
 - remove worktree
   - 追跡中の session (primary / suggested) が active な worktree はメニュー段階で削除させない
   - 削除の直前に、その worktree を cwd にした生きたプロセスがないか OS に問い合わせる (lsof)
@@ -176,7 +180,8 @@ session lifecycle の操作は選択中 worktree の Terminal が担う。
 
 - primary がない worktree: suggested session の一覧 (クリックで primary へ昇格して resume) と、
   新規 session (Claude / Codex) の選択肢
-- inactive primary がある worktree: primary の preview と resume 操作
+- inactive primary がある worktree: primary の preview と resume / detach 操作。
+  detach すると primary なしの選択肢に戻り、そこが別 session を始める導線になる
 - main worktree: standalone terminal を開く操作
 
 右側の `Terminal`, `Files`, `Changes`, preview は選択中の task worktree に連動する。

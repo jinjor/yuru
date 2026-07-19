@@ -360,6 +360,37 @@ export class YuruService {
     return this.resumeSuggestedWorktreeSession(worktreeId, providerSessionKey);
   }
 
+  // primary session の strong link だけを外す。worktree・Git の変更・provider store の
+  // session 履歴には触れない。active な terminal runtime を持つ間は外させない
+  // (UI は inactive の時だけ detach を出すが、一覧が古い場合はここで拒否して error center に出す)。
+  async detachPrimarySession(
+    worktreeId: string,
+    providerSessionKey: string,
+  ): Promise<Result<void>> {
+    const target = await this.findPrimarySessionResumeTarget(worktreeId, providerSessionKey);
+    if (!target) {
+      return this.failAndReport<void>({
+        code: "unknown",
+        message: "This primary session no longer exists.",
+      });
+    }
+
+    const activeTerminalRuntimeId =
+      this.getTerminalRuntimeIdsBySessionKey().get(providerSessionKey);
+    if (activeTerminalRuntimeId && this.ptyProcesses.has(activeTerminalRuntimeId)) {
+      return this.failAndReport<void>({
+        code: "unknown",
+        message: "This session is still running. Exit it in the terminal before detaching.",
+      });
+    }
+
+    detachPrimarySessionByPath(target.project, {
+      provider: target.provider,
+      providerSessionId: target.providerSessionId,
+    });
+    return ok(undefined);
+  }
+
   async createSessionForWorktree(
     worktreeId: string,
     provider: SessionProvider,

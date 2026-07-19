@@ -266,6 +266,13 @@ function registerIpcHandlers(): void {
     },
   );
 
+  handleIpc(
+    "worktreeSession:detachPrimary",
+    (_event, worktreeId: string, providerSessionKey: string) => {
+      return service.detachPrimarySession(worktreeId, providerSessionKey);
+    },
+  );
+
   handleIpc("worktreeSession:create", (_event, worktreeId: string, provider: SessionProvider) => {
     return service.createSessionForWorktree(worktreeId, provider);
   });

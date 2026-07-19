@@ -22,8 +22,9 @@ interface SessionViewProps {
   worktree: WorktreeListItem | null;
   worktreeId: string;
   // session の開始・終了で変わる左ペインの dot / preview を更新するため、
-  // App に repos の再取得を頼む。
-  onSessionsChanged: () => void;
+  // App に repos の再取得を頼む。detach は取り直しの完了を待って表示を切り替えるので、
+  // 再取得の完了で resolve する。
+  onSessionsChanged: () => Promise<unknown>;
 }
 
 function isPathChanged(states: readonly GitPathState[], path: string): boolean {
@@ -69,8 +70,8 @@ export function SessionView({
     setPreviewSelection(null);
   }, []);
 
-  // resume / promote / 新規 session / standalone terminal 開始の共通処理。
-  // 実行中は後続の開始操作を無視して、session や terminal の二重起動を防ぐ。
+  // resume / promote / 新規 session / standalone terminal 開始 / detach の共通ガード。
+  // 実行中は後続の session 操作を無視して、二重起動や開始と解除の競合を防ぐ。
   // 完了前に別の worktree へ切り替えた場合はこの SessionView ごと unmount されるので、
   // 古い結果が表示を引き戻すことはない。
   const isStartingRef = useRef(false);
@@ -86,12 +87,38 @@ export function SessionView({
           return;
         }
         setTerminalRuntimeId(result.data.terminalRuntimeId);
-        onSessionsChanged();
+        void onSessionsChanged();
       } finally {
         isStartingRef.current = false;
       }
     },
     [onSessionsChanged],
+  );
+
+  const detachPrimarySession = useCallback(
+    async (providerSessionKey: string): Promise<void> => {
+      if (isStartingRef.current) {
+        return;
+      }
+      isStartingRef.current = true;
+      try {
+        const result = await window.electronAPI.detachPrimarySession(
+          worktreeId,
+          providerSessionKey,
+        );
+        if (!result.ok) {
+          return;
+        }
+        // 一覧を取り直すと worktree の primary が消え、Terminal は
+        // 既存 / 新規 session の選択肢に切り替わる。resume と違い表示の切り替えを
+        // この再取得だけに頼るので、完了までガードを保持して古い Resume / Detach への
+        // 再操作を無視する。
+        await onSessionsChanged();
+      } finally {
+        isStartingRef.current = false;
+      }
+    },
+    [onSessionsChanged, worktreeId],
   );
 
   useEffect(() => {
@@ -217,6 +244,9 @@ export function SessionView({
               void startTerminalRuntime(() =>
                 window.electronAPI.resumePrimarySession(worktreeId, providerSessionKey),
               );
+            }}
+            onDetachPrimarySession={(providerSessionKey) => {
+              void detachPrimarySession(providerSessionKey);
             }}
             onResumeSuggestedSession={(providerSessionKey) => {
               void startTerminalRuntime(() =>

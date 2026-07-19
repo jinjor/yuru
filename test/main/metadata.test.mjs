@@ -12,6 +12,7 @@ process.env.YURU_HOME = tempDir;
 
 const {
   attachPrimarySessionByPath,
+  detachPrimarySessionByPath,
   findRepoByPath,
   loadMetadata,
   parseMetadata,
@@ -1041,6 +1042,54 @@ test("attachPrimarySessionByPath は対象 path が無ければ何もしない",
   seed({ repos: [], taskWorktrees: [] });
   attachPrimarySessionByPath("/tmp/missing", { provider: "claude", providerSessionId: "abc" });
   assert.deepEqual(loadMetadata().taskWorktrees, []);
+});
+
+test("detachPrimarySessionByPath は一致する primary だけを外す", () => {
+  seed({
+    repos: [{ id: "repo-1", repoPath: "/tmp/repo" }],
+    taskWorktrees: [
+      {
+        repoId: "repo-1",
+        worktreePath: "/tmp/wt-a",
+        primarySession: { provider: "claude", providerSessionId: "abc" },
+      },
+      {
+        repoId: "repo-1",
+        worktreePath: "/tmp/wt-b",
+        primarySession: { provider: "claude", providerSessionId: "def" },
+      },
+    ],
+  });
+
+  detachPrimarySessionByPath("/tmp/wt-a", { provider: "claude", providerSessionId: "abc" });
+
+  const taskWorktrees = loadMetadata().taskWorktrees;
+  const a = taskWorktrees.find((entry) => entry.worktreePath === "/tmp/wt-a");
+  const b = taskWorktrees.find((entry) => entry.worktreePath === "/tmp/wt-b");
+  // strong link だけが消え、task worktree の record 自体は残る
+  assert.equal(a.primarySession, undefined);
+  assert.deepEqual(b.primarySession, { provider: "claude", providerSessionId: "def" });
+});
+
+test("detachPrimarySessionByPath は provider や session id が違えば外さない", () => {
+  seed({
+    repos: [{ id: "repo-1", repoPath: "/tmp/repo" }],
+    taskWorktrees: [
+      {
+        repoId: "repo-1",
+        worktreePath: "/tmp/wt",
+        primarySession: { provider: "claude", providerSessionId: "abc" },
+      },
+    ],
+  });
+
+  detachPrimarySessionByPath("/tmp/wt", { provider: "codex", providerSessionId: "abc" });
+  detachPrimarySessionByPath("/tmp/wt", { provider: "claude", providerSessionId: "other" });
+
+  assert.deepEqual(loadMetadata().taskWorktrees[0].primarySession, {
+    provider: "claude",
+    providerSessionId: "abc",
+  });
 });
 
 test("removeTaskWorktreeByPath は対象だけ削除する", () => {

@@ -169,6 +169,7 @@ export interface ElectronAPI {
     worktreeId: string,
     providerSessionKey: string,
   ) => Promise<Result<WorktreeSessionSelection>>;
+  detachPrimarySession: (worktreeId: string, providerSessionKey: string) => Promise<Result<void>>;
   createSessionForWorktree: (
     worktreeId: string,
     provider: SessionProvider,

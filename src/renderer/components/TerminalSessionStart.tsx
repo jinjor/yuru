@@ -1,4 +1,4 @@
-import { Terminal as TerminalIcon } from "lucide-react";
+import { Terminal as TerminalIcon, Unlink } from "lucide-react";
 import type { AgentDefinition } from "../../shared/agent";
 import type {
   PrimarySessionListItem,
@@ -17,6 +17,7 @@ interface TerminalSessionStartProps {
   providers: AgentDefinition[];
   worktree: WorktreeListItem | null;
   onResumePrimarySession: (providerSessionKey: string) => void;
+  onDetachPrimarySession: (providerSessionKey: string) => void;
   onResumeSuggestedSession: (providerSessionKey: string) => void;
   onCreateSessionForWorktree: (provider: SessionProvider) => void;
   onOpenWorktreeTerminal: () => void;
@@ -31,6 +32,7 @@ export function TerminalSessionStart({
   providers,
   worktree,
   onResumePrimarySession,
+  onDetachPrimarySession,
   onResumeSuggestedSession,
   onCreateSessionForWorktree,
   onOpenWorktreeTerminal,
@@ -51,6 +53,7 @@ export function TerminalSessionStart({
               <ResumePrimarySection
                 primarySession={worktree.primarySession}
                 onResume={onResumePrimarySession}
+                onDetach={onDetachPrimarySession}
               />
             ) : (
               <>
@@ -121,11 +124,13 @@ function OpenTerminalSection({ onOpen }: OpenTerminalSectionProps) {
 interface ResumePrimarySectionProps {
   primarySession: PrimarySessionListItem;
   onResume: (providerSessionKey: string) => void;
+  onDetach: (providerSessionKey: string) => void;
 }
 
-function ResumePrimarySection({ primarySession, onResume }: ResumePrimarySectionProps) {
+function ResumePrimarySection({ primarySession, onResume, onDetach }: ResumePrimarySectionProps) {
   const preview = primarySession.preview || "(no messages)";
   const providerName = providerLabel(primarySession.provider);
+  const providerSessionKey = primarySession.providerSessionKey;
   const meta = [providerName, primarySession.state === "active" ? "active" : null]
     .filter((value) => value !== null)
     .join(" · ");
@@ -136,8 +141,8 @@ function ResumePrimarySection({ primarySession, onResume }: ResumePrimarySection
         type="button"
         className={`action-surface-row suggested-session-action resume-primary-action ${primarySession.state}`}
         onClick={() => {
-          if (primarySession.providerSessionKey) {
-            onResume(primarySession.providerSessionKey);
+          if (providerSessionKey) {
+            onResume(providerSessionKey);
           }
         }}
         title={`Resume ${providerName}`}
@@ -155,6 +160,22 @@ function ResumePrimarySection({ primarySession, onResume }: ResumePrimarySection
           <span className="action-surface-row-meta">{meta}</span>
         </span>
       </button>
+      {primarySession.state === "inactive" && providerSessionKey !== null && (
+        <button
+          type="button"
+          className="action-surface-row new-session-action detach-primary-action"
+          onClick={() => onDetach(providerSessionKey)}
+          title={`Detach this ${providerName} session from the worktree`}
+        >
+          <Unlink size={14} strokeWidth={2} aria-hidden="true" />
+          <span className="action-surface-row-text">
+            <span className="action-surface-row-main">Detach session</span>
+            <span className="action-surface-row-meta">
+              Frees this worktree for another session. History is kept.
+            </span>
+          </span>
+        </button>
+      )}
     </div>
   );
 }
