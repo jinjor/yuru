@@ -5,12 +5,15 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { packager } from "@electron/packager";
+import { pruneRendererBuild } from "./prune-renderer-build.mjs";
 
 const repoDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const appsDir = process.env.YURU_APPLICATIONS_DIR ?? path.join(os.homedir(), "Applications");
 const finalAppPath = path.join(appsDir, "Yuru.app");
 const backupAppPath = path.join(appsDir, "Yuru.app.old");
-const packageVersion = JSON.parse(fs.readFileSync(path.join(repoDir, "package.json"), "utf8")).version;
+const packageVersion = JSON.parse(
+  fs.readFileSync(path.join(repoDir, "package.json"), "utf8"),
+).version;
 const arch = process.arch === "arm64" ? "arm64" : process.arch === "x64" ? "x64" : process.arch;
 
 // Without explicit checksums, @electron/get fetches SHASUMS256.txt from GitHub on
@@ -108,6 +111,10 @@ async function main() {
       throw new Error("Packager did not produce Yuru.app.");
     }
 
+    pruneRendererBuild(
+      path.join(stagedAppPath, "Contents", "Resources", "app", "dist", "renderer"),
+      { removeManifest: true },
+    );
     stageReplacement(stagedAppPath);
   } finally {
     fs.rmSync(packageRoot, { recursive: true, force: true });

@@ -8,6 +8,9 @@ export default defineConfig({
   base: "./",
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/renderer"),
-    emptyOutDir: true,
+    // 起動中の renderer は、起動時に読んだ entry chunk から遅延読み込み先を参照する。
+    // 再 build で旧 chunk を消すと初回表示時に import できなくなるため、app restart までは残す。
+    emptyOutDir: false,
+    manifest: true,
   },
 });

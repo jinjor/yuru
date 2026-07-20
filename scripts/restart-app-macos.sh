@@ -55,6 +55,8 @@ restart_app() {
     done <<<"$(find_running_pids)"
   fi
 
+  node "$ROOT_DIR/scripts/prune-renderer-build.mjs"
+
   open -na "$APP_BUNDLE" --args "$ROOT_DIR" >/dev/null 2>&1
 
   for _ in {1..40}; do
