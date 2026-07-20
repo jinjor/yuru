@@ -118,8 +118,8 @@ export default function MarkdownPreview({
   changedLines,
   deletions,
 }: MarkdownPreviewProps) {
-  const html = useMemo(
-    () => renderMarkdown(content, changedLines, deletions),
+  const renderedHtml = useMemo(
+    () => ({ __html: renderMarkdown(content, changedLines, deletions) }),
     [content, changedLines, deletions],
   );
 
@@ -143,7 +143,7 @@ export default function MarkdownPreview({
 
   return (
     <div className="markdown-preview" onClick={handleClick}>
-      <div className="markdown-preview-body" dangerouslySetInnerHTML={{ __html: html }} />
+      <div className="markdown-preview-body" dangerouslySetInnerHTML={renderedHtml} />
     </div>
   );
 }

@@ -93,25 +93,29 @@ test("Changes タブで変更ファイルと未追跡ファイルを表示し di
   }
 });
 
-test("プレビューの内容が変わらない再取得では選択中の文字列を維持する", async () => {
+test("Markdown プレビューの内容が変わらない定期更新では選択中の文字列を維持する", async () => {
   const context = await createE2eContext();
   let app: ElectronApplication | null = null;
   try {
     const repoDir = await createCommittedRepo(context, {
-      "copy.txt": "before\n",
+      "README.md": "# before\n\ncopy this text\n",
     });
-    await writeFiles(repoDir, { "copy.txt": "copy this text\n" });
+    await writeFiles(repoDir, {
+      "README.md": "# after\n\ncopy this text\n",
+    });
     await registerRepo(context, repoDir);
     const launched = await launchWindow(context);
     app = launched.app;
     const window = launched.window;
     await openMainTerminal(window);
 
-    await window.locator(".change-item", { hasText: "copy.txt" }).click();
-    const addedLine = window.locator(".source-line.diff-added .source-code");
-    await expect(addedLine).toContainText("copy this text");
+    await window.locator(".change-item", { hasText: "README.md" }).click();
+    const paragraph = window.locator(".markdown-preview-body p", {
+      hasText: "copy this text",
+    });
+    await expect(paragraph).toBeVisible();
 
-    const selectedText = await addedLine.evaluate((element) => {
+    const selectedText = await paragraph.evaluate((element) => {
       const selection = getSelection();
       const range = document.createRange();
       range.selectNodeContents(element);

@@ -19,22 +19,6 @@ function isMarkdownPath(path: string): boolean {
   return ext ? markdownExtensions.has(ext) : false;
 }
 
-function isSameDiffDocument(
-  previous: GitDiffDocument | null,
-  next: GitDiffDocument | null,
-): boolean {
-  return (
-    previous === next ||
-    (previous !== null &&
-      next !== null &&
-      previous.path === next.path &&
-      previous.originalContent === next.originalContent &&
-      previous.currentContent === next.currentContent &&
-      previous.isBinary === next.isBinary &&
-      previous.size === next.size)
-  );
-}
-
 interface DiffPreviewPanelProps {
   line?: number;
   onClose: () => void;
@@ -127,10 +111,7 @@ export function DiffPreviewPanel({
         return;
       }
 
-      const nextDocument = resultDataOrNull(result);
-      setDiffDocument((previous) =>
-        isSameDiffDocument(previous, nextDocument) ? previous : nextDocument,
-      );
+      setDiffDocument(resultDataOrNull(result));
       if (showLoader) {
         showLoader = false;
         setIsLoadingDiff(false);
