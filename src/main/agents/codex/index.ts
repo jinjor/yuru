@@ -18,6 +18,7 @@ import type { WorktreeSessionHint } from "../../worktree-session-detection.js";
 import { codexSessionDateDirFromId, getCodexHistoryPath, getCodexSessionsDir } from "./paths.js";
 import { loadWorktreeContextPrompt } from "../../worktree-context-prompt.js";
 import { detectCodexWorktreeSessionLines } from "./worktree-session-detection.js";
+import { IncrementalSessionPreviewReader } from "../../session-preview-reader.js";
 
 interface CodexSessionMeta {
   providerSessionId: string;
@@ -30,6 +31,8 @@ interface CodexHistoryEntry {
   sessionId: string;
   timestamp: number;
 }
+
+const sessionFilePathsById = new Map<string, string>();
 
 function parseCodexTimestamp(raw: string | number | null | undefined): number | null {
   if (typeof raw === "number") {
@@ -123,6 +126,8 @@ function parseCodexAssistantPreviewEntry(entry: unknown): SessionPreview | null 
   };
 }
 
+const sessionPreviewReader = new IncrementalSessionPreviewReader(parseCodexAssistantPreviewEntry);
+
 function parseCodexHistoryEntry(entry: unknown): CodexHistoryEntry | null {
   if (typeof entry !== "object" || entry === null) {
     return null;
@@ -176,6 +181,7 @@ async function readCodexSessionMetas(): Promise<Map<string, CodexSessionMeta>> {
       const meta = await readCodexSessionMeta(filePath);
       if (meta) {
         metas.set(meta.providerSessionId, meta);
+        sessionFilePathsById.set(meta.providerSessionId, filePath);
       }
     }),
   );
@@ -225,6 +231,10 @@ async function loadStoredSessionPreview(providerSessionId: string): Promise<Sess
 }
 
 async function findCodexSessionFile(providerSessionId: string): Promise<string | null> {
+  const cachedFilePath = sessionFilePathsById.get(providerSessionId);
+  if (cachedFilePath && fs.existsSync(cachedFilePath)) {
+    return cachedFilePath;
+  }
   const sessionDateDir = codexSessionDateDirFromId(providerSessionId);
   if (!sessionDateDir || !fs.existsSync(sessionDateDir)) {
     return null;
@@ -234,21 +244,16 @@ async function findCodexSessionFile(providerSessionId: string): Promise<string |
   const sessionFileName =
     fs.readdirSync(sessionDateDir).find((fileName) => fileName.endsWith(`-${sessionId}.jsonl`)) ??
     null;
-  return sessionFileName ? path.join(sessionDateDir, sessionFileName) : null;
+  if (!sessionFileName) {
+    return null;
+  }
+  const filePath = path.join(sessionDateDir, sessionFileName);
+  sessionFilePathsById.set(providerSessionId, filePath);
+  return filePath;
 }
 
 async function readCodexSessionPreview(filePath: string): Promise<SessionPreview | null> {
-  const content = await readTextFileIfExists(filePath);
-  if (!content) {
-    return null;
-  }
-  let preview: SessionPreview | null = null;
-  for (const entry of parseJsonLinesAs(content, parseCodexAssistantPreviewEntry)) {
-    if (!preview || entry.timestamp >= preview.timestamp) {
-      preview = entry;
-    }
-  }
-  return preview;
+  return sessionPreviewReader.read(filePath);
 }
 
 async function loadWorktreeSessionHints(

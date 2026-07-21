@@ -18,6 +18,7 @@ import {
   pidFilePath,
 } from "./paths.js";
 import { loadWorktreeContextPrompt } from "../../worktree-context-prompt.js";
+import { IncrementalSessionPreviewReader } from "../../session-preview-reader.js";
 
 interface ClaudeHistoryEntry {
   sessionId: string;
@@ -29,6 +30,8 @@ interface ClaudeHistoryEntry {
 interface ClaudeStoredSession extends SessionSnapshot {
   filePath: string;
 }
+
+const sessionFilePathsById = new Map<string, string>();
 
 function parseClaudeHistoryEntry(entry: unknown): ClaudeHistoryEntry | null {
   if (typeof entry !== "object" || entry === null) {
@@ -84,6 +87,8 @@ function parseClaudeAssistantPreviewEntry(entry: unknown): SessionPreview | null
   };
 }
 
+const sessionPreviewReader = new IncrementalSessionPreviewReader(parseClaudeAssistantPreviewEntry);
+
 function extractClaudeMessageText(content: unknown): string {
   const texts: string[] = [];
   if (typeof content === "string") {
@@ -138,6 +143,7 @@ async function loadStoredSessions(): Promise<SessionSnapshot[]> {
 
   return Promise.all(
     Array.from(sessionMap.values()).map(async (session) => {
+      sessionFilePathsById.set(session.providerSessionId, session.filePath);
       const preview = await readClaudeSessionPreview(session.filePath);
       return {
         provider: session.provider,
@@ -164,11 +170,16 @@ async function readClaudeHistoryEntries(): Promise<ClaudeHistoryEntry[]> {
 }
 
 async function findClaudeSessionFile(providerSessionId: string): Promise<string | null> {
+  const cachedFilePath = sessionFilePathsById.get(providerSessionId);
+  if (cachedFilePath && fs.existsSync(cachedFilePath)) {
+    return cachedFilePath;
+  }
   for (const entry of (await readClaudeHistoryEntries())
     .filter((historyEntry) => historyEntry.sessionId === providerSessionId)
     .sort((a, b) => b.timestamp - a.timestamp)) {
     const sessionFilePath = claudeSessionFilePath(entry.project, providerSessionId);
     if (fs.existsSync(sessionFilePath)) {
+      sessionFilePathsById.set(providerSessionId, sessionFilePath);
       return sessionFilePath;
     }
   }
@@ -177,17 +188,7 @@ async function findClaudeSessionFile(providerSessionId: string): Promise<string 
 }
 
 async function readClaudeSessionPreview(filePath: string): Promise<SessionPreview | null> {
-  const content = await readTextFileIfExists(filePath);
-  if (!content) {
-    return null;
-  }
-  let preview: SessionPreview | null = null;
-  for (const entry of parseJsonLinesAs(content, parseClaudeAssistantPreviewEntry)) {
-    if (!preview || entry.timestamp >= preview.timestamp) {
-      preview = entry;
-    }
-  }
-  return preview;
+  return sessionPreviewReader.read(filePath);
 }
 
 async function loadWorktreeSessionHints(

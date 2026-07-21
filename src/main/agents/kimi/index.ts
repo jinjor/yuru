@@ -34,6 +34,8 @@ interface KimiSessionState {
   updatedAt: string;
 }
 
+const sessionRefsById = new Map<string, KimiStoredSessionRef>();
+
 function parseKimiSessionIndexEntry(entry: unknown): KimiStoredSessionRef | null {
   if (typeof entry !== "object" || entry === null) {
     return null;
@@ -88,7 +90,22 @@ async function readKimiSessionIndex(): Promise<KimiStoredSessionRef[]> {
   if (!content) {
     return [];
   }
-  return parseJsonLinesAs(content, parseKimiSessionIndexEntry);
+  const entries = parseJsonLinesAs(content, parseKimiSessionIndexEntry);
+  for (const entry of entries) {
+    sessionRefsById.set(entry.providerSessionId, entry);
+  }
+  return entries;
+}
+
+async function findKimiSessionRef(providerSessionId: string): Promise<KimiStoredSessionRef | null> {
+  const cached = sessionRefsById.get(providerSessionId);
+  if (cached && fs.existsSync(cached.sessionDir)) {
+    return cached;
+  }
+  const entry = (await readKimiSessionIndex()).find(
+    (candidate) => candidate.providerSessionId === providerSessionId,
+  );
+  return entry && fs.existsSync(entry.sessionDir) ? entry : null;
 }
 
 async function readKimiSessionState(sessionDir: string): Promise<KimiSessionState | null> {
@@ -131,9 +148,7 @@ async function loadStoredSessions(): Promise<SessionSnapshot[]> {
 }
 
 async function loadStoredSessionPreview(providerSessionId: string): Promise<SessionPreview | null> {
-  const entry = (await readKimiSessionIndex()).find(
-    (candidate) => candidate.providerSessionId === providerSessionId,
-  );
+  const entry = await findKimiSessionRef(providerSessionId);
   if (!entry) {
     return null;
   }
@@ -142,9 +157,7 @@ async function loadStoredSessionPreview(providerSessionId: string): Promise<Sess
 }
 
 async function hasStoredSession(providerSessionId: string): Promise<boolean> {
-  return (await readKimiSessionIndex()).some(
-    (entry) => entry.providerSessionId === providerSessionId && fs.existsSync(entry.sessionDir),
-  );
+  return (await findKimiSessionRef(providerSessionId)) !== null;
 }
 
 async function loadWorktreeSessionHints(
@@ -230,9 +243,7 @@ async function hasRecordedInitialInput(
   providerSessionId: string,
   initialInput: string,
 ): Promise<boolean> {
-  const entry = (await readKimiSessionIndex()).find(
-    (candidate) => candidate.providerSessionId === providerSessionId,
-  );
+  const entry = await findKimiSessionRef(providerSessionId);
   if (!entry) {
     return false;
   }

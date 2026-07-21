@@ -197,6 +197,42 @@ test("loadStoredSessionPreview は指定 session の preview だけを返す", a
   assert.equal(await loadStoredSessionPreview("kimi", "missing"), null);
 });
 
+test("loadStoredSessionPreview は Claude/Codex session への追記を反映する", async () => {
+  fs.appendFileSync(
+    path.join(claudeProjectDir, "claude-1.jsonl"),
+    jsonl({
+      type: "assistant",
+      sessionId: "claude-1",
+      timestamp: "2026-05-24T00:00:03.000Z",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "appended claude assistant message" }],
+      },
+    }),
+  );
+  fs.appendFileSync(
+    codexSessionFile,
+    jsonl({
+      type: "response_item",
+      timestamp: "2026-05-24T00:00:03.000Z",
+      payload: {
+        type: "message",
+        role: "assistant",
+        content: [{ type: "output_text", text: "appended codex assistant message" }],
+      },
+    }),
+  );
+
+  assert.equal(
+    await loadStoredSessionPreview("claude", "claude-1"),
+    "appended claude assistant message",
+  );
+  assert.equal(
+    await loadStoredSessionPreview("codex", codexSessionId),
+    "appended codex assistant message",
+  );
+});
+
 test("Claude stored session の存在判定は session file の存在を見る", async () => {
   assert.equal(await claudeProvider.hasStoredSession("claude-1"), true);
   assert.equal(await claudeProvider.hasStoredSession(missingClaudeSessionId), false);
