@@ -22,14 +22,31 @@ test("e2e 実行中は BrowserWindow が hidden のままになる", async () =>
     const browserWindowState = await app.evaluate(async ({ BrowserWindow }) => {
       const browserWindow = BrowserWindow.getAllWindows()[0];
       return {
+        backgroundThrottling: browserWindow.webContents.getBackgroundThrottling(),
         isFocused: browserWindow.isFocused(),
         isVisible: browserWindow.isVisible(),
       };
     });
     expect(browserWindowState).toEqual({
+      backgroundThrottling: false,
       isFocused: false,
       isVisible: false,
     });
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+test("通常の BrowserWindow 設定では background throttling が有効になる", async () => {
+  const context = await createE2eContext();
+  const app = await launchYuru(context, { disableBackgroundThrottlingForE2e: false });
+  try {
+    await app.firstWindow();
+    const backgroundThrottling = await app.evaluate(async ({ BrowserWindow }) => {
+      return BrowserWindow.getAllWindows()[0].webContents.getBackgroundThrottling();
+    });
+    expect(backgroundThrottling).toBe(true);
   } finally {
     await closeYuru(app);
     await context.cleanup();

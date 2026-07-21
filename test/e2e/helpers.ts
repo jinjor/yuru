@@ -67,8 +67,11 @@ export async function createE2eContext(): Promise<E2eContext> {
   };
 }
 
-export async function launchYuru(context: E2eContext): Promise<ElectronApplication> {
-  return electron.launch({
+export async function launchYuru(
+  context: E2eContext,
+  options: { disableBackgroundThrottlingForE2e?: boolean } = {},
+): Promise<ElectronApplication> {
+  const app = await electron.launch({
     args: [context.repoRoot],
     cwd: context.repoRoot,
     env: {
@@ -78,6 +81,18 @@ export async function launchYuru(context: E2eContext): Promise<ElectronApplicati
       YURU_HOME: context.yuruHome,
     },
   });
+
+  // Hidden BrowserWindows are throttled by Electron by default. Keep that
+  // production behavior, and disable throttling from the test harness only so
+  // Playwright can drive the hidden renderer without long timer delays.
+  if (options.disableBackgroundThrottlingForE2e !== false) {
+    await app.firstWindow();
+    await app.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0]?.webContents.setBackgroundThrottling(false);
+    });
+  }
+
+  return app;
 }
 
 export async function launchWindow(context: E2eContext): Promise<{
