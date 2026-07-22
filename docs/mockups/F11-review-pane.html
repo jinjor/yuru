@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>F11 Review — Changes 区間分割とレビューチェック モックアップ (第 4 案)</title>
+<style>
+  :root {
+    --bg-app: #11151d;
+    --bg-panel: #181d27;
+    --bg-hover: #262f3f;
+    --bg-selected: #2f4058;
+    --border: #2f394a;
+    --border-strong: #445068;
+    --text: #d8e1ef;
+    --text-muted: #91a0b8;
+    --text-subtle: #63718a;
+    --accent: #7bc1ff;
+    --success: #7ad7a1;
+    --warning: #e2c08d;
+    --danger: #f08f86;
+    --viewer-bg: #0f141c;
+    --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg-app);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Hiragino Sans", sans-serif;
+    font-size: 13px;
+    padding: 32px 40px 80px;
+  }
+  h1 { font-size: 18px; font-weight: 600; margin: 0 0 6px; }
+  .lead { color: var(--text-muted); max-width: 860px; line-height: 1.7; margin: 0 0 8px; }
+  code { background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+
+  .spec-box {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 18px;
+    max-width: 860px;
+    margin: 18px 0 0;
+    line-height: 1.7;
+  }
+  .spec-box h2 { font-size: 13px; margin: 0 0 8px; letter-spacing: 0.04em; }
+  .spec-box ul { margin: 0; padding-left: 20px; color: var(--text-muted); }
+  .spec-box b { color: var(--text); }
+  .spec-fixed { border-left: 3px solid var(--success); background: rgba(122,215,161,0.06); }
+  .spec-fixed h2 { color: var(--success); }
+  .spec-trial { border-left: 3px solid var(--accent); background: rgba(123,193,255,0.06); margin-bottom: 34px; }
+  .spec-trial h2 { color: var(--accent); }
+
+  .case { margin: 0 0 34px; }
+  .case-title { font-size: 13px; font-weight: 600; color: var(--accent); margin: 0 0 4px; }
+  .case-note { color: var(--text-subtle); font-size: 12px; margin: 0 0 12px; max-width: 760px; line-height: 1.7; }
+  .case-note b { color: var(--text-muted); }
+  .row-of-panels { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+
+  /* ===== 左ペイン (changes-panel 相当) ===== */
+  .side-panel {
+    width: 330px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--bg-panel);
+    box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+  }
+  .panel-header { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  .panel-tabs { display: flex; align-items: center; gap: 6px; }
+  .panel-tab {
+    height: 30px; padding: 0 10px;
+    font-size: 12px; line-height: 1;
+    color: var(--text-muted);
+    background: transparent;
+    border: 1px solid transparent; border-radius: 999px;
+    display: inline-flex; align-items: center; gap: 6px;
+    cursor: default;
+  }
+  .panel-tab.active {
+    color: var(--text);
+    background: rgba(123,193,255,0.14);
+    border-color: rgba(123,193,255,0.3);
+  }
+  .panel-tab-count {
+    min-width: 18px; height: 18px; padding: 0 5px;
+    border-radius: 999px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; line-height: 1;
+    color: var(--text);
+    background: rgba(255,255,255,0.08);
+  }
+  .panel-tab.active .panel-tab-count { background: rgba(123,193,255,0.22); }
+
+  .changes-list { padding-bottom: 10px; }
+
+  /* セクションの区切り: 余白を広げ、線も少し強くする */
+  .section { padding-bottom: 8px; }
+  .section + .section {
+    margin-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.09);
+  }
+  /* ヘッダのラベル左端は全セクションで揃える (chevron は左の余白に置く) */
+  .section-header {
+    position: relative;
+    padding: 12px 16px 8px;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-muted);
+    display: flex; align-items: center; gap: 8px;
+    cursor: default;
+  }
+  .section-header .linestat { margin-left: auto; }
+  .chevron {
+    position: absolute; left: 2px; top: 14px;
+    display: inline-flex; color: var(--text-subtle);
+  }
+  /* Committed ヘッダに添える base 名 (fork point 推測の結果がそのまま見える) */
+  .base-name {
+    text-transform: none; letter-spacing: 0;
+    font-family: var(--font-mono); font-weight: 500;
+    color: var(--text-subtle);
+  }
+  .change-item {
+    padding: 5px 16px;
+    font-size: 12px;
+    display: flex; align-items: center; gap: 8px;
+    cursor: default;
+  }
+  .change-item:hover { background: rgba(255,255,255,0.04); }
+  .change-item.selected { background: rgba(123,193,255,0.1); }
+  .status {
+    font-size: 11px; font-weight: 700; font-family: var(--font-mono);
+    min-width: 14px; text-align: center;
+  }
+  .st-m { color: #e2c08d; }
+  .st-a { color: #73c991; }
+  .st-d { color: #c74e39; }
+  /* dir は取り消し線に関係なく常に左寄せ (名前の真横)。fpath が 1 つの inline 流として
+     まとめて後ろ省略する (あふれるのは dir 側 = F40 ヘッダと同じ) */
+  .fpath { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fname { color: var(--text); }
+  .fdir { color: var(--text-subtle); font-size: 11px; margin-left: 8px; }
+  .linestat { display: inline-flex; gap: 6px; font-family: var(--font-mono); font-size: 11px; font-weight: 500; white-space: nowrap; flex-shrink: 0; }
+  .ls-add { color: #73c991; }
+  .ls-del { color: #c74e39; }
+
+  /* レビュー済み (案 A): ファイル名だけに取り消し線 */
+  .reviewed .fname {
+    text-decoration: line-through;
+    text-decoration-thickness: 1.5px;
+    text-decoration-color: rgba(216, 225, 239, 0.85);
+  }
+
+  /* 案 B: fname と dir を 1 本の線で跨ぐ。inline の親 (.fpath) に decoration を置くと
+     子要素の間の隙間も途切れずに引かれる (入れ子 span に下線が連続するのと同じ仕組み) */
+  .variant-b .reviewed .fpath {
+    text-decoration: line-through;
+    text-decoration-thickness: 1.5px;
+    text-decoration-color: rgba(216, 225, 239, 0.75);
+  }
+  .variant-b .reviewed .fname { text-decoration: none; }
+
+  .no-base {
+    padding: 4px 16px 12px; font-size: 12px; color: var(--text-subtle);
+    line-height: 1.7;
+  }
+
+  /* ===== diff パネルヘッダ (preview-header 相当) ===== */
+  .preview-panel {
+    width: 680px; max-width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--bg-app);
+    box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+  }
+  .preview-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+  }
+  .preview-filemeta { display: flex; align-items: baseline; gap: 8px; min-width: 0; flex: 1; }
+  .preview-filename { font-size: 13px; font-weight: 600; white-space: nowrap; }
+  .preview-dir {
+    font-size: 11px; color: var(--text-subtle); font-family: var(--font-mono);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+  }
+  /* 範囲ラベル: Committed の diff にだけ出す。branch 名を含む形なので、
+     文字を読まなくてもラベルの有無と形で見分けられる */
+  .scope-label {
+    flex-shrink: 0;
+    font-size: 11px; font-weight: 500;
+    color: var(--text-muted);
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    padding: 2px 7px;
+    white-space: nowrap;
+  }
+  .scope-label .branch { font-family: var(--font-mono); color: var(--text); }
+  .mode-segment {
+    display: inline-flex; gap: 2px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 8px; padding: 2px;
+  }
+  .mode-btn {
+    width: 26px; height: 24px; border: 0; border-radius: 6px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: transparent; color: var(--text-subtle); cursor: default;
+  }
+  .mode-btn.active { background: var(--bg-selected); color: var(--text); }
+  .mode-btn.disabled { opacity: 0.35; }
+
+  .reviewed-toggle {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 24px; padding: 0 10px;
+    font-size: 12px; line-height: 1;
+    border-radius: 999px;
+    border: 1px solid var(--border-strong);
+    background: transparent; color: var(--text-muted);
+    cursor: pointer; white-space: nowrap;
+  }
+  .reviewed-toggle .dot {
+    width: 12px; height: 12px; border-radius: 999px;
+    border: 1.5px solid currentColor;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .reviewed-toggle.on {
+    border-color: rgba(122,215,161,0.5);
+    background: rgba(122,215,161,0.12);
+    color: var(--success);
+  }
+  .close-btn { border: 0; background: transparent; color: var(--text-subtle); width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; cursor: default; }
+
+  .diff-body { font-family: var(--font-mono); font-size: 12px; line-height: 1.7; padding: 10px 0; background: var(--viewer-bg); }
+  .diff-line { padding: 0 16px 0 56px; position: relative; white-space: pre; color: var(--text-muted); }
+  .diff-line .ln { position: absolute; left: 16px; color: var(--text-subtle); }
+  .diff-line.add { background: rgba(34,94,59,0.34); color: var(--text); }
+  .diff-line.del { background: rgba(113,38,38,0.34); color: var(--text); }
+</style>
+</head>
+<body>
+
+<h1>F11 Review — Changes 区間分割とレビューチェック (第 4 案)</h1>
+<p class="lead">
+  設計 doc: <code>docs/backlog-details/F11-review-from-base.md</code> (この版の内容を反映済み)。
+  チェックの意味論 (base からこの内容までヨシ、表示は導出) は変わらない。
+  この版はレビューの印を最小化し、base を画面から消して自動解決だけにした。
+</p>
+
+<div class="spec-box spec-fixed">
+  <h2>前提 (確定済み)</h2>
+  <ul>
+    <li>Review の独立タブは作らない。区間は重複しない分割 (<code>merge-base ↔ HEAD ↔ index ↔ 作業ツリー</code>)。</li>
+    <li>チェックリストはファイルごとに 1 本。承認内容が commit されるとチェックは Committed 行に引き継がれる。</li>
+    <li>並び順は Committed → Staged → Unstaged (変動するものが下)。Conflicted は例外で最上部。</li>
+    <li>Committed は既定で折りたたみ。進捗の分数 (4/12) は出さない。</li>
+  </ul>
+</div>
+
+<div class="spec-box spec-trial">
+  <h2>この版で試している変更</h2>
+  <ul>
+    <li>レビュー済みの印は<b>ファイル名の取り消し線だけ</b>。色・ディレクトリ・行数はそのまま残す
+      (レビュー状態は変更の種類より重要度が低い。リストをレビュー中心のデザインにしない)。</li>
+    <li>チェックのトグルは<b>リストから廃止</b>。操作は diff パネルの Reviewed トグルだけ。
+      リストは表示専用なので取り消し線だけで足りる。</li>
+    <li>セクションヘッダの<b>ラベル左端を全セクションで縦に揃える</b> (chevron は左余白に置く)。</li>
+    <li><b>dir は常に左寄せ (名前の真横)</b>。F40 ヘッダと同じ「関心が同じものを隣接させる」配置。
+      省略はパス全体の後ろ省略 (あふれるのは dir 側)。</li>
+    <li>セクション名は <b>Committed / Staged / Unstaged</b> の三兄弟に。</li>
+    <li>base は fork point の推測 (全 local branch との merge-base 比較) で自動解決し、
+      <b>解決結果の branch 名を Committed ヘッダに表示</b>。切替 UI も作成時記録も持たない。</li>
+    <li><b>セクションヘッダの件数を削除</b> (合計 +/- は残す。リストを見れば分かるし、
+      総数は Changes タブの badge にある)。</li>
+    <li>diff ヘッダの範囲ラベルは <b>Committed だけ</b> (<code>from main</code>)。
+      Staged / Unstaged / Files から開いた diff は従来通りラベルなし。</li>
+  </ul>
+</div>
+
+<div class="case">
+  <p class="case-title">1. 普段 (作業中): Committed は折りたたみ</p>
+  <p class="case-note">
+    直近の変更 (Staged / Unstaged) が主役。Committed はヘッダだけで、件数と合計 +/- が見える
+    (base は hover の tooltip でだけ確認できる)。
+    <b>review-state.ts と ipc.ts は取り消し線 = レビュー済み</b>。それ以外の見た目は通常の行と同じ。
+  </p>
+  <div class="row-of-panels">
+    <div class="side-panel">
+      <div class="panel-header">
+        <div class="panel-tabs">
+          <span class="panel-tab active">Changes <span class="panel-tab-count">3</span></span>
+          <span class="panel-tab">Files</span>
+          <span class="panel-tab">Search</span>
+        </div>
+      </div>
+      <div class="changes-list">
+        <div class="section">
+          <div class="section-header">
+            <span class="chevron"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+            <span>Committed</span><span class="base-name">main</span>
+            <span class="linestat"><span class="ls-add">+188</span><span class="ls-del">-46</span></span>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-header">
+            <span>Staged</span>
+            <span class="linestat"><span class="ls-add">+9</span><span class="ls-del">-1</span></span>
+          </div>
+          <div class="change-item reviewed">
+            <span class="status st-m">M</span>
+            <span class="fpath"><span class="fname">ipc.ts</span><span class="fdir">src/shared</span></span>
+            <span class="linestat"><span class="ls-add">+9</span><span class="ls-del">-1</span></span>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-header">
+            <span>Unstaged</span>
+            <span class="linestat"><span class="ls-add">+38</span><span class="ls-del">-2</span></span>
+          </div>
+          <div class="change-item">
+            <span class="status st-m">M</span>
+            <span class="fpath"><span class="fname">git.ts</span><span class="fdir">src/main</span></span>
+            <span class="linestat"><span class="ls-add">+14</span><span class="ls-del">-2</span></span>
+          </div>
+          <div class="change-item reviewed">
+            <span class="status st-a">U</span>
+            <span class="fpath"><span class="fname">review-state.ts</span><span class="fdir">src/main</span></span>
+            <span class="linestat"><span class="ls-add">+24</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="case">
+  <p class="case-title">2. レビュー中 (commit 済み): Committed を展開</p>
+  <p class="case-note">
+    agent が commit し終えると Staged / Unstaged は消え、Committed だけが残る。
+    取り消し線の 2 件は済み。ChangesPane.tsx は選択中 (diff を開いている)。チェックの付け外しは
+    diff パネル側で行うので、リストに操作 UI はない。
+    右: base を解決できない worktree (fork 元の候補になる branch が無い)。明示メッセージを出す。
+  </p>
+  <div class="row-of-panels">
+    <div class="side-panel">
+      <div class="panel-header">
+        <div class="panel-tabs">
+          <span class="panel-tab active">Changes <span class="panel-tab-count">0</span></span>
+          <span class="panel-tab">Files</span>
+          <span class="panel-tab">Search</span>
+        </div>
+      </div>
+      <div class="changes-list">
+        <div class="section">
+          <div class="section-header">
+            <span class="chevron"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+            <span>Committed</span><span class="base-name">main</span>
+            <span class="linestat"><span class="ls-add">+188</span><span class="ls-del">-46</span></span>
+          </div>
+          <div class="change-item reviewed">
+            <span class="status st-m">M</span>
+            <span class="fpath"><span class="fname">changes.ts</span><span class="fdir">src/renderer/components/ExplorerPanel</span></span>
+            <span class="linestat"><span class="ls-add">+18</span><span class="ls-del">-4</span></span>
+          </div>
+          <div class="change-item reviewed">
+            <span class="status st-m">M</span>
+            <span class="fpath"><span class="fname">git.ts</span><span class="fdir">src/main</span></span>
+            <span class="linestat"><span class="ls-add">+42</span><span class="ls-del">-7</span></span>
+          </div>
+          <div class="change-item selected">
+            <span class="status st-m">M</span>
+            <span class="fpath"><span class="fname">ChangesPane.tsx</span><span class="fdir">src/renderer/components/ExplorerPanel</span></span>
+            <span class="linestat"><span class="ls-add">+97</span><span class="ls-del">-4</span></span>
+          </div>
+          <div class="change-item">
+            <span class="status st-d">D</span>
+            <span class="fpath"><span class="fname">legacy-diff.ts</span><span class="fdir">src/main</span></span>
+            <span class="linestat"><span class="ls-del">-31</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-panel">
+      <div class="panel-header">
+        <div class="panel-tabs">
+          <span class="panel-tab active">Changes <span class="panel-tab-count">1</span></span>
+          <span class="panel-tab">Files</span>
+          <span class="panel-tab">Search</span>
+        </div>
+      </div>
+      <div class="changes-list">
+        <div class="section">
+          <div class="section-header">
+            <span>Committed</span>
+          </div>
+          <div class="no-base">
+            Base branch is unknown.<br />
+            (fork 元の候補になる branch が 1 つも無い場合)
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-header">
+            <span>Unstaged</span>
+            <span class="linestat"><span class="ls-add">+6</span></span>
+          </div>
+          <div class="change-item">
+            <span class="status st-m">M</span>
+            <span class="fpath"><span class="fname">notes.md</span><span class="fdir">docs</span></span>
+            <span class="linestat"><span class="ls-add">+6</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="case">
+  <p class="case-title">3. 取り消し線の範囲比較 — A: ファイル名のみ (採用) / B: dir まで 1 本の線</p>
+  <p class="case-note">
+    <b>→ A を採用</b>。dir は取り消し線に関係なく全行で左寄せ (名前の真横) にした。比較は線の範囲だけ:
+    <b>A はファイル名のみ</b>、<b>B は fname と dir を 1 本の途切れない線で跨ぐ</b>
+    (2 要素に別々に引くのではなく、inline の親に decoration を置く)。
+  </p>
+  <div class="row-of-panels">
+    <div class="side-panel">
+      <div class="changes-list" style="padding-top: 4px;">
+        <div class="section">
+          <div class="section-header"><span>A: ファイル名のみ</span></div>
+          <div class="change-item reviewed">
+            <span class="status st-m">M</span>
+            <span class="fpath"><span class="fname">changes.ts</span><span class="fdir">src/renderer/components/ExplorerPanel</span></span>
+            <span class="linestat"><span class="ls-add">+18</span><span class="ls-del">-4</span></span>
+          </div>
+          <div class="change-item reviewed">
+            <span class="status st-m">M</span>
+            <span class="fpath"><span class="fname">git.ts</span><span class="fdir">src/main</span></span>
+            <span class="linestat"><span class="ls-add">+42</span><span class="ls-del">-7</span></span>
+          </div>
+          <div class="change-item">
+            <span class="status st-m">M</span>
+            <span class="fpath"><span class="fname">ChangesPane.tsx</span><span class="fdir">src/renderer/components/ExplorerPanel</span></span>
+            <span class="linestat"><span class="ls-add">+97</span><span class="ls-del">-4</span></span>
+          </div>
+          <div class="change-item">
+            <span class="status st-d">D</span>
+            <span class="fpath"><span class="fname">legacy-diff.ts</span><span class="fdir">src/main</span></span>
+            <span class="linestat"><span class="ls-del">-31</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-panel variant-b">
+      <div class="changes-list" style="padding-top: 4px;">
+        <div class="section">
+          <div class="section-header"><span>B: dir まで 1 本で跨ぐ</span></div>
+          <div class="change-item reviewed">
+            <span class="status st-m">M</span>
+            <span class="fpath"><span class="fname">changes.ts</span><span class="fdir">src/renderer/components/ExplorerPanel</span></span>
+            <span class="linestat"><span class="ls-add">+18</span><span class="ls-del">-4</span></span>
+          </div>
+          <div class="change-item reviewed">
+            <span class="status st-m">M</span>
+            <span class="fpath"><span class="fname">git.ts</span><span class="fdir">src/main</span></span>
+            <span class="linestat"><span class="ls-add">+42</span><span class="ls-del">-7</span></span>
+          </div>
+          <div class="change-item">
+            <span class="status st-m">M</span>
+            <span class="fpath"><span class="fname">ChangesPane.tsx</span><span class="fdir">src/renderer/components/ExplorerPanel</span></span>
+            <span class="linestat"><span class="ls-add">+97</span><span class="ls-del">-4</span></span>
+          </div>
+          <div class="change-item">
+            <span class="status st-d">D</span>
+            <span class="fpath"><span class="fname">legacy-diff.ts</span><span class="fdir">src/main</span></span>
+            <span class="linestat"><span class="ls-del">-31</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="case">
+  <p class="case-title">4. diff パネルヘッダ — from ラベルと Reviewed トグル</p>
+  <p class="case-note">
+    範囲ラベルは <b>Committed の diff にだけ</b>出す (<code>from main</code>)。branch 名を含む形なので、
+    文字を読まなくてもラベルの有無で見分けられる。Staged / Unstaged / Files から開いた diff は
+    従来通りラベルなし。チェックの付け外しはここの Reviewed トグルだけで行う
+    (意味は常に「この画面の右側の内容までヨシ」)。
+    上: Unstaged から開いた diff (ラベルなし、編集可、未チェック)。
+    下: Committed から開いた diff (両側 blob なので編集アイコンは disabled、チェック済み)。
+  </p>
+
+  <div class="preview-panel" style="margin-bottom: 18px;">
+    <div class="preview-header">
+      <div class="preview-filemeta">
+        <span class="preview-filename">git.ts</span>
+        <span class="preview-dir">src/main</span>
+      </div>
+      <span class="mode-segment">
+        <span class="mode-btn active"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></span>
+        <span class="mode-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></span>
+      </span>
+      <button class="reviewed-toggle"><span class="dot"></span>Reviewed</button>
+      <span class="linestat"><span class="ls-add">+14</span><span class="ls-del">-2</span></span>
+      <span class="close-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+    </div>
+    <div class="diff-body">
+      <div class="diff-line"><span class="ln">188</span>async function isPathChanged(cwd: string, filePath: string): Promise&lt;boolean&gt; {</div>
+      <div class="diff-line del"><span class="ln"> </span>  const output = await exec("git", ["status", "--porcelain", "--", filePath], cwd);</div>
+      <div class="diff-line add"><span class="ln">189</span>  const output = await exec("git", ["status", "--porcelain", "-uall", "--", filePath], cwd);</div>
+      <div class="diff-line"><span class="ln">190</span>  return output.trim().length &gt; 0;</div>
+    </div>
+  </div>
+
+  <div class="preview-panel">
+    <div class="preview-header">
+      <div class="preview-filemeta">
+        <span class="preview-filename">changes.ts</span>
+        <span class="preview-dir">src/renderer/components/ExplorerPanel</span>
+      </div>
+      <span class="scope-label">from <span class="branch">main</span></span>
+      <span class="mode-segment">
+        <span class="mode-btn active"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></span>
+        <span class="mode-btn disabled"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></span>
+      </span>
+      <button class="reviewed-toggle on">
+        <span class="dot"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+        Reviewed
+      </button>
+      <span class="linestat"><span class="ls-add">+18</span><span class="ls-del">-4</span></span>
+      <span class="close-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+    </div>
+    <div class="diff-body">
+      <div class="diff-line"><span class="ln">20</span>export function buildChangeSections({</div>
+      <div class="diff-line del"><span class="ln"> </span>  conflictedFiles,</div>
+      <div class="diff-line add"><span class="ln">21</span>  conflictedFiles, // Committed → Staged → Unstaged の順に並べる</div>
+      <div class="diff-line"><span class="ln">22</span>}: {</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

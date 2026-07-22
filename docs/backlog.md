@@ -27,8 +27,8 @@ UI 改善も機能追加も同じ土俵で扱う。
 | ID | Type | Area | Item | Why now |
 |---|---|---|---|---|
 | P18 | polish | Changes | Changes のファイル表示順を最適化する | 確認したい変更へ素早くたどり着けるようにしたい |
-| F11 | feature | Diff | GitHub review のようにファイルごとに差分を確認済みにできるようにする | 大きめの差分で、どのファイルを見終わったかを失わずに確認したい |
-| F37 | feature | Diff | ブランチの任意のコミット間で diff を表示できるようにする | 複数コミットある作業で差分の範囲を切り替えて確認したい |
+| F11 | feature | Diff | GitHub review のようにファイルごとに差分を確認済みにできるようにする | 大きめの差分で、どのファイルを見終わったかを失わずに確認したい。設計: docs/backlog-details/F11-review-from-base.md |
+| F37 | feature | Diff | ブランチの任意のコミット間で diff を表示できるようにする | 複数コミットある作業で差分の範囲を切り替えて確認したい。F11 の設計で「merge-base ↔ HEAD (Committed セクション)」に絞って実装する (同 doc) |
 
 ## Next
 
