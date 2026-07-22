@@ -115,7 +115,7 @@ worktree の作成と provider session の開始は別の操作である (F43)�
 session が紐づいていない task worktree に対して新規 session を開始すると、
 provider session id が起動時に取れる場合はその場で primary に attach し、遅れて分かる provider は session id 解決後に attach する。
 初回起動時だけ worktree context を hidden prompt として注入する。
-この prompt は「provider session は repo root で起動しているが、実際の作業場所は task worktree である」ことを明示し、ファイル操作・コマンド実行・build/test は `worktreePath` で行うよう指示する。
+この prompt は「provider session は repo root で起動しているが、実際の作業場所は task worktree である」ことを明示し、ファイル操作・コマンド実行・build/test は `worktreePath` で行い、回答中のファイルパスは `worktreePath` 基準の相対パスまたは絶対パスで記述するよう指示する。
 
 - Claude: `--append-system-prompt`
 - Codex: `-c developer_instructions=...`

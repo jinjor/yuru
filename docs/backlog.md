@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-07-20
+Last updated: 2026-07-22
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -43,6 +43,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F32 | feature | Terminal | task worktree 外の作業を standalone terminal として分離する | task worktree list に混ぜない補助導線として欲しい |
 | P9 | polish | New Session | 長い repo path の省略ルールを見直す | 折りたたみが不自然 |
 | P16 | polish | Worktrees / Changes | 左ペインで worktree の Git 変更状態を分かるようにする | いま選択していない worktree に unstaged/staged/untracked 変更があることに気づけない |
+| F53 | feature | Terminal / Files | worktree 外の絶対ファイルパスをプレビューで開けるようにする | `/tmp/...` などはリンクとして検出できるが、クリック時に worktree 外として拒否される |
 | F7 | feature | Terminal | ファイル名が改行を跨いでもリンクできるようにする | linkifier 改善 |
 | F8 | feature | Terminal | ファイルクリック時にツリー側も開く | navigation の連動 |
 | F9 | feature | Terminal | ウィンドウを広げた時に 1 行の文字数を増やす | xterm fit を調整 |
