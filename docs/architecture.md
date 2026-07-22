@@ -128,8 +128,8 @@ worktree context prompt は `~/.yuru/worktree-context-prompt.txt` で差し替�
 
 ## Operations
 
-- `yuru add`
-  - 現在の cwd から Git repo root を解決し、Yuru metadata に repo を登録する
+- `yuru add <directory>`
+  - 指定した directory から Git repo root を解決し、Yuru metadata に repo を登録する
   - すでに登録済みなら重複登録しない
 - create task worktree
   - repo row の `+` から branch name だけを入力する。provider は選ばない

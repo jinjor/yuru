@@ -34,7 +34,8 @@ function printHelp() {
 
 Commands:
   yuru        Launch ~/Applications/Yuru.app
-  yuru add    Register the current Git repository in Yuru
+  yuru add <directory>
+              Register the directory's Git repository in Yuru
   yuru latest Update the managed checkout, rebuild, and replace Yuru.app
   yuru help   Show this message
 `);
@@ -174,16 +175,21 @@ function saveMetadata(metadata) {
   fs.writeFileSync(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`);
 }
 
-function resolveRepoRoot(cwd) {
+function resolveRepoRoot(directory) {
+  const cwd = path.resolve(directory);
   try {
     return read("git", ["rev-parse", "--show-toplevel"], { cwd });
   } catch {
-    fail("Run `yuru add` inside a Git repository.");
+    fail(`Not a directory inside a Git repository: ${cwd}`);
   }
 }
 
-function addRepo() {
-  const repoPath = resolveRepoRoot(process.cwd());
+function addRepo(args) {
+  if (args.length !== 1) {
+    fail("Usage: yuru add <directory>");
+  }
+
+  const repoPath = resolveRepoRoot(args[0]);
   const metadata = loadMetadata();
   const existingRepo = metadata.repos.find((repo) => repo.repoPath === repoPath);
   if (existingRepo) {
@@ -222,7 +228,7 @@ switch (command) {
     openApp();
     break;
   case "add":
-    addRepo();
+    addRepo(process.argv.slice(3));
     break;
   case "latest":
     updateApp();

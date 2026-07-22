@@ -522,7 +522,7 @@ export class YuruService {
     if (!repo) {
       return this.failAndReport<CreatedTaskWorktree>({
         code: "unknown",
-        message: `Repository "${repoPath}" is not registered in Yuru. Run \`yuru add\` first.`,
+        message: `Repository "${repoPath}" is not registered in Yuru. Run \`yuru add <directory>\` first.`,
       });
     }
 

@@ -23,7 +23,7 @@ function cleanGitEnv(env) {
   return next;
 }
 
-test("yuru add registers the current Git repository once", (t) => {
+test("yuru add registers the specified Git repository once", (t) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-cli-"));
   t.after(() => {
     fs.rmSync(tempDir, { recursive: true, force: true });
@@ -44,12 +44,12 @@ test("yuru add registers the current Git repository once", (t) => {
     GIT_DIR: "/nonexistent-yuru-test-git-dir",
     YURU_HOME: yuruHome,
   };
-  const firstOutput = execFileSync(process.execPath, [cliPath, "add"], {
-    cwd: nestedDir,
+  const firstOutput = execFileSync(process.execPath, [cliPath, "add", "repo/src"], {
+    cwd: tempDir,
     env,
     encoding: "utf8",
   });
-  const secondOutput = execFileSync(process.execPath, [cliPath, "add"], {
+  const secondOutput = execFileSync(process.execPath, [cliPath, "add", "."], {
     cwd: repoDir,
     env,
     encoding: "utf8",
@@ -64,4 +64,19 @@ test("yuru add registers the current Git repository once", (t) => {
   assert.equal(metadata.repos.length, 1);
   assert.equal(metadata.repos[0].repoPath, repoRoot);
   assert.equal(typeof metadata.repos[0].id, "string");
+});
+
+test("yuru add requires a directory argument", () => {
+  assert.throws(
+    () =>
+      execFileSync(process.execPath, [cliPath, "add"], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      }),
+    (error) => {
+      assert.equal(error.status, 1);
+      assert.equal(error.stderr, "Usage: yuru add <directory>\n");
+      return true;
+    },
+  );
 });

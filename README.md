@@ -24,8 +24,7 @@ yuru
 To register a repository in Yuru:
 
 ```sh
-cd /path/to/repo
-yuru add
+yuru add /path/to/repo
 ```
 
 To update the managed checkout and rebuild the local app:
