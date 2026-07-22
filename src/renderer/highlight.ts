@@ -17,6 +17,7 @@ const defaultLangs: BundledLanguage[] = [
   "python",
   "rust",
   "go",
+  "dockerfile",
 ];
 
 function getHighlighter(): Promise<Highlighter> {
@@ -52,10 +53,16 @@ const extensionToLang: Record<string, BundledLanguage> = {
   py: "python",
   rs: "rust",
   go: "go",
+  dockerfile: "dockerfile",
 };
 
 function detectLanguage(filePath: string): BundledLanguage | null {
-  const ext = filePath.split(".").pop()?.toLowerCase();
+  const fileName = filePath.split("/").pop()?.toLowerCase();
+  if (fileName?.startsWith("dockerfile.")) {
+    return "dockerfile";
+  }
+
+  const ext = fileName?.split(".").pop();
   if (!ext) {
     return null;
   }

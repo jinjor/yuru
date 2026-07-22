@@ -4,7 +4,8 @@ import { StreamLanguage } from "@codemirror/language";
 // 動的 import で言語ごとに別チャンクへ分割し、編集中のファイルに必要な言語だけをロードする。
 // 該当が無ければ null (ハイライト無しで編集)。
 export function loadLanguageExtension(filePath: string): Promise<Extension> | null {
-  const ext = filePath.split(".").pop()?.toLowerCase();
+  const fileName = filePath.split("/").pop()?.toLowerCase();
+  const ext = fileName?.startsWith("dockerfile.") ? "dockerfile" : fileName?.split(".").pop();
   switch (ext) {
     case "ts":
     case "mts":
@@ -48,6 +49,10 @@ export function loadLanguageExtension(filePath: string): Promise<Extension> | nu
     case "toml":
       return import("@codemirror/legacy-modes/mode/toml").then((m) =>
         StreamLanguage.define(m.toml),
+      );
+    case "dockerfile":
+      return import("@codemirror/legacy-modes/mode/dockerfile").then((m) =>
+        StreamLanguage.define(m.dockerFile),
       );
     default:
       return null;
