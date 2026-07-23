@@ -46,6 +46,11 @@ export interface MetadataSeed {
   }>;
 }
 
+interface LaunchYuruOptions {
+  disableBackgroundThrottlingForE2e?: boolean;
+  env?: NodeJS.ProcessEnv;
+}
+
 export async function createE2eContext(): Promise<E2eContext> {
   const cleanupDirs: string[] = [];
   const tmpHome = await mkdtemp(path.join(tmpdir(), "yuru-e2e-home-"));
@@ -69,13 +74,14 @@ export async function createE2eContext(): Promise<E2eContext> {
 
 export async function launchYuru(
   context: E2eContext,
-  options: { disableBackgroundThrottlingForE2e?: boolean } = {},
+  options: LaunchYuruOptions = {},
 ): Promise<ElectronApplication> {
   const app = await electron.launch({
     args: [context.repoRoot],
     cwd: context.repoRoot,
     env: {
       ...process.env,
+      ...options.env,
       HOME: context.tmpHome,
       YURU_E2E_HIDE_WINDOW: process.env.YURU_E2E_SHOW_WINDOW === "1" ? "0" : "1",
       YURU_HOME: context.yuruHome,
@@ -95,11 +101,14 @@ export async function launchYuru(
   return app;
 }
 
-export async function launchWindow(context: E2eContext): Promise<{
+export async function launchWindow(
+  context: E2eContext,
+  options: LaunchYuruOptions = {},
+): Promise<{
   app: ElectronApplication;
   window: Page;
 }> {
-  const app = await launchYuru(context);
+  const app = await launchYuru(context, options);
   return {
     app,
     window: await app.firstWindow(),

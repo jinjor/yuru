@@ -289,11 +289,14 @@ function registerIpcHandlers(): void {
   });
 
   handleIpc(
-    "worktree:remove",
+    "worktree:prepareRemoval",
     (_event, worktreeId: string, force: boolean, processesToStop?: WorktreeProcessRef[]) => {
-      return service.removeWorktree(worktreeId, force, processesToStop);
+      return service.prepareWorktreeRemoval(worktreeId, force, processesToStop);
     },
   );
+  handleIpc("worktree:executeRemoval", (_event, worktreeId: string, force: boolean) => {
+    return service.executeWorktreeRemoval(worktreeId, force);
+  });
 
   handleIpc("shell:openExternal", (_event, url: string) => {
     return service.openExternal(url);

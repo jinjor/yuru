@@ -161,11 +161,15 @@ worktree context prompt は `~/.yuru/worktree-context-prompt.txt` で差し替�
   - active な terminal runtime を持つ間は detach できない。先に terminal 内でセッションを終了する
   - 外した session は provider store の path hint があれば suggested として再発見される
 - remove worktree
-  - 追跡中の session (primary / suggested) が active な worktree はメニュー段階で削除させない
-  - 削除の直前に、その worktree を cwd にした生きたプロセスがないか OS に問い合わせる (lsof)
-  - セッションを止めた後も worktree を使用中のプロセスがいれば、command と PID を一覧表示する。明示確認後は、表示時になかったプロセスを止めないよう再照合して全件へ SIGTERM を送り、終了を確認してから削除する
-  - 通常は `git worktree remove`、dirty で拒否されたら明示確認のうえ `--force`
+  - 確認ダイアログ内の準備と、その後のバックグラウンド削除を分ける
+  - 準備の最初に dirty を確認し、dirty ならセッションを止める前に force remove の明示確認へ切り替える
+  - 削除が承認されたら、Yuru が起動した session / terminal を停止する
+  - その後も worktree を cwd にした生きたプロセスがないか OS に問い合わせる (lsof)。残っていれば command と PID を一覧表示する
+  - プロセス停止の明示確認後は、表示時になかったプロセスを止めないよう再照合して全件へ SIGTERM を送り、終了を確認する。終了していなければ最新の一覧を同じダイアログに表示し、削除へ進まない
+  - 追加確認が不要になった時点でダイアログを閉じ、カードを操作不能な `Removing…` 表示にして `git worktree remove` (`force` 承認済みなら `--force`) を実行する
+  - 実削除の直前にも新しい session / process がないか再確認する
   - 削除が成功したら metadata の task worktree record も削除する。branch と provider session 履歴は残す
+  - 実削除に失敗したら一覧を再取得してカードを実態に合わせ、モーダルは開かない。準備後に dirty / process が発生した場合は warning、その他の失敗は error として Error ログに記録する
 - startup maintenance
   - app 起動時に registered repo ごとに `git worktree list` を実行する
   - list に成功した repo だけ、metadata に残った stale task worktree record を削除する

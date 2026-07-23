@@ -72,7 +72,7 @@ import {
   type Result,
   type SessionUpdate,
   type WorktreeProcessRef,
-  type WorktreeRemovalOutcome,
+  type WorktreeRemovalPreparationOutcome,
   type WorktreeSessionSelection,
 } from "../shared/ipc.js";
 import {
@@ -536,69 +536,115 @@ export class YuruService {
     return ok({ worktreeId: toWorktreeId(repo.id, worktreePath) });
   }
 
-  // 削除フローは renderer 側が確認ダイアログを出し分け、実行直前の処理と git 削除をここで行う。
-  // Yuru が起動したセッションはこの worktree と運命を共にするので先に止める。それでも残った
-  // プロセスは、詳細を process_alive で返して明示確認を取る。確認後は、表示時になかったプロセスを
-  // 勝手に止めないよう PID と command を照合してから SIGTERM を送り、全件の終了を確認して削除する。
-  // 通常削除が dirty で拒否されたら dirty を返し、別の force 確認に使う。
-  async removeWorktree(
+  // 確認ダイアログを閉じる前の削除準備。通常削除の初回だけ dirty を先に確認し、
+  // force が必要ならセッションを止める前に renderer へ返す。削除が承認された後は Yuru が
+  // 起動したセッションを止め、それでも残ったプロセスに明示確認を取る。確認済みプロセスは
+  // PID と command を照合してから SIGTERM を送り、全件の終了を確認して ready を返す。
+  async prepareWorktreeRemoval(
     worktreeId: string,
     force: boolean,
     processesToStop?: WorktreeProcessRef[],
-  ): Promise<Result<WorktreeRemovalOutcome>> {
+  ): Promise<Result<WorktreeRemovalPreparationOutcome>> {
     const worktree = await this.findGitWorktree(worktreeId);
     if (!worktree) {
-      return this.failAndReport<WorktreeRemovalOutcome>({
+      return this.failAndReport<WorktreeRemovalPreparationOutcome>({
         code: "unknown",
         message: "This worktree no longer exists.",
       });
     }
 
-    await this.stopTerminalRuntimesForWorktree(worktree.worktreePath);
-
-    let liveProcesses = await listLiveProcessesInWorktree(worktree.worktreePath, worktree.repoPath);
-    if (liveProcesses.length > 0) {
-      if (!processesToStop) {
-        return ok({ status: "process_alive", processes: liveProcesses });
+    try {
+      // process_alive からの再実行では dirty を再検査しない。準備中や実削除中に状態が
+      // 変わった場合は executeWorktreeRemoval の失敗として記録し、次の操作で再確認する。
+      if (!force && !processesToStop && (await isWorktreeDirty(worktree.worktreePath))) {
+        return ok({ status: "dirty" });
       }
 
-      const approvedProcesses = new Map(
-        processesToStop.map((processInfo) => [processInfo.pid, processInfo.command]),
-      );
-      const hasUnapprovedProcess = liveProcesses.some(
-        (processInfo) => approvedProcesses.get(processInfo.pid) !== processInfo.command,
-      );
-      if (hasUnapprovedProcess) {
-        return ok({ status: "process_alive", processes: liveProcesses });
-      }
+      await this.stopTerminalRuntimesForWorktree(worktree.worktreePath);
 
-      for (const processInfo of liveProcesses) {
-        try {
-          process.kill(processInfo.pid, "SIGTERM");
-        } catch (error) {
-          if (!isNoSuchProcessError(error)) {
-            throw error;
+      let liveProcesses = await listLiveProcessesInWorktree(
+        worktree.worktreePath,
+        worktree.repoPath,
+      );
+      if (liveProcesses.length > 0) {
+        if (!processesToStop) {
+          return ok({ status: "process_alive", processes: liveProcesses });
+        }
+
+        const approvedProcesses = new Map(
+          processesToStop.map((processInfo) => [processInfo.pid, processInfo.command]),
+        );
+        const hasUnapprovedProcess = liveProcesses.some(
+          (processInfo) => approvedProcesses.get(processInfo.pid) !== processInfo.command,
+        );
+        if (hasUnapprovedProcess) {
+          return ok({ status: "process_alive", processes: liveProcesses });
+        }
+
+        for (const processInfo of liveProcesses) {
+          try {
+            process.kill(processInfo.pid, "SIGTERM");
+          } catch (error) {
+            if (!isNoSuchProcessError(error)) {
+              throw error;
+            }
           }
+        }
+
+        const deadline = Date.now() + WORKTREE_PROCESS_TERMINATION_GRACE_MS;
+        while (
+          Date.now() < deadline &&
+          (await hasLiveProcessInWorktree(worktree.worktreePath, worktree.repoPath))
+        ) {
+          await wait(WORKTREE_PROCESS_POLL_INTERVAL_MS);
+        }
+
+        liveProcesses = await listLiveProcessesInWorktree(worktree.worktreePath, worktree.repoPath);
+        if (liveProcesses.length > 0) {
+          return ok({ status: "process_alive", processes: liveProcesses });
         }
       }
 
-      const deadline = Date.now() + WORKTREE_PROCESS_TERMINATION_GRACE_MS;
-      while (
-        Date.now() < deadline &&
-        (await hasLiveProcessInWorktree(worktree.worktreePath, worktree.repoPath))
-      ) {
-        await wait(WORKTREE_PROCESS_POLL_INTERVAL_MS);
-      }
+      return ok({ status: "ready" });
+    } catch (error) {
+      return this.failAndReport<WorktreeRemovalPreparationOutcome>(toAppError(error));
+    }
+  }
 
-      liveProcesses = await listLiveProcessesInWorktree(worktree.worktreePath, worktree.repoPath);
+  // ready 後のバックグラウンド削除。ここから確認ダイアログへ状態を戻すことはない。
+  // 準備後に新しいプロセスや dirty が発生した場合は warning、その他の失敗は error center に
+  // 記録し、renderer は一覧を再取得して再試行可能な状態へ戻す。
+  async executeWorktreeRemoval(worktreeId: string, force: boolean): Promise<Result<void>> {
+    const worktree = await this.findGitWorktree(worktreeId);
+    if (!worktree) {
+      return this.failAndReport<void>({
+        code: "unknown",
+        message: "This worktree no longer exists.",
+      });
+    }
+
+    try {
+      await this.stopTerminalRuntimesForWorktree(worktree.worktreePath);
+      const liveProcesses = await listLiveProcessesInWorktree(
+        worktree.worktreePath,
+        worktree.repoPath,
+      );
       if (liveProcesses.length > 0) {
-        return ok({ status: "process_alive", processes: liveProcesses });
+        return this.failAndWarn<void>({
+          code: "unknown",
+          message: `Could not remove worktree "${path.basename(worktree.worktreePath)}".`,
+          detail: `${liveProcesses.length} process${
+            liveProcesses.length === 1 ? "" : "es"
+          } started using it after confirmation. Try removing it again.`,
+        });
       }
+    } catch (error) {
+      return this.failAndReport<void>(toAppError(error));
     }
 
     try {
       // git worktree のロックは .git 配下に残るファイルで、かけたプロセス (Claude Code など) が
-      // 異常終了すると残留する。上で生きたプロセスがないことを確認済みなので、解除してから消す。
+      // 異常終了すると残留する。生きたプロセスがないことを再確認済みなので、解除してから消す。
       if (worktree.locked) {
         await unlockGitWorktree(worktree.repoPath, worktree.worktreePath);
       }
@@ -609,9 +655,13 @@ export class YuruService {
       }
     } catch (error) {
       if (!force && (await isWorktreeDirty(worktree.worktreePath))) {
-        return ok({ status: "dirty" });
+        return this.failAndWarn<void>({
+          code: "git_failed",
+          message: `Could not remove worktree "${path.basename(worktree.worktreePath)}".`,
+          detail: "It has uncommitted changes. Try removing it again.",
+        });
       }
-      return this.failAndReport<WorktreeRemovalOutcome>(toAppError(error, { command: "git" }));
+      return this.failAndReport<void>(toAppError(error, { command: "git" }));
     }
 
     // worktree ディレクトリが消えた以上、そこに紐づく file 監視と進行中の code 検索はもう無効。
@@ -620,7 +670,7 @@ export class YuruService {
     this.fileTreeWatcher.clearWorktree(worktreeId);
 
     removeTaskWorktreeByPath(worktree.worktreePath);
-    return ok({ status: "removed" });
+    return ok(undefined);
   }
 
   async openExternal(url: string): Promise<void> {
@@ -796,6 +846,11 @@ export class YuruService {
 
   private failAndReport<T>(error: AppError): Result<T> {
     recordAppError(error);
+    return fail(error);
+  }
+
+  private failAndWarn<T>(error: AppError): Result<T> {
+    recordAppWarning(error);
     return fail(error);
   }
 

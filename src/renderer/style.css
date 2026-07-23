@@ -316,6 +316,13 @@ body,
   box-shadow: 0 0 0 2px rgba(123, 193, 255, 0.18);
 }
 
+.task-worktree-card.removing,
+.task-worktree-card.removing:hover {
+  border-color: var(--border);
+  cursor: default;
+  opacity: 0.72;
+}
+
 .task-worktree-card.inactive:not(.selected) .task-worktree-session-preview {
   color: var(--text-subtle);
 }
@@ -378,6 +385,25 @@ body,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.task-worktree-removing {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.15;
+}
+
+.task-worktree-removing svg {
+  animation: task-worktree-removing-spin 900ms linear infinite;
+}
+
+@keyframes task-worktree-removing-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .task-worktree-session-row {

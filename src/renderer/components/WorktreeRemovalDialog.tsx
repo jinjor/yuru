@@ -9,17 +9,17 @@ interface WorktreeRemovalDialogProps {
   worktree: WorktreeListItem;
   topOffset: number;
   onClose: () => void;
-  onRemoved: (worktreeId: string) => void;
+  onReady: (worktreeId: string, force: boolean) => void;
 }
 
-// 削除フローの確認ダイアログ。通常 (A) / open PR 警告付き (B) / force (C) を出し分ける。
-// Yuru が起動したセッションは削除時に自動で止める。その後もプロセスが worktree を握って
-// いるときは詳細一覧へ差し替え、全件の停止と削除を一つの明示操作として確認する。
+// 削除準備の確認ダイアログ。通常 (A) / open PR 警告付き (B) / force (C) を出し分ける。
+// dirty、Yuru セッションの停止、残存プロセスの停止確認をこの中で完結させ、ready に
+// なった時だけ閉じる。時間のかかる Git 削除は onReady 後にカード側で表示する。
 export function WorktreeRemovalDialog({
   worktree,
   topOffset,
   onClose,
-  onRemoved,
+  onReady,
 }: WorktreeRemovalDialogProps) {
   const [mode, setMode] = useState<"confirm" | "force">("confirm");
   const [blockingProcesses, setBlockingProcesses] = useState<WorktreeProcessInfo[] | null>(null);
@@ -37,33 +37,36 @@ export function WorktreeRemovalDialog({
     };
   }, [busy, onClose]);
 
-  const requestRemove = async (
+  const prepareRemoval = async (
     force: boolean,
     processesToStop?: WorktreeProcessInfo[],
   ): Promise<void> => {
     setBusy(true);
-    const result = await window.electronAPI.removeWorktree(
-      worktree.worktreeId,
-      force,
-      processesToStop?.map(({ pid, command }) => ({ pid, command })),
-    );
-    setBusy(false);
-    if (!result.ok) {
-      // git/unknown の失敗は error center に出るので、ここはダイアログを閉じるだけ。
-      onClose();
-      return;
-    }
-    switch (result.data.status) {
-      case "removed":
-        onRemoved(worktree.worktreeId);
+    try {
+      const result = await window.electronAPI.prepareWorktreeRemoval(
+        worktree.worktreeId,
+        force,
+        processesToStop?.map(({ pid, command }) => ({ pid, command })),
+      );
+      setBusy(false);
+      if (!result.ok) {
         return;
-      case "dirty":
-        setBlockingProcesses(null);
-        setMode("force");
-        return;
-      case "process_alive":
-        setBlockingProcesses(result.data.processes);
-        return;
+      }
+      switch (result.data.status) {
+        case "ready":
+          onReady(worktree.worktreeId, force);
+          return;
+        case "dirty":
+          setBlockingProcesses(null);
+          setMode("force");
+          return;
+        case "process_alive":
+          setBlockingProcesses(result.data.processes);
+          return;
+      }
+    } catch (error) {
+      setBusy(false);
+      console.error("Failed to prepare worktree removal.", error);
     }
   };
 
@@ -72,7 +75,7 @@ export function WorktreeRemovalDialog({
     worktree.githubPullRequest?.state === "open" || worktree.githubPullRequest?.state === "draft";
 
   return (
-    <Modal onClose={onClose} topOffset={topOffset}>
+    <Modal onClose={() => !busy && onClose()} topOffset={topOffset}>
       <div className={`removal-dialog ${blockingProcesses ? "processes" : ""}`}>
         <div className={`removal-dialog-head ${isForce ? "danger" : ""}`}>
           {isForce ? (
@@ -121,8 +124,8 @@ export function WorktreeRemovalDialog({
           ) : isForce ? (
             <>
               <div className="removal-note force">
-                This worktree has <b>uncommitted work</b>, so a normal remove was refused. Forcing
-                will throw it away.
+                This worktree has <b>uncommitted work</b>, so it can&apos;t be removed normally.
+                Forcing will throw it away.
               </div>
               <p className="removal-text">
                 <b>Uncommitted changes and untracked files will be discarded.</b> The <b>branch</b>{" "}
@@ -156,7 +159,7 @@ export function WorktreeRemovalDialog({
               <button
                 type="button"
                 className="removal-btn danger"
-                onClick={() => void requestRemove(isForce, blockingProcesses)}
+                onClick={() => void prepareRemoval(isForce, blockingProcesses)}
                 disabled={busy}
               >
                 {blockingProcesses.length === 1 ? "Stop" : "Stop all"}
@@ -171,7 +174,7 @@ export function WorktreeRemovalDialog({
               <button
                 type="button"
                 className="removal-btn danger"
-                onClick={() => void requestRemove(isForce)}
+                onClick={() => void prepareRemoval(isForce)}
                 disabled={busy}
               >
                 {isForce ? "Force remove" : hasOpenPullRequest ? "Remove anyway" : "Remove"}

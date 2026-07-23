@@ -31,8 +31,13 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke("worktree:create", repoPath, branchName),
   createTaskWorktreeFromRemoteBranch: (repoPath: string, branchName: string) =>
     ipcRenderer.invoke("worktree:createFromRemoteBranch", repoPath, branchName),
-  removeWorktree: (worktreeId: string, force: boolean, processesToStop?: WorktreeProcessRef[]) =>
-    ipcRenderer.invoke("worktree:remove", worktreeId, force, processesToStop),
+  prepareWorktreeRemoval: (
+    worktreeId: string,
+    force: boolean,
+    processesToStop?: WorktreeProcessRef[],
+  ) => ipcRenderer.invoke("worktree:prepareRemoval", worktreeId, force, processesToStop),
+  executeWorktreeRemoval: (worktreeId: string, force: boolean) =>
+    ipcRenderer.invoke("worktree:executeRemoval", worktreeId, force),
   openExternal: (url: string) => ipcRenderer.invoke("shell:openExternal", url),
   getGitPathStates: (worktreeId: string) => ipcRenderer.invoke("git:pathStates", worktreeId),
   getGitDiffDocument: (worktreeId: string, filePath: string, scope?: GitDiffScope) =>

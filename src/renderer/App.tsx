@@ -28,6 +28,7 @@ export function App() {
   const [worktreeTarget, setWorktreeTarget] = useState<string | null>(null);
   const [worktreeError, setWorktreeError] = useState<string | null>(null);
   const [removalTargetId, setRemovalTargetId] = useState<string | null>(null);
+  const [removingWorktreeIds, setRemovingWorktreeIds] = useState<Set<string>>(() => new Set());
   const [sidebarWidth, setSidebarWidth] = useState(390);
   const [errorNotices, setErrorNotices] = useState<AppErrorNotice[]>([]);
   const [isErrorLogOpen, setIsErrorLogOpen] = useState(false);
@@ -141,11 +142,38 @@ export function App() {
     [selectedWorktreeId, sidebarWidth],
   );
 
-  const handleWorktreeRemoved = useCallback(
-    (worktreeId: string): void => {
-      setRemovalTargetId(null);
-      setSelectedWorktreeId((prev) => (prev === worktreeId ? null : prev));
-      void refreshRepos();
+  const handleWorktreeRemovalReady = useCallback(
+    (worktreeId: string, force: boolean): void => {
+      setRemovalTargetId((prev) => (prev === worktreeId ? null : prev));
+      setRemovingWorktreeIds((prev) => new Set(prev).add(worktreeId));
+
+      void window.electronAPI
+        .executeWorktreeRemoval(worktreeId, force)
+        .then((result) => {
+          if (result.ok) {
+            setRepos((prev) =>
+              prev.map((repo) => ({
+                ...repo,
+                taskWorktrees: repo.taskWorktrees.filter(
+                  (worktree) => worktree.worktreeId !== worktreeId,
+                ),
+              })),
+            );
+            setSelectedWorktreeId((prev) => (prev === worktreeId ? null : prev));
+          }
+          void refreshRepos();
+        })
+        .catch((error) => {
+          console.error("Failed to remove worktree.", error);
+          void refreshRepos();
+        })
+        .finally(() => {
+          setRemovingWorktreeIds((prev) => {
+            const next = new Set(prev);
+            next.delete(worktreeId);
+            return next;
+          });
+        });
     },
     [refreshRepos],
   );
@@ -193,6 +221,7 @@ export function App() {
           <RepoList
             repos={repos}
             selectedWorktreeId={selectedWorktreeId}
+            removingWorktreeIds={removingWorktreeIds}
             onCreateWorktree={(repoPath) => {
               setWorktreeError(null);
               setWorktreeTarget(repoPath);
@@ -250,7 +279,7 @@ export function App() {
           worktree={removalTarget}
           topOffset={120}
           onClose={() => setRemovalTargetId(null)}
-          onRemoved={handleWorktreeRemoved}
+          onReady={handleWorktreeRemovalReady}
         />
       )}
       {isErrorLogOpen && (

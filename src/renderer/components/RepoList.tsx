@@ -1,4 +1,4 @@
-import { GitBranch, MoreVertical, Trash2 } from "lucide-react";
+import { GitBranch, LoaderCircle, MoreVertical, Trash2 } from "lucide-react";
 import {
   useEffect,
   useRef,
@@ -15,6 +15,7 @@ import { SessionProviderDot } from "./SessionProviderDot";
 interface RepoListProps {
   repos: RepoListItem[];
   selectedWorktreeId: string | null;
+  removingWorktreeIds: ReadonlySet<string>;
   onCreateWorktree: (repoPath: string) => void;
   onSelectWorktree: (worktree: WorktreeListItem) => void;
   onRequestRemoveWorktree: (worktreeId: string) => void;
@@ -23,6 +24,7 @@ interface RepoListProps {
 export function RepoList({
   repos,
   selectedWorktreeId,
+  removingWorktreeIds,
   onCreateWorktree,
   onSelectWorktree,
   onRequestRemoveWorktree,
@@ -75,6 +77,7 @@ export function RepoList({
                 key={worktree.worktreeId}
                 worktree={worktree}
                 selectedWorktreeId={selectedWorktreeId}
+                isRemoving={removingWorktreeIds.has(worktree.worktreeId)}
                 isMenuOpen={openMenuWorktreeId === worktree.worktreeId}
                 onCloseMenu={() => setOpenMenuWorktreeId(null)}
                 onToggleMenu={() => {
@@ -96,6 +99,7 @@ export function RepoList({
 interface WorktreeCardProps {
   worktree: WorktreeListItem;
   selectedWorktreeId: string | null;
+  isRemoving: boolean;
   isMenuOpen: boolean;
   onCloseMenu: () => void;
   onToggleMenu: () => void;
@@ -106,6 +110,7 @@ interface WorktreeCardProps {
 function WorktreeCard({
   worktree,
   selectedWorktreeId,
+  isRemoving,
   isMenuOpen,
   onCloseMenu,
   onToggleMenu,
@@ -116,9 +121,12 @@ function WorktreeCard({
   const isSelected = selectedWorktreeId === worktree.worktreeId;
   const isPrimarySessionActive = primarySession?.state === "active";
   // main worktree は削除対象外。task worktree にだけ ︙ メニューを出す。
-  const showOverflowMenu = worktree.isMainWorktree !== true;
+  const showOverflowMenu = worktree.isMainWorktree !== true && !isRemoving;
 
   const selectWorktree = () => {
+    if (isRemoving) {
+      return;
+    }
     onCloseMenu();
     onSelectWorktree(worktree);
   };
@@ -144,10 +152,12 @@ function WorktreeCard({
         isPrimarySessionActive ? "active" : "inactive",
         isSelected ? "selected" : "",
         isMenuOpen ? "action-open" : "",
+        isRemoving ? "removing" : "",
       ].join(" ")}
       title={worktree.worktreePath}
       role="button"
-      tabIndex={0}
+      aria-disabled={isRemoving}
+      tabIndex={isRemoving ? -1 : 0}
       onClick={handleCardClick}
       onKeyDown={handleCardKeyDown}
     >
@@ -189,7 +199,12 @@ function WorktreeCard({
           )}
           {worktree.githubPullRequest && <GitHubBadge github={worktree.githubPullRequest} />}
         </span>
-        {primarySession ? (
+        {isRemoving ? (
+          <span className="task-worktree-removing">
+            <LoaderCircle size={12} strokeWidth={2} aria-hidden="true" />
+            Removing…
+          </span>
+        ) : primarySession ? (
           <PrimarySessionSummary primarySession={primarySession} />
         ) : (
           <span className="task-worktree-hint">

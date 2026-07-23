@@ -130,14 +130,13 @@ export interface WorktreeProcessRef {
   command: string;
 }
 
-// task worktree 削除の結果。エラーではない分岐 (削除直前のプロセスチェック / dirty 拒否) を
-// 確認ダイアログの差し替えに使うため、成功・ブロック理由を data として返す。
-export type WorktreeRemovalOutcome =
-  // worktree を削除し、一覧から項目を消した
-  | { status: "removed" }
+// task worktree の削除準備結果。追加確認が不要な ready になるまで renderer は
+// 確認ダイアログを維持し、実際の Git 削除は別の IPC で開始する。
+export type WorktreeRemovalPreparationOutcome =
+  | { status: "ready" }
   // 生きたプロセスがあり削除しなかった (先に止める必要がある)
   | { status: "process_alive"; processes: WorktreeProcessInfo[] }
-  // dirty で通常削除が拒否された (force 確認が必要。force=false のときだけ返る)
+  // dirty の事前確認で通常削除を止めた (force 確認が必要。force=false のときだけ返る)
   | { status: "dirty" };
 
 // メインプロセスが検知した、動作中セッションの変化 (活動状態・最新メッセージ)。
@@ -183,11 +182,12 @@ export interface ElectronAPI {
     repoPath: string,
     branchName: string,
   ) => Promise<Result<CreatedTaskWorktree>>;
-  removeWorktree: (
+  prepareWorktreeRemoval: (
     worktreeId: string,
     force: boolean,
     processesToStop?: WorktreeProcessRef[],
-  ) => Promise<Result<WorktreeRemovalOutcome>>;
+  ) => Promise<Result<WorktreeRemovalPreparationOutcome>>;
+  executeWorktreeRemoval: (worktreeId: string, force: boolean) => Promise<Result<void>>;
   openExternal: (url: string) => Promise<void>;
   getGitPathStates: (worktreeId: string) => Promise<Result<GitPathState[]>>;
   getGitDiffDocument: (
