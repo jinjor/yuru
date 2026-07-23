@@ -91,6 +91,30 @@ test("searchCode は no match を空結果として返す", async () => {
   assert.equal(result.matchCount, 0);
 });
 
+test("searchCode は PATH に rg が無くても同梱バイナリで検索する", async () => {
+  const previousPath = process.env.PATH;
+  const emptyBinDir = path.join(tempDir, "empty-bin");
+  fs.mkdirSync(emptyBinDir, { recursive: true });
+  fs.writeFileSync(path.join(tempDir, "bundled-rg.txt"), "bundled-rg-token\n");
+
+  process.env.PATH = emptyBinDir;
+  try {
+    const result = await searchCode(tempDir, "bundled-rg-token", {
+      signal: new AbortController().signal,
+      limit: 10,
+    });
+
+    assert.equal(result.matchCount, 1);
+    assert.equal(result.files[0]?.path, "bundled-rg.txt");
+  } finally {
+    if (previousPath === undefined) {
+      delete process.env.PATH;
+    } else {
+      process.env.PATH = previousPath;
+    }
+  }
+});
+
 test("searchCode は ripgrep config によらず case-sensitive で検索する", async () => {
   const previousConfigPath = process.env.RIPGREP_CONFIG_PATH;
   const configPath = path.join(tempDir, "ripgrep-config");

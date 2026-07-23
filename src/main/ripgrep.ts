@@ -6,6 +6,10 @@ export interface RipgrepLineMatch {
   lineIndex: number;
 }
 
+export async function getRipgrepPath(): Promise<string> {
+  return (await import("@vscode/ripgrep")).rgPath;
+}
+
 // rg --json の出力をストリームで読み、マッチ行のあるファイルごとに onFileMatches を呼ぶ。
 // stdout 全体をバッファしないため、マッチ総量が大きくても maxBuffer のような上限にかからない。
 // JSON 仕様は各メッセージが自分の path を持つことは定めている一方、ファイル間でメッセージが
@@ -15,7 +19,10 @@ export async function streamRipgrepLineMatches(
   cwd: string,
   onFileMatches: (filePath: string, lines: RipgrepLineMatch[]) => void | Promise<void>,
 ): Promise<void> {
-  const child = spawn("rg", ["--json", ...args], { cwd, stdio: ["ignore", "pipe", "pipe"] });
+  const child = spawn(await getRipgrepPath(), ["--json", ...args], {
+    cwd,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
 
   let stderr = "";
   child.stderr.setEncoding("utf-8");

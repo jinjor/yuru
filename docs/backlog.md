@@ -57,7 +57,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | I14 | investigate | Persistence | metadata が壊れていた時の救済を考える | 単一ファイルの一部破損で全体が読めなくなるため |
 | I15 | investigate | IPC | `electronAPI` と IPC channel の対応を追いやすくする | renderer / preload / main で名前がズレていて読みにくいため、channel 名を露出するか shared RPC wrapper に寄せるか決めたい |
 | I16 | investigate | Events | backend event の発火ポリシーと購読設計を整理する | frontend 起点 IPC の応答代わりに push すると race しやすいため、外部変化・非同期完了・プロセス終了などに用途を限定したい |
-| I17 | investigate | Dependencies | `rg` 依存を見直す | provider store の検索で暗黙に使っているため、Codex 同梱 / Homebrew / GUI 起動時 PATH のどれを前提にするか整理したい |
 | F28 | feature | Files | ファイル検索の最近開いたファイル履歴 | Cmd+P 空入力時に履歴を出したい |
 | I11 | investigate | App | モーダルとショートカットの管理設計を決める (詳細: docs/backlog-details/I11-modal-management.md) | FileSearch 導入時に Cmd+P が他モーダル裏で発火する問題が出たため、場当たり対応せず設計として直したい |
 | P17 | polish | Repos / Sessions | getRepos が毎回全セッションのログを読むのをやめる | 一覧は ID と並び順程度に痩せさせ、プレビュー等のセッション表示状態はカード側が個別に取得する。session:changed push の続きで、将来のカード単位購読にも繋がる |

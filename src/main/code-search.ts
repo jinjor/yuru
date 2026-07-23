@@ -5,6 +5,7 @@ import type {
   CodeSearchRange,
   CodeSearchResult,
 } from "../shared/ipc.js";
+import { getRipgrepPath } from "./ripgrep.js";
 
 export const CODE_SEARCH_RESULT_LIMIT = 500;
 
@@ -51,10 +52,11 @@ export async function searchCode(
   if (query.trim().length === 0) {
     return createEmptyCodeSearchResult(query, limit);
   }
+  const rgPath = await getRipgrepPath();
 
   return new Promise((resolve, reject) => {
     const child = spawn(
-      "rg",
+      rgPath,
       ["--json", "--no-config", "--case-sensitive", "--fixed-strings", "--", query],
       {
         cwd: workingRoot,

@@ -240,7 +240,7 @@ export async function seedCodexHome(home: string, trustedRepoPath: string): Prom
   await writeFile(
     path.join(codexDir, "config.toml"),
     [
-      `model = "gpt-5.4-mini"`,
+      `model = "gpt-5.5"`,
       "",
       "[notice]",
       "hide_rate_limit_model_nudge = true",

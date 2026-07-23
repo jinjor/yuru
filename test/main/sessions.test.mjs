@@ -442,7 +442,7 @@ test("loadSuggestedWorktreeSessions は 10MB を超える検索結果でも sess
   ]);
 });
 
-test("loadSuggestedWorktreeSessions は rg が無ければ失敗する", async () => {
+test("loadSuggestedWorktreeSessions は PATH に rg が無くても失敗しない", async () => {
   const previousPath = process.env.PATH;
   const emptyBinDir = path.join(tempDir, "empty-bin");
   const worktreePath = path.join(tempDir, "repo-rg-required", ".yuru", "worktrees", "task-a");
@@ -451,9 +451,7 @@ test("loadSuggestedWorktreeSessions は rg が無ければ失敗する", async (
 
   process.env.PATH = emptyBinDir;
   try {
-    await assert.rejects(() => loadSuggestedWorktreeSessions([worktreePath]), {
-      code: "ENOENT",
-    });
+    await assert.doesNotReject(() => loadSuggestedWorktreeSessions([worktreePath]));
   } finally {
     if (previousPath === undefined) {
       delete process.env.PATH;
