@@ -1456,6 +1456,10 @@ button.github-badge {
 }
 
 /* HTML preview (sandboxed iframe) */
+.is-pane-dragging .html-preview-frame {
+  pointer-events: none;
+}
+
 .html-preview-frame {
   flex: 1;
   min-width: 0;

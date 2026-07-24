@@ -140,6 +140,49 @@ test("プレビュー分割のリサイズで preview の高さが変わる", as
   }
 });
 
+test("HTML プレビューの上までドラッグしても分割を動かせ、離せば止まる", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context, {
+      "README.md": "# e2e\n",
+      "mock/index.html": "<!doctype html>\n<html><body><p>mock</p></body></html>\n",
+    });
+    await registerRepo(context, repoDir);
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+    await openMainTerminal(window);
+
+    await window.locator(".panel-tab", { hasText: "Files" }).click();
+    await window.locator(".file-tree-row", { hasText: "mock" }).click();
+    await window.locator(".file-tree-row", { hasText: "index.html" }).click();
+    await expect(window.locator(".html-preview-frame")).toBeVisible();
+
+    const previewPanel = window.locator(".preview-panel");
+    const before = await elementHeight(previewPanel);
+    const box = await window.locator(".session-view-split-handle").boundingBox();
+    expect(box).not.toBeNull();
+    const startX = box!.x + box!.width / 2;
+    const startY = box!.y + box!.height / 2;
+
+    // 上へ動かすとポインタは preview の iframe に入る。
+    await window.mouse.move(startX, startY);
+    await window.mouse.down();
+    await window.mouse.move(startX, startY - 80, { steps: 4 });
+    await window.mouse.up();
+    const afterDrag = await elementHeight(previewPanel);
+    expect(afterDrag).toBeLessThan(before);
+
+    // 離した後のポインタ移動では分割は動かない。
+    await window.mouse.move(startX, startY + 120, { steps: 4 });
+    expect(await elementHeight(previewPanel)).toBe(afterDrag);
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
 async function dragHandle(window: Page, handle: Locator, deltaX: number, deltaY: number): Promise<void> {
   const box = await handle.boundingBox();
   expect(box).not.toBeNull();

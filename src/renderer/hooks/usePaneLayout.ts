@@ -1,5 +1,5 @@
 import { type MouseEvent as ReactMouseEvent, type RefObject, useCallback, useState } from "react";
-import { clamp } from "../utils/layout";
+import { clamp, runPointerDrag } from "../utils/layout";
 
 interface UsePaneLayoutOptions {
   appRef: RefObject<HTMLDivElement | null>;
@@ -22,30 +22,6 @@ export function usePaneLayout({
   const [changesPanelWidth, setChangesPanelWidth] = useState(375);
   const [previewRatio, setPreviewRatio] = useState(0.6);
 
-  const runPointerDrag = useCallback(
-    (cursor: string, onMove: (event: globalThis.MouseEvent) => void): void => {
-      const previousCursor = document.body.style.cursor;
-      const previousUserSelect = document.body.style.userSelect;
-      document.body.style.cursor = cursor;
-      document.body.style.userSelect = "none";
-
-      const handleMouseMove = (event: globalThis.MouseEvent): void => {
-        onMove(event);
-      };
-
-      const stopDragging = (): void => {
-        document.body.style.cursor = previousCursor;
-        document.body.style.userSelect = previousUserSelect;
-        window.removeEventListener("mousemove", handleMouseMove);
-        window.removeEventListener("mouseup", stopDragging);
-      };
-
-      window.addEventListener("mousemove", handleMouseMove);
-      window.addEventListener("mouseup", stopDragging);
-    },
-    [],
-  );
-
   const handleChangesResizeStart = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>): void => {
       event.preventDefault();
@@ -62,7 +38,7 @@ export function usePaneLayout({
         setChangesPanelWidth(clamp(startWidth - (moveEvent.clientX - startX), 220, maxWidth));
       });
     },
-    [appRef, changesPanelWidth, runPointerDrag, sidebarWidth],
+    [appRef, changesPanelWidth, sidebarWidth],
   );
 
   const handlePreviewResizeStart = useCallback(
@@ -83,7 +59,7 @@ export function usePaneLayout({
         setPreviewRatio(clamp(nextRatio, minPreviewRatio, maxPreviewRatio));
       });
     },
-    [previewRatio, runPointerDrag, sessionViewColumnRef],
+    [previewRatio, sessionViewColumnRef],
   );
 
   return {

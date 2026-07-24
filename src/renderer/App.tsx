@@ -16,7 +16,7 @@ import { ErrorLogModal } from "./components/ErrorLogModal";
 import { RepoList } from "./components/RepoList";
 import { SessionView } from "./components/SessionView";
 import { WorktreeRemovalDialog } from "./components/WorktreeRemovalDialog";
-import { clamp } from "./utils/layout";
+import { clamp, runPointerDrag } from "./utils/layout";
 
 export function App() {
   const appRef = useRef<HTMLDivElement>(null);
@@ -118,26 +118,11 @@ export function App() {
         return;
       }
 
-      const previousCursor = document.body.style.cursor;
-      const previousUserSelect = document.body.style.userSelect;
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-
-      const handleMouseMove = (moveEvent: globalThis.MouseEvent): void => {
+      runPointerDrag("col-resize", (moveEvent) => {
         const reservedSessionViewWidth = selectedWorktreeId ? 520 : 640;
         const maxWidth = Math.max(220, appWidth - reservedSessionViewWidth);
         setSidebarWidth(clamp(startWidth + moveEvent.clientX - startX, 220, maxWidth));
-      };
-
-      const stopDragging = (): void => {
-        document.body.style.cursor = previousCursor;
-        document.body.style.userSelect = previousUserSelect;
-        window.removeEventListener("mousemove", handleMouseMove);
-        window.removeEventListener("mouseup", stopDragging);
-      };
-
-      window.addEventListener("mousemove", handleMouseMove);
-      window.addEventListener("mouseup", stopDragging);
+      });
     },
     [selectedWorktreeId, sidebarWidth],
   );
