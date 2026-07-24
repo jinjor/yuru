@@ -87,6 +87,11 @@ export interface GitDiffDocument {
   size: number;
 }
 
+export interface HtmlPreviewGrant {
+  id: string;
+  url: string;
+}
+
 export interface CodeSearchRange {
   start: number;
   end: number;
@@ -195,6 +200,12 @@ export interface ElectronAPI {
     filePath: string,
     scope?: GitDiffScope,
   ) => Promise<Result<GitDiffDocument | null>>;
+  createHtmlPreview: (
+    worktreeId: string,
+    filePath: string,
+    content: string,
+  ) => Promise<Result<HtmlPreviewGrant>>;
+  releaseHtmlPreview: (grantId: string) => Promise<void>;
   listFiles: (worktreeId: string, relativePath?: string) => Promise<Result<FileTreeNode[]>>;
   listAllFiles: (worktreeId: string) => Promise<Result<string[]>>;
   resolveRepoFile: (worktreeId: string, filePath: string) => Promise<string | null>;

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, ipcMain } from "electron";
+import { app, BrowserWindow, Menu, ipcMain, protocol, session } from "electron";
 import type { IpcMainInvokeEvent, MenuItemConstructorOptions } from "electron";
 import path from "path";
 import { loadRepos } from "./metadata.js";
@@ -19,6 +19,7 @@ import type {
   WorktreeProcessRef,
 } from "../shared/ipc.js";
 import type { SessionProvider } from "../shared/session.js";
+import { HTML_PREVIEW_CSP, HTML_PREVIEW_SCHEME, HtmlPreviewGrants } from "./html-preview.js";
 
 let mainWindow: BrowserWindow | null = null;
 let worktreeWatcher: WorktreeWatcher | null = null;
@@ -27,6 +28,20 @@ let servicesStopped = false;
 const HIDE_WINDOW_FOR_E2E = process.env.YURU_E2E_HIDE_WINDOW === "1";
 
 app.setName(APP_NAME);
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: HTML_PREVIEW_SCHEME,
+    privileges: {
+      corsEnabled: true,
+      secure: true,
+      standard: true,
+      supportFetchAPI: true,
+    },
+  },
+]);
+
+const htmlPreviewGrants = new HtmlPreviewGrants();
 
 const service = new YuruService({
   fileTreeChanged: sendFileTreeChanged,
@@ -149,6 +164,7 @@ async function createWindow(): Promise<void> {
       preload: path.join(__dirname, "../preload/index.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
     },
   });
 
@@ -161,6 +177,18 @@ async function createWindow(): Promise<void> {
     return { action: "deny" };
   });
 
+  // アプリ本体は画面遷移しない。preview iframe も専用 protocol 内だけに閉じ込める。
+  mainWindow.webContents.on("will-frame-navigate", (event) => {
+    if (event.isMainFrame || !isHtmlPreviewUrl(event.url)) {
+      event.preventDefault();
+    }
+  });
+
+  // 画面を読み込み直すと、それまでの grant を release する側 (renderer) がいなくなる。
+  mainWindow.webContents.on("did-navigate", () => {
+    htmlPreviewGrants.clear();
+  });
+
   mainWindow.on("page-title-updated", (event) => {
     event.preventDefault();
     mainWindow?.setTitle(windowTitle);
@@ -169,6 +197,7 @@ async function createWindow(): Promise<void> {
   // 画面が急に消える・固まる系の後追い調査用。error center は main 側なので、
   // renderer が死んでもリロード後にエラーログから確認できる。
   mainWindow.webContents.on("render-process-gone", (_event, details) => {
+    htmlPreviewGrants.clear();
     recordAppError({
       code: "unknown",
       message: "The screen process crashed.",
@@ -183,6 +212,54 @@ async function createWindow(): Promise<void> {
   });
 
   await mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
+}
+
+function isHtmlPreviewUrl(url: string): boolean {
+  try {
+    return new URL(url).protocol === `${HTML_PREVIEW_SCHEME}:`;
+  } catch {
+    return false;
+  }
+}
+
+function isMainFrameSender(event: IpcMainInvokeEvent): boolean {
+  return (
+    !!mainWindow &&
+    !mainWindow.isDestroyed() &&
+    event.sender === mainWindow.webContents &&
+    event.senderFrame === mainWindow.webContents.mainFrame
+  );
+}
+
+function registerHtmlPreviewProtocol(): void {
+  protocol.handle(HTML_PREVIEW_SCHEME, async (request) => {
+    try {
+      const response = await htmlPreviewGrants.respond(request.url, request.method);
+      return new Response(new Uint8Array(response.body), {
+        headers: response.headers,
+        status: response.status,
+      });
+    } catch (error) {
+      recordAppError(toAppError(error));
+      return new Response("HTML preview failed", {
+        headers: {
+          "Content-Security-Policy": HTML_PREVIEW_CSP,
+          "Content-Type": "text/plain; charset=utf-8",
+          "X-Content-Type-Options": "nosniff",
+        },
+        status: 500,
+      });
+    }
+  });
+}
+
+function configureBrowserPermissions(): void {
+  // Yuru 本体は browser permission API を使わない。preview の HTML が権限を要求しても
+  // prompt を出したり暗黙に許可したりしない。
+  session.defaultSession.setPermissionCheckHandler(() => false);
+  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
+    callback(false);
+  });
 }
 
 async function refreshWorktreeWatcher(): Promise<void> {
@@ -313,6 +390,28 @@ function registerIpcHandlers(): void {
     },
   );
 
+  handleIpc(
+    "htmlPreview:create",
+    async (event, worktreeId: string, filePath: string, content: string) => {
+      if (!isMainFrameSender(event)) {
+        throw new Error("HTML preview grants are only available to the main frame.");
+      }
+      const target = await service.resolveHtmlPreviewEntry(worktreeId, filePath);
+      if (!target.ok) {
+        return target;
+      }
+      const grant = await htmlPreviewGrants.create(target.data.root, target.data.path, content);
+      return { ok: true, data: grant } as const;
+    },
+  );
+
+  handleIpc("htmlPreview:release", (event, grantId: string) => {
+    if (!isMainFrameSender(event)) {
+      throw new Error("HTML preview grants are only available to the main frame.");
+    }
+    htmlPreviewGrants.release(grantId);
+  });
+
   handleIpc("files:list", (_event, worktreeId: string, relativePath?: string) => {
     return service.listFiles(worktreeId, relativePath);
   });
@@ -364,6 +463,8 @@ app.whenReady().then(async () => {
     applicationName: APP_NAME,
     applicationVersion: app.getVersion(),
   });
+  registerHtmlPreviewProtocol();
+  configureBrowserPermissions();
   const cleanupResult = await cleanupStaleTaskWorktrees();
   for (const skippedRepo of cleanupResult.skippedRepos) {
     const appError = toAppError(skippedRepo.error);

@@ -42,6 +42,9 @@ const electronAPI: ElectronAPI = {
   getGitPathStates: (worktreeId: string) => ipcRenderer.invoke("git:pathStates", worktreeId),
   getGitDiffDocument: (worktreeId: string, filePath: string, scope?: GitDiffScope) =>
     ipcRenderer.invoke("git:diffDocument", worktreeId, filePath, scope),
+  createHtmlPreview: (worktreeId: string, filePath: string, content: string) =>
+    ipcRenderer.invoke("htmlPreview:create", worktreeId, filePath, content),
+  releaseHtmlPreview: (grantId: string) => ipcRenderer.invoke("htmlPreview:release", grantId),
   listFiles: (worktreeId: string, relativePath?: string) =>
     ipcRenderer.invoke("files:list", worktreeId, relativePath),
   listAllFiles: (worktreeId: string) => ipcRenderer.invoke("files:listAll", worktreeId),
@@ -126,4 +129,8 @@ const electronAPI: ElectronAPI = {
   },
 };
 
-contextBridge.exposeInMainWorld("electronAPI", electronAPI);
+// Electron は同じ BrowserWindow 内の iframe にも preload を読み込む。preview HTML へ
+// filesystem や PTY の IPC を渡さないよう、bridge は Yuru 本体の frame だけに公開する。
+if (process.isMainFrame) {
+  contextBridge.exposeInMainWorld("electronAPI", electronAPI);
+}

@@ -10,13 +10,26 @@ import { startPollingLoop } from "../utils/polling";
 import { resultDataOrNull } from "../utils/result";
 
 const EditModeEditor = lazy(() => import("./CodeEditor/EditModeEditor"));
+const HtmlPreview = lazy(() => import("./HtmlPreview"));
 const MarkdownPreview = lazy(() => import("./MarkdownPreview"));
 
 const markdownExtensions = new Set(["md", "markdown"]);
+const htmlExtensions = new Set(["htm", "html"]);
 
-function isMarkdownPath(path: string): boolean {
+type RenderedPreviewKind = "html" | "markdown";
+
+function renderedPreviewKind(path: string): RenderedPreviewKind | null {
   const ext = path.split(".").pop()?.toLowerCase();
-  return ext ? markdownExtensions.has(ext) : false;
+  if (!ext) {
+    return null;
+  }
+  if (markdownExtensions.has(ext)) {
+    return "markdown";
+  }
+  if (htmlExtensions.has(ext)) {
+    return "html";
+  }
+  return null;
 }
 
 interface DiffPreviewPanelProps {
@@ -41,22 +54,23 @@ export function DiffPreviewPanel({
   const [diffDocument, setDiffDocument] = useState<GitDiffDocument | null>(null);
   const [isLoadingDiff, setIsLoadingDiff] = useState(false);
   const [lines, setLines] = useState<SourceLine[]>([]);
-  // markdown はプレビューを既定にし、それ以外は閲覧を既定にする。
-  const isMarkdown = isMarkdownPath(path);
-  const [mode, setMode] = useState<FileViewMode>(isMarkdown ? "preview" : "view");
+  // 描画できるファイルはプレビューを既定にし、それ以外は閲覧を既定にする。
+  const hasRenderedPreview = renderedPreviewKind(path) !== null;
+  const [mode, setMode] = useState<FileViewMode>(hasRenderedPreview ? "preview" : "view");
 
   // ファイルが変わったら既定モードに戻す。パネルは再マウントしたくない (前の diff を出し続けて
   // チラつきを防ぐため key にしていない) ので、effect ではなく描画中に直接調整する React の方式。
   const [prevPath, setPrevPath] = useState(path);
   if (path !== prevPath) {
     setPrevPath(path);
-    setMode(isMarkdown ? "preview" : "view");
+    setMode(hasRenderedPreview ? "preview" : "view");
   }
 
   // While a new file's diff is being fetched, `diffDocument` still holds the
   // previously shown file. Render it (with its own path) until the new diff
   // arrives so switching files does not flash a "Loading..." screen.
   const displayPath = diffDocument?.path ?? path;
+  const displayPreviewKind = renderedPreviewKind(displayPath);
   const originalContent = diffDocument?.originalContent ?? null;
   const currentContent = diffDocument?.currentContent ?? null;
   const fileSize = diffDocument?.size ?? null;
@@ -168,7 +182,7 @@ export function DiffPreviewPanel({
         path={displayPath}
         mode={mode}
         onModeChange={setMode}
-        showPreview={isMarkdown}
+        showPreview={displayPreviewKind !== null}
         canEdit={canEdit}
         editDisabledReason={editDisabledReason}
         lineStat={headerLineStat}
@@ -189,7 +203,7 @@ export function DiffPreviewPanel({
           >
             <EditModeEditor key={path} worktreeId={worktreeId} path={path} />
           </Suspense>
-        ) : mode === "preview" ? (
+        ) : mode === "preview" && displayPreviewKind !== null ? (
           <Suspense
             fallback={
               <div className="code-panel-empty">
@@ -197,11 +211,19 @@ export function DiffPreviewPanel({
               </div>
             }
           >
-            <MarkdownPreview
-              content={currentContent ?? ""}
-              changedLines={changedLines}
-              deletions={deletions}
-            />
+            {displayPreviewKind === "html" ? (
+              <HtmlPreview
+                content={currentContent ?? ""}
+                path={displayPath}
+                worktreeId={worktreeId}
+              />
+            ) : (
+              <MarkdownPreview
+                content={currentContent ?? ""}
+                changedLines={changedLines}
+                deletions={deletions}
+              />
+            )}
           </Suspense>
         ) : isBinary ? (
           <div className="code-panel-empty">

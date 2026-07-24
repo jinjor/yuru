@@ -133,6 +133,83 @@ test("Markdown プレビューの内容が変わらない定期更新では選�
   }
 });
 
+test("HTML プレビューは相対 CSS / JavaScript を読み込み Yuru 本体から隔離する", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context, {
+      "README.md": "# e2e\n",
+      "mock/app.js": `
+const status = document.querySelector("#status");
+let parentAccess = "allowed";
+let evalAccess = "allowed";
+let storageAccess = "blocked";
+try {
+  void parent.document;
+} catch {
+  parentAccess = "blocked";
+}
+try {
+  eval("document.body.dataset.eval = 'ran'");
+} catch {
+  evalAccess = "blocked";
+}
+try {
+  localStorage.setItem("preview", "kept");
+  storageAccess = localStorage.getItem("preview");
+} catch (error) {
+  storageAccess = error.name;
+}
+status.textContent =
+  "script loaded; api=" + typeof window.electronAPI +
+  "; parent=" + parentAccess +
+  "; eval=" + evalAccess +
+  "; storage=" + storageAccess;
+`,
+      "mock/index.html": `<!doctype html>
+<html>
+  <head>
+    <link rel="stylesheet" href="./style.css">
+  </head>
+  <body>
+    <p id="status">not loaded</p>
+    <a id="external-link" href="https://example.com/">external</a>
+    <script src="./app.js"></script>
+  </body>
+</html>
+`,
+      "mock/style.css": "#status { color: rgb(12, 34, 56); }\n",
+    });
+    await registerRepo(context, repoDir);
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+    await openMainTerminal(window);
+
+    await window.locator(".panel-tab", { hasText: "Files" }).click();
+    await window.locator(".file-tree-row", { hasText: "mock" }).click();
+    await window.locator(".file-tree-row", { hasText: "index.html" }).click();
+
+    await expectPreviewPath(window, "mock/index.html");
+    const iframe = window.locator(".html-preview-frame");
+    await expect(iframe).toHaveAttribute("sandbox", "allow-scripts allow-same-origin");
+
+    const preview = window.frameLocator(".html-preview-frame");
+    const status = preview.locator("#status");
+    const expected = "script loaded; api=undefined; parent=blocked; eval=blocked; storage=kept";
+    await expect(status).toHaveText(expected);
+    expect(await status.evaluate((element) => getComputedStyle(element).color)).toBe(
+      "rgb(12, 34, 56)",
+    );
+
+    await preview.locator("#external-link").click();
+    await expect(status).toHaveText(expected);
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
 test("Files タブには選択中 worktree のファイルだけが出る", async () => {
   const context = await createE2eContext();
   let app: ElectronApplication | null = null;

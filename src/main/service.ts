@@ -775,6 +775,27 @@ export class YuruService {
     return resolveRepoFilePath(workingRoot, filePath);
   }
 
+  async resolveHtmlPreviewEntry(
+    worktreeId: string,
+    filePath: string,
+  ): Promise<Result<{ root: string; path: string }>> {
+    const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
+    if (!workingRoot) {
+      return fail({
+        code: "invalid_path",
+        message: "Selected worktree is no longer available.",
+      });
+    }
+    const relativePath = resolveRepoFilePath(workingRoot, filePath);
+    if (!relativePath) {
+      return fail({
+        code: "invalid_path",
+        message: "HTML preview file is no longer available.",
+      });
+    }
+    return ok({ root: workingRoot, path: relativePath });
+  }
+
   async syncFileWatchTargets(worktreeId: string, relativePaths: string[]): Promise<void> {
     const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
     if (!workingRoot) {
