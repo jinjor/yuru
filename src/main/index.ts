@@ -14,6 +14,7 @@ import { PullRequestMonitor } from "./pull-request-monitor.js";
 import type {
   AppErrorNotice,
   GitDiffScope,
+  GitReviewSnapshot,
   PullRequestUpdate,
   SessionUpdate,
   WorktreeProcessRef,
@@ -382,6 +383,24 @@ function registerIpcHandlers(): void {
   handleIpc("git:pathStates", (_event, worktreeId: string) => {
     return service.getGitPathStates(worktreeId);
   });
+
+  handleIpc("git:reviewState", (_event, worktreeId: string) => {
+    return service.getReviewState(worktreeId);
+  });
+
+  handleIpc(
+    "git:setFileReviewed",
+    (
+      _event,
+      worktreeId: string,
+      filePath: string,
+      scope: GitDiffScope | undefined,
+      reviewed: boolean,
+      expectedSnapshot: GitReviewSnapshot,
+    ) => {
+      return service.setFileReviewed(worktreeId, filePath, scope, reviewed, expectedSnapshot);
+    },
+  );
 
   handleIpc(
     "git:diffDocument",

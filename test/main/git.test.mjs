@@ -12,7 +12,12 @@ import {
   listWorktrees,
   parseWorktreeListPorcelain,
 } from "../../src/main/git.ts";
-import { parseNameStatusZ, parseNumstatZ, parsePorcelainLine } from "../../src/main/git-status.ts";
+import {
+  parseNameStatusZ,
+  parseNumstatZ,
+  parsePorcelainLine,
+  parseRawDiffZ,
+} from "../../src/main/git-status.ts";
 
 function runGit(args, cwd) {
   // git hook 経由でテストが走ると GIT_DIR / GIT_WORK_TREE が設定されており、
@@ -153,6 +158,25 @@ test("parseNameStatusZ は rename を移動元つきで返す", () => {
     { status: "M", path: "src/app.ts" },
     { status: "R100", path: "new/name.ts", srcPath: "old/name.ts" },
     { status: "A", path: "src/new.ts" },
+  ]);
+});
+
+test("parseRawDiffZ は両側の blob OID と rename 元を返す", () => {
+  const oldOid = "1".repeat(40);
+  const newOid = "2".repeat(40);
+  const output =
+    `:100644 100644 ${oldOid} ${newOid} M\0src/app.ts\0` +
+    `:100644 100644 ${oldOid} ${newOid} R100\0old/name.ts\0new/name.ts\0`;
+
+  assert.deepEqual(parseRawDiffZ(output), [
+    { status: "M", path: "src/app.ts", srcOid: oldOid, dstOid: newOid },
+    {
+      status: "R100",
+      path: "new/name.ts",
+      srcPath: "old/name.ts",
+      srcOid: oldOid,
+      dstOid: newOid,
+    },
   ]);
 });
 

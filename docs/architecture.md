@@ -1,6 +1,6 @@
 # Architecture Notes
 
-Last updated: 2026-07-19
+Last updated: 2026-07-25
 
 この文書は現在の Yuru のアーキテクチャをまとめる。
 実装の細部、型定義、処理手順の正確な姿はコードを正とする。
@@ -44,6 +44,9 @@ Last updated: 2026-07-19
   - どの repo を主導線に表示するか
   - repo と task worktree の path link
   - task worktree と primary session の strong link
+- file review store
+  - worktree ごとの、ファイル内容に対するレビュー済み宣言
+  - 表示中の checked 状態そのものではなく、fork 元と承認済み内容の blob OID を保存する
 - process memory
   - active terminal runtime
   - PTY process と scrollback
@@ -81,6 +84,11 @@ metadata は通常 `~/.yuru/metadata.json` に置く。
 
 `primarySession` は必須ではない。
 Git 上には存在するが、まだ Yuru metadata に strong link を持たない worktree もありうる。
+
+ファイルのレビュー記録は metadata とライフサイクル・書き込み頻度が異なるため、
+`~/.yuru/file-reviews.json` に分けて保存する。worktree の絶対 path とファイルの相対 path を key にし、
+値は「fork 元の blob OID : 承認した内容の blob OID」である。現在の表示がレビュー済みかどうかは、
+この記録と Git の各層にある実際の blob OID を比較して毎回導出する。
 
 ## Repo assembly
 
@@ -168,7 +176,7 @@ worktree context prompt は `~/.yuru/worktree-context-prompt.txt` で差し替�
   - プロセス停止の明示確認後は、表示時になかったプロセスを止めないよう再照合して全件へ SIGTERM を送り、終了を確認する。終了していなければ最新の一覧を同じダイアログに表示し、削除へ進まない
   - 追加確認が不要になった時点でダイアログを閉じ、カードを操作不能な `Removing…` 表示にして `git worktree remove` (`force` 承認済みなら `--force`) を実行する
   - 実削除の直前にも新しい session / process がないか再確認する
-  - 削除が成功したら metadata の task worktree record も削除する。branch と provider session 履歴は残す
+  - 削除が成功したら metadata の task worktree record と file review record も削除する。branch と provider session 履歴は残す
   - 実削除に失敗したら一覧を再取得してカードを実態に合わせ、モーダルは開かない。準備後に dirty / process が発生した場合は warning、その他の失敗は error として Error ログに記録する
 - startup maintenance
   - app 起動時に registered repo ごとに `git worktree list` を実行する
@@ -205,6 +213,24 @@ session 操作 (resume / promote / 新規 session / standalone terminal 開始) 
 session がなくても `Files`, `Changes`, preview は worktree に対して使える。
 terminal runtime の exit では worktree の選択を保ち、表示中 runtime だけを外して
 session start surface に戻す。main worktree でも自動では開き直さない。
+
+`Changes` は Git の層を `merge-base → HEAD → index → worktree` の重複しない区間に分け、
+`Committed → Staged → Unstaged` の順で表示する。merge conflict は例外として `Conflicted` を先頭に置く。
+`Committed` の基準は local default branch と HEAD の merge-base に固定し、ヘッダには実際の
+branch 名 (`main`、`master` など) を表示する。default branch の名前は `origin/HEAD` から特定するが、
+base に使うのは同名の local branch だけである。stacked branch の parent は推測せず、常に default
+branch からの全差分として見せる。default branch を特定できない、対応する local branch がない、
+または HEAD と履歴が繋がっていない場合は推測不能であることを画面に出す。remote-tracking ref や
+PR の base へ暗黙に切り替えない。PR のレビューに使う場合は、利用者が local default branch を
+最新にしておく。
+レビュー操作は diff ヘッダの `Reviewed` で行い、承認した内容が stage や commit で層を移動しても、
+blob OID が同じならレビュー済み表示もその内容について移動する。
+`Changes` の各 scope だけでなく、`Files` / `Search` から開く scope なしの
+`HEAD ↔ worktree` 合算 diff でも、変更があれば worktree 内容をレビューできる。
+diff document は表示した左右と保存対象の blob OID を review snapshot として持つ。
+`Reviewed` の更新時は main process が表示時と同じ scope の現在の snapshot と照合し、
+一致した場合だけ表示済み snapshot の OID を保存する。
+一致しなければ記録を変更せず、renderer は polling を待たずに diff とレビュー状態を再取得する。
 
 Terminal の描画には xterm.js を使う。
 stable 6.0.0 には IME の変換位置がずれて過去に入力したテキストの断片が再送されるバグがあるため、修正済みの 6.1.0-beta 系(VS Code が本番で使っているのと同じ系列)を使っている。stable 6.0.0 系に戻すと再発する。6.1.0 stable が出たらそちらに移行する。

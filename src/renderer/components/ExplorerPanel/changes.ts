@@ -1,8 +1,8 @@
 import type { GitFileStatus, GitLineStat } from "../../../shared/ipc";
 
 export interface ChangeSection {
-  key: "conflicted" | "staged" | "unstaged";
-  label: "Conflicted" | "Staged" | "Unstaged";
+  key: "conflicted" | "base" | "staged" | "unstaged";
+  label: "Conflicted" | "Committed" | "Staged" | "Unstaged";
   files: readonly GitFileStatus[];
   totalLineStat: GitLineStat;
 }
@@ -19,10 +19,12 @@ function sumLineStats(files: readonly GitFileStatus[]): GitLineStat {
 
 export function buildChangeSections({
   conflictedFiles,
+  committedFiles,
   stagedFiles,
   unstagedFiles,
 }: {
   conflictedFiles: readonly GitFileStatus[];
+  committedFiles: readonly GitFileStatus[];
   stagedFiles: readonly GitFileStatus[];
   unstagedFiles: readonly GitFileStatus[];
 }): ChangeSection[] {
@@ -34,6 +36,15 @@ export function buildChangeSections({
       label: "Conflicted",
       files: conflictedFiles,
       totalLineStat: sumLineStats(conflictedFiles),
+    });
+  }
+
+  if (committedFiles.length > 0) {
+    sections.push({
+      key: "base",
+      label: "Committed",
+      files: committedFiles,
+      totalLineStat: sumLineStats(committedFiles),
     });
   }
 

@@ -1,6 +1,12 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { diffArrays } from "diff";
-import type { GitDiffDocument, GitDiffScope } from "../../shared/ipc";
+import type {
+  GitDiffDocument,
+  GitDiffScope,
+  GitFileReviewUpdate,
+  GitReviewLayer,
+  GitReviewSnapshot,
+} from "../../shared/ipc";
 import type { FileViewMode } from "../types";
 import { computeLineChanges } from "./CodeEditor/lineChanges";
 import { SourceViewer, type SourceLine } from "./SourceViewer";
@@ -32,27 +38,48 @@ function renderedPreviewKind(path: string): RenderedPreviewKind | null {
   return null;
 }
 
+function reviewLayerForScope(scope: GitDiffScope | undefined): GitReviewLayer {
+  return scope === "base" ? "head" : scope === "staged" ? "index" : "worktree";
+}
+
 interface DiffPreviewPanelProps {
+  baseBranch?: string;
   line?: number;
   onClose: () => void;
+  onReviewedChange: (
+    reviewed: boolean,
+    expectedSnapshot: GitReviewSnapshot,
+  ) => Promise<GitFileReviewUpdate | null>;
   path: string;
   // Changes pane から選んだ時だけ入る scope。なしは HEAD ↔ 作業ツリーの合算 diff。
   scope?: GitDiffScope;
   worktreeId: string;
   // 変更ありのファイルだけ diff をポーリングするための判定。git status は親が持つ。
   pathChanged: boolean;
+  reviewed?: boolean;
+  reviewable: boolean;
 }
 
 export function DiffPreviewPanel({
+  baseBranch,
   line,
   onClose,
+  onReviewedChange,
   path,
   scope,
   worktreeId,
   pathChanged,
+  reviewed,
+  reviewable,
 }: DiffPreviewPanelProps) {
   const [diffDocument, setDiffDocument] = useState<GitDiffDocument | null>(null);
+  const [diffDocumentRequest, setDiffDocumentRequest] = useState<{
+    path: string;
+    scope?: GitDiffScope;
+  } | null>(null);
   const [isLoadingDiff, setIsLoadingDiff] = useState(false);
+  const [isSettingReviewed, setIsSettingReviewed] = useState(false);
+  const [diffRefreshVersion, setDiffRefreshVersion] = useState(0);
   const [lines, setLines] = useState<SourceLine[]>([]);
   // 描画できるファイルはプレビューを既定にし、それ以外は閲覧を既定にする。
   const hasRenderedPreview = renderedPreviewKind(path) !== null;
@@ -76,17 +103,32 @@ export function DiffPreviewPanel({
   const fileSize = diffDocument?.size ?? null;
   const isBinary = diffDocument?.isBinary ?? false;
   const hasChanges = originalContent !== currentContent;
+  const isCurrentDocument =
+    diffDocument?.path === path &&
+    diffDocumentRequest?.path === path &&
+    diffDocumentRequest.scope === scope;
+  const activeReviewSnapshot =
+    isCurrentDocument &&
+    diffDocument?.reviewSnapshot?.path === path &&
+    diffDocument.reviewSnapshot.layer === reviewLayerForScope(scope)
+      ? diffDocument.reviewSnapshot
+      : undefined;
 
   // staged 差分は index を見ているので、作業ツリーを編集する編集モードには入れない。
   // (unstaged / Files から開いた時は current 側が作業ツリーなので編集に入れる)。実在チェックは
   // 編集に入った EditModeEditor が実ファイルを読んで行う (削除済みなら "missing")。
   const editDisabledReason = isBinary
     ? "Binary files cannot be edited"
-    : scope === "staged"
-      ? "Switch to the unstaged diff to edit"
+    : scope === "staged" || scope === "base"
+      ? scope === "base"
+        ? "Committed diffs cannot be edited"
+        : "Switch to the unstaged diff to edit"
       : undefined;
-  const canEdit = diffDocument !== null && diffDocument.path === path && !editDisabledReason;
+  const canEdit = diffDocument !== null && isCurrentDocument && !editDisabledReason;
   const isEditing = mode === "edit" && canEdit;
+  // reviewable は「この path に選択中 scope の差分があるか」を親が Git state から判定した値。
+  // review state / snapshot の取得中もガワを維持し、差分のない Files 表示では出さない。
+  const activeReviewed = reviewable ? (reviewed ?? false) : undefined;
   // ヘッダの +/- と、プレビューで変更ブロックに印を付けるための変更行を 1 回の計算から導く。
   // (編集中の数値は autosave 後に追従する)。
   const lineChanges = useMemo(
@@ -126,6 +168,7 @@ export function DiffPreviewPanel({
       }
 
       setDiffDocument(resultDataOrNull(result));
+      setDiffDocumentRequest({ path, scope });
       if (showLoader) {
         showLoader = false;
         setIsLoadingDiff(false);
@@ -145,7 +188,7 @@ export function DiffPreviewPanel({
       cancelled = true;
       stopPolling();
     };
-  }, [path, scope, pathChanged, worktreeId]);
+  }, [diffRefreshVersion, path, scope, pathChanged, worktreeId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -179,6 +222,7 @@ export function DiffPreviewPanel({
   return (
     <div className="preview-panel">
       <PreviewHeader
+        baseBranch={scope === "base" && isCurrentDocument ? baseBranch : undefined}
         path={displayPath}
         mode={mode}
         onModeChange={setMode}
@@ -186,6 +230,23 @@ export function DiffPreviewPanel({
         canEdit={canEdit}
         editDisabledReason={editDisabledReason}
         lineStat={headerLineStat}
+        reviewed={activeReviewed}
+        reviewPending={isSettingReviewed || reviewed === undefined || !activeReviewSnapshot}
+        onReviewedChange={(nextReviewed) => {
+          if (!activeReviewSnapshot) {
+            return;
+          }
+          const expectedSnapshot = activeReviewSnapshot;
+          setIsSettingReviewed(true);
+          void onReviewedChange(nextReviewed, expectedSnapshot)
+            .then((update) => {
+              if (update?.kind === "stale") {
+                setDiffDocumentRequest(null);
+                setDiffRefreshVersion((version) => version + 1);
+              }
+            })
+            .finally(() => setIsSettingReviewed(false));
+        }}
         onClose={onClose}
       />
       <div className="preview-body">
@@ -233,7 +294,7 @@ export function DiffPreviewPanel({
           <SourceViewer
             lines={lines}
             className={hasChanges ? "diff-viewer" : ""}
-            scrollToLine={diffDocument.path === path ? line : undefined}
+            scrollToLine={isCurrentDocument ? line : undefined}
           />
         )}
       </div>

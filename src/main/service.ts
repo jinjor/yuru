@@ -12,6 +12,11 @@ import {
   removeTaskWorktreeByPath,
   upsertTaskWorktree,
 } from "./metadata.js";
+import { removeFileReviews } from "./file-reviews.js";
+import {
+  getReviewState as loadReviewState,
+  setFileReviewed as saveFileReviewed,
+} from "./review-state.js";
 import { loadRepoList } from "./repo-list.js";
 import {
   loadStoredSessionPreview,
@@ -69,6 +74,8 @@ import {
   type AppErrorNotice,
   type CreatedTaskWorktree,
   type GitDiffScope,
+  type GitFileReviewUpdate,
+  type GitReviewSnapshot,
   type Result,
   type SessionUpdate,
   type WorktreeProcessRef,
@@ -670,6 +677,7 @@ export class YuruService {
     this.fileTreeWatcher.clearWorktree(worktreeId);
 
     removeTaskWorktreeByPath(worktree.worktreePath);
+    removeFileReviews(worktree.worktreePath);
     return ok(undefined);
   }
 
@@ -693,6 +701,39 @@ export class YuruService {
       // 3 秒ポーリングで呼ばれるため、失敗は警告として記録しつつ Changes は空表示にする。
       recordAppWarning(toAppError(error, { command: "git" }));
       return ok([]);
+    }
+  }
+
+  async getReviewState(worktreeId: string) {
+    const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
+    if (!workingRoot) {
+      return ok({ kind: "no-base" } as const);
+    }
+    try {
+      return ok(await loadReviewState(workingRoot));
+    } catch (error) {
+      return this.failAndReport(toAppError(error, { command: "git" }));
+    }
+  }
+
+  async setFileReviewed(
+    worktreeId: string,
+    filePath: string,
+    scope: GitDiffScope | undefined,
+    reviewed: boolean,
+    expectedSnapshot: GitReviewSnapshot,
+  ) {
+    const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
+    if (!workingRoot) {
+      return this.failAndReport<GitFileReviewUpdate>({
+        code: "invalid_path",
+        message: "Selected worktree is no longer available.",
+      });
+    }
+    try {
+      return ok(await saveFileReviewed(workingRoot, filePath, scope, reviewed, expectedSnapshot));
+    } catch (error) {
+      return this.failAndReport<GitFileReviewUpdate>(toAppError(error, { command: "git" }));
     }
   }
 

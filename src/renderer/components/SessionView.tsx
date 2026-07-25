@@ -1,7 +1,14 @@
 import type { RefObject } from "react";
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
 import type { AgentDefinition } from "../../shared/agent";
-import type { GitPathState, Result, WorktreeSessionSelection } from "../../shared/ipc";
+import type {
+  GitFileReviewUpdate,
+  GitPathState,
+  GitReviewSnapshot,
+  GitReviewState,
+  Result,
+  WorktreeSessionSelection,
+} from "../../shared/ipc";
 import type { WorktreeListItem } from "../../shared/metadata";
 import type { TerminalRuntimeId } from "../../shared/session";
 import { DiffPreviewPanel } from "./DiffPreviewPanel";
@@ -36,6 +43,24 @@ function isPathChanged(states: readonly GitPathState[], path: string): boolean {
   );
 }
 
+function isPathChangedInScope(
+  states: readonly GitPathState[],
+  path: string,
+  scope: "staged" | "unstaged" | undefined,
+): boolean {
+  const entry = states.find((state) => state.path === path);
+  if (!entry || entry.ignored || entry.conflicted) {
+    return false;
+  }
+  if (scope === "staged") {
+    return Boolean(entry.indexStatus);
+  }
+  if (scope === "unstaged") {
+    return Boolean(entry.worktreeStatus);
+  }
+  return Boolean(entry.indexStatus || entry.worktreeStatus);
+}
+
 export function SessionView({
   appRef,
   onOpenExternal,
@@ -53,6 +78,8 @@ export function SessionView({
   );
   const [previewSelection, setPreviewSelection] = useState<PreviewSelection | null>(null);
   const [gitPathStates, setGitPathStates] = useState<GitPathState[]>([]);
+  const [reviewState, setReviewState] = useState<GitReviewState | null>(null);
+  const reviewMutationVersionRef = useRef(0);
   const [isFileSearchOpen, setIsFileSearchOpen] = useState(false);
   const [explorerTab, setExplorerTab] = useState<ExplorerTab>("changes");
   const [searchFocusRequest, setSearchFocusRequest] = useState(0);
@@ -64,8 +91,32 @@ export function SessionView({
   const currentBranch = worktree?.branch ?? null;
   const currentGitHub = worktree?.githubPullRequest ?? null;
   const previewPath = previewSelection?.path ?? null;
-  const previewPathChanged = previewPath ? isPathChanged(gitPathStates, previewPath) : false;
-
+  const committedPreviewFile =
+    previewSelection?.scope === "base" && reviewState?.kind === "ready"
+      ? reviewState.committedFiles.find((file) => file.path === previewSelection.path)
+      : undefined;
+  const previewPathChanged = previewPath
+    ? previewSelection?.scope === "base"
+      ? committedPreviewFile !== undefined
+      : isPathChanged(gitPathStates, previewPath)
+    : false;
+  const workingReviewCheck =
+    reviewState?.kind === "ready" && previewPath
+      ? reviewState.workingChecks.find((check) => check.path === previewPath)
+      : undefined;
+  const previewHasReviewableChange = previewSelection
+    ? previewSelection.scope === "base"
+      ? committedPreviewFile !== undefined
+      : isPathChangedInScope(gitPathStates, previewSelection.path, previewSelection.scope)
+    : false;
+  const previewReviewed =
+    reviewState?.kind !== "ready" || !previewHasReviewableChange
+      ? undefined
+      : previewSelection?.scope === "base"
+        ? committedPreviewFile?.reviewed
+        : previewSelection?.scope === "staged"
+          ? workingReviewCheck?.stagedReviewed
+          : workingReviewCheck?.unstagedReviewed;
   const resetPreviewState = useCallback((): void => {
     setPreviewSelection(null);
   }, []);
@@ -175,22 +226,59 @@ export function SessionView({
   useEffect(() => {
     let cancelled = false;
 
-    const fetchPathStates = async (): Promise<void> => {
-      const pathStatesResult = await window.electronAPI.getGitPathStates(worktreeId);
+    const fetchGitState = async (): Promise<void> => {
+      const reviewMutationVersion = reviewMutationVersionRef.current;
+      const [pathStatesResult, reviewStateResult] = await Promise.all([
+        window.electronAPI.getGitPathStates(worktreeId),
+        window.electronAPI.getReviewState(worktreeId),
+      ]);
       if (cancelled) {
         return;
       }
 
       setGitPathStates(resultDataOrNull(pathStatesResult) ?? []);
+      if (reviewMutationVersion === reviewMutationVersionRef.current) {
+        setReviewState(resultDataOrNull(reviewStateResult));
+      }
     };
 
-    const stopPolling = startPollingLoop(fetchPathStates, 3000);
+    const stopPolling = startPollingLoop(fetchGitState, 3000);
 
     return () => {
       cancelled = true;
       stopPolling();
     };
   }, [worktreeId]);
+
+  const handleReviewedChange = useCallback(
+    async (
+      reviewed: boolean,
+      expectedSnapshot: GitReviewSnapshot,
+    ): Promise<GitFileReviewUpdate | null> => {
+      if (!previewSelection) {
+        return null;
+      }
+      const reviewMutationVersion = reviewMutationVersionRef.current + 1;
+      reviewMutationVersionRef.current = reviewMutationVersion;
+      const result = await window.electronAPI.setFileReviewed(
+        worktreeId,
+        previewSelection.path,
+        previewSelection.scope,
+        reviewed,
+        expectedSnapshot,
+      );
+      if (!result.ok) {
+        return null;
+      }
+      const nextReviewState = await window.electronAPI.getReviewState(worktreeId);
+      if (nextReviewState.ok && reviewMutationVersion === reviewMutationVersionRef.current) {
+        reviewMutationVersionRef.current += 1;
+        setReviewState(nextReviewState.data);
+      }
+      return result.data;
+    },
+    [previewSelection, worktreeId],
+  );
 
   return (
     <>
@@ -209,6 +297,14 @@ export function SessionView({
             line={previewSelection.line}
             scope={previewSelection.scope}
             pathChanged={previewPathChanged}
+            baseBranch={
+              previewSelection.scope === "base" && reviewState?.kind === "ready"
+                ? reviewState.baseBranch
+                : undefined
+            }
+            reviewed={previewReviewed}
+            reviewable={previewHasReviewableChange}
+            onReviewedChange={handleReviewedChange}
             onClose={resetPreviewState}
             worktreeId={worktreeId}
           />
@@ -280,6 +376,7 @@ export function SessionView({
           }
         }}
         previewSelection={previewSelection}
+        reviewState={reviewState}
         searchFocusRequest={searchFocusRequest}
         width={paneLayout.changesPanelWidth}
         worktreeId={worktreeId}

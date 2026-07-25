@@ -1,8 +1,16 @@
 import fs from "fs";
 import path from "path";
-import type { GitDiffDocument, GitDiffScope, GitLineStat, GitPathState } from "../shared/ipc.js";
+import type {
+  GitDiffDocument,
+  GitDiffScope,
+  GitLineStat,
+  GitPathState,
+  GitReviewLayer,
+  GitReviewSnapshot,
+} from "../shared/ipc.js";
 import { exec, execBuffer } from "./exec.js";
 import { parseNameStatusZ, parseNumstatZ, parsePorcelainLine } from "./git-status.js";
+import { baseOidForLayer, blobOid, loadRawDiff, rawEntryMap } from "./review-fingerprint.js";
 import { getUntrackedLineStats } from "./untracked-line-stats.js";
 
 interface WorktreeListPorcelainEntry {
@@ -14,6 +22,91 @@ interface WorktreeListPorcelainEntry {
 
 export interface WorktreeInfo extends WorktreeListPorcelainEntry {
   createdAt: number;
+}
+
+export interface GitReviewBase {
+  branch: string;
+  mergeBase: string;
+}
+
+const reviewBaseCache = new Map<string, { key: string; value: GitReviewBase | null }>();
+
+async function getDefaultBranch(cwd: string): Promise<string | null> {
+  try {
+    const output = await exec(
+      "git",
+      ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
+      cwd,
+    );
+    const ref = output.trim();
+    return ref.startsWith("origin/") ? ref.slice("origin/".length) : null;
+  } catch (error) {
+    if (isExitCode(error, 1)) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function getReviewBaseSha(cwd: string, branch: string): Promise<string | null> {
+  try {
+    const output = await exec(
+      "git",
+      ["rev-parse", "--verify", `refs/heads/${branch}^{commit}`],
+      cwd,
+    );
+    return output.trim() || null;
+  } catch (error) {
+    if (isExitCode(error, 128)) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+function isExitCode(error: unknown, code: number): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === code
+  );
+}
+
+// origin/HEAD は default branch の名前の特定だけに使い、Review の基準は対応する
+// local branch に固定する。stacked branch でも parent を推測せず、default branch
+// からの全差分として表示する。HEAD と base が同じ間は merge-base を再実行しない。
+export async function resolveGitReviewBase(cwd: string): Promise<GitReviewBase | null> {
+  const [head, branch] = await Promise.all([getHeadSha(cwd), getDefaultBranch(cwd)]);
+  if (!head || !branch) {
+    return null;
+  }
+  const base = await getReviewBaseSha(cwd, branch);
+  if (!base) {
+    return null;
+  }
+
+  const key = JSON.stringify({ head, branch, base });
+  const cacheKey = path.resolve(cwd);
+  const cached = reviewBaseCache.get(cacheKey);
+  if (cached?.key === key) {
+    return cached.value;
+  }
+
+  let mergeBase: string;
+  try {
+    mergeBase = (await exec("git", ["merge-base", base, head], cwd)).trim();
+  } catch (error) {
+    if (!isExitCode(error, 1)) {
+      throw error;
+    }
+    reviewBaseCache.set(cacheKey, { key, value: null });
+    return null;
+  }
+
+  const value = mergeBase ? { branch, mergeBase } : null;
+  reviewBaseCache.set(cacheKey, { key, value });
+  return value;
 }
 
 export async function getCurrentBranch(cwd: string): Promise<string | null> {
@@ -137,6 +230,7 @@ async function resolveOriginalPath(
   cwd: string,
   filePath: string,
   scope: GitDiffScope | undefined,
+  reviewBase?: GitReviewBase,
 ): Promise<string | null> {
   if (!(await hasHead(cwd))) {
     return null;
@@ -144,7 +238,16 @@ async function resolveOriginalPath(
 
   // pathspec で対象 file に絞ると rename 元が diff から外れて rename 検出が
   // 効かなくなるため、全体の name-status から対象 file の record を探す
-  const rangeArgs = scope === "staged" ? ["--cached"] : ["HEAD"];
+  let rangeArgs: string[];
+  if (scope === "base") {
+    const base = reviewBase ?? (await resolveGitReviewBase(cwd));
+    if (!base) {
+      throw new Error("Base branch is unknown.");
+    }
+    rangeArgs = [base.mergeBase, "HEAD"];
+  } else {
+    rangeArgs = scope === "staged" ? ["--cached"] : ["HEAD"];
+  }
   const output = await exec(
     "git",
     ["diff", "--name-status", "--find-renames", "-z", ...rangeArgs],
@@ -160,12 +263,16 @@ async function resolveOriginalPath(
   return filePath;
 }
 
-async function readGitBlob(cwd: string, filePath: string): Promise<Buffer | null> {
+async function readGitBlobAt(cwd: string, ref: string, filePath: string): Promise<Buffer | null> {
   try {
-    return await execBuffer("git", ["show", `HEAD:${filePath}`], cwd);
+    return await execBuffer("git", ["show", `${ref}:${filePath}`], cwd);
   } catch {
     return null;
   }
+}
+
+async function readGitBlob(cwd: string, filePath: string): Promise<Buffer | null> {
+  return readGitBlobAt(cwd, "HEAD", filePath);
 }
 
 async function readIndexBlob(cwd: string, filePath: string): Promise<Buffer | null> {
@@ -194,9 +301,20 @@ async function loadOriginalBuffer(
   cwd: string,
   filePath: string,
   scope: GitDiffScope | undefined,
+  reviewBase?: GitReviewBase,
 ): Promise<Buffer | null> {
-  const originalPath = await resolveOriginalPath(cwd, filePath, scope);
-  return originalPath ? await readGitBlob(cwd, originalPath) : null;
+  const originalPath = await resolveOriginalPath(cwd, filePath, scope, reviewBase);
+  if (!originalPath) {
+    return null;
+  }
+  if (scope === "base") {
+    const base = reviewBase ?? (await resolveGitReviewBase(cwd));
+    if (!base) {
+      throw new Error("Base branch is unknown.");
+    }
+    return readGitBlobAt(cwd, base.mergeBase, originalPath);
+  }
+  return readGitBlob(cwd, originalPath);
 }
 
 async function readWorktreeFile(cwd: string, filePath: string): Promise<Buffer | null> {
@@ -205,12 +323,25 @@ async function readWorktreeFile(cwd: string, filePath: string): Promise<Buffer |
 }
 
 // scope なし: HEAD ↔ 作業ツリー (staged + unstaged の合算)
-// staged: HEAD ↔ index / unstaged: index ↔ 作業ツリー
+// base: merge-base ↔ HEAD / staged: HEAD ↔ index / unstaged: index ↔ 作業ツリー
 async function loadDiffBuffers(
   cwd: string,
   filePath: string,
   scope: GitDiffScope | undefined,
+  reviewBase?: GitReviewBase | null,
 ): Promise<{ originalBuffer: Buffer | null; currentBuffer: Buffer | null }> {
+  if (scope === "base") {
+    const base = reviewBase === undefined ? await resolveGitReviewBase(cwd) : reviewBase;
+    if (!base) {
+      throw new Error("Base branch is unknown.");
+    }
+    const [originalBuffer, currentBuffer] = await Promise.all([
+      loadOriginalBuffer(cwd, filePath, scope, base),
+      readGitBlob(cwd, filePath),
+    ]);
+    return { originalBuffer, currentBuffer };
+  }
+
   if (scope === "staged") {
     const [originalBuffer, currentBuffer] = await Promise.all([
       loadOriginalBuffer(cwd, filePath, scope),
@@ -233,14 +364,62 @@ async function loadDiffBuffers(
   return { originalBuffer, currentBuffer };
 }
 
-export async function getGitDiffDocument(
+function layerForScope(scope: GitDiffScope | undefined): GitReviewLayer {
+  return scope === "base" ? "head" : scope === "staged" ? "index" : "worktree";
+}
+
+async function createReviewSnapshot(
   cwd: string,
   filePath: string,
-  scope?: GitDiffScope,
+  scope: GitDiffScope | undefined,
+  reviewBase: GitReviewBase,
+  originalBuffer: Buffer | null,
+  currentBuffer: Buffer | null,
+): Promise<GitReviewSnapshot> {
+  const layer = layerForScope(scope);
+  const approvedOid = blobOid(currentBuffer);
+  const diffByPath = rawEntryMap(await loadRawDiff(cwd, reviewBase.mergeBase, layer));
+  return {
+    path: filePath,
+    layer,
+    originalOid: blobOid(originalBuffer),
+    baseOid: baseOidForLayer(
+      filePath,
+      approvedOid,
+      diffByPath,
+      layer === "worktree" && originalBuffer === null && currentBuffer !== null,
+    ),
+    approvedOid,
+  };
+}
+
+async function loadGitDiffDocument(
+  cwd: string,
+  filePath: string,
+  scope: GitDiffScope | undefined,
+  reviewBase: GitReviewBase | null | undefined,
 ): Promise<GitDiffDocument> {
-  const { originalBuffer, currentBuffer } = await loadDiffBuffers(cwd, filePath, scope);
+  const { originalBuffer, currentBuffer } = await loadDiffBuffers(cwd, filePath, scope, reviewBase);
   const isBinary = [originalBuffer, currentBuffer].some((buffer) => buffer?.includes(0));
   const size = Math.max(originalBuffer?.byteLength ?? 0, currentBuffer?.byteLength ?? 0);
+  // scope なしは Files / Search から開く HEAD ↔ worktree の合算 diff。
+  // 変更がある時だけ base を遅延解決し、通常のファイル閲覧には review 用 Git 処理を増やさない。
+  const hasReviewableChange = scope !== undefined || originalBuffer !== currentBuffer;
+  const resolvedReviewBase = hasReviewableChange
+    ? reviewBase === undefined
+      ? await resolveGitReviewBase(cwd)
+      : reviewBase
+    : null;
+  const reviewSnapshot = resolvedReviewBase
+    ? await createReviewSnapshot(
+        cwd,
+        filePath,
+        scope,
+        resolvedReviewBase,
+        originalBuffer,
+        currentBuffer,
+      )
+    : undefined;
 
   return {
     path: filePath,
@@ -248,7 +427,30 @@ export async function getGitDiffDocument(
     currentContent: bufferToContent(currentBuffer, isBinary),
     isBinary,
     size,
+    reviewSnapshot,
   };
+}
+
+export async function getGitDiffDocument(
+  cwd: string,
+  filePath: string,
+  scope?: GitDiffScope,
+): Promise<GitDiffDocument> {
+  const reviewBase = scope ? await resolveGitReviewBase(cwd) : undefined;
+  return loadGitDiffDocument(cwd, filePath, scope, reviewBase);
+}
+
+export async function getCurrentGitReviewSnapshot(
+  cwd: string,
+  filePath: string,
+  scope: GitDiffScope | undefined,
+): Promise<GitReviewSnapshot | null> {
+  const reviewBase = await resolveGitReviewBase(cwd);
+  if (!reviewBase) {
+    return null;
+  }
+  const document = await loadGitDiffDocument(cwd, filePath, scope, reviewBase);
+  return document.reviewSnapshot ?? null;
 }
 
 export async function listWorktrees(cwd: string): Promise<WorktreeInfo[]> {

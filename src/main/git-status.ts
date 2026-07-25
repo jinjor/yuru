@@ -71,6 +71,56 @@ export interface NameStatusEntry {
   srcPath?: string;
 }
 
+export interface RawDiffEntry {
+  status: string;
+  path: string;
+  srcPath?: string;
+  srcOid: string;
+  dstOid: string;
+}
+
+// `git diff --raw -z --no-abbrev` を、変更先 path と両側の blob OID に分解する。
+// header と path はそれぞれ NUL 区切りで、rename/copy だけ path が 2 個続く。
+export function parseRawDiffZ(output: string): RawDiffEntry[] {
+  const entries: RawDiffEntry[] = [];
+  const tokens = output.split("\0");
+
+  for (let i = 0; i < tokens.length; i++) {
+    const header = tokens[i];
+    if (!header) {
+      continue;
+    }
+    if (!header.startsWith(":")) {
+      throw new Error(`Unexpected raw diff header: ${JSON.stringify(header)}`);
+    }
+    const fields = header.slice(1).split(" ");
+    if (fields.length !== 5) {
+      throw new Error(`Unexpected raw diff header: ${JSON.stringify(header)}`);
+    }
+    const [, , srcOid, dstOid, status] = fields as [string, string, string, string, string];
+
+    if (status.startsWith("R") || status.startsWith("C")) {
+      const srcPath = tokens[i + 1];
+      const dstPath = tokens[i + 2];
+      if (srcPath === undefined || dstPath === undefined) {
+        throw new Error("Unexpected raw diff rename record: missing paths");
+      }
+      entries.push({ status, path: dstPath, srcPath, srcOid, dstOid });
+      i += 2;
+      continue;
+    }
+
+    const filePath = tokens[i + 1];
+    if (filePath === undefined) {
+      throw new Error("Unexpected raw diff record: missing path");
+    }
+    entries.push({ status, path: filePath, srcOid, dstOid });
+    i += 1;
+  }
+
+  return entries;
+}
+
 // `git diff --name-status -z` の出力を解釈する。
 // 全 field が NUL 区切りで `<status>\0<path>\0` と並び、
 // rename/copy では `<R|C><score>\0<src>\0<dst>\0` になる。

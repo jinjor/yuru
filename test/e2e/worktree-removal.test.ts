@@ -1,6 +1,6 @@
 import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
 import { execFileSync, spawn } from "node:child_process";
-import { chmod, mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   closeYuru,
@@ -70,13 +70,28 @@ function worktreePaths(context: E2eContext, repoDir: string): string[] {
     .map((line) => line.slice("worktree ".length));
 }
 
-test("clean な worktree を ︙ メニューから削除すると一覧・metadata・git から消える", async () => {
+test("clean な worktree を削除すると一覧・metadata・review record・git から消える", async () => {
   const context = await createE2eContext();
   let app: ElectronApplication | null = null;
   try {
     const repoDir = await createCommittedRepo(context);
     const worktreePath = await createGitWorktree(context, repoDir, "feature/remove-me");
     await registerRepo(context, repoDir, [{ worktreePath }]);
+    const fileReviewsPath = path.join(context.yuruHome, "file-reviews.json");
+    await writeFile(
+      fileReviewsPath,
+      `${JSON.stringify(
+        {
+          worktrees: {
+            [worktreePath]: {
+              "README.md": `${"a".repeat(40)}:${"b".repeat(40)}`,
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
 
     const launched = await launchWindow(context);
     app = launched.app;
@@ -92,6 +107,10 @@ test("clean な worktree を ︙ メニューから削除すると一覧・metad
     expect(worktreePaths(context, repoDir)).not.toContain(worktreePath);
     const metadata = await readMetadata(context);
     expect(metadata.taskWorktrees).toHaveLength(0);
+    const fileReviews = JSON.parse(await readFile(fileReviewsPath, "utf8")) as {
+      worktrees: Record<string, Record<string, string>>;
+    };
+    expect(fileReviews.worktrees[worktreePath]).toBeUndefined();
   } finally {
     await closeYuru(app);
     await context.cleanup();

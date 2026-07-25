@@ -74,8 +74,12 @@ test("staged 差分では編集が無効で、unstaged からは作業ツリー�
     const window = launched.window;
     await openMainTerminal(window);
 
-    const stagedSection = window.locator(".change-section").nth(0);
-    const unstagedSection = window.locator(".change-section").nth(1);
+    const stagedSection = window
+      .locator(".change-section")
+      .filter({ has: window.locator(".change-section-header", { hasText: /^Staged/ }) });
+    const unstagedSection = window
+      .locator(".change-section")
+      .filter({ has: window.locator(".change-section-header", { hasText: /^Unstaged/ }) });
 
     // staged (HEAD ↔ index) を開くと、index を見ているので編集は無効
     await stagedSection.locator(".change-item", { hasText: "note.txt" }).click();

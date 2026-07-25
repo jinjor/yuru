@@ -1,9 +1,10 @@
-import { BookOpen, Eye, Pencil, X } from "lucide-react";
+import { BookOpen, Check, Eye, Pencil, X } from "lucide-react";
 import type { GitLineStat } from "../../shared/ipc";
 import type { FileViewMode } from "../types";
 import { LineStatLabel } from "./LineStatLabel";
 
 interface PreviewHeaderProps {
+  baseBranch?: string;
   // repo-relative なファイルパス (前方がディレクトリ、末尾がファイル名)。
   path: string;
   mode: FileViewMode;
@@ -14,6 +15,9 @@ interface PreviewHeaderProps {
   // canEdit が false のときに編集アイコンへ出す理由 (tooltip)。
   editDisabledReason?: string;
   lineStat?: GitLineStat;
+  reviewed?: boolean;
+  reviewPending: boolean;
+  onReviewedChange: (reviewed: boolean) => void;
   onClose: () => void;
 }
 
@@ -26,6 +30,7 @@ function splitPath(path: string): { name: string; dir: string } {
 }
 
 export function PreviewHeader({
+  baseBranch,
   path,
   mode,
   onModeChange,
@@ -33,6 +38,9 @@ export function PreviewHeader({
   canEdit,
   editDisabledReason,
   lineStat,
+  reviewed,
+  reviewPending,
+  onReviewedChange,
   onClose,
 }: PreviewHeaderProps) {
   const { name, dir } = splitPath(path);
@@ -47,6 +55,11 @@ export function PreviewHeader({
           </span>
         )}
       </div>
+      {baseBranch && (
+        <span className="preview-scope-label">
+          from <span>{baseBranch}</span>
+        </span>
+      )}
       <div className="preview-mode-segment" role="group" aria-label="View mode">
         {showPreview && (
           <button
@@ -79,6 +92,20 @@ export function PreviewHeader({
           <Pencil size={15} strokeWidth={2} />
         </button>
       </div>
+      {reviewed !== undefined && (
+        <button
+          type="button"
+          className={`reviewed-toggle ${reviewed ? "on" : ""}`}
+          onClick={() => onReviewedChange(!reviewed)}
+          disabled={reviewPending}
+          aria-pressed={reviewed}
+        >
+          <span className="reviewed-toggle-dot" aria-hidden="true">
+            {reviewed && <Check size={8} strokeWidth={4} />}
+          </span>
+          Reviewed
+        </button>
+      )}
       {lineStat && <LineStatLabel lineStat={lineStat} />}
       <button
         type="button"

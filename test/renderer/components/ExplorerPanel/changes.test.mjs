@@ -7,6 +7,7 @@ test("buildChangeSections は空のセクションを省く", () => {
   assert.deepEqual(
     buildChangeSections({
       conflictedFiles: [],
+      committedFiles: [],
       stagedFiles: [],
       unstagedFiles: [{ path: "src/app.ts", status: "M" }],
     }),
@@ -24,6 +25,7 @@ test("buildChangeSections は空のセクションを省く", () => {
 test("buildChangeSections は section ごとに行数を合計する", () => {
   const sections = buildChangeSections({
     conflictedFiles: [],
+    committedFiles: [],
     stagedFiles: [
       { path: "src/a.ts", status: "M", lineStat: { added: 2, deleted: 1 } },
       { path: "assets/icon.png", status: "A" },
@@ -47,6 +49,7 @@ test("buildChangeSections は両方に変更があるときだけ 2 セクショ
   assert.deepEqual(
     buildChangeSections({
       conflictedFiles: [],
+      committedFiles: [],
       stagedFiles: [{ path: "src/staged.ts", status: "M" }],
       unstagedFiles: [{ path: "src/unstaged.ts", status: "M" }],
     }).map((section) => section.key),
@@ -57,13 +60,14 @@ test("buildChangeSections は両方に変更があるときだけ 2 セクショ
 test("buildChangeSections は conflicted を先頭の section として返す", () => {
   const sections = buildChangeSections({
     conflictedFiles: [{ path: "src/conflict.ts", status: "!", lineStat: { added: 4, deleted: 0 } }],
+    committedFiles: [{ path: "src/committed.ts", status: "M" }],
     stagedFiles: [{ path: "src/staged.ts", status: "M" }],
     unstagedFiles: [{ path: "src/unstaged.ts", status: "M" }],
   });
 
   assert.deepEqual(
     sections.map((section) => section.key),
-    ["conflicted", "staged", "unstaged"],
+    ["conflicted", "base", "staged", "unstaged"],
   );
   assert.deepEqual(sections[0].totalLineStat, { added: 4, deleted: 0 });
 });

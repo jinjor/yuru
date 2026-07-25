@@ -1,4 +1,4 @@
-import type { GitPathState } from "../../../shared/ipc";
+import type { GitPathState, GitReviewState } from "../../../shared/ipc";
 import { useElementSize } from "../../hooks/useElementSize";
 import type { PreviewSelection } from "../../types";
 import {
@@ -19,6 +19,7 @@ interface ExplorerPanelProps {
   onPreviewSelectionChange: (selection: PreviewSelection | null) => void;
   onTabChange: (tab: ExplorerTab) => void;
   previewSelection: PreviewSelection | null;
+  reviewState: GitReviewState | null;
   searchFocusRequest: number;
   width: number;
   worktreeId: string;
@@ -30,6 +31,7 @@ export function ExplorerPanel({
   onPreviewSelectionChange,
   onTabChange,
   previewSelection,
+  reviewState,
   searchFocusRequest,
   width,
   worktreeId,
@@ -74,6 +76,7 @@ export function ExplorerPanel({
           conflictedFiles={conflictedFiles}
           onPreviewSelectionChange={onPreviewSelectionChange}
           previewSelection={previewSelection}
+          reviewState={reviewState}
           stagedFiles={stagedFiles}
           unstagedFiles={unstagedFiles}
         />

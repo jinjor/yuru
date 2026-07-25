@@ -1,5 +1,5 @@
 import { expect, test, type ElectronApplication } from "@playwright/test";
-import { rm } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import {
   closeYuru,
   createCommittedRepo,
@@ -42,6 +42,54 @@ test("Files タブで追跡ファイルを表示しクリックしたファイ�
 
     await expectPreviewPath(window, "src/app.ts");
     await expect(window.locator(".source-viewer")).toContainText("needle");
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+test("Files / Search から開いた合算 diff でも Reviewed を切り替えられる", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context, {
+      "app.ts": "export const value = 1;\n",
+      "stable.ts": "export const stable = true;\n",
+    });
+    git(["update-ref", "refs/remotes/origin/main", "HEAD"], repoDir);
+    git(["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"], repoDir);
+    await writeFiles(repoDir, { "app.ts": "export const value = 2;\n" });
+    git(["add", "app.ts"], repoDir);
+    await writeFiles(repoDir, {
+      "app.ts": "export const scopeToggleNeedle = 3;\n",
+    });
+    await registerRepo(context, repoDir);
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+    await openMainTerminal(window);
+
+    await window.locator(".panel-tab", { hasText: "Files" }).click();
+    await window.locator(".file-tree-row", { hasText: "stable.ts" }).click();
+    await expectPreviewPath(window, "stable.ts");
+    await expect(window.locator(".reviewed-toggle")).toHaveCount(0);
+
+    await window.locator(".file-tree-row", { hasText: "app.ts" }).click();
+    await expectPreviewPath(window, "app.ts");
+    const reviewedToggle = window.locator(".reviewed-toggle");
+    await expect(reviewedToggle).toHaveAttribute("aria-pressed", "false");
+    await expect(reviewedToggle).toBeEnabled();
+    await reviewedToggle.click();
+    await expect(reviewedToggle).toHaveAttribute("aria-pressed", "true");
+
+    await window.keyboard.press("Meta+Shift+F");
+    await window.locator(".code-search-input").fill("scopeToggleNeedle");
+    await expect(window.locator(".code-search-status")).toContainText("1 matches", {
+      timeout: 10_000,
+    });
+    await window.locator(".code-search-match-row").click();
+    await expectPreviewPath(window, "app.ts");
+    await expect(reviewedToggle).toHaveAttribute("aria-pressed", "true");
   } finally {
     await closeYuru(app);
     await context.cleanup();
@@ -285,16 +333,20 @@ test("Changes タブは staged と unstaged を別セクションで表示し、
     const window = launched.window;
     await openMainTerminal(window);
 
-    // header: label + file 数 + 合計行数
+    // header: label + 合計行数 (file 数は Changes badge にだけ出す)
     await expect(
-      window.locator(".change-section-header", { hasText: /^Staged1\+1-1$/ }),
+      window.locator(".change-section-header", { hasText: /^Staged\+1-1$/ }),
     ).toBeVisible({ timeout: 10_000 });
     await expect(
-      window.locator(".change-section-header", { hasText: /^Unstaged2\+2-2$/ }),
+      window.locator(".change-section-header", { hasText: /^Unstaged\+2-2$/ }),
     ).toBeVisible();
 
-    const stagedSection = window.locator(".change-section").nth(0);
-    const unstagedSection = window.locator(".change-section").nth(1);
+    const stagedSection = window
+      .locator(".change-section")
+      .filter({ has: window.locator(".change-section-header", { hasText: /^Staged/ }) });
+    const unstagedSection = window
+      .locator(".change-section")
+      .filter({ has: window.locator(".change-section-header", { hasText: /^Unstaged/ }) });
     const stagedReadme = stagedSection.locator(".change-item", { hasText: "README.md" });
     const unstagedReadme = unstagedSection.locator(".change-item", { hasText: "README.md" });
     await expect(stagedReadme).toContainText("M");
@@ -326,6 +378,8 @@ test("Changes タブは変更が無いと No changes を表示する", async () 
   let app: ElectronApplication | null = null;
   try {
     const repoDir = await createCommittedRepo(context);
+    git(["update-ref", "refs/remotes/origin/main", "HEAD"], repoDir);
+    git(["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"], repoDir);
     await registerRepo(context, repoDir);
     const launched = await launchWindow(context);
     app = launched.app;
@@ -334,6 +388,184 @@ test("Changes タブは変更が無いと No changes を表示する", async () 
 
     await expect(window.locator(".empty-changes")).toHaveText("No changes");
     await expect(window.locator(".panel-tab.active", { hasText: "Changes" })).toContainText("0");
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+test("local main が無ければ Committed に明示する", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context);
+    git(["update-ref", "refs/remotes/origin/main", "HEAD"], repoDir);
+    git(["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"], repoDir);
+    git(["switch", "-c", "feature"], repoDir);
+    git(["branch", "-D", "main"], repoDir);
+    await registerRepo(context, repoDir);
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+    await openMainTerminal(window);
+
+    const committedSection = window
+      .locator(".change-section")
+      .filter({ has: window.locator(".change-section-header", { hasText: "Committed" }) });
+    await expect(committedSection.locator(".change-section-no-base")).toHaveText(
+      "Base branch is unknown.",
+      { timeout: 10_000 },
+    );
+    await expect(window.locator(".reviewed-toggle")).toHaveCount(0);
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+test("default branch が master でも Committed の Reviewed は commit 後と再起動後に残る", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context, {
+      "src/app.ts": "export const value = 1;\n",
+    });
+    git(["branch", "-m", "master"], repoDir);
+    git(["update-ref", "refs/remotes/origin/master", "HEAD"], repoDir);
+    git(["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/master"], repoDir);
+    const taskWorktreePath = await createGitWorktree(context, repoDir, "feature-review");
+    await writeFiles(taskWorktreePath, {
+      "src/app.ts": "export const value = 2;\n",
+    });
+    git(["add", "src/app.ts"], taskWorktreePath);
+    git(["commit", "-m", "feature"], taskWorktreePath);
+    await registerRepo(context, repoDir, [{ worktreePath: taskWorktreePath }]);
+
+    let launched = await launchWindow(context);
+    app = launched.app;
+    let window = launched.window;
+    await window.locator(".task-worktree-card", { hasText: "feature-review" }).click();
+
+    let committedSection = window
+      .locator(".change-section")
+      .filter({ has: window.locator(".change-section-header", { hasText: /^Committedmaster/ }) });
+    let committedHeader = committedSection.locator(".change-section-header");
+    await expect(committedHeader).toHaveAttribute("aria-expanded", "false", { timeout: 10_000 });
+    await expect(committedSection.locator(".change-item")).toHaveCount(0);
+
+    await committedHeader.click();
+    let committedRow = committedSection.locator(".change-item", { hasText: "app.ts" });
+    await committedRow.click();
+    await expectPreviewPath(window, "src/app.ts");
+    await expect(window.locator(".preview-scope-label")).toHaveText("from master");
+    await expect(window.getByTitle("Committed diffs cannot be edited")).toBeDisabled();
+
+    await window.locator(".reviewed-toggle").click();
+    await expect(committedRow).toHaveClass(/reviewed/);
+
+    // file-reviews.json は metadata と分離され、worktree path ごとに保存される。
+    const stored = JSON.parse(
+      await readFile(`${context.yuruHome}/file-reviews.json`, "utf8"),
+    ) as { worktrees: Record<string, Record<string, string>> };
+    expect(Object.keys(stored.worktrees[taskWorktreePath] ?? {})).toEqual(["src/app.ts"]);
+
+    await closeYuru(app);
+    app = null;
+    launched = await launchWindow(context);
+    app = launched.app;
+    window = launched.window;
+    await window.locator(".task-worktree-card", { hasText: "feature-review" }).click();
+    committedSection = window
+      .locator(".change-section")
+      .filter({ has: window.locator(".change-section-header", { hasText: /^Committedmaster/ }) });
+    committedHeader = committedSection.locator(".change-section-header");
+    await committedHeader.click();
+    committedRow = committedSection.locator(".change-item", { hasText: "app.ts" });
+    await expect(committedRow).toHaveClass(/reviewed/);
+
+    // 新しい worktree 内容は未レビューだが、承認済み HEAD の Committed 行は維持される。
+    await writeFiles(taskWorktreePath, {
+      "src/app.ts": "export const value = 3;\n",
+    });
+    const unstagedSection = window
+      .locator(".change-section")
+      .filter({ has: window.locator(".change-section-header", { hasText: /^Unstaged/ }) });
+    const unstagedRow = unstagedSection.locator(".change-item", { hasText: "app.ts" });
+    await expect(unstagedRow).toBeVisible({ timeout: 7_000 });
+    await expect(unstagedRow).not.toHaveClass(/reviewed/);
+    await expect(committedRow).toHaveClass(/reviewed/);
+
+    await unstagedRow.click();
+    await expect(window.locator(".preview-scope-label")).toHaveCount(0);
+    await expect(window.locator(".reviewed-toggle")).toHaveAttribute("aria-pressed", "false");
+    await window.locator(".reviewed-toggle").click();
+    await expect(unstagedRow).toHaveClass(/reviewed/);
+
+    git(["add", "src/app.ts"], taskWorktreePath);
+    git(["commit", "-m", "feature v3"], taskWorktreePath);
+    await expect(unstagedSection).toHaveCount(0, { timeout: 7_000 });
+    await expect(committedRow).toHaveClass(/reviewed/);
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+test("表示中の Committed diff より HEAD が進んだら未表示内容を Reviewed にしない", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context, {
+      "src/app.ts": "export const value = 1;\n",
+    });
+    git(["update-ref", "refs/remotes/origin/main", "HEAD"], repoDir);
+    git(["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"], repoDir);
+    const taskWorktreePath = await createGitWorktree(context, repoDir, "feature-stale-review");
+    await writeFiles(taskWorktreePath, {
+      "src/app.ts": "export const value = 2;\n",
+    });
+    git(["add", "src/app.ts"], taskWorktreePath);
+    git(["commit", "-m", "feature v2"], taskWorktreePath);
+    await registerRepo(context, repoDir, [{ worktreePath: taskWorktreePath }]);
+
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+    await window.locator(".task-worktree-card", { hasText: "feature-stale-review" }).click();
+
+    const committedSection = window
+      .locator(".change-section")
+      .filter({ has: window.locator(".change-section-header", { hasText: /^Committedmain/ }) });
+    await committedSection.locator(".change-section-header").click();
+    const committedRow = committedSection.locator(".change-item", { hasText: "app.ts" });
+    await committedRow.click();
+    const addedLine = window.locator(".source-line.diff-added");
+    await expect(addedLine).toContainText("value = 2");
+
+    await writeFiles(taskWorktreePath, {
+      "src/app.ts": "export const value = 3;\n",
+    });
+    git(["add", "src/app.ts"], taskWorktreePath);
+    git(["commit", "-m", "feature v3"], taskWorktreePath);
+
+    // polling が新しい diff を描画する前の v2 を見ている状態でクリックする。
+    expect(await addedLine.textContent()).toContain("value = 2");
+    await window.locator(".reviewed-toggle").click();
+
+    // stale 応答を受けたら 3 秒 polling を待たず、現在の v3 と unchecked 状態へ更新する。
+    await expect(addedLine).toContainText("value = 3", { timeout: 2_500 });
+    await expect(window.locator(".reviewed-toggle")).toHaveAttribute("aria-pressed", "false");
+    await expect(committedRow).not.toHaveClass(/reviewed/);
+
+    let stored: unknown = null;
+    try {
+      stored = JSON.parse(await readFile(`${context.yuruHome}/file-reviews.json`, "utf8"));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw error;
+      }
+    }
+    expect(stored).toBeNull();
   } finally {
     await closeYuru(app);
     await context.cleanup();

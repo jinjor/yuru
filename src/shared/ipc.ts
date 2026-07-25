@@ -47,13 +47,41 @@ export interface GitLineStat {
   deleted: number;
 }
 
-export type GitDiffScope = "staged" | "unstaged";
+export type GitDiffScope = "base" | "staged" | "unstaged";
 
 export interface GitFileStatus {
   path: string;
   status: string;
   lineStat?: GitLineStat;
+  reviewed?: boolean;
 }
+
+export interface GitWorkingReviewCheck {
+  path: string;
+  unstagedReviewed: boolean;
+  stagedReviewed: boolean;
+}
+
+export type GitReviewState =
+  | { kind: "no-base" }
+  | {
+      kind: "ready";
+      baseBranch: string;
+      committedFiles: GitFileStatus[];
+      workingChecks: GitWorkingReviewCheck[];
+    };
+
+export type GitReviewLayer = "worktree" | "index" | "head";
+
+export interface GitReviewSnapshot {
+  path: string;
+  layer: GitReviewLayer;
+  originalOid: string;
+  baseOid: string;
+  approvedOid: string;
+}
+
+export type GitFileReviewUpdate = { kind: "updated" } | { kind: "stale" };
 
 export interface GitPathState {
   path: string;
@@ -85,6 +113,7 @@ export interface GitDiffDocument {
   currentContent: string | null;
   isBinary: boolean;
   size: number;
+  reviewSnapshot?: GitReviewSnapshot;
 }
 
 export interface HtmlPreviewGrant {
@@ -195,6 +224,14 @@ export interface ElectronAPI {
   executeWorktreeRemoval: (worktreeId: string, force: boolean) => Promise<Result<void>>;
   openExternal: (url: string) => Promise<void>;
   getGitPathStates: (worktreeId: string) => Promise<Result<GitPathState[]>>;
+  getReviewState: (worktreeId: string) => Promise<Result<GitReviewState>>;
+  setFileReviewed: (
+    worktreeId: string,
+    path: string,
+    scope: GitDiffScope | undefined,
+    reviewed: boolean,
+    expectedSnapshot: GitReviewSnapshot,
+  ) => Promise<Result<GitFileReviewUpdate>>;
   getGitDiffDocument: (
     worktreeId: string,
     filePath: string,

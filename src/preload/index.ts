@@ -3,6 +3,7 @@ import type {
   AppErrorNotice,
   ElectronAPI,
   GitDiffScope,
+  GitReviewSnapshot,
   PullRequestUpdate,
   SessionUpdate,
   WorktreeProcessRef,
@@ -40,6 +41,15 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke("worktree:executeRemoval", worktreeId, force),
   openExternal: (url: string) => ipcRenderer.invoke("shell:openExternal", url),
   getGitPathStates: (worktreeId: string) => ipcRenderer.invoke("git:pathStates", worktreeId),
+  getReviewState: (worktreeId: string) => ipcRenderer.invoke("git:reviewState", worktreeId),
+  setFileReviewed: (
+    worktreeId: string,
+    path: string,
+    scope: GitDiffScope | undefined,
+    reviewed: boolean,
+    expectedSnapshot: GitReviewSnapshot,
+  ) =>
+    ipcRenderer.invoke("git:setFileReviewed", worktreeId, path, scope, reviewed, expectedSnapshot),
   getGitDiffDocument: (worktreeId: string, filePath: string, scope?: GitDiffScope) =>
     ipcRenderer.invoke("git:diffDocument", worktreeId, filePath, scope),
   createHtmlPreview: (worktreeId: string, filePath: string, content: string) =>
