@@ -97,7 +97,7 @@ import {
 import { createTerminalEnv } from "./terminal-env.js";
 import { deliverInitialInput } from "./initial-input.js";
 import { TerminalScreen } from "./terminal-screen.js";
-import { buildShellStartupCommand, createInteractiveShellLaunchCommand } from "./shell-launch.js";
+import { createInteractiveShellLaunchCommand } from "./shell-launch.js";
 
 const STARTUP_OUTPUT_LIMIT = 4000;
 const OUTPUT_ACTIVE_GRACE_MS = 1500;
@@ -1000,7 +1000,7 @@ export class YuruService {
   ): PendingTerminal {
     const startedAt = Date.now();
     const terminalRuntimeId = createTerminalRuntimeId(request.runtimeKind);
-    const launchCommand = createInteractiveShellLaunchCommand(request.env);
+    const launchCommand = createInteractiveShellLaunchCommand(request.env, request.startupCommand);
     const initialCols = 80;
     const initialRows = 24;
     const proc = pty.spawn(launchCommand.command, launchCommand.args, {
@@ -1082,13 +1082,6 @@ export class YuruService {
       this.events.terminalRuntimeExited(pending.terminalRuntimeId);
       onExit?.(pending);
     });
-
-    if (request.startupCommand) {
-      proc.write(
-        `${buildShellStartupCommand(request.startupCommand.command, request.startupCommand.args)}\r`,
-      );
-      this.markTerminalRuntimeInput(terminalRuntimeId);
-    }
 
     return pending;
   }
