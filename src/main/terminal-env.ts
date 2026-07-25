@@ -19,13 +19,17 @@ export function createTerminalEnv(
   // started from inside a Claude Code session, these markers leak in through the
   // inherited environment, and a freshly launched `claude` then treats itself as
   // a nested child session and never registers its session — so session
-  // detection times out. Drop them so every launch is a clean top-level session.
+  // detection times out. CLAUDE_CODE_SSE_PORT points at the parent's IDE
+  // integration, which makes the new session open a blocking notice that
+  // swallows the first typed characters. Drop them so every launch is a clean
+  // top-level session.
   for (const key of [
     "CLAUDECODE",
     "CLAUDE_CODE_CHILD_SESSION",
     "CLAUDE_CODE_ENTRYPOINT",
     "CLAUDE_CODE_SESSION_ID",
     "CLAUDE_CODE_EXECPATH",
+    "CLAUDE_CODE_SSE_PORT",
   ]) {
     delete env[key];
   }

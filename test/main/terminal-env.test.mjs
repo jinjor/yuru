@@ -32,6 +32,7 @@ test("createTerminalEnv は親の Claude セッションの子セッションマ
     CLAUDE_CODE_ENTRYPOINT: "cli",
     CLAUDE_CODE_SESSION_ID: "parent-session",
     CLAUDE_CODE_EXECPATH: "/parent/claude",
+    CLAUDE_CODE_SSE_PORT: "12345",
   });
 
   assert.equal(env.HOME, "/tmp/example");
@@ -40,6 +41,7 @@ test("createTerminalEnv は親の Claude セッションの子セッションマ
   assert.equal(env.CLAUDE_CODE_ENTRYPOINT, undefined);
   assert.equal(env.CLAUDE_CODE_SESSION_ID, undefined);
   assert.equal(env.CLAUDE_CODE_EXECPATH, undefined);
+  assert.equal(env.CLAUDE_CODE_SSE_PORT, undefined);
 });
 
 test("createTerminalEnv は Codex 起動時に親の Codex thread/session 情報を渡さない", () => {
