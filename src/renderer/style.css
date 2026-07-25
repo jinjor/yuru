@@ -1407,11 +1407,6 @@ button.github-badge {
   border-color: rgba(122, 215, 161, 0.5);
 }
 
-.reviewed-toggle:disabled {
-  cursor: wait;
-  opacity: 0.7;
-}
-
 .preview-close-btn {
   width: 24px;
   height: 24px;
