@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { diffArrays } from "diff";
-import type { GitDiffDocument, GitDiffScope, GitReviewSnapshot } from "../../shared/ipc";
+import type { GitDiffDocument, GitDiffScope } from "../../shared/ipc";
 import type { FileViewMode } from "../types";
 import { computeLineChanges } from "./CodeEditor/lineChanges";
 import { SourceViewer, type SourceLine } from "./SourceViewer";
@@ -36,7 +36,7 @@ interface DiffPreviewPanelProps {
   baseBranch?: string;
   line?: number;
   onClose: () => void;
-  onReviewedChange: (reviewed: boolean, snapshot: GitReviewSnapshot) => Promise<void>;
+  onReviewedChange: (reviewed: boolean) => Promise<void>;
   path: string;
   // Changes pane から選んだ時だけ入る scope。なしは HEAD ↔ 作業ツリーの合算 diff。
   scope?: GitDiffScope;
@@ -92,7 +92,6 @@ export function DiffPreviewPanel({
   const isBinary = diffDocument?.isBinary ?? false;
   const hasChanges = originalContent !== currentContent;
   const isCurrentDocument = loadedDiff?.document.path === path && loadedDiff.scope === scope;
-  const activeReviewSnapshot = isCurrentDocument ? loadedDiff.document.reviewSnapshot : undefined;
 
   // staged 差分は index を見ているので、作業ツリーを編集する編集モードには入れない。
   // (unstaged / Files から開いた時は current 側が作業ツリーなので編集に入れる)。実在チェックは
@@ -211,15 +210,10 @@ export function DiffPreviewPanel({
         editDisabledReason={editDisabledReason}
         lineStat={headerLineStat}
         reviewed={activeReviewed}
-        reviewPending={isSettingReviewed || reviewed === undefined || !activeReviewSnapshot}
+        reviewPending={isSettingReviewed || reviewed === undefined}
         onReviewedChange={(nextReviewed) => {
-          if (!activeReviewSnapshot) {
-            return;
-          }
           setIsSettingReviewed(true);
-          void onReviewedChange(nextReviewed, activeReviewSnapshot).finally(() =>
-            setIsSettingReviewed(false),
-          );
+          void onReviewedChange(nextReviewed).finally(() => setIsSettingReviewed(false));
         }}
         onClose={onClose}
       />

@@ -3,7 +3,6 @@ import type {
   AppErrorNotice,
   ElectronAPI,
   GitDiffScope,
-  GitReviewSnapshot,
   PullRequestUpdate,
   SessionUpdate,
   WorktreeProcessRef,
@@ -45,9 +44,9 @@ const electronAPI: ElectronAPI = {
   setFileReviewed: (
     worktreeId: string,
     path: string,
+    scope: GitDiffScope | undefined,
     reviewed: boolean,
-    snapshot: GitReviewSnapshot,
-  ) => ipcRenderer.invoke("git:setFileReviewed", worktreeId, path, reviewed, snapshot),
+  ) => ipcRenderer.invoke("git:setFileReviewed", worktreeId, path, scope, reviewed),
   getGitDiffDocument: (worktreeId: string, filePath: string, scope?: GitDiffScope) =>
     ipcRenderer.invoke("git:diffDocument", worktreeId, filePath, scope),
   createHtmlPreview: (worktreeId: string, filePath: string, content: string) =>

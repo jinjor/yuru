@@ -1,14 +1,14 @@
 import fs from "fs";
 import path from "path";
 import type {
+  GitDiffScope,
   GitFileStatus,
-  GitReviewSnapshot,
   GitReviewState,
   GitWorkingReviewCheck,
 } from "../shared/ipc.js";
 import { exec } from "./exec.js";
 import { loadFileReviews, setFileReview, type FileReviewRecord } from "./file-reviews.js";
-import { resolveGitReviewBase } from "./git.js";
+import { loadDiffBuffers, resolveGitReviewBase } from "./git.js";
 import { parseNumstatZ, parsePorcelainLine } from "./git-status.js";
 import {
   baseOidForLayer,
@@ -17,6 +17,7 @@ import {
   MISSING_BLOB_OID,
   normalizeOid,
   rawEntryMap,
+  type GitReviewLayer,
 } from "./review-fingerprint.js";
 
 function parseIndexOids(output: string): Map<string, string> {
@@ -143,17 +144,52 @@ export async function getReviewState(cwd: string): Promise<GitReviewState> {
   };
 }
 
-// 表示していた diff の snapshot をそのまま記録する。表示が古くなっていた場合は、
-// 記録した内容がもうその層に無いため導出で checked にならない。
-export function setFileReviewed(
+function layerForScope(scope: GitDiffScope | undefined): GitReviewLayer {
+  return scope === "base" ? "head" : scope === "staged" ? "index" : "worktree";
+}
+
+// diff を表示するのと同じ手順で両側の内容を読み、「fork 元からこの内容まで見た」を組み立てる。
+async function currentFileReview(
   cwd: string,
   filePath: string,
+  scope: GitDiffScope | undefined,
+): Promise<FileReviewRecord | null> {
+  const base = await resolveGitReviewBase(cwd);
+  if (!base) {
+    return null;
+  }
+
+  const layer = layerForScope(scope);
+  const [{ originalBuffer, currentBuffer }, rawDiff] = await Promise.all([
+    loadDiffBuffers(cwd, filePath, scope, base),
+    loadRawDiff(cwd, base.mergeBase, layer),
+  ]);
+  const approvedOid = blobOid(currentBuffer);
+  return {
+    baseOid: baseOidForLayer(
+      filePath,
+      approvedOid,
+      rawEntryMap(rawDiff),
+      layer === "worktree" && originalBuffer === null && currentBuffer !== null,
+    ),
+    approvedOid,
+  };
+}
+
+export async function setFileReviewed(
+  cwd: string,
+  filePath: string,
+  scope: GitDiffScope | undefined,
   reviewed: boolean,
-  snapshot: GitReviewSnapshot,
-): void {
-  setFileReview(
-    cwd,
-    filePath,
-    reviewed ? { baseOid: snapshot.baseOid, approvedOid: snapshot.approvedOid } : null,
-  );
+): Promise<void> {
+  if (!reviewed) {
+    setFileReview(cwd, filePath, null);
+    return;
+  }
+
+  const record = await currentFileReview(cwd, filePath, scope);
+  if (!record) {
+    throw new Error("Base branch is unknown.");
+  }
+  setFileReview(cwd, filePath, record);
 }

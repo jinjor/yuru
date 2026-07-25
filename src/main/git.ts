@@ -1,16 +1,8 @@
 import fs from "fs";
 import path from "path";
-import type {
-  GitDiffDocument,
-  GitDiffScope,
-  GitLineStat,
-  GitPathState,
-  GitReviewLayer,
-  GitReviewSnapshot,
-} from "../shared/ipc.js";
+import type { GitDiffDocument, GitDiffScope, GitLineStat, GitPathState } from "../shared/ipc.js";
 import { exec, execBuffer } from "./exec.js";
 import { parseNameStatusZ, parseNumstatZ, parsePorcelainLine } from "./git-status.js";
-import { baseOidForLayer, blobOid, loadRawDiff, rawEntryMap } from "./review-fingerprint.js";
 import { getUntrackedLineStats } from "./untracked-line-stats.js";
 
 interface WorktreeListPorcelainEntry {
@@ -279,14 +271,12 @@ async function readWorktreeFile(cwd: string, filePath: string): Promise<Buffer |
 
 // scope なし: HEAD ↔ 作業ツリー (staged + unstaged の合算)
 // base: merge-base ↔ HEAD / staged: HEAD ↔ index / unstaged: index ↔ 作業ツリー
-// changed は「この scope にレビューできる差分があるか」。scope 付きは Changes で
-// 変更として並んでいる file を開くので常に真、scope なしだけ status で確かめる。
-async function loadDiffBuffers(
+export async function loadDiffBuffers(
   cwd: string,
   filePath: string,
   scope: GitDiffScope | undefined,
   reviewBase: GitReviewBase | null,
-): Promise<{ originalBuffer: Buffer | null; currentBuffer: Buffer | null; changed: boolean }> {
+): Promise<{ originalBuffer: Buffer | null; currentBuffer: Buffer | null }> {
   if (scope === "base") {
     if (!reviewBase) {
       throw new Error("Base branch is unknown.");
@@ -295,7 +285,7 @@ async function loadDiffBuffers(
       loadOriginalBuffer(cwd, filePath, [reviewBase.mergeBase, "HEAD"], reviewBase.mergeBase),
       readGitBlobAt(cwd, "HEAD", filePath),
     ]);
-    return { originalBuffer, currentBuffer, changed: true };
+    return { originalBuffer, currentBuffer };
   }
 
   if (scope === "staged") {
@@ -303,7 +293,7 @@ async function loadDiffBuffers(
       loadOriginalBuffer(cwd, filePath, ["--cached"], "HEAD"),
       readIndexBlob(cwd, filePath),
     ]);
-    return { originalBuffer, currentBuffer, changed: true };
+    return { originalBuffer, currentBuffer };
   }
 
   if (scope === "unstaged") {
@@ -311,42 +301,14 @@ async function loadDiffBuffers(
       readIndexBlob(cwd, filePath),
       readWorktreeFile(cwd, filePath),
     ]);
-    return { originalBuffer, currentBuffer, changed: true };
+    return { originalBuffer, currentBuffer };
   }
 
   const currentBuffer = await readWorktreeFile(cwd, filePath);
-  const changed = await isPathChanged(cwd, filePath);
-  const originalBuffer = changed
+  const originalBuffer = (await isPathChanged(cwd, filePath))
     ? await loadOriginalBuffer(cwd, filePath, ["HEAD"], "HEAD")
     : currentBuffer;
-  return { originalBuffer, currentBuffer, changed };
-}
-
-function layerForScope(scope: GitDiffScope | undefined): GitReviewLayer {
-  return scope === "base" ? "head" : scope === "staged" ? "index" : "worktree";
-}
-
-async function createReviewSnapshot(
-  cwd: string,
-  filePath: string,
-  scope: GitDiffScope | undefined,
-  reviewBase: GitReviewBase,
-  originalBuffer: Buffer | null,
-  currentBuffer: Buffer | null,
-): Promise<GitReviewSnapshot> {
-  const layer = layerForScope(scope);
-  const approvedOid = blobOid(currentBuffer);
-  const diffByPath = rawEntryMap(await loadRawDiff(cwd, reviewBase.mergeBase, layer));
-  return {
-    path: filePath,
-    baseOid: baseOidForLayer(
-      filePath,
-      approvedOid,
-      diffByPath,
-      layer === "worktree" && originalBuffer === null && currentBuffer !== null,
-    ),
-    approvedOid,
-  };
+  return { originalBuffer, currentBuffer };
 }
 
 export async function getGitDiffDocument(
@@ -355,24 +317,9 @@ export async function getGitDiffDocument(
   scope?: GitDiffScope,
 ): Promise<GitDiffDocument> {
   const reviewBase = scope ? await resolveGitReviewBase(cwd) : null;
-  const { originalBuffer, currentBuffer, changed } = await loadDiffBuffers(
-    cwd,
-    filePath,
-    scope,
-    reviewBase,
-  );
+  const { originalBuffer, currentBuffer } = await loadDiffBuffers(cwd, filePath, scope, reviewBase);
   const isBinary = [originalBuffer, currentBuffer].some((buffer) => buffer?.includes(0));
   const size = Math.max(originalBuffer?.byteLength ?? 0, currentBuffer?.byteLength ?? 0);
-  // scope なしは Files / Search から開く HEAD ↔ worktree の合算 diff。変更がある時だけ
-  // base を解決し、ただのファイル閲覧に review 用の Git 処理を増やさない。
-  const snapshotBase = changed
-    ? scope === undefined
-      ? await resolveGitReviewBase(cwd)
-      : reviewBase
-    : null;
-  const reviewSnapshot = snapshotBase
-    ? await createReviewSnapshot(cwd, filePath, scope, snapshotBase, originalBuffer, currentBuffer)
-    : undefined;
 
   return {
     path: filePath,
@@ -380,7 +327,6 @@ export async function getGitDiffDocument(
     currentContent: bufferToContent(currentBuffer, isBinary),
     isBinary,
     size,
-    reviewSnapshot,
   };
 }
 

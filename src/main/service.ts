@@ -74,7 +74,6 @@ import {
   type AppErrorNotice,
   type CreatedTaskWorktree,
   type GitDiffScope,
-  type GitReviewSnapshot,
   type Result,
   type SessionUpdate,
   type WorktreeProcessRef,
@@ -718,8 +717,8 @@ export class YuruService {
   async setFileReviewed(
     worktreeId: string,
     filePath: string,
+    scope: GitDiffScope | undefined,
     reviewed: boolean,
-    snapshot: GitReviewSnapshot,
   ) {
     const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
     if (!workingRoot) {
@@ -729,9 +728,9 @@ export class YuruService {
       });
     }
     try {
-      return ok(saveFileReviewed(workingRoot, filePath, reviewed, snapshot));
+      return ok(await saveFileReviewed(workingRoot, filePath, scope, reviewed));
     } catch (error) {
-      return this.failAndReport<void>(toAppError(error));
+      return this.failAndReport<void>(toAppError(error, { command: "git" }));
     }
   }
 

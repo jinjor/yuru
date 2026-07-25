@@ -71,14 +71,6 @@ export type GitReviewState =
       workingChecks: GitWorkingReviewCheck[];
     };
 
-export type GitReviewLayer = "worktree" | "index" | "head";
-
-export interface GitReviewSnapshot {
-  path: string;
-  baseOid: string;
-  approvedOid: string;
-}
-
 export interface GitPathState {
   path: string;
   indexStatus: string;
@@ -109,7 +101,6 @@ export interface GitDiffDocument {
   currentContent: string | null;
   isBinary: boolean;
   size: number;
-  reviewSnapshot?: GitReviewSnapshot;
 }
 
 export interface HtmlPreviewGrant {
@@ -224,8 +215,8 @@ export interface ElectronAPI {
   setFileReviewed: (
     worktreeId: string,
     path: string,
+    scope: GitDiffScope | undefined,
     reviewed: boolean,
-    snapshot: GitReviewSnapshot,
   ) => Promise<Result<void>>;
   getGitDiffDocument: (
     worktreeId: string,

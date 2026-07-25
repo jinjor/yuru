@@ -1,7 +1,9 @@
 import { createHash } from "crypto";
-import type { GitReviewLayer } from "../shared/ipc.js";
 import { exec } from "./exec.js";
 import { parseRawDiffZ, type RawDiffEntry } from "./git-status.js";
+
+// レビュー済み宣言が指す内容がどの層にあるか。renderer には出さない。
+export type GitReviewLayer = "worktree" | "index" | "head";
 
 export const MISSING_BLOB_OID = "-";
 

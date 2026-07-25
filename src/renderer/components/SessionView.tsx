@@ -3,7 +3,6 @@ import { type CSSProperties, useCallback, useEffect, useRef, useState } from "re
 import type { AgentDefinition } from "../../shared/agent";
 import type {
   GitPathState,
-  GitReviewSnapshot,
   GitReviewState,
   Result,
   WorktreeSessionSelection,
@@ -250,7 +249,7 @@ export function SessionView({
   }, [worktreeId]);
 
   const handleReviewedChange = useCallback(
-    async (reviewed: boolean, snapshot: GitReviewSnapshot): Promise<void> => {
+    async (reviewed: boolean): Promise<void> => {
       if (!previewSelection) {
         return;
       }
@@ -261,8 +260,8 @@ export function SessionView({
       const result = await window.electronAPI.setFileReviewed(
         worktreeId,
         previewSelection.path,
+        previewSelection.scope,
         reviewed,
-        snapshot,
       );
       if (!result.ok) {
         return;

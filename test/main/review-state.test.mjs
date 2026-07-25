@@ -9,7 +9,6 @@ const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-review-state-"));
 process.env.YURU_HOME = path.join(testRoot, "yuru-home");
 
 const { removeFileReviews } = await import("../../src/main/file-reviews.ts");
-const { getGitDiffDocument } = await import("../../src/main/git.ts");
 const { getReviewState, setFileReviewed } = await import("../../src/main/review-state.ts");
 
 function cleanGitEnv() {
@@ -53,9 +52,7 @@ function scopeForLayer(layer) {
 }
 
 async function setCurrentFileReviewed(dir, filePath, layer, reviewed = true) {
-  const document = await getGitDiffDocument(dir, filePath, scopeForLayer(layer));
-  assert.ok(document.reviewSnapshot);
-  setFileReviewed(dir, filePath, reviewed, document.reviewSnapshot);
+  await setFileReviewed(dir, filePath, scopeForLayer(layer), reviewed);
 }
 
 test.after(() => {
@@ -129,24 +126,50 @@ test("index でレビューした内容は commit 後の Committed 行へ引き�
   assert.equal(state.committedFiles[0].reviewed, true);
 });
 
-test("scope なしの合算 diff は index 境界に依存せず worktree 内容をレビューする", async () => {
+test("scope なしの合算 diff は worktree の内容を承認する", async () => {
   const dir = makeRepo("combined-worktree-review");
   fs.writeFileSync(path.join(dir, "app.txt"), "staged\n");
   git(["add", "app.txt"], dir);
   fs.writeFileSync(path.join(dir, "app.txt"), "worktree\n");
 
-  const displayed = await getGitDiffDocument(dir, "app.txt");
-  assert.ok(displayed.reviewSnapshot);
-
-  // 合算表示の左右 (HEAD ↔ worktree) は変えず、stage 境界だけを移動する。
-  // 再検証も scope なしで行えば、表示していた内容をそのまま承認できる。
-  git(["add", "app.txt"], dir);
-  setFileReviewed(dir, "app.txt", true, displayed.reviewSnapshot);
+  await setFileReviewed(dir, "app.txt", undefined, true);
 
   const state = await getReviewState(dir);
   assert.equal(state.kind, "ready");
+  // 承認したのは worktree の内容なので、index にある別の内容は未レビューのまま。
   assert.deepEqual(state.workingChecks, [
-    { path: "app.txt", stagedReviewed: true, unstagedReviewed: true },
+    { path: "app.txt", stagedReviewed: false, unstagedReviewed: true },
+  ]);
+});
+
+test("scope ごとに、その層にある内容が承認される", async () => {
+  const dir = makeRepo("layer-fingerprint");
+  git(["switch", "-c", "feature"], dir);
+  fs.writeFileSync(path.join(dir, "app.txt"), "head\n");
+  commitAll(dir, "head");
+  fs.writeFileSync(path.join(dir, "app.txt"), "index\n");
+  git(["add", "app.txt"], dir);
+  fs.writeFileSync(path.join(dir, "app.txt"), "worktree\n");
+
+  await setFileReviewed(dir, "app.txt", "base", true);
+  let state = await getReviewState(dir);
+  assert.equal(state.committedFiles[0].reviewed, true);
+  assert.deepEqual(state.workingChecks, [
+    { path: "app.txt", stagedReviewed: false, unstagedReviewed: false },
+  ]);
+
+  await setFileReviewed(dir, "app.txt", "staged", true);
+  state = await getReviewState(dir);
+  assert.equal(state.committedFiles[0].reviewed, false);
+  assert.deepEqual(state.workingChecks, [
+    { path: "app.txt", stagedReviewed: true, unstagedReviewed: false },
+  ]);
+
+  await setFileReviewed(dir, "app.txt", "unstaged", true);
+  state = await getReviewState(dir);
+  assert.equal(state.committedFiles[0].reviewed, false);
+  assert.deepEqual(state.workingChecks, [
+    { path: "app.txt", stagedReviewed: false, unstagedReviewed: true },
   ]);
 });
 
@@ -200,9 +223,7 @@ test("staged rename のレビューは commit 後の destination path へ引き�
   git(["switch", "-c", "feature"], dir);
   git(["mv", "app.txt", "renamed.txt"], dir);
 
-  const displayed = await getGitDiffDocument(dir, "renamed.txt", "staged");
-  assert.ok(displayed.reviewSnapshot);
-  setFileReviewed(dir, "renamed.txt", true, displayed.reviewSnapshot);
+  await setFileReviewed(dir, "renamed.txt", "staged", true);
   commitAll(dir, "rename");
 
   const state = await getReviewState(dir);
