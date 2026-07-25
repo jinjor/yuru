@@ -178,6 +178,28 @@ test("searchCode は結果数の上限で打ち切る", async () => {
   assert.equal(result.truncated, true);
 });
 
+// rg の出力が複数の chunk に分かれると、打ち切って kill したあとにも chunk が届く。
+// そこで match を積み足すと、上限ちょうどのはずの結果が 1 件ずつ増えてしまう。
+test("searchCode は多数のファイルにまたがる結果でも上限ちょうどで打ち切る", async () => {
+  const manyFilesDir = path.join(tempDir, "many-files");
+  fs.mkdirSync(manyFilesDir, { recursive: true });
+  for (let index = 0; index < 500; index++) {
+    fs.writeFileSync(path.join(manyFilesDir, `file-${index}.txt`), "spread\n");
+  }
+
+  for (const limit of [1, 10, 100]) {
+    const result = await searchCode(manyFilesDir, "spread", {
+      signal: new AbortController().signal,
+      limit,
+    });
+    const rows = result.files.reduce((count, file) => count + file.matches.length, 0);
+
+    assert.equal(result.matchCount, limit);
+    assert.equal(rows, limit);
+    assert.equal(result.truncated, true);
+  }
+});
+
 test("searchCode は打ち切り時に未完の JSON 末尾を parse しない", async () => {
   const longLine = `${"worktree ".repeat(2000)}\n`;
   fs.writeFileSync(path.join(tempDir, "large.txt"), longLine.repeat(200));

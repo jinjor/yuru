@@ -92,6 +92,12 @@ export async function searchCode(
     }
 
     child.stdout?.on("data", (chunk: Buffer) => {
+      // kill() は非同期なので、打ち切りや parse 失敗で rg を止めたあとも、
+      // すでにパイプに溜まっていた出力が data として届く。上限を超えて match を
+      // 積んだり、後続の chunk で parse エラーを上書きしたりしないよう捨てる。
+      if (truncated || parseError) {
+        return;
+      }
       stdoutBuffer += chunk.toString("utf-8");
       const lines = stdoutBuffer.split("\n");
       stdoutBuffer = lines.pop() ?? "";
