@@ -2,7 +2,6 @@ import type { RefObject } from "react";
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
 import type { AgentDefinition } from "../../shared/agent";
 import type {
-  GitFileReviewUpdate,
   GitPathState,
   GitReviewSnapshot,
   GitReviewState,
@@ -251,31 +250,28 @@ export function SessionView({
   }, [worktreeId]);
 
   const handleReviewedChange = useCallback(
-    async (
-      reviewed: boolean,
-      expectedSnapshot: GitReviewSnapshot,
-    ): Promise<GitFileReviewUpdate | null> => {
+    async (reviewed: boolean, snapshot: GitReviewSnapshot): Promise<void> => {
       if (!previewSelection) {
-        return null;
+        return;
       }
+      // 記録してから読み直すまでの間に返ってくる polling は、まだ古い状態を持っている。
+      // version を進めておき、その結果で上書きされないようにする。
       const reviewMutationVersion = reviewMutationVersionRef.current + 1;
       reviewMutationVersionRef.current = reviewMutationVersion;
       const result = await window.electronAPI.setFileReviewed(
         worktreeId,
         previewSelection.path,
-        previewSelection.scope,
         reviewed,
-        expectedSnapshot,
+        snapshot,
       );
       if (!result.ok) {
-        return null;
+        return;
       }
       const nextReviewState = await window.electronAPI.getReviewState(worktreeId);
       if (nextReviewState.ok && reviewMutationVersion === reviewMutationVersionRef.current) {
         reviewMutationVersionRef.current += 1;
         setReviewState(nextReviewState.data);
       }
-      return result.data;
     },
     [previewSelection, worktreeId],
   );

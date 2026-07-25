@@ -53,10 +53,9 @@ function scopeForLayer(layer) {
 }
 
 async function setCurrentFileReviewed(dir, filePath, layer, reviewed = true) {
-  const scope = scopeForLayer(layer);
-  const document = await getGitDiffDocument(dir, filePath, scope);
+  const document = await getGitDiffDocument(dir, filePath, scopeForLayer(layer));
   assert.ok(document.reviewSnapshot);
-  return setFileReviewed(dir, filePath, scope, reviewed, document.reviewSnapshot);
+  setFileReviewed(dir, filePath, reviewed, document.reviewSnapshot);
 }
 
 test.after(() => {
@@ -138,15 +137,11 @@ test("scope なしの合算 diff は index 境界に依存せず worktree 内容
 
   const displayed = await getGitDiffDocument(dir, "app.txt");
   assert.ok(displayed.reviewSnapshot);
-  assert.equal(displayed.reviewSnapshot.layer, "worktree");
 
   // 合算表示の左右 (HEAD ↔ worktree) は変えず、stage 境界だけを移動する。
   // 再検証も scope なしで行えば、表示していた内容をそのまま承認できる。
   git(["add", "app.txt"], dir);
-  assert.deepEqual(
-    await setFileReviewed(dir, "app.txt", undefined, true, displayed.reviewSnapshot),
-    { kind: "updated" },
-  );
+  setFileReviewed(dir, "app.txt", true, displayed.reviewSnapshot);
 
   const state = await getReviewState(dir);
   assert.equal(state.kind, "ready");
@@ -200,87 +195,6 @@ test("rename は移動先 path を key にしつつ fork 元 blob を fingerprin
   assert.equal(removedStore.worktrees[path.resolve(dir)], undefined);
 });
 
-test("表示後に HEAD が進んだら古い Committed snapshot ではレビューしない", async () => {
-  const dir = makeRepo("stale-committed");
-  git(["switch", "-c", "feature"], dir);
-  fs.writeFileSync(path.join(dir, "app.txt"), "feature v2\n");
-  commitAll(dir, "v2");
-
-  const displayed = await getGitDiffDocument(dir, "app.txt", "base");
-  assert.ok(displayed.reviewSnapshot);
-  fs.writeFileSync(path.join(dir, "app.txt"), "feature v3\n");
-  commitAll(dir, "v3");
-
-  assert.deepEqual(
-    await setFileReviewed(dir, "app.txt", "base", true, displayed.reviewSnapshot),
-    { kind: "stale" },
-  );
-  const state = await getReviewState(dir);
-  assert.equal(state.kind, "ready");
-  assert.equal(state.committedFiles[0].reviewed, false);
-});
-
-test("表示後に index が変わったら古い Staged snapshot ではレビューしない", async () => {
-  const dir = makeRepo("stale-staged");
-  git(["switch", "-c", "feature"], dir);
-  fs.writeFileSync(path.join(dir, "app.txt"), "staged v2\n");
-  git(["add", "app.txt"], dir);
-
-  const displayed = await getGitDiffDocument(dir, "app.txt", "staged");
-  assert.ok(displayed.reviewSnapshot);
-  fs.writeFileSync(path.join(dir, "app.txt"), "staged v3\n");
-  git(["add", "app.txt"], dir);
-
-  assert.deepEqual(
-    await setFileReviewed(dir, "app.txt", "staged", true, displayed.reviewSnapshot),
-    { kind: "stale" },
-  );
-  const state = await getReviewState(dir);
-  assert.equal(state.kind, "ready");
-  assert.equal(state.workingChecks[0].stagedReviewed, false);
-});
-
-test("表示後に worktree が変わったら古い Unstaged snapshot ではレビューしない", async () => {
-  const dir = makeRepo("stale-unstaged");
-  git(["switch", "-c", "feature"], dir);
-  fs.writeFileSync(path.join(dir, "app.txt"), "worktree v2\n");
-
-  const displayed = await getGitDiffDocument(dir, "app.txt", "unstaged");
-  assert.ok(displayed.reviewSnapshot);
-  fs.writeFileSync(path.join(dir, "app.txt"), "worktree v3\n");
-
-  assert.deepEqual(
-    await setFileReviewed(dir, "app.txt", "unstaged", true, displayed.reviewSnapshot),
-    { kind: "stale" },
-  );
-  const state = await getReviewState(dir);
-  assert.equal(state.kind, "ready");
-  assert.equal(state.workingChecks[0].unstagedReviewed, false);
-});
-
-test("古い snapshot からの解除は新しい状態や既存 record を変更しない", async () => {
-  const dir = makeRepo("stale-unreview");
-  git(["switch", "-c", "feature"], dir);
-  fs.writeFileSync(path.join(dir, "app.txt"), "worktree v2\n");
-
-  const displayed = await getGitDiffDocument(dir, "app.txt", "unstaged");
-  assert.ok(displayed.reviewSnapshot);
-  assert.deepEqual(
-    await setFileReviewed(dir, "app.txt", "unstaged", true, displayed.reviewSnapshot),
-    { kind: "updated" },
-  );
-  fs.writeFileSync(path.join(dir, "app.txt"), "worktree v3\n");
-
-  assert.deepEqual(
-    await setFileReviewed(dir, "app.txt", "unstaged", false, displayed.reviewSnapshot),
-    { kind: "stale" },
-  );
-  fs.writeFileSync(path.join(dir, "app.txt"), "worktree v2\n");
-  const state = await getReviewState(dir);
-  assert.equal(state.kind, "ready");
-  assert.equal(state.workingChecks[0].unstagedReviewed, true);
-});
-
 test("staged rename のレビューは commit 後の destination path へ引き継がれる", async () => {
   const dir = makeRepo("staged-rename-transfer");
   git(["switch", "-c", "feature"], dir);
@@ -288,10 +202,7 @@ test("staged rename のレビューは commit 後の destination path へ引き�
 
   const displayed = await getGitDiffDocument(dir, "renamed.txt", "staged");
   assert.ok(displayed.reviewSnapshot);
-  assert.deepEqual(
-    await setFileReviewed(dir, "renamed.txt", "staged", true, displayed.reviewSnapshot),
-    { kind: "updated" },
-  );
+  setFileReviewed(dir, "renamed.txt", true, displayed.reviewSnapshot);
   commitAll(dir, "rename");
 
   const state = await getReviewState(dir);

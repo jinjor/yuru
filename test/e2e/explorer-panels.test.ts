@@ -511,67 +511,6 @@ test("default branch が master でも Committed の Reviewed は commit 後と�
   }
 });
 
-test("表示中の Committed diff より HEAD が進んだら未表示内容を Reviewed にしない", async () => {
-  const context = await createE2eContext();
-  let app: ElectronApplication | null = null;
-  try {
-    const repoDir = await createCommittedRepo(context, {
-      "src/app.ts": "export const value = 1;\n",
-    });
-    git(["update-ref", "refs/remotes/origin/main", "HEAD"], repoDir);
-    git(["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"], repoDir);
-    const taskWorktreePath = await createGitWorktree(context, repoDir, "feature-stale-review");
-    await writeFiles(taskWorktreePath, {
-      "src/app.ts": "export const value = 2;\n",
-    });
-    git(["add", "src/app.ts"], taskWorktreePath);
-    git(["commit", "-m", "feature v2"], taskWorktreePath);
-    await registerRepo(context, repoDir, [{ worktreePath: taskWorktreePath }]);
-
-    const launched = await launchWindow(context);
-    app = launched.app;
-    const window = launched.window;
-    await window.locator(".task-worktree-card", { hasText: "feature-stale-review" }).click();
-
-    const committedSection = window
-      .locator(".change-section")
-      .filter({ has: window.locator(".change-section-header", { hasText: /^Committedmain/ }) });
-    await committedSection.locator(".change-section-header").click();
-    const committedRow = committedSection.locator(".change-item", { hasText: "app.ts" });
-    await committedRow.click();
-    const addedLine = window.locator(".source-line.diff-added");
-    await expect(addedLine).toContainText("value = 2");
-
-    await writeFiles(taskWorktreePath, {
-      "src/app.ts": "export const value = 3;\n",
-    });
-    git(["add", "src/app.ts"], taskWorktreePath);
-    git(["commit", "-m", "feature v3"], taskWorktreePath);
-
-    // polling が新しい diff を描画する前の v2 を見ている状態でクリックする。
-    expect(await addedLine.textContent()).toContain("value = 2");
-    await window.locator(".reviewed-toggle").click();
-
-    // stale 応答を受けたら 3 秒 polling を待たず、現在の v3 と unchecked 状態へ更新する。
-    await expect(addedLine).toContainText("value = 3", { timeout: 2_500 });
-    await expect(window.locator(".reviewed-toggle")).toHaveAttribute("aria-pressed", "false");
-    await expect(committedRow).not.toHaveClass(/reviewed/);
-
-    let stored: unknown = null;
-    try {
-      stored = JSON.parse(await readFile(`${context.yuruHome}/file-reviews.json`, "utf8"));
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-        throw error;
-      }
-    }
-    expect(stored).toBeNull();
-  } finally {
-    await closeYuru(app);
-    await context.cleanup();
-  }
-});
-
 test("Changes タブは削除ファイルを D として表示し diff を開く", async () => {
   const context = await createE2eContext();
   let app: ElectronApplication | null = null;

@@ -74,7 +74,6 @@ import {
   type AppErrorNotice,
   type CreatedTaskWorktree,
   type GitDiffScope,
-  type GitFileReviewUpdate,
   type GitReviewSnapshot,
   type Result,
   type SessionUpdate,
@@ -719,21 +718,20 @@ export class YuruService {
   async setFileReviewed(
     worktreeId: string,
     filePath: string,
-    scope: GitDiffScope | undefined,
     reviewed: boolean,
-    expectedSnapshot: GitReviewSnapshot,
+    snapshot: GitReviewSnapshot,
   ) {
     const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
     if (!workingRoot) {
-      return this.failAndReport<GitFileReviewUpdate>({
+      return this.failAndReport<void>({
         code: "invalid_path",
         message: "Selected worktree is no longer available.",
       });
     }
     try {
-      return ok(await saveFileReviewed(workingRoot, filePath, scope, reviewed, expectedSnapshot));
+      return ok(saveFileReviewed(workingRoot, filePath, reviewed, snapshot));
     } catch (error) {
-      return this.failAndReport<GitFileReviewUpdate>(toAppError(error, { command: "git" }));
+      return this.failAndReport<void>(toAppError(error));
     }
   }
 

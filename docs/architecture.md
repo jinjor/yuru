@@ -227,10 +227,9 @@ branch を最新にしておく。
 blob OID が同じならレビュー済み表示もその内容について移動する。
 `Changes` の各 scope だけでなく、`Files` / `Search` から開く scope なしの
 `HEAD ↔ worktree` 合算 diff でも、変更があれば worktree 内容をレビューできる。
-diff document は表示した左右と保存対象の blob OID を review snapshot として持つ。
-`Reviewed` の更新時は main process が表示時と同じ scope の現在の snapshot と照合し、
-一致した場合だけ表示済み snapshot の OID を保存する。
-一致しなければ記録を変更せず、renderer は polling を待たずに diff とレビュー状態を再取得する。
+diff document は保存対象の blob OID を review snapshot として持ち、`Reviewed` はそれを
+そのまま記録する。表示が古くなっていた場合は、記録した内容がもうその層に無いため
+導出で checked にならず、次の polling で最新の diff に切り替わる。
 
 Terminal の描画には xterm.js を使う。
 stable 6.0.0 には IME の変換位置がずれて過去に入力したテキストの断片が再送されるバグがあるため、修正済みの 6.1.0-beta 系(VS Code が本番で使っているのと同じ系列)を使っている。stable 6.0.0 系に戻すと再発する。6.1.0 stable が出たらそちらに移行する。

@@ -394,11 +394,10 @@ function registerIpcHandlers(): void {
       _event,
       worktreeId: string,
       filePath: string,
-      scope: GitDiffScope | undefined,
       reviewed: boolean,
-      expectedSnapshot: GitReviewSnapshot,
+      snapshot: GitReviewSnapshot,
     ) => {
-      return service.setFileReviewed(worktreeId, filePath, scope, reviewed, expectedSnapshot);
+      return service.setFileReviewed(worktreeId, filePath, reviewed, snapshot);
     },
   );
 

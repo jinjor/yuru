@@ -1,8 +1,6 @@
 import fs from "fs";
 import path from "path";
 import type {
-  GitDiffScope,
-  GitFileReviewUpdate,
   GitFileStatus,
   GitReviewSnapshot,
   GitReviewState,
@@ -10,7 +8,7 @@ import type {
 } from "../shared/ipc.js";
 import { exec } from "./exec.js";
 import { loadFileReviews, setFileReview, type FileReviewRecord } from "./file-reviews.js";
-import { getCurrentGitReviewSnapshot, resolveGitReviewBase } from "./git.js";
+import { resolveGitReviewBase } from "./git.js";
 import { parseNumstatZ, parsePorcelainLine } from "./git-status.js";
 import {
   baseOidForLayer,
@@ -145,44 +143,17 @@ export async function getReviewState(cwd: string): Promise<GitReviewState> {
   };
 }
 
-function sameSnapshot(current: GitReviewSnapshot, expected: GitReviewSnapshot): boolean {
-  return (
-    current.path === expected.path &&
-    current.layer === expected.layer &&
-    current.originalOid === expected.originalOid &&
-    current.baseOid === expected.baseOid &&
-    current.approvedOid === expected.approvedOid
-  );
-}
-
-export async function setFileReviewed(
+// 表示していた diff の snapshot をそのまま記録する。表示が古くなっていた場合は、
+// 記録した内容がもうその層に無いため導出で checked にならない。
+export function setFileReviewed(
   cwd: string,
   filePath: string,
-  scope: GitDiffScope | undefined,
   reviewed: boolean,
-  expectedSnapshot: GitReviewSnapshot,
-): Promise<GitFileReviewUpdate> {
-  if (expectedSnapshot.path !== filePath) {
-    return { kind: "stale" };
-  }
-
-  const currentSnapshot = await getCurrentGitReviewSnapshot(cwd, filePath, scope);
-  if (!currentSnapshot || !sameSnapshot(currentSnapshot, expectedSnapshot)) {
-    return { kind: "stale" };
-  }
-
-  if (!reviewed) {
-    const record = loadFileReviews(cwd).get(filePath);
-    if (!isReviewed(record, expectedSnapshot.baseOid, expectedSnapshot.approvedOid)) {
-      return { kind: "stale" };
-    }
-    setFileReview(cwd, filePath, null);
-    return { kind: "updated" };
-  }
-
-  setFileReview(cwd, filePath, {
-    baseOid: expectedSnapshot.baseOid,
-    approvedOid: expectedSnapshot.approvedOid,
-  });
-  return { kind: "updated" };
+  snapshot: GitReviewSnapshot,
+): void {
+  setFileReview(
+    cwd,
+    filePath,
+    reviewed ? { baseOid: snapshot.baseOid, approvedOid: snapshot.approvedOid } : null,
+  );
 }

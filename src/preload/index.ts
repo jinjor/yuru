@@ -45,11 +45,9 @@ const electronAPI: ElectronAPI = {
   setFileReviewed: (
     worktreeId: string,
     path: string,
-    scope: GitDiffScope | undefined,
     reviewed: boolean,
-    expectedSnapshot: GitReviewSnapshot,
-  ) =>
-    ipcRenderer.invoke("git:setFileReviewed", worktreeId, path, scope, reviewed, expectedSnapshot),
+    snapshot: GitReviewSnapshot,
+  ) => ipcRenderer.invoke("git:setFileReviewed", worktreeId, path, reviewed, snapshot),
   getGitDiffDocument: (worktreeId: string, filePath: string, scope?: GitDiffScope) =>
     ipcRenderer.invoke("git:diffDocument", worktreeId, filePath, scope),
   createHtmlPreview: (worktreeId: string, filePath: string, content: string) =>

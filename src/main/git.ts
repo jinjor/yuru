@@ -339,8 +339,6 @@ async function createReviewSnapshot(
   const diffByPath = rawEntryMap(await loadRawDiff(cwd, reviewBase.mergeBase, layer));
   return {
     path: filePath,
-    layer,
-    originalOid: blobOid(originalBuffer),
     baseOid: baseOidForLayer(
       filePath,
       approvedOid,
@@ -384,15 +382,6 @@ export async function getGitDiffDocument(
     size,
     reviewSnapshot,
   };
-}
-
-export async function getCurrentGitReviewSnapshot(
-  cwd: string,
-  filePath: string,
-  scope: GitDiffScope | undefined,
-): Promise<GitReviewSnapshot | null> {
-  const { reviewSnapshot } = await getGitDiffDocument(cwd, filePath, scope);
-  return reviewSnapshot ?? null;
 }
 
 export async function listWorktrees(cwd: string): Promise<WorktreeInfo[]> {

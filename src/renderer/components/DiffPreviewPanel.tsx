@@ -1,11 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { diffArrays } from "diff";
-import type {
-  GitDiffDocument,
-  GitDiffScope,
-  GitFileReviewUpdate,
-  GitReviewSnapshot,
-} from "../../shared/ipc";
+import type { GitDiffDocument, GitDiffScope, GitReviewSnapshot } from "../../shared/ipc";
 import type { FileViewMode } from "../types";
 import { computeLineChanges } from "./CodeEditor/lineChanges";
 import { SourceViewer, type SourceLine } from "./SourceViewer";
@@ -41,10 +36,7 @@ interface DiffPreviewPanelProps {
   baseBranch?: string;
   line?: number;
   onClose: () => void;
-  onReviewedChange: (
-    reviewed: boolean,
-    expectedSnapshot: GitReviewSnapshot,
-  ) => Promise<GitFileReviewUpdate | null>;
+  onReviewedChange: (reviewed: boolean, snapshot: GitReviewSnapshot) => Promise<void>;
   path: string;
   // Changes pane から選んだ時だけ入る scope。なしは HEAD ↔ 作業ツリーの合算 diff。
   scope?: GitDiffScope;
@@ -75,9 +67,6 @@ export function DiffPreviewPanel({
   } | null>(null);
   const [isLoadingDiff, setIsLoadingDiff] = useState(false);
   const [isSettingReviewed, setIsSettingReviewed] = useState(false);
-  // Reviewed を弾かれた snapshot。再取得が終わるまでもう一度送らない。
-  const [isStaleSnapshot, setIsStaleSnapshot] = useState(false);
-  const [diffRefreshVersion, setDiffRefreshVersion] = useState(0);
   const [lines, setLines] = useState<SourceLine[]>([]);
   // 描画できるファイルはプレビューを既定にし、それ以外は閲覧を既定にする。
   const hasRenderedPreview = renderedPreviewKind(path) !== null;
@@ -103,8 +92,7 @@ export function DiffPreviewPanel({
   const isBinary = diffDocument?.isBinary ?? false;
   const hasChanges = originalContent !== currentContent;
   const isCurrentDocument = loadedDiff?.document.path === path && loadedDiff.scope === scope;
-  const activeReviewSnapshot =
-    isCurrentDocument && !isStaleSnapshot ? loadedDiff.document.reviewSnapshot : undefined;
+  const activeReviewSnapshot = isCurrentDocument ? loadedDiff.document.reviewSnapshot : undefined;
 
   // staged 差分は index を見ているので、作業ツリーを編集する編集モードには入れない。
   // (unstaged / Files から開いた時は current 側が作業ツリーなので編集に入れる)。実在チェックは
@@ -161,7 +149,6 @@ export function DiffPreviewPanel({
 
       const document = resultDataOrNull(result);
       setLoadedDiff(document ? { document, scope } : null);
-      setIsStaleSnapshot(false);
       if (showLoader) {
         showLoader = false;
         setIsLoadingDiff(false);
@@ -181,7 +168,7 @@ export function DiffPreviewPanel({
       cancelled = true;
       stopPolling();
     };
-  }, [diffRefreshVersion, path, scope, pathChanged, worktreeId]);
+  }, [path, scope, pathChanged, worktreeId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -229,16 +216,10 @@ export function DiffPreviewPanel({
           if (!activeReviewSnapshot) {
             return;
           }
-          const expectedSnapshot = activeReviewSnapshot;
           setIsSettingReviewed(true);
-          void onReviewedChange(nextReviewed, expectedSnapshot)
-            .then((update) => {
-              if (update?.kind === "stale") {
-                setIsStaleSnapshot(true);
-                setDiffRefreshVersion((version) => version + 1);
-              }
-            })
-            .finally(() => setIsSettingReviewed(false));
+          void onReviewedChange(nextReviewed, activeReviewSnapshot).finally(() =>
+            setIsSettingReviewed(false),
+          );
         }}
         onClose={onClose}
       />

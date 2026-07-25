@@ -94,8 +94,6 @@ test("review snapshot は表示した左右と merge-base 基準の OID を scop
   const baseDocument = await getGitDiffDocument(dir, "app.txt", "base");
   assert.deepEqual(baseDocument.reviewSnapshot, {
     path: "app.txt",
-    layer: "head",
-    originalOid: baseOid,
     baseOid,
     approvedOid: headOid,
   });
@@ -103,8 +101,6 @@ test("review snapshot は表示した左右と merge-base 基準の OID を scop
   const stagedDocument = await getGitDiffDocument(dir, "app.txt", "staged");
   assert.deepEqual(stagedDocument.reviewSnapshot, {
     path: "app.txt",
-    layer: "index",
-    originalOid: headOid,
     baseOid,
     approvedOid: indexOid,
   });
@@ -112,8 +108,6 @@ test("review snapshot は表示した左右と merge-base 基準の OID を scop
   const unstagedDocument = await getGitDiffDocument(dir, "app.txt", "unstaged");
   assert.deepEqual(unstagedDocument.reviewSnapshot, {
     path: "app.txt",
-    layer: "worktree",
-    originalOid: indexOid,
     baseOid,
     approvedOid: worktreeOid,
   });
@@ -121,8 +115,6 @@ test("review snapshot は表示した左右と merge-base 基準の OID を scop
   const combinedDocument = await getGitDiffDocument(dir, "app.txt");
   assert.deepEqual(combinedDocument.reviewSnapshot, {
     path: "app.txt",
-    layer: "worktree",
-    originalOid: headOid,
     baseOid,
     approvedOid: worktreeOid,
   });
@@ -140,8 +132,6 @@ test("untracked file の snapshot は不在側を '-' にする", async (t) => {
   const document = await getGitDiffDocument(dir, "new.txt", "unstaged");
   assert.deepEqual(document.reviewSnapshot, {
     path: "new.txt",
-    layer: "worktree",
-    originalOid: "-",
     baseOid: "-",
     approvedOid: blobOid("new\n", dir),
   });
@@ -198,8 +188,6 @@ test("base 表示は fork 元の内容と HEAD の内容を返し rename 元も�
   assert.equal(doc.currentContent, "line 1\nfeature\nline 3\n");
   assert.deepEqual(doc.reviewSnapshot, {
     path: "after.txt",
-    layer: "head",
-    originalOid: baseOid,
     baseOid,
     approvedOid,
   });
