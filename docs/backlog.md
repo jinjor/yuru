@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-07-22
+Last updated: 2026-07-25
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -53,6 +53,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F40 | feature | Files / Editor | ファイルを埋め込みエディタで編集できるようにする (編集モード) | 詳細: docs/backlog-details/F40-edit-mode.md |
 | B7 | bug | Worktrees / Git | repo 内の `/.yuru/` を Git の local exclude に登録する | tracked な `.gitignore` は変更せず、Yuru の worktree が未追跡表示や `git add .` の対象になることを防ぐ |
 | B8 | bug | Sessions | claude で `/clear` するとセッションが迷子になる | 詳細: docs/backlog-details/B8-clear-session-lost.md |
+| B12 | bug | Sessions / Worktree Context | resume したセッションに worktree の作業指示が引き継がれない | 起動時引数で渡した指示は会話履歴に残らないため、resume すると agent が repo root で作業してしまう。詳細: docs/backlog-details/B12-resume-worktree-context.md |
 | I10 | investigate | Files | 自前 tree で大量のファイルを表示した時の重さ対策を考える | 切り替え後に実測して判断したい |
 | I14 | investigate | Persistence | metadata が壊れていた時の救済を考える | 単一ファイルの一部破損で全体が読めなくなるため |
 | I15 | investigate | IPC | `electronAPI` と IPC channel の対応を追いやすくする | renderer / preload / main で名前がズレていて読みにくいため、channel 名を露出するか shared RPC wrapper に寄せるか決めたい |
