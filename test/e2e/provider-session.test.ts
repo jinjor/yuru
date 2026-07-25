@@ -125,9 +125,23 @@ async function createSessionWithTurn(
   // Wait for the turn to actually complete and persist an assistant message. This
   // proves the borrowed credentials authenticate, gives resume a real conversation
   // to restore, and (for codex) outlasts the async primary-session attach.
-  await expect(() => {
-    expect(provider.hasAssistantReply(context.tmpHome, repoDir)).toBe(true);
-  }).toPass({ timeout: 60_000 });
+  try {
+    await expect(() => {
+      expect(provider.hasAssistantReply(context.tmpHome, repoDir)).toBe(true);
+    }).toPass({ timeout: 60_000 });
+  } catch (error) {
+    // A turn that never lands looks identical from the outside whether the CLI
+    // hit a usage limit, never received the prompt, or is still thinking. The
+    // terminal says which, so print it before failing.
+    const rows = await window.evaluate(() => {
+      const rowsEl = document.querySelector(".xterm-rows");
+      return rowsEl ? Array.from(rowsEl.children).map((r) => (r as HTMLElement).innerText) : [];
+    });
+    console.log(`### TERMINAL AT FAILURE (${provider.label} / ${marker}) ###`);
+    console.log(rows.filter((row) => row.trim() !== "").join("\n"));
+    console.log("### END ###");
+    throw error;
+  }
 }
 
 for (const provider of providers) {
