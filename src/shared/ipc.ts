@@ -224,7 +224,7 @@ export interface ElectronAPI {
   executeWorktreeRemoval: (worktreeId: string, force: boolean) => Promise<Result<void>>;
   openExternal: (url: string) => Promise<void>;
   getGitPathStates: (worktreeId: string) => Promise<Result<GitPathState[]>>;
-  getReviewState: (worktreeId: string) => Promise<Result<GitReviewState>>;
+  getReviewState: (worktreeId: string) => Promise<Result<GitReviewState | null>>;
   setFileReviewed: (
     worktreeId: string,
     path: string,

@@ -39,9 +39,12 @@ export async function loadRawDiff(
   return parseRawDiffZ(output);
 }
 
+// fork 元から見たこの file の blob OID。merge-base との diff に出ていれば元側の OID を使い、
+// 出ていなければ fork 元と中身が同じなので、その層にある現在の内容の OID がそのまま元側になる。
+// untracked は merge-base との diff に出ないが fork 元にも存在しないので、不在として扱う。
 export function baseOidForLayer(
   filePath: string,
-  approvedOid: string,
+  currentOid: string,
   diffByPath: ReadonlyMap<string, RawDiffEntry>,
   untracked: boolean,
 ): string {
@@ -49,5 +52,5 @@ export function baseOidForLayer(
   if (entry) {
     return normalizeOid(entry.srcOid);
   }
-  return untracked ? MISSING_BLOB_OID : approvedOid;
+  return untracked ? MISSING_BLOB_OID : currentOid;
 }

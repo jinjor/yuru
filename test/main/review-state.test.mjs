@@ -328,11 +328,17 @@ test("default branch が master の repository は from master にする", async
   assert.deepEqual(state.committedFiles.map((file) => file.path), ["feature.txt"]);
 });
 
-test("default branch を特定できなければ local main があっても no-base を返す", async () => {
-  const dir = makeRepo("unknown-default");
+test("origin/HEAD が無くても local main を基準にする", async () => {
+  const dir = makeRepo("no-origin-head");
   git(["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"], dir);
+  git(["switch", "-c", "feature"], dir);
+  fs.writeFileSync(path.join(dir, "feature.txt"), "feature\n");
+  commitAll(dir, "feature");
 
-  assert.deepEqual(await getReviewState(dir), { kind: "no-base" });
+  const state = await getReviewState(dir);
+  assert.equal(state.kind, "ready");
+  assert.equal(state.baseBranch, "main");
+  assert.deepEqual(state.committedFiles.map((file) => file.path), ["feature.txt"]);
 });
 
 test("他の local branch が同じ commit を指していても main を表示する", async () => {

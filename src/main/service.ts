@@ -707,7 +707,7 @@ export class YuruService {
   async getReviewState(worktreeId: string) {
     const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
     if (!workingRoot) {
-      return ok({ kind: "no-base" } as const);
+      return ok(null);
     }
     try {
       return ok(await loadReviewState(workingRoot));

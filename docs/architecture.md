@@ -217,12 +217,12 @@ session start surface に戻す。main worktree でも自動では開き直さ�
 `Changes` は Git の層を `merge-base → HEAD → index → worktree` の重複しない区間に分け、
 `Committed → Staged → Unstaged` の順で表示する。merge conflict は例外として `Conflicted` を先頭に置く。
 `Committed` の基準は local default branch と HEAD の merge-base に固定し、ヘッダには実際の
-branch 名 (`main`、`master` など) を表示する。default branch の名前は `origin/HEAD` から特定するが、
-base に使うのは同名の local branch だけである。stacked branch の parent は推測せず、常に default
-branch からの全差分として見せる。default branch を特定できない、対応する local branch がない、
-または HEAD と履歴が繋がっていない場合は推測不能であることを画面に出す。remote-tracking ref や
-PR の base へ暗黙に切り替えない。PR のレビューに使う場合は、利用者が local default branch を
-最新にしておく。
+branch 名を表示する。default branch は local の `main`、次に `master` を探して最初に見つかった
+ものを使う。remote-tracking ref は一切見ないので、clone の仕方や fetch の状況に左右されない。
+stacked branch の parent は推測せず、常に default branch からの全差分として見せる。
+どちらの branch も無い、または HEAD と履歴が繋がっていない場合は推測不能であることを画面に出す。
+PR の base へ暗黙に切り替えることもしない。PR のレビューに使う場合は、利用者が local default
+branch を最新にしておく。
 レビュー操作は diff ヘッダの `Reviewed` で行い、承認した内容が stage や commit で層を移動しても、
 blob OID が同じならレビュー済み表示もその内容について移動する。
 `Changes` の各 scope だけでなく、`Files` / `Search` から開く scope なしの

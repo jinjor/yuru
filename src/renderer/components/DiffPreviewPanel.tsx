@@ -4,7 +4,6 @@ import type {
   GitDiffDocument,
   GitDiffScope,
   GitFileReviewUpdate,
-  GitReviewLayer,
   GitReviewSnapshot,
 } from "../../shared/ipc";
 import type { FileViewMode } from "../types";
@@ -38,10 +37,6 @@ function renderedPreviewKind(path: string): RenderedPreviewKind | null {
   return null;
 }
 
-function reviewLayerForScope(scope: GitDiffScope | undefined): GitReviewLayer {
-  return scope === "base" ? "head" : scope === "staged" ? "index" : "worktree";
-}
-
 interface DiffPreviewPanelProps {
   baseBranch?: string;
   line?: number;
@@ -72,13 +67,16 @@ export function DiffPreviewPanel({
   reviewed,
   reviewable,
 }: DiffPreviewPanelProps) {
-  const [diffDocument, setDiffDocument] = useState<GitDiffDocument | null>(null);
-  const [diffDocumentRequest, setDiffDocumentRequest] = useState<{
-    path: string;
+  // 取得した diff は「どの scope を要求した結果か」と対で持つ。document 自身は path しか
+  // 持たないので、scope を別 state にすると表示中の中身と要求がズレうる。
+  const [loadedDiff, setLoadedDiff] = useState<{
+    document: GitDiffDocument;
     scope?: GitDiffScope;
   } | null>(null);
   const [isLoadingDiff, setIsLoadingDiff] = useState(false);
   const [isSettingReviewed, setIsSettingReviewed] = useState(false);
+  // Reviewed を弾かれた snapshot。再取得が終わるまでもう一度送らない。
+  const [isStaleSnapshot, setIsStaleSnapshot] = useState(false);
   const [diffRefreshVersion, setDiffRefreshVersion] = useState(0);
   const [lines, setLines] = useState<SourceLine[]>([]);
   // 描画できるファイルはプレビューを既定にし、それ以外は閲覧を既定にする。
@@ -96,6 +94,7 @@ export function DiffPreviewPanel({
   // While a new file's diff is being fetched, `diffDocument` still holds the
   // previously shown file. Render it (with its own path) until the new diff
   // arrives so switching files does not flash a "Loading..." screen.
+  const diffDocument = loadedDiff?.document ?? null;
   const displayPath = diffDocument?.path ?? path;
   const displayPreviewKind = renderedPreviewKind(displayPath);
   const originalContent = diffDocument?.originalContent ?? null;
@@ -103,16 +102,9 @@ export function DiffPreviewPanel({
   const fileSize = diffDocument?.size ?? null;
   const isBinary = diffDocument?.isBinary ?? false;
   const hasChanges = originalContent !== currentContent;
-  const isCurrentDocument =
-    diffDocument?.path === path &&
-    diffDocumentRequest?.path === path &&
-    diffDocumentRequest.scope === scope;
+  const isCurrentDocument = loadedDiff?.document.path === path && loadedDiff.scope === scope;
   const activeReviewSnapshot =
-    isCurrentDocument &&
-    diffDocument?.reviewSnapshot?.path === path &&
-    diffDocument.reviewSnapshot.layer === reviewLayerForScope(scope)
-      ? diffDocument.reviewSnapshot
-      : undefined;
+    isCurrentDocument && !isStaleSnapshot ? loadedDiff.document.reviewSnapshot : undefined;
 
   // staged 差分は index を見ているので、作業ツリーを編集する編集モードには入れない。
   // (unstaged / Files から開いた時は current 側が作業ツリーなので編集に入れる)。実在チェックは
@@ -167,8 +159,9 @@ export function DiffPreviewPanel({
         return;
       }
 
-      setDiffDocument(resultDataOrNull(result));
-      setDiffDocumentRequest({ path, scope });
+      const document = resultDataOrNull(result);
+      setLoadedDiff(document ? { document, scope } : null);
+      setIsStaleSnapshot(false);
       if (showLoader) {
         showLoader = false;
         setIsLoadingDiff(false);
@@ -241,7 +234,7 @@ export function DiffPreviewPanel({
           void onReviewedChange(nextReviewed, expectedSnapshot)
             .then((update) => {
               if (update?.kind === "stale") {
-                setDiffDocumentRequest(null);
+                setIsStaleSnapshot(true);
                 setDiffRefreshVersion((version) => version + 1);
               }
             })
