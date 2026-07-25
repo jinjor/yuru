@@ -6,6 +6,7 @@ import {
   createCommittedRepo,
   createE2eContext,
   launchWindow,
+  PROMPT_TYPE_DELAY_MS,
   registerRepo,
   seedClaudeHome,
   seedCodexHome,
@@ -146,7 +147,7 @@ async function runInterrupt(
 
 async function submitPrompt(window: Page, prompt: string): Promise<void> {
   await window.locator(".xterm").click();
-  await window.keyboard.type(prompt);
+  await window.keyboard.type(prompt, { delay: PROMPT_TYPE_DELAY_MS });
   await window.waitForTimeout(300);
   await window.keyboard.press("Enter");
 }

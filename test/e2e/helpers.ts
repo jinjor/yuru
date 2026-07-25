@@ -51,6 +51,11 @@ interface LaunchYuruOptions {
   env?: NodeJS.ProcessEnv;
 }
 
+// Provider TUIs treat a burst of characters as a paste and swallow the Enter
+// that follows it, leaving the prompt sitting unsent in the input box. Typing at
+// a human-ish pace keeps it a real keystroke sequence.
+export const PROMPT_TYPE_DELAY_MS = 30;
+
 export async function createE2eContext(): Promise<E2eContext> {
   const cleanupDirs: string[] = [];
   const tmpHome = await mkdtemp(path.join(tmpdir(), "yuru-e2e-home-"));

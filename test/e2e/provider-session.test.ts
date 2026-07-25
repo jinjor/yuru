@@ -14,6 +14,7 @@ import {
   createGitWorktree,
   launchWindow,
   openMainTerminal,
+  PROMPT_TYPE_DELAY_MS,
   registerRepo,
   seedClaudeHome,
   seedCodexHome,
@@ -116,7 +117,7 @@ async function createSessionWithTurn(
 
   await provider.waitForReady(window);
   await window.locator(".xterm").click();
-  await window.keyboard.type(`Reply with exactly: ${marker}`);
+  await window.keyboard.type(`Reply with exactly: ${marker}`, { delay: PROMPT_TYPE_DELAY_MS });
   // Give the TUI a moment to ingest the line before submitting, otherwise Enter
   // races the input and the turn is never sent.
   await window.waitForTimeout(1500);
