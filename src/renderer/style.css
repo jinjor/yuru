@@ -1685,6 +1685,64 @@ button.github-badge {
   background: var(--viewer-gutter);
 }
 
+.markdown-preview-body .md-frontmatter {
+  margin: 0 0 1.5em;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--viewer-gutter) 45%, transparent);
+}
+
+.markdown-preview-body .md-frontmatter table {
+  width: 100%;
+  margin: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.markdown-preview-body .md-frontmatter th,
+.markdown-preview-body .md-frontmatter td {
+  padding: 5px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.markdown-preview-body .md-frontmatter tr:last-child > * {
+  border-bottom: 0;
+}
+
+.markdown-preview-body .md-frontmatter th {
+  width: 1%;
+  min-width: 90px;
+  color: var(--text-muted);
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.markdown-preview-body .md-frontmatter ul {
+  margin: 0;
+  padding-left: 1.4em;
+}
+
+.markdown-preview-body .md-frontmatter code {
+  display: block;
+  padding: 0;
+  white-space: pre-wrap;
+  background: transparent;
+}
+
+.markdown-preview-body .md-frontmatter-error {
+  padding: 8px 10px 10px;
+  color: var(--danger);
+}
+
+.markdown-preview-body .md-frontmatter-error pre {
+  margin: 6px 0 0;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
 /* 追加・変更されたブロックは、左の余白に縦バーだけを出す (本文レイアウトはずらさない)。 */
 .markdown-preview-body .md-changed {
   position: relative;

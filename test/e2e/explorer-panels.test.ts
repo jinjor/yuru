@@ -181,6 +181,54 @@ test("Markdown プレビューの内容が変わらない定期更新では選�
   }
 });
 
+test("Markdown プレビューは frontmatter を変更表示付きのメタ情報として表示する", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context, {
+      "README.md": `---
+title: Before
+tags:
+  - docs
+---
+
+# Heading
+`,
+    });
+    await writeFiles(repoDir, {
+      "README.md": `---
+title: After
+tags:
+  - docs
+  - preview
+---
+
+# Heading
+`,
+    });
+    await registerRepo(context, repoDir);
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+    await openMainTerminal(window);
+
+    await window.locator(".change-item", { hasText: "README.md" }).click();
+
+    const frontmatter = window.locator(".md-frontmatter");
+    await expect(frontmatter).toBeVisible();
+    await expect(frontmatter.locator(".md-frontmatter-label")).toHaveCount(0);
+    await expect(frontmatter.locator("tr", { hasText: "title" })).toContainText("After");
+    await expect(frontmatter.locator("tr", { hasText: "tags" })).toContainText("docs");
+    await expect(frontmatter.locator("tr", { hasText: "tags" })).toContainText("preview");
+    await expect(frontmatter).toHaveClass(/md-changed/);
+    await expect(window.locator(".markdown-preview-body h1")).toHaveText("Heading");
+    await expect(window.locator(".markdown-preview-body h2")).toHaveCount(0);
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
 test("HTML プレビューは相対 CSS / JavaScript を読み込み Yuru 本体から隔離する", async () => {
   const context = await createE2eContext();
   let app: ElectronApplication | null = null;

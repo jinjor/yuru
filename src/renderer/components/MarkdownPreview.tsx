@@ -1,9 +1,11 @@
 import { type MouseEvent, useMemo } from "react";
 import MarkdownIt from "markdown-it";
+import { extendMarkdownItWithFrontmatter } from "./markdownFrontmatter";
 
 // html: false で生 HTML を埋め込ませない (エスケープする)。出力タグは markdown-it が生成する
 // 安全なものだけになるので、renderer に innerHTML で流し込んでよい。
 const md = new MarkdownIt({ html: false, linkify: true });
+extendMarkdownItWithFrontmatter(md);
 
 type MdToken = ReturnType<typeof md.parse>[number];
 
