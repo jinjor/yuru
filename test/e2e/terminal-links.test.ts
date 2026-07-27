@@ -3,6 +3,7 @@ import {
   closeYuru,
   createCommittedRepo,
   createE2eContext,
+  expectPreviewPath,
   launchWindow,
   openMainTerminal,
   registerRepo,
@@ -72,6 +73,46 @@ test("OSC 8 ハイパーリンクのクリックは確認ダイアログなし�
     await expect.poll(() => openedExternalUrls(app!)).toEqual(["https://example.com/osc8"]);
     expect(dialogs).toEqual([]);
     expect(app.windows()).toHaveLength(1);
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+test("TUI が文中から複数行に描画したファイルパスの先頭行からプレビューできる", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const filePath = `src/${"nested_".repeat(25)}terminal_link_target.ts`;
+    const repoDir = await createCommittedRepo(context, {
+      [filePath]: "export const wrappedLinkTarget = true;\n",
+    });
+    await registerRepo(context, repoDir);
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+
+    await openMainTerminal(window);
+    await window.locator(".xterm").click();
+    await window.keyboard.type(
+      `P=${filePath}; W=$((COLUMNS/2)); W1=$((W-5)); WN=$((W-2)); printf 'open %s\\n' "\${P:0:$W1}"; R="\${P:$W1}"; while (( \${#R} > WN )); do printf '  %s\\n' "\${R:0:$WN}"; R="\${R:$WN}"; done; printf '  %s\\n' "$R"`,
+    );
+    await window.keyboard.press("Enter");
+
+    const linkRow = window.locator(".xterm-rows > div", { hasText: "open src/" }).last();
+    await expect(linkRow).toBeVisible({ timeout: 10_000 });
+    const box = await linkRow.boundingBox();
+    if (!box) {
+      throw new Error("Wrapped file link row is not visible");
+    }
+    const x = box.x + 60;
+    const y = box.y + box.height / 2;
+    await window.mouse.move(x, y);
+    await expect(window.locator(".xterm-screen")).toHaveClass(/xterm-cursor-pointer/);
+    await window.mouse.click(x, y);
+
+    await expectPreviewPath(window, filePath);
+    await expect(window.locator(".source-viewer")).toContainText("wrappedLinkTarget");
   } finally {
     await closeYuru(app);
     await context.cleanup();

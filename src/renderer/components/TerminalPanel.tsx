@@ -1,9 +1,9 @@
 import { FitAddon } from "@xterm/addon-fit";
-import { Terminal, type IBufferRange, type ILink, type ILinkProvider } from "@xterm/xterm";
+import { Terminal, type ILink, type ILinkProvider } from "@xterm/xterm";
 import { useCallback, useEffect, useRef } from "react";
 import type { GitHubPullRequest } from "../../shared/session";
 import { TerminalBar } from "./TerminalBar";
-import { findTerminalLinks } from "./terminalLinks";
+import { findTerminalLinksInBufferLine } from "./terminalBufferLinks";
 
 interface TerminalPanelProps {
   changesPanelWidth: number;
@@ -85,14 +85,11 @@ export function TerminalPanel({
 
     term.registerLinkProvider({
       provideLinks(bufferLineNumber: number, callback: (links: ILink[] | undefined) => void): void {
-        const line = term.buffer.active.getLine(bufferLineNumber - 1);
-        if (!line) {
-          callback(undefined);
-          return;
-        }
-
-        const lineText = line.translateToString();
-        const matches = findTerminalLinks(lineText);
+        const matches = findTerminalLinksInBufferLine(
+          term.buffer.active,
+          term.cols,
+          bufferLineNumber,
+        );
 
         if (matches.length === 0) {
           callback(undefined);
@@ -100,15 +97,8 @@ export function TerminalPanel({
         }
 
         const links = matches.map((entry): ILink => {
-          const cellStart = stringIndexToCellIndex(line, entry.startIndex);
-          const cellEnd = stringIndexToCellIndex(line, entry.startIndex + entry.text.length);
-          const range: IBufferRange = {
-            start: { x: cellStart + 1, y: bufferLineNumber },
-            end: { x: cellEnd, y: bufferLineNumber },
-          };
-
           return {
-            range,
+            range: entry.range,
             text: entry.text,
             decorations: { pointerCursor: true, underline: true },
             activate(): void {
@@ -229,22 +219,6 @@ export function TerminalPanel({
       <div ref={containerRef} className="terminal-host" />
     </main>
   );
-}
-
-function stringIndexToCellIndex(
-  line: ReturnType<Terminal["buffer"]["active"]["getLine"]>,
-  strIndex: number,
-): number {
-  let cellIndex = 0;
-  for (let i = 0; i < strIndex; i++) {
-    const cell = line?.getCell(cellIndex);
-    if (!cell) {
-      break;
-    }
-    const width = cell.getWidth();
-    cellIndex += width > 0 ? width : 1;
-  }
-  return cellIndex;
 }
 
 function terminalKeySequence(event: KeyboardEvent): string | null {
