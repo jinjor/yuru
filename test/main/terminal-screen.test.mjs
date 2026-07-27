@@ -80,3 +80,14 @@ test("serialize includes writes issued immediately before it", async () => {
   screen.dispose();
   restored.dispose();
 });
+
+test("tracks the latest OSC terminal title", async () => {
+  const screen = new TerminalScreen(COLS, ROWS);
+  screen.write("\x1b]0;codex-permission-dot\x07");
+  screen.write("\x1b]0;[ ! ] Action Required | codex-permission-dot\x07");
+  await screen.serialize();
+
+  assert.equal(screen.getTitle(), "[ ! ] Action Required | codex-permission-dot");
+
+  screen.dispose();
+});

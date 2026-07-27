@@ -64,6 +64,10 @@ export interface SessionProviderAdapter {
   createResumeLaunch(session: ResumeSessionTarget): Promise<LaunchRequest>;
   createWorktreeLaunch(context: WorktreeContext): Promise<LaunchRequest>;
   waitForSessionId(pending: PendingSession): Promise<string>;
+  // Provider TUIs can keep repainting while requiring user action. This only
+  // detects a provider-specific signal; false does not determine the overall
+  // activity state.
+  detectUserActionRequired?(terminalTitle: string): boolean;
   // Whether the provider recorded the injected initialInput into the session
   // store. Only providers that launch with initialInput implement this; the
   // runtime uses it to verify the injection did not get lost.

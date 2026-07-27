@@ -197,6 +197,19 @@ test("loadStoredSessionPreview は指定 session の preview だけを返す", a
   assert.equal(await loadStoredSessionPreview("kimi", "missing"), null);
 });
 
+test("Codex は Action Required の terminal title を識別する", () => {
+  assert.equal(
+    codexProvider.detectUserActionRequired?.("[ ! ] Action Required | codex-permission-dot"),
+    true,
+  );
+  assert.equal(
+    codexProvider.detectUserActionRequired?.("[ . ] Action Required | codex-permission-dot"),
+    true,
+  );
+  assert.equal(codexProvider.detectUserActionRequired?.("codex-permission-dot"), false);
+  assert.equal(codexProvider.detectUserActionRequired?.("⠹ codex-permission-dot"), false);
+});
+
 test("loadStoredSessionPreview は Claude/Codex session への追記を反映する", async () => {
   fs.appendFileSync(
     path.join(claudeProjectDir, "claude-1.jsonl"),

@@ -1207,22 +1207,33 @@ export class YuruService {
     await Promise.all(procs.map((proc) => killPtyAndWait(proc)));
   }
 
-  // The session dot blinks ("working") while the agent's terminal keeps
-  // producing output (its TUI animates a spinner while busy) and is solid
-  // ("waiting") once output stops — which covers both end-of-turn and waiting
-  // for a permission prompt, where the user is the one expected to act.
+  // Recent terminal output normally means the agent is working. A provider can
+  // override that heuristic when its terminal title exposes an explicit
+  // semantic state, such as Codex's animated permission prompt.
   private loadAgentActivityStatesByTerminalRuntimeId(): Map<string, AgentActivityState> {
     const states = new Map<string, AgentActivityState>();
     for (const [terminalRuntimeId, runtime] of this.terminalRuntimeMap) {
       if (!runtime.provider) {
         continue;
       }
-      states.set(
-        terminalRuntimeId,
-        this.isTerminalRuntimeOutputActive(terminalRuntimeId) ? "working" : "waiting",
-      );
+      states.set(terminalRuntimeId, this.resolveTerminalRuntimeActivityState(terminalRuntimeId));
     }
     return states;
+  }
+
+  private resolveTerminalRuntimeActivityState(terminalRuntimeId: string): AgentActivityState {
+    const runtime = this.terminalRuntimeMap.get(terminalRuntimeId);
+    if (!runtime?.provider) {
+      return "waiting";
+    }
+    const userActionRequiredDetected =
+      getSessionProvider(runtime.provider).detectUserActionRequired?.(
+        this.ptyScreens.get(terminalRuntimeId)?.getTitle() ?? "",
+      ) ?? false;
+    if (userActionRequiredDetected) {
+      return "waiting";
+    }
+    return this.isTerminalRuntimeOutputActive(terminalRuntimeId) ? "working" : "waiting";
   }
 
   private isTerminalRuntimeOutputActive(terminalRuntimeId: string): boolean {
@@ -1256,11 +1267,7 @@ export class YuruService {
       }
       hasAgentRuntime = true;
       const state = this.getSessionMonitorState(terminalRuntimeId);
-      const activityState: AgentActivityState = this.isTerminalRuntimeOutputActive(
-        terminalRuntimeId,
-      )
-        ? "working"
-        : "waiting";
+      const activityState = this.resolveTerminalRuntimeActivityState(terminalRuntimeId);
       const activityChanged = activityState !== state.activityState;
       if (activityChanged) {
         state.activityState = activityState;

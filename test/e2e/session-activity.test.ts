@@ -69,6 +69,9 @@ for (const provider of providers) {
       await expectActivity(window, provider, "waiting");
 
       await runNormalConversation(context, window, provider, repoDir);
+      if (provider.id === "codex") {
+        await runPermissionPrompt(window, provider);
+      }
       await runModelCommand(window, provider);
       await runInterrupt(window, provider);
     } finally {
@@ -125,6 +128,30 @@ async function runModelCommand(window: Page, provider: ProviderActivityE2e): Pro
   await expect(window.locator(".xterm")).toContainText(provider.modelCommandCompleteText, {
     timeout: 20_000,
   });
+  await expectActivity(window, provider, "waiting", 20_000);
+}
+
+async function runPermissionPrompt(
+  window: Page,
+  provider: ProviderActivityE2e,
+): Promise<void> {
+  await submitPrompt(
+    window,
+    [
+      "Run exactly this shell command and nothing else: curl -I https://example.com.",
+      "Request escalated permissions before executing it.",
+    ].join(" "),
+  );
+  await expectActivity(window, provider, "working", 30_000);
+  await expect(window.locator(".xterm")).toContainText(
+    "Would you like to run the following command?",
+    { timeout: 60_000 },
+  );
+  // Codex keeps repainting the Action Required title and spinner while the
+  // permission menu is open. That output must not make the session look busy.
+  await expectActivity(window, provider, "waiting", 10_000);
+  await window.keyboard.press("Escape");
+  await expect(window.locator(".xterm")).toContainText("canceled", { timeout: 10_000 });
   await expectActivity(window, provider, "waiting", 20_000);
 }
 

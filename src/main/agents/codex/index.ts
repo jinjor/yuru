@@ -128,6 +128,10 @@ function parseCodexAssistantPreviewEntry(entry: unknown): SessionPreview | null 
 
 const sessionPreviewReader = new IncrementalSessionPreviewReader(parseCodexAssistantPreviewEntry);
 
+function detectUserActionRequired(terminalTitle: string): boolean {
+  return terminalTitle.includes("Action Required |");
+}
+
 function parseCodexHistoryEntry(entry: unknown): CodexHistoryEntry | null {
   if (typeof entry !== "object" || entry === null) {
     return null;
@@ -393,4 +397,5 @@ export const sessionProvider: SessionProviderAdapter = {
     };
   },
   waitForSessionId,
+  detectUserActionRequired,
 };

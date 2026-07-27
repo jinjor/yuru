@@ -20,11 +20,15 @@ type SerializeAddon = InstanceType<typeof SerializeAddon>;
 export class TerminalScreen {
   private readonly terminal: Terminal;
   private readonly serializeAddon: SerializeAddon;
+  private title = "";
 
   constructor(cols: number, rows: number) {
     this.terminal = new Terminal({ cols, rows });
     this.serializeAddon = new SerializeAddon();
     this.terminal.loadAddon(this.serializeAddon);
+    this.terminal.onTitleChange((title) => {
+      this.title = title;
+    });
   }
 
   write(data: string): void {
@@ -33,6 +37,10 @@ export class TerminalScreen {
 
   resize(cols: number, rows: number): void {
     this.terminal.resize(cols, rows);
+  }
+
+  getTitle(): string {
+    return this.title;
   }
 
   // write() は内部キューで非同期に処理されるため、空 write のコールバックで
