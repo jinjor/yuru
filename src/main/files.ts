@@ -35,21 +35,38 @@ async function detectDirectory(entryPath: string, dirent: fs.Dirent): Promise<bo
 
 // ターミナルのファイルリンクからの解決。worktree 内なら相対パス、外なら絶対パスを返す。
 // 絶対パスは実在する通常ファイルのみ許し、不在・ディレクトリ・相対パスでの外への脱出は null。
-export function resolveRepoFile(workingRoot: string, filePath: string): string | null {
-  try {
-    const basePath = path.resolve(workingRoot);
-    const absPath = path.isAbsolute(filePath) ? filePath : path.resolve(basePath, filePath);
-    const relative = path.relative(basePath, absPath);
+export function resolveRepoFile(
+  workingRoot: string,
+  filePath: string,
+  repoRoot = workingRoot,
+): string | null {
+  const basePath = path.resolve(workingRoot);
+  const isAbsoluteInput = path.isAbsolute(filePath);
+  const candidates = isAbsoluteInput
+    ? [path.resolve(filePath)]
+    : [path.resolve(basePath, filePath), path.resolve(repoRoot, filePath)];
+
+  for (const candidate of candidates) {
+    const relative = path.relative(basePath, candidate);
     if (relative.startsWith("..") || path.isAbsolute(relative)) {
-      return path.isAbsolute(filePath) && fs.statSync(absPath).isFile() ? absPath : null;
+      if (!isAbsoluteInput) {
+        continue;
+      }
+      try {
+        return fs.statSync(candidate).isFile() ? candidate : null;
+      } catch {
+        return null;
+      }
     }
-    if (!fs.statSync(absPath).isFile()) {
-      return null;
+    try {
+      if (fs.statSync(candidate).isFile()) {
+        return normalizeRelativePath(relative);
+      }
+    } catch {
+      // 相対パスは worktree 基準を優先し、不在なら repo root 基準も試す。
     }
-    return normalizeRelativePath(relative);
-  } catch {
-    return null;
   }
+  return null;
 }
 
 // HTML プレビュー対象の解決。worktree 内なら root=worktree ルート、外なら root=entry の

@@ -817,11 +817,11 @@ export class YuruService {
   }
 
   async resolveRepoFile(worktreeId: string, filePath: string): Promise<string | null> {
-    const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
-    if (!workingRoot) {
+    const worktree = await this.findGitWorktree(worktreeId);
+    if (!worktree) {
       return null;
     }
-    return resolveRepoFilePath(workingRoot, filePath);
+    return resolveRepoFilePath(worktree.worktreePath, filePath, worktree.repoPath);
   }
 
   async resolveHtmlPreviewEntry(

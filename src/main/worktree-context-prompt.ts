@@ -7,7 +7,7 @@ const DEFAULT_WORKTREE_CONTEXT_PROMPT = [
   "Yuru opened this session for the task worktree '{worktreeName}' on branch '{branchName}'.",
   "Use {worktreePath} as the working directory for this task.",
   "When reading files, editing files, applying patches, running commands, building, or testing, operate in {worktreePath}.",
-  "When mentioning files in messages, use either paths relative to {worktreePath} or absolute paths. Never use paths relative to {repoPath}.",
+  "When mentioning a file, use a path relative to its Git worktree when the intended worktree is unambiguous from context. Use an absolute path when the worktree is ambiguous or the file is outside any worktree.",
   "The repository root {repoPath} is only the parent repository that Yuru used to launch this provider session; do not treat it as the task workspace unless the user explicitly asks you to.",
 ].join(" ");
 

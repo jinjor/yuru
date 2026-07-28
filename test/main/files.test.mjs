@@ -10,6 +10,55 @@ function makeTempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "yuru-files-"));
 }
 
+test("resolveRepoFile は worktree 基準の相対パスを返す", () => {
+  const repoRoot = makeTempDir();
+  const worktreePath = path.join(repoRoot, ".yuru", "worktrees", "task-a");
+  fs.mkdirSync(path.join(worktreePath, "src"), { recursive: true });
+  fs.writeFileSync(path.join(worktreePath, "src", "app.ts"), "");
+
+  assert.equal(resolveRepoFile(worktreePath, "src/app.ts", repoRoot), "src/app.ts");
+});
+
+test("resolveRepoFile は repo root 基準で表示された worktree 内のパスを解決する", () => {
+  const repoRoot = makeTempDir();
+  const worktreePath = path.join(repoRoot, ".yuru", "worktrees", "task-a");
+  fs.mkdirSync(path.join(worktreePath, "src"), { recursive: true });
+  fs.writeFileSync(path.join(worktreePath, "src", "app.ts"), "");
+
+  assert.equal(
+    resolveRepoFile(worktreePath, ".yuru/worktrees/task-a/src/app.ts", repoRoot),
+    "src/app.ts",
+  );
+});
+
+test("resolveRepoFile は worktree の配置を決め打ちしない", () => {
+  const repoRoot = makeTempDir();
+  const worktreePath = path.join(repoRoot, ".claude", "worktrees", "task-a");
+  fs.mkdirSync(path.join(worktreePath, "src"), { recursive: true });
+  fs.writeFileSync(path.join(worktreePath, "src", "app.ts"), "");
+
+  assert.equal(
+    resolveRepoFile(worktreePath, ".claude/worktrees/task-a/src/app.ts", repoRoot),
+    "src/app.ts",
+  );
+});
+
+test("resolveRepoFile は選択中 worktree の外を拒否する", () => {
+  const repoRoot = makeTempDir();
+  const worktreePath = path.join(repoRoot, ".yuru", "worktrees", "task-a");
+  const otherWorktreePath = path.join(repoRoot, ".yuru", "worktrees", "task-b");
+  fs.mkdirSync(worktreePath, { recursive: true });
+  fs.mkdirSync(otherWorktreePath, { recursive: true });
+  fs.writeFileSync(path.join(repoRoot, "root.txt"), "");
+  fs.writeFileSync(path.join(otherWorktreePath, "other.txt"), "");
+
+  assert.equal(resolveRepoFile(worktreePath, "root.txt", repoRoot), null);
+  assert.equal(
+    resolveRepoFile(worktreePath, ".yuru/worktrees/task-b/other.txt", repoRoot),
+    null,
+  );
+});
+
 test("readWorktreeFile は既存ファイルの内容を返す", async () => {
   const dir = makeTempDir();
   fs.writeFileSync(path.join(dir, "a.txt"), "hello\nworld\n");
