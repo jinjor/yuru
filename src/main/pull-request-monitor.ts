@@ -28,7 +28,12 @@ function samePullRequest(a: GitHubPullRequest | null, b: GitHubPullRequest | nul
   if (a === null || b === null) {
     return a === b;
   }
-  return a.prNumber === b.prNumber && a.state === b.state && a.url === b.url;
+  return (
+    a.prNumber === b.prNumber &&
+    a.state === b.state &&
+    a.isApproved === b.isApproved &&
+    a.url === b.url
+  );
 }
 
 export class PullRequestMonitor {

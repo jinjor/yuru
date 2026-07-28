@@ -12,9 +12,9 @@ function worktree(path, branch, headSha = "sha-head") {
   return { path, branch, headSha, locked: false };
 }
 
-function fetched(prNumber, state, headRefOid = "sha-head") {
+function fetched(prNumber, state, headRefOid = "sha-head", isApproved = false) {
   return {
-    pullRequest: { prNumber, state, url: `https://example.com/${prNumber}` },
+    pullRequest: { prNumber, state, isApproved, url: `https://example.com/${prNumber}` },
     headRefOid,
   };
 }
@@ -78,7 +78,12 @@ test("PullRequestMonitor は変わった worktree の分だけ push する", asy
     [
       {
         worktreeId: toWorktreeId("repo-1", worktreePath),
-        pullRequest: { prNumber: 1, state: "open", url: "https://example.com/1" },
+        pullRequest: {
+          prNumber: 1,
+          state: "open",
+          isApproved: false,
+          url: "https://example.com/1",
+        },
       },
     ],
   ]);
@@ -94,6 +99,36 @@ test("PullRequestMonitor は変わった worktree の分だけ push する", asy
   await flush();
   assert.equal(pushes.length, 2);
   assert.equal(pushes[1][0].pullRequest.state, "draft");
+
+  monitor.stop();
+});
+
+test("PullRequestMonitor は approval が変わった worktree を push する", async (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const repoPath = "/repo-1";
+  const worktreePath = `${repoPath}/wt-a`;
+  const pushes = [];
+  let isApproved = false;
+  const monitor = new PullRequestMonitor({
+    listRepos: () => [{ id: "repo-1", repoPath }],
+    listWorktrees: async () => [worktree(worktreePath, "task-a")],
+    fetchPullRequests: async () =>
+      new Map([["task-a", fetched(1, "open", "sha-head", isApproved)]]),
+    hasAliveTerminalRuntimeInRepo: () => true,
+    pullRequestsChanged: (updates) => {
+      pushes.push(updates);
+    },
+  });
+
+  monitor.start();
+  await flush();
+  assert.equal(pushes[0][0].pullRequest.isApproved, false);
+
+  isApproved = true;
+  t.mock.timers.tick(10_000);
+  await flush();
+  assert.equal(pushes.length, 2);
+  assert.equal(pushes[1][0].pullRequest.isApproved, true);
 
   monitor.stop();
 });
@@ -158,7 +193,12 @@ test("PullRequestMonitor は merged PR の head が worktree と一致しない�
     [
       {
         worktreeId: toWorktreeId("repo-1", `${repoPath}/wt-a`),
-        pullRequest: { prNumber: 1, state: "merged", url: "https://example.com/1" },
+        pullRequest: {
+          prNumber: 1,
+          state: "merged",
+          isApproved: false,
+          url: "https://example.com/1",
+        },
       },
       {
         worktreeId: toWorktreeId("repo-1", `${repoPath}/wt-b`),

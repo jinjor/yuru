@@ -1,6 +1,7 @@
 import { type MouseEvent as ReactMouseEvent } from "react";
 import { GitPullRequest } from "lucide-react";
 import type { GitHubPullRequest } from "../../shared/session";
+import { gitHubBadgeLabel } from "./githubBadgeLabel";
 
 interface GitHubBadgeProps {
   github: GitHubPullRequest;
@@ -28,19 +29,6 @@ export function GitHubBadge({ github, onClick }: GitHubBadgeProps) {
       {gitHubBadgeLabel(github)}
     </span>
   );
-}
-
-function gitHubBadgeLabel(github: GitHubPullRequest): string {
-  switch (github.state) {
-    case "open":
-      return `Open #${github.prNumber}`;
-    case "draft":
-      return `Draft #${github.prNumber}`;
-    case "merged":
-      return `Merged #${github.prNumber}`;
-    case "closed":
-      return `Closed #${github.prNumber}`;
-  }
 }
 
 function gitHubBadgeClass(github: GitHubPullRequest): string {

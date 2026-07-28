@@ -128,7 +128,8 @@ export function buildGitHubPullRequestQuery(repoSlug: string, branches: readonly
   const aliases = branches.map(
     (branch, index) =>
       `b${index}: pullRequests(headRefName: ${JSON.stringify(branch)}, first: 1, ` +
-      `orderBy: {field: CREATED_AT, direction: DESC}) { nodes { number state isDraft headRefOid url } }`,
+      `orderBy: {field: CREATED_AT, direction: DESC}) ` +
+      `{ nodes { number state isDraft reviewDecision headRefOid url } }`,
   );
   return (
     `query { repository(owner: ${JSON.stringify(owner)}, name: ${JSON.stringify(name)}) ` +
@@ -144,6 +145,7 @@ function toFetchedPullRequest(node: unknown): FetchedPullRequest | null {
     number?: unknown;
     state?: unknown;
     isDraft?: unknown;
+    reviewDecision?: unknown;
     headRefOid?: unknown;
     url?: unknown;
   };
@@ -171,6 +173,7 @@ function toFetchedPullRequest(node: unknown): FetchedPullRequest | null {
     pullRequest: {
       prNumber: pr.number,
       state,
+      isApproved: pr.reviewDecision === "APPROVED",
       url: pr.url,
     },
     headRefOid: pr.headRefOid,

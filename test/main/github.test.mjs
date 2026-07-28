@@ -13,7 +13,7 @@ test("buildGitHubPullRequestQuery は branch ごとのエイリアスを 1 ク�
   assert.match(query, /b0: pullRequests\(headRefName: "feature-a", first: 1/);
   assert.match(query, /b1: pullRequests\(headRefName: "feature-b", first: 1/);
   assert.match(query, /orderBy: \{field: CREATED_AT, direction: DESC\}/);
-  assert.match(query, /nodes \{ number state isDraft headRefOid url \}/);
+  assert.match(query, /nodes \{ number state isDraft reviewDecision headRefOid url \}/);
 });
 
 test("buildGitHubPullRequestQuery は branch 名の引用符をエスケープする", () => {
@@ -31,6 +31,7 @@ test("parseGitHubPullRequestsResponse は state と isDraft を PR の状態へ�
               number: 1,
               state: "OPEN",
               isDraft: false,
+              reviewDecision: "APPROVED",
               headRefOid: "sha-1",
               url: "https://example.com/1",
             },
@@ -42,6 +43,7 @@ test("parseGitHubPullRequestsResponse は state と isDraft を PR の状態へ�
               number: 2,
               state: "OPEN",
               isDraft: true,
+              reviewDecision: null,
               headRefOid: "sha-2",
               url: "https://example.com/2",
             },
@@ -53,6 +55,7 @@ test("parseGitHubPullRequestsResponse は state と isDraft を PR の状態へ�
               number: 3,
               state: "MERGED",
               isDraft: false,
+              reviewDecision: "APPROVED",
               headRefOid: "sha-3",
               url: "https://example.com/3",
             },
@@ -64,6 +67,7 @@ test("parseGitHubPullRequestsResponse は state と isDraft を PR の状態へ�
               number: 4,
               state: "CLOSED",
               isDraft: false,
+              reviewDecision: "CHANGES_REQUESTED",
               headRefOid: "sha-4",
               url: "https://example.com/4",
             },
@@ -75,19 +79,39 @@ test("parseGitHubPullRequestsResponse は state と isDraft を PR の状態へ�
   });
   const result = parseGitHubPullRequestsResponse(raw, ["a", "b", "c", "d", "e"]);
   assert.deepEqual(result.get("a"), {
-    pullRequest: { prNumber: 1, state: "open", url: "https://example.com/1" },
+    pullRequest: {
+      prNumber: 1,
+      state: "open",
+      isApproved: true,
+      url: "https://example.com/1",
+    },
     headRefOid: "sha-1",
   });
   assert.deepEqual(result.get("b"), {
-    pullRequest: { prNumber: 2, state: "draft", url: "https://example.com/2" },
+    pullRequest: {
+      prNumber: 2,
+      state: "draft",
+      isApproved: false,
+      url: "https://example.com/2",
+    },
     headRefOid: "sha-2",
   });
   assert.deepEqual(result.get("c"), {
-    pullRequest: { prNumber: 3, state: "merged", url: "https://example.com/3" },
+    pullRequest: {
+      prNumber: 3,
+      state: "merged",
+      isApproved: true,
+      url: "https://example.com/3",
+    },
     headRefOid: "sha-3",
   });
   assert.deepEqual(result.get("d"), {
-    pullRequest: { prNumber: 4, state: "closed", url: "https://example.com/4" },
+    pullRequest: {
+      prNumber: 4,
+      state: "closed",
+      isApproved: false,
+      url: "https://example.com/4",
+    },
     headRefOid: "sha-4",
   });
   assert.equal(result.get("e"), null);
@@ -115,7 +139,12 @@ test("parseGitHubPullRequestsResponse は必須フィールドが欠けた node 
 });
 
 test("toVisiblePullRequest は open/draft を head の一致に関わらず表示する", () => {
-  const openPullRequest = { prNumber: 1, state: "open", url: "https://example.com/1" };
+  const openPullRequest = {
+    prNumber: 1,
+    state: "open",
+    isApproved: true,
+    url: "https://example.com/1",
+  };
   assert.deepEqual(
     toVisiblePullRequest({ pullRequest: openPullRequest, headRefOid: "sha-x" }, "sha-y"),
     openPullRequest,
@@ -123,7 +152,12 @@ test("toVisiblePullRequest は open/draft を head の一致に関わらず表�
 });
 
 test("toVisiblePullRequest は merged/closed を head が一致するときだけ表示する", () => {
-  const mergedPullRequest = { prNumber: 2, state: "merged", url: "https://example.com/2" };
+  const mergedPullRequest = {
+    prNumber: 2,
+    state: "merged",
+    isApproved: true,
+    url: "https://example.com/2",
+  };
   assert.deepEqual(
     toVisiblePullRequest({ pullRequest: mergedPullRequest, headRefOid: "sha-a" }, "sha-a"),
     mergedPullRequest,
@@ -133,7 +167,12 @@ test("toVisiblePullRequest は merged/closed を head が一致するときだ�
     null,
   );
 
-  const closedPullRequest = { prNumber: 3, state: "closed", url: "https://example.com/3" };
+  const closedPullRequest = {
+    prNumber: 3,
+    state: "closed",
+    isApproved: false,
+    url: "https://example.com/3",
+  };
   assert.equal(
     toVisiblePullRequest({ pullRequest: closedPullRequest, headRefOid: "sha-a" }, "sha-b"),
     null,

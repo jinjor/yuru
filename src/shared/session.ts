@@ -15,6 +15,7 @@ export interface SuggestedWorktreeSession {
 export interface GitHubPullRequest {
   prNumber: number;
   state: "open" | "draft" | "merged" | "closed";
+  isApproved: boolean;
   url: string;
 }
 
