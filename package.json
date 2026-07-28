@@ -17,6 +17,10 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "allowScripts": {
+    "fsevents@2.3.2 || 2.3.3": true,
+    "node-pty@1.2.0-beta.14": true
+  },
   "dependencies": {
     "@codemirror/commands": "^6.10.3",
     "@codemirror/lang-css": "^6.3.1",

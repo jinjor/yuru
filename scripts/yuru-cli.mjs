@@ -110,10 +110,19 @@ function ensureMainBranch() {
 }
 
 function ensureNpm() {
+  let npmVersion;
   try {
-    execFileSync("npm", ["--version"], { stdio: "ignore" });
+    npmVersion = execFileSync("npm", ["--version"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
   } catch {
     fail("npm is required to update Yuru.");
+  }
+
+  const [major, minor] = npmVersion.split(".").map(Number);
+  if (major < 11 || (major === 11 && minor < 16)) {
+    fail(`npm 11.16.0 or later is required to update Yuru. Found npm ${npmVersion}.`);
   }
 }
 
@@ -216,6 +225,7 @@ function updateApp() {
 
   run("git", ["fetch", "origin", "main"]);
   run("git", ["pull", "--ff-only", "origin", "main"]);
+  run("npm", ["audit", "--package-lock-only", "--audit-level=high"]);
   run("npm", ["ci"]);
   run("npm", ["run", "build"]);
   run("npm", ["run", "package:local"]);

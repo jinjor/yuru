@@ -29,6 +29,7 @@ const electronChecksums = JSON.parse(
 const ignorePatterns = [
   /^\/\.claude(?:$|\/)/,
   /^\/\.git(?:$|\/)/,
+  /^\/\.npmrc$/,
   /^\/assets(?:$|\/)/,
   /^\/\.yuru(?:$|\/)/,
   /^\/bin(?:$|\/)/,

@@ -3,6 +3,7 @@
 Yuru is a session-centered editor for Claude Code and Codex CLI.
 
 Current local-app workflow is supported on macOS only.
+Updating and building Yuru requires npm 11.16.0 or later.
 
 ## Install
 
@@ -33,7 +34,7 @@ To update the managed checkout and rebuild the local app:
 yuru latest
 ```
 
-`yuru latest` updates `~/.yuru/repo`, runs `npm ci`, rebuilds the app, and replaces `~/Applications/Yuru.app`. It does not launch the app automatically.
+`yuru latest` updates `~/.yuru/repo`, audits the locked dependencies, runs `npm ci`, rebuilds the app, and replaces `~/Applications/Yuru.app`. It does not launch the app automatically.
 
 ## Trust Model
 
