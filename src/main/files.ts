@@ -33,13 +33,15 @@ async function detectDirectory(entryPath: string, dirent: fs.Dirent): Promise<bo
   }
 }
 
+// ターミナルのファイルリンクからの解決。worktree 内なら相対パス、外なら絶対パスを返す。
+// 絶対パスは実在する通常ファイルのみ許し、不在・ディレクトリ・相対パスでの外への脱出は null。
 export function resolveRepoFile(workingRoot: string, filePath: string): string | null {
   try {
     const basePath = path.resolve(workingRoot);
     const absPath = path.isAbsolute(filePath) ? filePath : path.resolve(basePath, filePath);
     const relative = path.relative(basePath, absPath);
     if (relative.startsWith("..") || path.isAbsolute(relative)) {
-      return null;
+      return path.isAbsolute(filePath) && fs.statSync(absPath).isFile() ? absPath : null;
     }
     if (!fs.statSync(absPath).isFile()) {
       return null;
@@ -48,6 +50,22 @@ export function resolveRepoFile(workingRoot: string, filePath: string): string |
   } catch {
     return null;
   }
+}
+
+// HTML プレビュー対象の解決。worktree 内なら root=worktree ルート、外なら root=entry の
+// 親ディレクトリ (相対参照される CSS / JavaScript は大抵同じディレクトリにある)。
+export function resolveHtmlPreviewEntry(
+  workingRoot: string,
+  filePath: string,
+): { root: string; path: string } | null {
+  const resolvedPath = resolveRepoFile(workingRoot, filePath);
+  if (!resolvedPath) {
+    return null;
+  }
+  if (path.isAbsolute(resolvedPath)) {
+    return { root: path.dirname(resolvedPath), path: path.basename(resolvedPath) };
+  }
+  return { root: workingRoot, path: resolvedPath };
 }
 
 // 編集モードの seed 用。既存テキストは内容 (空は "")、不在は null、範囲外は throw。

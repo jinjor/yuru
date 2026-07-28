@@ -93,16 +93,21 @@ export function DiffPreviewPanel({
   const hasChanges = originalContent !== currentContent;
   const isCurrentDocument = loadedDiff?.document.path === path && loadedDiff.scope === scope;
 
+  // worktree 外のファイル (ターミナルリンク由来の絶対パス)。git state には載らず、
+  // 編集モードも対象外 (worktree 内のファイルだけ書き込みを許す)。
+  const isExternalPath = path.startsWith("/");
   // staged 差分は index を見ているので、作業ツリーを編集する編集モードには入れない。
   // (unstaged / Files から開いた時は current 側が作業ツリーなので編集に入れる)。実在チェックは
   // 編集に入った EditModeEditor が実ファイルを読んで行う (削除済みなら "missing")。
   const editDisabledReason = isBinary
     ? "Binary files cannot be edited"
-    : scope === "staged" || scope === "base"
-      ? scope === "base"
-        ? "Committed diffs cannot be edited"
-        : "Switch to the unstaged diff to edit"
-      : undefined;
+    : isExternalPath
+      ? "Files outside the worktree cannot be edited"
+      : scope === "staged" || scope === "base"
+        ? scope === "base"
+          ? "Committed diffs cannot be edited"
+          : "Switch to the unstaged diff to edit"
+        : undefined;
   const canEdit = diffDocument !== null && isCurrentDocument && !editDisabledReason;
   const isEditing = mode === "edit" && canEdit;
   // reviewable は「この path に選択中 scope の差分があるか」を親が Git state から判定した値。
@@ -154,7 +159,9 @@ export function DiffPreviewPanel({
       }
     };
 
-    if (!pathChanged) {
+    // 外部ファイルは git status に載らず pathChanged が常に false なので、常に poll して
+    // 追従する (エージェントと話しながらメモを更新していく用途で使う)。
+    if (!pathChanged && !isExternalPath) {
       void fetchDiff();
       return () => {
         cancelled = true;
@@ -167,7 +174,7 @@ export function DiffPreviewPanel({
       cancelled = true;
       stopPolling();
     };
-  }, [path, scope, pathChanged, worktreeId]);
+  }, [path, scope, pathChanged, isExternalPath, worktreeId]);
 
   useEffect(() => {
     let cancelled = false;

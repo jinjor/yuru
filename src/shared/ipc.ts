@@ -231,6 +231,7 @@ export interface ElectronAPI {
   releaseHtmlPreview: (grantId: string) => Promise<void>;
   listFiles: (worktreeId: string, relativePath?: string) => Promise<Result<FileTreeNode[]>>;
   listAllFiles: (worktreeId: string) => Promise<Result<string[]>>;
+  // ターミナルのファイルリンクの解決。worktree 内なら相対パス、外なら絶対パス、開けなければ null。
   resolveRepoFile: (worktreeId: string, filePath: string) => Promise<string | null>;
   readWorktreeFile: (worktreeId: string, filePath: string) => Promise<Result<string | null>>;
   writeFile: (worktreeId: string, filePath: string, content: string) => Promise<Result<void>>;

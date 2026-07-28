@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import type { GitDiffDocument, GitDiffScope, GitLineStat, GitPathState } from "../shared/ipc.js";
 import { exec, execBuffer } from "./exec.js";
+import { isFileNotFoundError } from "./errors.js";
 import { parseNameStatusZ, parseNumstatZ, parsePorcelainLine } from "./git-status.js";
 import { getUntrackedLineStats } from "./untracked-line-stats.js";
 
@@ -327,6 +328,34 @@ export async function getGitDiffDocument(
     currentContent: bufferToContent(currentBuffer, isBinary),
     isBinary,
     size,
+  };
+}
+
+// worktree 外のファイル用。git は関わらず、差分なし (original = current) のドキュメント
+// として返す。不在・通常ファイルでない場合は null。
+export async function getFileDocument(absolutePath: string): Promise<GitDiffDocument | null> {
+  let buffer: Buffer;
+  try {
+    const stat = await fs.promises.stat(absolutePath);
+    if (!stat.isFile()) {
+      return null;
+    }
+    buffer = await fs.promises.readFile(absolutePath);
+  } catch (error) {
+    // ENOTDIR はパス途中のコンポーネントがファイルだった場合。どちらも「開けない」ので null。
+    if (isFileNotFoundError(error) || (error as { code?: unknown }).code === "ENOTDIR") {
+      return null;
+    }
+    throw error;
+  }
+  const isBinary = buffer.includes(0);
+  const content = bufferToContent(buffer, isBinary);
+  return {
+    path: absolutePath,
+    originalContent: content,
+    currentContent: content,
+    isBinary,
+    size: buffer.byteLength,
   };
 }
 

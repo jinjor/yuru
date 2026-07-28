@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { readWorktreeFile } from "../../src/main/files.ts";
-import { getGitDiffDocument } from "../../src/main/git.ts";
+import { getFileDocument, getGitDiffDocument } from "../../src/main/git.ts";
 
 function cleanGitEnv(env) {
   const next = { ...env };
@@ -114,4 +114,52 @@ test("base 表示は fork 元の内容と HEAD の内容を返し rename 元も�
   const doc = await getGitDiffDocument(dir, "after.txt", "base");
   assert.equal(doc.originalContent, "line 1\nline 2\nline 3\n");
   assert.equal(doc.currentContent, "line 1\nfeature\nline 3\n");
+});
+
+test("getFileDocument は worktree 外のファイルを差分なし (original = current) で返す", async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-external-"));
+  t.after(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+  const file = path.join(dir, "memo.md");
+  fs.writeFileSync(file, "hello\n");
+
+  const doc = await getFileDocument(file);
+  assert.equal(doc.path, file);
+  assert.equal(doc.originalContent, "hello\n");
+  assert.equal(doc.currentContent, "hello\n");
+  assert.equal(doc.isBinary, false);
+  assert.equal(doc.size, 6);
+});
+
+test("getFileDocument は空ファイルを '' で返し、binary は内容を送らない", async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-external-"));
+  t.after(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+  const emptyFile = path.join(dir, "empty.txt");
+  fs.writeFileSync(emptyFile, "");
+  const binaryFile = path.join(dir, "image.bin");
+  fs.writeFileSync(binaryFile, Buffer.from([0x89, 0x50, 0x00, 0x47]));
+
+  const emptyDoc = await getFileDocument(emptyFile);
+  assert.equal(emptyDoc.originalContent, "");
+  assert.equal(emptyDoc.currentContent, "");
+  assert.equal(emptyDoc.isBinary, false);
+
+  const binaryDoc = await getFileDocument(binaryFile);
+  assert.equal(binaryDoc.isBinary, true);
+  assert.equal(binaryDoc.originalContent, "");
+  assert.equal(binaryDoc.currentContent, "");
+  assert.equal(binaryDoc.size, 4);
+});
+
+test("getFileDocument は不在ファイルとディレクトリを null で返す", async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-external-"));
+  t.after(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  assert.equal(await getFileDocument(path.join(dir, "missing.txt")), null);
+  assert.equal(await getFileDocument(dir), null);
 });

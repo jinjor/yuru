@@ -13,7 +13,11 @@ export type TerminalLink =
       url: string;
     };
 
-const filePathPattern = /[\w./-][\w./-]*\.\w+(?::(\d+)(?::\d+)?)?/g;
+// 絶対パスは拡張子がなくても拾う (worktree 外も含め、任意の種類のファイルを開くため)。
+// 誤検出を減らすため 2 セグメント以上 (`/tmp/mock`) を要求し、`/12` のような分数表記は拾わない。
+// 相対パスは従来通り拡張子ありのみ。拡張子は `c++` のように + を含みうる。
+const filePathPattern =
+  /(?:\/(?:[\w.+-]+\/)+[\w.+-]+|[\w./-][\w./-]*\.[\w+-]+)(?::(\d+)(?::\d+)?)?/g;
 const urlPattern = /\bhttps?:\/\/[^\s<>"'`]+/g;
 
 export function findTerminalLinks(lineText: string): TerminalLink[] {
@@ -50,14 +54,16 @@ function findFileLinks(lineText: string, urlLinks: readonly TerminalLink[]): Ter
 
   filePathPattern.lastIndex = 0;
   while ((match = filePathPattern.exec(lineText)) !== null) {
-    const text = match[0];
     const startIndex = match.index;
+    const lineMatch = match[0].match(/:(\d+)(?::\d+)?$/);
+    const suffix = lineMatch?.[0] ?? "";
+    // 文末に続くピリオドはパスに含めない ("see /tmp/mock." の '.' を外す)
+    const filePath = match[0].slice(0, match[0].length - suffix.length).replace(/\.+$/, "");
+    const text = filePath + suffix;
     if (overlapsAnyLink(startIndex, startIndex + text.length, urlLinks)) {
       continue;
     }
 
-    const filePath = text.replace(/:\d+(?::\d+)?$/, "");
-    const lineMatch = text.match(/:(\d+)(?::\d+)?$/);
     const fileLine = lineMatch ? parseInt(lineMatch[1], 10) : undefined;
     if (filePath.includes("/") || filePath.includes(".")) {
       links.push({

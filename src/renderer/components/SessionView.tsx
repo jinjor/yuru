@@ -189,11 +189,12 @@ export function SessionView({
 
   const handleFileLinkActivate = useCallback(
     async (filePath: string, line?: number): Promise<void> => {
-      const repoRelativePath = await window.electronAPI.resolveRepoFile(worktreeId, filePath);
-      if (!repoRelativePath) {
+      // worktree 内なら相対パス、外なら絶対パスが返る (どちらもプレビューで開ける)。
+      const resolvedPath = await window.electronAPI.resolveRepoFile(worktreeId, filePath);
+      if (!resolvedPath) {
         return;
       }
-      setPreviewSelection({ path: repoRelativePath, line });
+      setPreviewSelection({ path: resolvedPath, line });
     },
     [worktreeId],
   );

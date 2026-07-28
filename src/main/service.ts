@@ -30,6 +30,7 @@ import {
   createWorktreeFromOriginBranch,
   fetchOriginBranch,
   getCurrentBranch,
+  getFileDocument,
   getGitDiffDocument as loadGitDiffDocument,
   getGitPathStates as loadGitPathStates,
   getHeadSha,
@@ -46,6 +47,7 @@ import {
   listAllFiles as listAllRepoFiles,
   listFiles as listRepoFiles,
   readWorktreeFile as readRepoWorktreeFile,
+  resolveHtmlPreviewEntry as resolveHtmlPreviewEntryPath,
   resolveRepoFile as resolveRepoFilePath,
   writeFile as writeRepoFile,
 } from "./files.js";
@@ -740,9 +742,18 @@ export class YuruService {
       return ok(null);
     }
     try {
+      // worktree 外のファイル (ターミナルリンク由来の絶対パス) は git が絡まない。
+      // 差分なしの単純表示にする (scope は来ない前提だが、来ても無視する)。
+      if (path.isAbsolute(filePath)) {
+        return ok(await getFileDocument(filePath));
+      }
       return ok(await loadGitDiffDocument(workingRoot, filePath, scope));
     } catch (error) {
-      return this.failAndReport(toAppError(error, { command: "git" }));
+      // 外部ファイルの読み取り失敗 (EACCES 等) は git の失敗ではないのでラベルを分ける。
+      // Result の失敗として返し、renderer の表示を Loading のままにしない。
+      return this.failAndReport(
+        toAppError(error, path.isAbsolute(filePath) ? undefined : { command: "git" }),
+      );
     }
   }
 
@@ -824,14 +835,14 @@ export class YuruService {
         message: "Selected worktree is no longer available.",
       });
     }
-    const relativePath = resolveRepoFilePath(workingRoot, filePath);
-    if (!relativePath) {
+    const entry = resolveHtmlPreviewEntryPath(workingRoot, filePath);
+    if (!entry) {
       return fail({
         code: "invalid_path",
         message: "HTML preview file is no longer available.",
       });
     }
-    return ok({ root: workingRoot, path: relativePath });
+    return ok(entry);
   }
 
   async syncFileWatchTargets(worktreeId: string, relativePaths: string[]): Promise<void> {
