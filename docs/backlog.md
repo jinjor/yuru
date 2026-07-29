@@ -36,7 +36,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | ID | Type | Area | Item | Notes |
 |---|---|---|---|---|
 | F55 | feature | Mobile | モバイル連携 | モバイルから Yuru を使えるようにしたい |
-| F48 | feature | Worktrees | 分岐した作業のために新しい task worktree を作成できるようにする | 現在の作業を残したまま別案や別タスクを進めたい |
+| F48 | feature | Worktrees | 分岐した作業のために新しい task worktree を作成できるようにする | 現在の作業を残したまま別案や別タスクを進めたい。詳細: docs/backlog-details/F48-branch-work.md |
 | F49 | feature | Updates | UI から `yuru latest` を実行できるようにする | ターミナルを開かずに Yuru を最新版へ更新したい |
 | F50 | feature | Files | 変更ファイルだけをツリー表示できるようにする | 変更箇所に絞ってファイルを確認したい |
 | F46 | feature | Repos | リポジトリを管理対象から削除できるようにする | `yuru add` と対になる機能として欲しい |
