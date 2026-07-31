@@ -202,6 +202,88 @@ test("yuru ping は Yuru terminal 外では実行しない", async () => {
   });
 });
 
+test("yuru worktree create は呼び出し元 worktree を渡して作成結果を表示する", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-cli-worktree-create-"));
+  const socketPath = path.join(tempDir, "api.sock");
+  const requests = [];
+  const server = await startApiServer({
+    socketPath,
+    handleRequest(request) {
+      requests.push(request);
+      return {
+        ok: true,
+        data: {
+          worktreePath: "/repo/.yuru/worktrees/child-task",
+          branchName: "child/task",
+        },
+      };
+    },
+  });
+  t.after(async () => {
+    await server.stop();
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  const result = await runCli(["worktree", "create", "child/task"], {
+    ...process.env,
+    YURU_API_SOCKET: socketPath,
+    YURU_WORKTREE_PATH: "/repo/.yuru/worktrees/parent-task",
+  });
+
+  assert.deepEqual(result, {
+    code: 0,
+    stdout:
+      "Created worktree /repo/.yuru/worktrees/child-task on branch child/task\n",
+    stderr: "",
+  });
+  assert.deepEqual(requests, [
+    {
+      command: "worktree.create",
+      args: {
+        worktreePath: "/repo/.yuru/worktrees/parent-task",
+        branchName: "child/task",
+      },
+    },
+  ]);
+});
+
+test("yuru worktree create は task worktree terminal 外では実行しない", async () => {
+  const env = { ...process.env, YURU_API_SOCKET: "/unused/api.sock" };
+  delete env.YURU_WORKTREE_PATH;
+
+  const result = await runCli(["worktree", "create", "child-task"], env);
+
+  assert.deepEqual(result, {
+    code: 1,
+    stdout: "",
+    stderr: "This command must be run inside a Yuru task worktree terminal.\n",
+  });
+});
+
+test("yuru worktree create は Yuru terminal 外では実行しない", async () => {
+  const env = { ...process.env };
+  delete env.YURU_API_SOCKET;
+  delete env.YURU_WORKTREE_PATH;
+
+  const result = await runCli(["worktree", "create", "child-task"], env);
+
+  assert.deepEqual(result, {
+    code: 1,
+    stdout: "",
+    stderr: "Yuru API is unavailable. Run this command inside a Yuru terminal.\n",
+  });
+});
+
+test("yuru worktree create は branch name を必須にする", async () => {
+  const result = await runCli(["worktree", "create"], process.env);
+
+  assert.deepEqual(result, {
+    code: 1,
+    stdout: "",
+    stderr: "Usage: yuru worktree create <branch-name>\n",
+  });
+});
+
 test(
   "yuru latest audits the pulled lockfile before installing dependencies",
   { skip: process.platform !== "darwin" },

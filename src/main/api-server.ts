@@ -17,6 +17,13 @@ export interface ApiServer {
   stop(): Promise<void>;
 }
 
+interface ApiService {
+  createTaskWorktreeFromWorktreePath(
+    worktreePath: string,
+    branchName: string,
+  ): Promise<Result<{ worktreePath: string; branchName: string }>>;
+}
+
 interface StartApiServerOptions {
   socketPath?: string;
   handleRequest?: ApiRequestHandler;
@@ -126,6 +133,22 @@ export function handleApiRequest(request: ApiRequest): Result<unknown> {
     code: "unknown",
     message: `Unknown command: ${request.command}`,
   });
+}
+
+export function createApiRequestHandler(service: ApiService): ApiRequestHandler {
+  return (request) => {
+    if (request.command !== "worktree.create") {
+      return handleApiRequest(request);
+    }
+
+    const { worktreePath, branchName } = request.args;
+    if (typeof worktreePath !== "string" || typeof branchName !== "string") {
+      return invalidRequest(
+        "worktree.create requires string worktreePath and branchName arguments.",
+      );
+    }
+    return service.createTaskWorktreeFromWorktreePath(worktreePath, branchName);
+  };
 }
 
 function closeServer(server: net.Server, sockets: ReadonlySet<net.Socket>): Promise<void> {

@@ -39,6 +39,8 @@ Commands:
               Register the directory's Git repository in Yuru
   yuru latest Update the managed checkout, rebuild, and replace Yuru.app
   yuru ping   Check the connection to the running Yuru app
+  yuru worktree create <branch-name>
+              Create a task worktree from the current worktree's repository
   yuru help   Show this message
 `);
 }
@@ -169,6 +171,50 @@ async function ping() {
     fail("Yuru returned an invalid ping response.");
   }
   console.log(response.data);
+}
+
+async function createTaskWorktree(args) {
+  if (args.length !== 1) {
+    fail("Usage: yuru worktree create <branch-name>");
+  }
+  apiSocketPath();
+  const callerWorktreePath = process.env.YURU_WORKTREE_PATH;
+  if (!callerWorktreePath) {
+    fail("This command must be run inside a Yuru task worktree terminal.");
+  }
+
+  let response;
+  try {
+    response = await requestApi("worktree.create", {
+      worktreePath: callerWorktreePath,
+      branchName: args[0],
+    });
+  } catch (error) {
+    fail(`Could not connect to Yuru: ${errorMessage(error)}`);
+  }
+
+  if (!response.ok) {
+    fail(response.error.message);
+  }
+  if (
+    !response.data ||
+    typeof response.data !== "object" ||
+    Array.isArray(response.data) ||
+    typeof response.data.worktreePath !== "string" ||
+    typeof response.data.branchName !== "string"
+  ) {
+    fail("Yuru returned an invalid worktree create response.");
+  }
+  console.log(
+    `Created worktree ${response.data.worktreePath} on branch ${response.data.branchName}`,
+  );
+}
+
+async function worktree(args) {
+  if (args[0] !== "create") {
+    fail("Usage: yuru worktree create <branch-name>");
+  }
+  await createTaskWorktree(args.slice(1));
 }
 
 function ensureManagedRepo() {
@@ -349,6 +395,9 @@ switch (command) {
     break;
   case "ping":
     await ping();
+    break;
+  case "worktree":
+    await worktree(process.argv.slice(3));
     break;
   case "help":
   case "--help":

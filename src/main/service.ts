@@ -100,6 +100,7 @@ import { createTerminalEnv, type TerminalEnvOptions } from "./terminal-env.js";
 import { deliverInitialInput } from "./initial-input.js";
 import { TerminalScreen } from "./terminal-screen.js";
 import { createInteractiveShellLaunchCommand } from "./shell-launch.js";
+import { findRepoByWorktreePath } from "./worktree-repository.js";
 
 const STARTUP_OUTPUT_LIMIT = 4000;
 const OUTPUT_ACTIVE_GRACE_MS = 1500;
@@ -135,8 +136,8 @@ interface WorktreeSessionResumeTarget {
   project: string;
 }
 
-function resolveTaskWorktreePath(repoPath: string, worktreeName: string): string {
-  return path.join(repoPath, ".yuru", "worktrees", worktreeName);
+function resolveTaskWorktreePath(repoPath: string, branchName: string): string {
+  return path.join(repoPath, ".yuru", "worktrees", branchName.replace(/\//g, "-"));
 }
 
 export interface YuruServiceEvents {
@@ -506,6 +507,33 @@ export class YuruService {
     );
   }
 
+  async createTaskWorktreeFromWorktreePath(
+    callerWorktreePath: string,
+    branchName: string,
+  ): Promise<Result<{ worktreePath: string; branchName: string }>> {
+    let repo;
+    try {
+      repo = await findRepoByWorktreePath(callerWorktreePath);
+    } catch (error) {
+      return this.failAndReport(toAppError(error, { command: "git" }));
+    }
+    if (!repo) {
+      return this.failAndReport({
+        code: "unknown",
+        message: `Worktree "${callerWorktreePath}" does not belong to a repository registered in Yuru.`,
+      });
+    }
+
+    const result = await this.createTaskWorktree(repo.repoPath, branchName);
+    if (!result.ok) {
+      return result;
+    }
+    return ok({
+      worktreePath: resolveTaskWorktreePath(repo.repoPath, branchName),
+      branchName,
+    });
+  }
+
   // 第 2 の worktree 作成方法 (F42)。branch を HEAD から切る代わりに origin から取り込む。
   async createTaskWorktreeFromRemoteBranch(
     repoPath: string,
@@ -524,7 +552,7 @@ export class YuruService {
     runGitCreate: (worktreePath: string) => Promise<void>,
   ): Promise<Result<CreatedTaskWorktree>> {
     const worktreeName = branchName.replace(/\//g, "-");
-    const worktreePath = resolveTaskWorktreePath(repoPath, worktreeName);
+    const worktreePath = resolveTaskWorktreePath(repoPath, branchName);
 
     if (fs.existsSync(worktreePath)) {
       return this.failAndReport<CreatedTaskWorktree>({

@@ -20,7 +20,12 @@ import type {
 } from "../shared/ipc.js";
 import type { SessionProvider } from "../shared/session.js";
 import { HTML_PREVIEW_CSP, HTML_PREVIEW_SCHEME, HtmlPreviewGrants } from "./html-preview.js";
-import { getApiSocketPath, startApiServer, type ApiServer } from "./api-server.js";
+import {
+  createApiRequestHandler,
+  getApiSocketPath,
+  startApiServer,
+  type ApiServer,
+} from "./api-server.js";
 
 let mainWindow: BrowserWindow | null = null;
 let worktreeWatcher: WorktreeWatcher | null = null;
@@ -509,6 +514,7 @@ app.whenReady().then(async () => {
   try {
     apiServer = await startApiServer({
       socketPath: apiSocketPath,
+      handleRequest: createApiRequestHandler(service),
       onError: recordAppError,
     });
   } catch (error) {

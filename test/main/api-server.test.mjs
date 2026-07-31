@@ -7,6 +7,7 @@ import test from "node:test";
 
 import {
   cleanupStaleApiSockets,
+  createApiRequestHandler,
   getApiSocketPath,
   handleApiRequest,
   startApiServer,
@@ -63,6 +64,61 @@ test("handleApiRequest は ping に pong を返し、未知の command を拒否
     error: {
       code: "unknown",
       message: "Unknown command: missing",
+    },
+  });
+});
+
+test("createApiRequestHandler は worktree.create を service に渡す", async () => {
+  const calls = [];
+  const handler = createApiRequestHandler({
+    async createTaskWorktreeFromWorktreePath(worktreePath, branchName) {
+      calls.push({ worktreePath, branchName });
+      return {
+        ok: true,
+        data: {
+          worktreePath: "/repo/.yuru/worktrees/child-task",
+          branchName,
+        },
+      };
+    },
+  });
+
+  assert.deepEqual(
+    await handler({
+      command: "worktree.create",
+      args: {
+        worktreePath: "/repo/.yuru/worktrees/parent-task",
+        branchName: "child-task",
+      },
+    }),
+    {
+      ok: true,
+      data: {
+        worktreePath: "/repo/.yuru/worktrees/child-task",
+        branchName: "child-task",
+      },
+    },
+  );
+  assert.deepEqual(calls, [
+    {
+      worktreePath: "/repo/.yuru/worktrees/parent-task",
+      branchName: "child-task",
+    },
+  ]);
+});
+
+test("createApiRequestHandler は worktree.create の不正な引数を拒否する", async () => {
+  const handler = createApiRequestHandler({
+    async createTaskWorktreeFromWorktreePath() {
+      throw new Error("must not be called");
+    },
+  });
+
+  assert.deepEqual(await handler({ command: "worktree.create", args: { branchName: 42 } }), {
+    ok: false,
+    error: {
+      code: "unknown",
+      message: "worktree.create requires string worktreePath and branchName arguments.",
     },
   });
 });
