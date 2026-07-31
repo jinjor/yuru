@@ -96,7 +96,7 @@ import {
   recordAppError,
   recordAppWarning,
 } from "./error-center.js";
-import { createTerminalEnv } from "./terminal-env.js";
+import { createTerminalEnv, type TerminalEnvOptions } from "./terminal-env.js";
 import { deliverInitialInput } from "./initial-input.js";
 import { TerminalScreen } from "./terminal-screen.js";
 import { createInteractiveShellLaunchCommand } from "./shell-launch.js";
@@ -148,6 +148,8 @@ export interface YuruServiceEvents {
   refreshWorktreeWatcher(): Promise<void>;
   addWorktreeWatcherRepo(repoPath: string): void;
 }
+
+export type YuruServiceTerminalEnv = Pick<TerminalEnvOptions, "apiSocketPath" | "yuruCliPath">;
 
 // Agent session ごとに「前回 renderer へ push した値」を覚えておき、変わった時だけ push する。
 interface SessionMonitorState {
@@ -290,7 +292,10 @@ export class YuruService {
   private readonly activeCodeSearches = new Map<string, AbortController>();
   private readonly fileTreeWatcher: FileTreeWatcher;
 
-  constructor(private readonly events: YuruServiceEvents) {
+  constructor(
+    private readonly events: YuruServiceEvents,
+    private readonly terminalEnv: YuruServiceTerminalEnv,
+  ) {
     this.fileTreeWatcher = new FileTreeWatcher((worktreeId, relativePath) => {
       this.events.fileTreeChanged(worktreeId, relativePath);
     });
@@ -421,6 +426,9 @@ export class YuruService {
         providerAdapter,
         await providerAdapter.createWorktreeLaunch(this.createContextForExistingWorktree(worktree)),
         "Failed to create worktree session",
+        path.resolve(worktree.worktreePath) === path.resolve(worktree.repoPath)
+          ? undefined
+          : worktree.worktreePath,
       );
       const { terminalRuntimeId, providerSessionId } = await this.startSession(
         providerAdapter,
@@ -464,7 +472,13 @@ export class YuruService {
     try {
       pending = this.launchPendingTerminal({
         cwd: worktree.worktreePath,
-        env: createTerminalEnv(process.env),
+        env: createTerminalEnv(process.env, {
+          ...this.terminalEnv,
+          worktreePath:
+            path.resolve(worktree.worktreePath) === path.resolve(worktree.repoPath)
+              ? undefined
+              : worktree.worktreePath,
+        }),
         launchLabel: "Failed to start terminal",
         runtimeKind: "standalone",
         worktreePath: worktree.worktreePath,
@@ -979,11 +993,16 @@ export class YuruService {
     providerAdapter: SessionProviderAdapter,
     request: LaunchRequest,
     launchLabel: string,
+    worktreePath?: string,
   ): PendingSession {
     const pendingTerminal = this.launchPendingTerminal(
       {
         cwd: request.cwd,
-        env: createTerminalEnv(process.env, providerAdapter.definition.id),
+        env: createTerminalEnv(process.env, {
+          ...this.terminalEnv,
+          provider: providerAdapter.definition.id,
+          worktreePath,
+        }),
         launchLabel,
         runtimeKind: providerAdapter.definition.id,
         startupCommand: {
@@ -1498,6 +1517,7 @@ export class YuruService {
         providerAdapter,
         await providerAdapter.createResumeLaunch(target),
         "Failed to resume session",
+        target.project,
       );
       this.registerTerminalRuntime(pending, target.providerSessionId);
       return ok(pending.terminalRuntimeId);

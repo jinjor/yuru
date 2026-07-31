@@ -20,12 +20,16 @@ import type {
 } from "../shared/ipc.js";
 import type { SessionProvider } from "../shared/session.js";
 import { HTML_PREVIEW_CSP, HTML_PREVIEW_SCHEME, HtmlPreviewGrants } from "./html-preview.js";
+import { getApiSocketPath, startApiServer, type ApiServer } from "./api-server.js";
 
 let mainWindow: BrowserWindow | null = null;
 let worktreeWatcher: WorktreeWatcher | null = null;
+let apiServer: ApiServer | null = null;
 let servicesStopped = false;
 
 const HIDE_WINDOW_FOR_E2E = process.env.YURU_E2E_HIDE_WINDOW === "1";
+const apiSocketPath = getApiSocketPath();
+const yuruCliPath = path.join(app.getAppPath(), "scripts", "yuru-cli.mjs");
 
 app.setName(APP_NAME);
 
@@ -43,15 +47,21 @@ protocol.registerSchemesAsPrivileged([
 
 const htmlPreviewGrants = new HtmlPreviewGrants();
 
-const service = new YuruService({
-  fileTreeChanged: sendFileTreeChanged,
-  ptyData: sendPtyData,
-  terminalRuntimeExited: sendTerminalRuntimeExited,
-  sessionChanged: sendSessionChanged,
-  repoListChanged: sendRepoListChanged,
-  refreshWorktreeWatcher,
-  addWorktreeWatcherRepo,
-});
+const service = new YuruService(
+  {
+    fileTreeChanged: sendFileTreeChanged,
+    ptyData: sendPtyData,
+    terminalRuntimeExited: sendTerminalRuntimeExited,
+    sessionChanged: sendSessionChanged,
+    repoListChanged: sendRepoListChanged,
+    refreshWorktreeWatcher,
+    addWorktreeWatcherRepo,
+  },
+  {
+    apiSocketPath,
+    yuruCliPath,
+  },
+);
 
 setErrorNoticesListener(sendErrorNoticesChanged);
 
@@ -276,7 +286,12 @@ async function stopApplicationServices(): Promise<void> {
   servicesStopped = true;
   pullRequestMonitor.stop();
   worktreeWatcher?.stop();
-  await service.stop();
+  try {
+    await apiServer?.stop();
+  } finally {
+    apiServer = null;
+    await service.stop();
+  }
 }
 
 // service は失敗を Result で返すルールだが、ルール外の例外が投げられた場合も
@@ -488,6 +503,19 @@ app.whenReady().then(async () => {
     recordAppWarning({
       ...appError,
       message: `Skipped stale task worktree cleanup for ${skippedRepo.repoPath}.`,
+      detail: appError.message,
+    });
+  }
+  try {
+    apiServer = await startApiServer({
+      socketPath: apiSocketPath,
+      onError: recordAppError,
+    });
+  } catch (error) {
+    const appError = toAppError(error);
+    recordAppWarning({
+      ...appError,
+      message: "Yuru API could not start.",
       detail: appError.message,
     });
   }

@@ -3,6 +3,7 @@
 import { execFileSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 
@@ -37,6 +38,7 @@ Commands:
   yuru add <directory>
               Register the directory's Git repository in Yuru
   yuru latest Update the managed checkout, rebuild, and replace Yuru.app
+  yuru ping   Check the connection to the running Yuru app
   yuru help   Show this message
 `);
 }
@@ -67,6 +69,106 @@ function read(command, args, options = {}) {
 function fail(message) {
   console.error(message);
   process.exit(1);
+}
+
+function apiSocketPath() {
+  const socketPath = process.env.YURU_API_SOCKET;
+  if (!socketPath) {
+    fail("Yuru API is unavailable. Run this command inside a Yuru terminal.");
+  }
+  return socketPath;
+}
+
+function parseApiResponse(line) {
+  let value;
+  try {
+    value = JSON.parse(line);
+  } catch {
+    throw new Error("Yuru returned invalid JSON.");
+  }
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Yuru returned an invalid response.");
+  }
+  if (value.ok === true && Object.hasOwn(value, "data")) {
+    return value;
+  }
+  if (
+    value.ok === false &&
+    value.error &&
+    typeof value.error === "object" &&
+    !Array.isArray(value.error) &&
+    typeof value.error.code === "string" &&
+    typeof value.error.message === "string"
+  ) {
+    return value;
+  }
+  throw new Error("Yuru returned an invalid response.");
+}
+
+function requestApi(command, args) {
+  return new Promise((resolve, reject) => {
+    const socket = net.createConnection(apiSocketPath());
+    socket.setEncoding("utf8");
+
+    let input = "";
+    let settled = false;
+
+    socket.on("connect", () => {
+      socket.write(`${JSON.stringify({ command, args })}\n`);
+    });
+    socket.on("data", (chunk) => {
+      if (settled) {
+        return;
+      }
+      input += chunk;
+      const newlineIndex = input.indexOf("\n");
+      if (newlineIndex === -1) {
+        return;
+      }
+
+      settled = true;
+      socket.destroy();
+      try {
+        resolve(parseApiResponse(input.slice(0, newlineIndex)));
+      } catch (error) {
+        reject(error);
+      }
+    });
+    socket.on("end", () => {
+      if (!settled) {
+        settled = true;
+        reject(new Error("Yuru closed the connection without a response."));
+      }
+    });
+    socket.on("error", (error) => {
+      if (!settled) {
+        settled = true;
+        reject(error);
+      }
+    });
+  });
+}
+
+function errorMessage(error) {
+  return error instanceof Error && error.message ? error.message : String(error);
+}
+
+async function ping() {
+  let response;
+  try {
+    response = await requestApi("ping", {});
+  } catch (error) {
+    fail(`Could not connect to Yuru: ${errorMessage(error)}`);
+  }
+
+  if (!response.ok) {
+    fail(response.error.message);
+  }
+  if (response.data !== "pong") {
+    fail("Yuru returned an invalid ping response.");
+  }
+  console.log(response.data);
 }
 
 function ensureManagedRepo() {
@@ -105,7 +207,9 @@ function ensureCleanWorktree() {
 function ensureMainBranch() {
   const branch = read("git", ["branch", "--show-current"]);
   if (branch !== "main") {
-    fail(`Refusing to update from branch \`${branch}\`. Switch the managed checkout back to \`main\`.`);
+    fail(
+      `Refusing to update from branch \`${branch}\`. Switch the managed checkout back to \`main\`.`,
+    );
   }
 }
 
@@ -242,6 +346,9 @@ switch (command) {
     break;
   case "latest":
     updateApp();
+    break;
+  case "ping":
+    await ping();
     break;
   case "help":
   case "--help":

@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { startApiServer } from "../../src/main/api-server.ts";
 
 const cliPath = path.resolve("scripts/yuru-cli.mjs");
 
@@ -87,6 +88,28 @@ function runLatest(env) {
   });
 }
 
+function runCli(args, env) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [cliPath, ...args], {
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("close", (code) => {
+      resolve({ code, stdout, stderr });
+    });
+  });
+}
+
 test("yuru add registers the specified Git repository once", (t) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-cli-"));
   t.after(() => {
@@ -145,6 +168,40 @@ test("yuru add requires a directory argument", () => {
   );
 });
 
+test("yuru ping は Yuru API の pong を表示する", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-cli-ping-"));
+  const socketPath = path.join(tempDir, "api.sock");
+  const server = await startApiServer({ socketPath });
+  t.after(async () => {
+    await server.stop();
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  const result = await runCli(["ping"], {
+    ...process.env,
+    YURU_API_SOCKET: socketPath,
+  });
+
+  assert.deepEqual(result, {
+    code: 0,
+    stdout: "pong\n",
+    stderr: "",
+  });
+});
+
+test("yuru ping は Yuru terminal 外では実行しない", async () => {
+  const env = { ...process.env };
+  delete env.YURU_API_SOCKET;
+
+  const result = await runCli(["ping"], env);
+
+  assert.deepEqual(result, {
+    code: 1,
+    stdout: "",
+    stderr: "Yuru API is unavailable. Run this command inside a Yuru terminal.\n",
+  });
+});
+
 test(
   "yuru latest audits the pulled lockfile before installing dependencies",
   { skip: process.platform !== "darwin" },
@@ -174,7 +231,10 @@ test(
   (t) => {
     const { commandLogPath, env } = createLatestFixture(t, { auditExitCode: 1 });
 
-    assert.throws(() => runLatest(env), (error) => error.status === 1);
+    assert.throws(
+      () => runLatest(env),
+      (error) => error.status === 1,
+    );
 
     const npmCommands = fs
       .readFileSync(commandLogPath, "utf8")
@@ -198,8 +258,7 @@ test(
       () => runLatest(env),
       (error) =>
         error.status === 1 &&
-        error.stderr ===
-          "npm 11.16.0 or later is required to update Yuru. Found npm 11.15.0.\n",
+        error.stderr === "npm 11.16.0 or later is required to update Yuru. Found npm 11.15.0.\n",
     );
   },
 );

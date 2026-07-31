@@ -1,8 +1,15 @@
 import type { SessionProvider } from "../shared/session.js";
 
+export interface TerminalEnvOptions {
+  apiSocketPath: string;
+  yuruCliPath: string;
+  provider?: SessionProvider;
+  worktreePath?: string;
+}
+
 export function createTerminalEnv(
   baseEnv: Record<string, string | undefined>,
-  provider?: SessionProvider,
+  options: TerminalEnvOptions,
 ): Record<string, string> {
   const env = Object.fromEntries(
     Object.entries(baseEnv).filter(
@@ -34,12 +41,20 @@ export function createTerminalEnv(
     delete env[key];
   }
 
-  if (provider === "codex") {
+  if (options.provider === "codex") {
     for (const key of Object.keys(env)) {
       if (/^CODEX_.*(THREAD|SESSION|CONVERSATION).*/.test(key)) {
         delete env[key];
       }
     }
+  }
+
+  env.YURU_API_SOCKET = options.apiSocketPath;
+  env.YURU_CLI = options.yuruCliPath;
+  if (options.worktreePath) {
+    env.YURU_WORKTREE_PATH = options.worktreePath;
+  } else {
+    delete env.YURU_WORKTREE_PATH;
   }
 
   return env;
