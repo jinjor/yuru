@@ -19,6 +19,7 @@ import {
 } from "./paths.js";
 import { loadWorktreeContextPrompt } from "../../worktree-context-prompt.js";
 import { IncrementalSessionPreviewReader } from "../../session-preview-reader.js";
+import { getYuruClaudePluginDir } from "../../skill-materializer.js";
 
 interface ClaudeHistoryEntry {
   sessionId: string;
@@ -275,12 +276,17 @@ export const sessionProvider: SessionProviderAdapter = {
   async createResumeLaunch(session) {
     return {
       cwd: session.cwd,
-      args: ["--resume", session.providerSessionId],
+      args: ["--plugin-dir", getYuruClaudePluginDir(), "--resume", session.providerSessionId],
       worktreePath: session.project,
     };
   },
   async createWorktreeLaunch(context) {
-    const args = ["--append-system-prompt", await loadWorktreeContextPrompt(context)];
+    const args = [
+      "--plugin-dir",
+      getYuruClaudePluginDir(),
+      "--append-system-prompt",
+      await loadWorktreeContextPrompt(context),
+    ];
     if (context.initialPrompt !== undefined) {
       args.push(context.initialPrompt);
     }

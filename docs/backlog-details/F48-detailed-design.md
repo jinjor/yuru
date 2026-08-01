@@ -1,6 +1,6 @@
 # F48 詳細設計: エージェントからの worktree + session 作成 API
 
-Last updated: 2026-07-30
+Last updated: 2026-08-01
 
 [F48-branch-work.md](F48-branch-work.md) の方向性 (handoff、API + 組み込み skill、Unix domain socket、
 中立性の原則) を土台に、スパイク結果と実装レベルの設計をまとめたもの。
@@ -65,7 +65,7 @@ Codex 対応は設計判断が要るので「相談事項」に分離した (後
 ### スラッシュ起動形式
 
 - Claude: plugin の skill は Skill tool から名前で呼べる (検証済み)。
-  スラッシュ補完上の見え方 (`/yuru` か `/plugin名:yuru` か) は未検証。実装時に確認する
+  F48 Step 4 実装後の Claude Code 2.1.220 では、スラッシュ補完に `/yuru:yuru` と表示された
 - Codex: skill は自動選択または `$<name>` メンション (公式の Agent Skills 仕様)。
   `/skill:...` 形式ではない
 - Kimi: `/skill:<name>` (公式ドキュメント)
@@ -276,6 +276,18 @@ CLI は `--prompt-file` でファイルの中身を受け取るだけで、そ�
 - Claude adapter の新規・resume 両方に `--plugin-dir` を追加
 - 手動確認: 3 provider のセッションで「yuru の skill を使って worktree を作って」が通ること。
   Claude でスラッシュ補完の見え方を確認してドキュメントに追記
+
+実機確認 (2026-08-01):
+
+- Claude / Codex / Kimi の各セッションが自然言語の依頼から `yuru` skill を読み、
+  `node "$YURU_CLI" worktree create f48-design` を Yuru API まで届けることを確認した。
+  既存 worktree 名を使ったため、いずれも `Worktree "f48-design" already exists` で終了し、
+  検証用の branch / worktree は作成していない
+- Claude Code 2.1.220 は `--plugin-dir` の対象が存在しない場合、空の場合、manifest が
+  壊れている場合もセッションを起動した。skill の実体化失敗を warning に留めても、
+  `--plugin-dir` が Claude セッションの起動失敗へ波及しないことを確認した
+- `npm run package:local` の一時出力で、app bundle 内の `skills/yuru/SKILL.md` が原本と
+  一致し、同 bundle に `scripts/yuru-cli.mjs` も同梱されることを確認した
 
 ### Step 5: `session transcript-path`
 

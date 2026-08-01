@@ -26,6 +26,7 @@ import {
   startApiServer,
   type ApiServer,
 } from "./api-server.js";
+import { materializeYuruSkill } from "./skill-materializer.js";
 
 let mainWindow: BrowserWindow | null = null;
 let worktreeWatcher: WorktreeWatcher | null = null;
@@ -35,6 +36,7 @@ let servicesStopped = false;
 const HIDE_WINDOW_FOR_E2E = process.env.YURU_E2E_HIDE_WINDOW === "1";
 const apiSocketPath = getApiSocketPath();
 const yuruCliPath = path.join(app.getAppPath(), "scripts", "yuru-cli.mjs");
+const yuruSkillSourcePath = path.join(app.getAppPath(), "skills", "yuru", "SKILL.md");
 
 app.setName(APP_NAME);
 
@@ -502,6 +504,16 @@ app.whenReady().then(async () => {
   });
   registerHtmlPreviewProtocol();
   configureBrowserPermissions();
+  try {
+    await materializeYuruSkill({ sourceSkillPath: yuruSkillSourcePath });
+  } catch (error) {
+    const appError = toAppError(error);
+    recordAppWarning({
+      ...appError,
+      message: "Yuru skill could not be installed.",
+      detail: appError.message,
+    });
+  }
   const cleanupResult = await cleanupStaleTaskWorktrees();
   for (const skippedRepo of cleanupResult.skippedRepos) {
     const appError = toAppError(skippedRepo.error);

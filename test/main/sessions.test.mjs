@@ -264,7 +264,7 @@ test("provider resume launch は session の記録場所 (target.cwd) で起動�
     }),
     {
       cwd: worktreePath,
-      args: ["--resume", "claude-resume"],
+      args: ["--plugin-dir", path.join(tempDir, ".yuru", "plugin"), "--resume", "claude-resume"],
       worktreePath,
     },
   );
@@ -314,7 +314,7 @@ test("provider worktree launch は repo root で起動して hidden context を�
 
   assert.deepEqual(await claudeProvider.createWorktreeLaunch(context), {
     cwd: repoPath,
-    args: ["--append-system-prompt", prompt],
+    args: ["--plugin-dir", path.join(tempDir, ".yuru", "plugin"), "--append-system-prompt", prompt],
     worktreePath,
   });
 
@@ -357,7 +357,13 @@ test("provider worktree launch は initial prompt を最初の依頼として渡
 
   assert.deepEqual(await claudeProvider.createWorktreeLaunch(context), {
     cwd: repoPath,
-    args: ["--append-system-prompt", worktreePrompt, initialPrompt],
+    args: [
+      "--plugin-dir",
+      path.join(tempDir, ".yuru", "plugin"),
+      "--append-system-prompt",
+      worktreePrompt,
+      initialPrompt,
+    ],
     worktreePath,
   });
 
