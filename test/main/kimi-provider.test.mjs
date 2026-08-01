@@ -156,4 +156,5 @@ test("hasRecordedInitialInput は JSON escape された注入文にも一致す�
   });
 
   assert.equal(await kimiProvider.hasRecordedInitialInput("session_escaped", 'say "hi"\nnow'), true);
+  assert.equal(await kimiProvider.hasRecordedInitialInput("session_escaped", 'say "hi"\nnow\n'), true);
 });

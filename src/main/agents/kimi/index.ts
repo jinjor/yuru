@@ -14,6 +14,7 @@ import {
   loadWorktreeContextPrompt,
   WORKTREE_CONTEXT_PROMPT_MARKER,
 } from "../../worktree-context-prompt.js";
+import { assertValidTerminalInput } from "../../initial-input.js";
 import {
   kimiSessionIndexPath,
   kimiSessionStatePath,
@@ -32,6 +33,15 @@ interface KimiSessionState {
   lastPrompt: string;
   createdAt: string;
   updatedAt: string;
+}
+
+// Kimi has no model-facing initial-message input for its interactive TUI yet:
+// https://github.com/MoonshotAI/kimi-code/issues/2507
+const KIMI_USER_MESSAGE_PREFIX = "User request:\n\n";
+
+function toKimiUserMessage(initialPrompt: string): string {
+  assertValidTerminalInput(initialPrompt);
+  return `${KIMI_USER_MESSAGE_PREFIX}${initialPrompt}`;
 }
 
 const sessionRefsById = new Map<string, KimiStoredSessionRef>();
@@ -260,10 +270,12 @@ async function hasRecordedInitialInput(
   if (!content) {
     return false;
   }
+  // Kimi trims the editor value when it submits a user message.
+  const recordedInput = initialInput.trim();
   // The wire log stores messages as JSON; check both the raw text and its
   // JSON-escaped form so prompts with quotes or newlines still match.
   return (
-    content.includes(initialInput) || content.includes(JSON.stringify(initialInput).slice(1, -1))
+    content.includes(recordedInput) || content.includes(JSON.stringify(recordedInput).slice(1, -1))
   );
 }
 
@@ -296,7 +308,8 @@ export const sessionProvider: SessionProviderAdapter = {
       args: context.model === undefined ? [] : ["--model", context.model],
       worktreePath: context.worktreePath,
       initialInput: await loadWorktreeContextPrompt(context),
-      initialPrompt: context.initialPrompt,
+      initialPrompt:
+        context.initialPrompt === undefined ? undefined : toKimiUserMessage(context.initialPrompt),
       existingProviderSessionIds: await listExistingSessionIds(),
     };
   },

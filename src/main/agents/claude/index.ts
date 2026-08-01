@@ -288,7 +288,10 @@ export const sessionProvider: SessionProviderAdapter = {
     }
     args.push("--append-system-prompt", await loadWorktreeContextPrompt(context));
     if (context.initialPrompt !== undefined) {
-      args.push(context.initialPrompt);
+      // Claude still recognizes command names such as `doctor` after `--`.
+      // A leading space keeps every value in the prompt operand while `--`
+      // prevents option-like prompts from changing launch configuration.
+      args.push("--", ` ${context.initialPrompt}`);
     }
     return {
       cwd: context.repoPath,

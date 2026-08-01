@@ -6,6 +6,8 @@ import { setTimeout } from "node:timers/promises";
 const ENTER_DELAY_MS = 500;
 const VERIFY_POLL_INTERVAL_MS = 500;
 const VERIFY_TIMEOUT_MS = 10_000;
+const BRACKETED_PASTE_START = "\u001b[200~";
+const BRACKETED_PASTE_END = "\u001b[201~";
 
 export interface InitialInputWriter {
   write(data: string): void;
@@ -20,12 +22,29 @@ export interface DeliverInitialInputOptions {
   verifyTimeoutMs?: number;
 }
 
+export function assertValidTerminalInput(input: string): void {
+  const hasTerminalControlCharacter = Array.from(input).some((character) => {
+    const codePoint = character.codePointAt(0)!;
+    return (
+      codePoint <= 0x08 ||
+      (codePoint >= 0x0b && codePoint <= 0x1f) ||
+      (codePoint >= 0x7f && codePoint <= 0x9f)
+    );
+  });
+  if (hasTerminalControlCharacter) {
+    throw new Error(
+      "Initial prompts sent through a terminal may contain tabs and line feeds, but no other terminal control characters.",
+    );
+  }
+}
+
 export async function deliverInitialInput(
   writer: InitialInputWriter,
   initialInput: string,
   options: DeliverInitialInputOptions = {},
 ): Promise<boolean> {
-  writer.write(initialInput);
+  assertValidTerminalInput(initialInput);
+  writer.write(`${BRACKETED_PASTE_START}${initialInput}${BRACKETED_PASTE_END}`);
   await setTimeout(options.enterDelayMs ?? ENTER_DELAY_MS);
   writer.write("\r");
 

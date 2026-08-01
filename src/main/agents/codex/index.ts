@@ -396,7 +396,7 @@ export const sessionProvider: SessionProviderAdapter = {
     }
     args.push("-c", `developer_instructions=${JSON.stringify(prompt)}`);
     if (context.initialPrompt !== undefined) {
-      args.push(context.initialPrompt);
+      args.push("--", context.initialPrompt);
     }
     return {
       cwd: context.repoPath,

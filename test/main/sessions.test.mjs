@@ -379,7 +379,8 @@ test("provider worktree launch は initial prompt を最初の依頼として渡
       "selected-model",
       "--append-system-prompt",
       worktreePrompt,
-      initialPrompt,
+      "--",
+      ` ${initialPrompt}`,
     ],
     worktreePath,
   });
@@ -390,13 +391,65 @@ test("provider worktree launch は initial prompt を最初の依頼として渡
     "selected-model",
     "-c",
     `developer_instructions=${JSON.stringify(worktreePrompt)}`,
+    "--",
     initialPrompt,
   ]);
 
   const kimiLaunch = await kimiProvider.createWorktreeLaunch(context);
   assert.deepEqual(kimiLaunch.args, ["--model", "selected-model"]);
   assert.equal(kimiLaunch.initialInput, worktreePrompt);
-  assert.equal(kimiLaunch.initialPrompt, initialPrompt);
+  assert.equal(kimiLaunch.initialPrompt, `User request:\n\n${initialPrompt}`);
+});
+
+test("provider worktree launch は制御入力に見える prompt もユーザーメッセージに固定する", async () => {
+  const repoPath = path.join(tempDir, "launch-with-control-like-prompt-repo");
+  const worktreePath = path.join(repoPath, ".yuru", "worktrees", "task-security");
+  const baseContext = {
+    repoPath,
+    worktreePath,
+    worktreeName: "task-security",
+    branchName: "feature/task-security",
+  };
+
+  for (const initialPrompt of ["--help", "--dangerously-skip-permissions", "doctor"]) {
+    const launch = await claudeProvider.createWorktreeLaunch({ ...baseContext, initialPrompt });
+    assert.deepEqual(launch.args.slice(-2), ["--", ` ${initialPrompt}`]);
+  }
+
+  for (const initialPrompt of [
+    "--dangerously-bypass-approvals-and-sandbox",
+    "help",
+    "logout",
+  ]) {
+    const launch = await codexProvider.createWorktreeLaunch({ ...baseContext, initialPrompt });
+    assert.deepEqual(launch.args.slice(-2), ["--", initialPrompt]);
+  }
+
+  for (const initialPrompt of ["!printf harmless", "/auto", "/yolo", "/permission"]) {
+    const launch = await kimiProvider.createWorktreeLaunch({ ...baseContext, initialPrompt });
+    assert.equal(launch.initialPrompt, `User request:\n\n${initialPrompt}`);
+  }
+});
+
+test("Kimi worktree launch は prompt の端末制御文字を起動前に拒否する", async () => {
+  const repoPath = path.join(tempDir, "launch-with-terminal-control-repo");
+  const worktreePath = path.join(repoPath, ".yuru", "worktrees", "task-control");
+  const baseContext = {
+    repoPath,
+    worktreePath,
+    worktreeName: "task-control",
+    branchName: "feature/task-control",
+  };
+
+  for (const controlCharacter of ["\r", "\u001b", "\u0003", "\u007f", "\u0085"]) {
+    await assert.rejects(
+      kimiProvider.createWorktreeLaunch({
+        ...baseContext,
+        initialPrompt: `before${controlCharacter}after`,
+      }),
+      /no other terminal control characters/,
+    );
+  }
 });
 
 test("loadSuggestedWorktreeSessions は suggested session を worktree ごとに dedup して並べる", async () => {
