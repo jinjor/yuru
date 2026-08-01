@@ -273,6 +273,7 @@ export const sessionProvider: SessionProviderAdapter = {
   loadStoredSessionPreview,
   loadWorktreeSessionHints,
   hasStoredSession,
+  findSessionTranscriptPath: findClaudeSessionFile,
   async createResumeLaunch(session) {
     return {
       cwd: session.cwd,

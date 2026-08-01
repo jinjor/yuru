@@ -500,6 +500,36 @@ export class YuruService {
     });
   }
 
+  async getSessionTranscriptPath(
+    worktreePath: string,
+  ): Promise<Result<{ transcriptPath: string }>> {
+    const resolvedWorktreePath = path.resolve(worktreePath);
+    const taskWorktree = loadTaskWorktrees().find(
+      (entry) => path.resolve(entry.worktreePath) === resolvedWorktreePath,
+    );
+    if (!taskWorktree?.primarySession) {
+      return this.failAndReport({
+        code: "unknown",
+        message: `Worktree "${resolvedWorktreePath}" does not have a resolved primary session.`,
+      });
+    }
+
+    const { provider, providerSessionId } = taskWorktree.primarySession;
+    try {
+      const transcriptPath =
+        await getSessionProvider(provider).findSessionTranscriptPath(providerSessionId);
+      if (!transcriptPath) {
+        return this.failAndReport({
+          code: "unknown",
+          message: `The ${provider} transcript for worktree "${resolvedWorktreePath}" was not found.`,
+        });
+      }
+      return ok({ transcriptPath: path.resolve(transcriptPath) });
+    } catch (error) {
+      return this.failAndReport(toAppError(error));
+    }
+  }
+
   async openWorktreeTerminal(worktreeId: string): Promise<Result<WorktreeSessionSelection>> {
     const worktree = await this.findGitWorktree(worktreeId);
     if (!worktree) {

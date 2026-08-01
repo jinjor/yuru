@@ -46,6 +46,14 @@ To make a prompt the session's first user message, add exactly one of:
 
 `--prompt-file` reads the file in the CLI process and sends its contents as the prompt. It does not move, retain, or delete the file.
 
+## Find a session transcript
+
+```sh
+node "$YURU_CLI" session transcript-path [--worktree <absolute-worktree-path>]
+```
+
+This prints the absolute path of the task worktree's primary session transcript. Without `--worktree`, it uses the current Yuru task worktree. Yuru returns the path without reading the transcript.
+
 ## Handle errors
 
 - If the CLI says the Yuru API is unavailable, run it inside a terminal created by the running Yuru app.

@@ -44,6 +44,8 @@ Commands:
   yuru session create --worktree <path> --provider <claude|codex|kimi>
               [--prompt <text> | --prompt-file <path>]
               Create a provider session for a task worktree
+  yuru session transcript-path [--worktree <path>]
+              Print the primary session transcript path for a task worktree
   yuru help   Show this message
 `);
 }
@@ -302,11 +304,57 @@ async function createSession(args) {
   console.log(`Created ${response.data.provider} session for ${response.data.worktreePath}`);
 }
 
-async function sessionCommand(args) {
-  if (args[0] !== "create") {
-    fail(sessionCreateUsage);
+const sessionTranscriptPathUsage =
+  "Usage: yuru session transcript-path [--worktree <path>]";
+
+function parseSessionTranscriptPathArgs(args) {
+  if (args.length === 0) {
+    return process.env.YURU_WORKTREE_PATH;
   }
-  await createSession(args.slice(1));
+  if (args.length === 2 && args[0] === "--worktree" && args[1]) {
+    return args[1];
+  }
+  fail(sessionTranscriptPathUsage);
+}
+
+async function printSessionTranscriptPath(args) {
+  const worktreePath = parseSessionTranscriptPathArgs(args);
+  apiSocketPath();
+  if (!worktreePath) {
+    fail("This command requires --worktree outside a Yuru task worktree terminal.");
+  }
+
+  let response;
+  try {
+    response = await requestApi("session.transcript-path", { worktreePath });
+  } catch (error) {
+    fail(`Could not connect to Yuru: ${errorMessage(error)}`);
+  }
+
+  if (!response.ok) {
+    fail(response.error.message);
+  }
+  if (
+    !response.data ||
+    typeof response.data !== "object" ||
+    Array.isArray(response.data) ||
+    typeof response.data.transcriptPath !== "string"
+  ) {
+    fail("Yuru returned an invalid session transcript path response.");
+  }
+  console.log(response.data.transcriptPath);
+}
+
+async function sessionCommand(args) {
+  if (args[0] === "create") {
+    await createSession(args.slice(1));
+    return;
+  }
+  if (args[0] === "transcript-path") {
+    await printSessionTranscriptPath(args.slice(1));
+    return;
+  }
+  fail("Usage: yuru session <create|transcript-path> ...");
 }
 
 function ensureManagedRepo() {

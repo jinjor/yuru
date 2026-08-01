@@ -197,6 +197,47 @@ test("createApiRequestHandler は session.create の不正な引数を拒否す�
   );
 });
 
+test("createApiRequestHandler は session.transcript-path を service に渡す", async () => {
+  const calls = [];
+  const handler = createApiRequestHandler({
+    async getSessionTranscriptPath(worktreePath) {
+      calls.push(worktreePath);
+      return {
+        ok: true,
+        data: { transcriptPath: "/sessions/parent.jsonl" },
+      };
+    },
+  });
+
+  assert.deepEqual(
+    await handler({
+      command: "session.transcript-path",
+      args: { worktreePath: "/repo/.yuru/worktrees/parent-task" },
+    }),
+    {
+      ok: true,
+      data: { transcriptPath: "/sessions/parent.jsonl" },
+    },
+  );
+  assert.deepEqual(calls, ["/repo/.yuru/worktrees/parent-task"]);
+});
+
+test("createApiRequestHandler は session.transcript-path の不正な引数を拒否する", async () => {
+  const handler = createApiRequestHandler({
+    async getSessionTranscriptPath() {
+      throw new Error("must not be called");
+    },
+  });
+
+  assert.deepEqual(await handler({ command: "session.transcript-path", args: {} }), {
+    ok: false,
+    error: {
+      code: "unknown",
+      message: "session.transcript-path requires a string worktreePath argument.",
+    },
+  });
+});
+
 test("API server は 0600 の Unix socket で NDJSON を往復し、停止時に削除する", async (t) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-api-server-"));
   const socketPath = path.join(tempDir, "run", "api.sock");

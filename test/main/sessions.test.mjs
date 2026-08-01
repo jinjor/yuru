@@ -156,6 +156,8 @@ fs.writeFileSync(
     workDir: staleProject,
   }),
 );
+const kimiTranscriptPath = path.join(kimiSessionDir, "agents", "main", "wire.jsonl");
+fs.writeFileSync(kimiTranscriptPath, jsonl({ type: "metadata", protocol_version: "1.4" }));
 
 test.after(() => {
   if (previousHome === undefined) {
@@ -195,6 +197,18 @@ test("loadStoredSessionPreview は指定 session の preview だけを返す", a
   assert.equal(await loadStoredSessionPreview("codex", "missing"), null);
   assert.equal(await loadStoredSessionPreview("kimi", kimiSessionId), "kimi last prompt");
   assert.equal(await loadStoredSessionPreview("kimi", "missing"), null);
+});
+
+test("provider は session transcript の実在する path を返す", async () => {
+  assert.equal(
+    await claudeProvider.findSessionTranscriptPath("claude-1"),
+    path.join(claudeProjectDir, "claude-1.jsonl"),
+  );
+  assert.equal(await claudeProvider.findSessionTranscriptPath(missingClaudeSessionId), null);
+  assert.equal(await codexProvider.findSessionTranscriptPath(codexSessionId), codexSessionFile);
+  assert.equal(await codexProvider.findSessionTranscriptPath("missing"), null);
+  assert.equal(await kimiProvider.findSessionTranscriptPath(kimiSessionId), kimiTranscriptPath);
+  assert.equal(await kimiProvider.findSessionTranscriptPath("missing"), null);
 });
 
 test("Codex は Action Required の terminal title を識別する", () => {

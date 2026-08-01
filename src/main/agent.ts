@@ -66,6 +66,7 @@ export interface SessionProviderAdapter {
   loadStoredSessionPreview(providerSessionId: string): Promise<SessionPreview | null>;
   loadWorktreeSessionHints(worktreePaths: readonly string[]): Promise<WorktreeSessionHint[]>;
   hasStoredSession(providerSessionId: string): Promise<boolean>;
+  findSessionTranscriptPath(providerSessionId: string): Promise<string | null>;
   createResumeLaunch(session: ResumeSessionTarget): Promise<LaunchRequest>;
   createWorktreeLaunch(context: WorktreeContext): Promise<LaunchRequest>;
   waitForSessionId(pending: PendingSession): Promise<string>;

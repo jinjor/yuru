@@ -377,6 +377,7 @@ export const sessionProvider: SessionProviderAdapter = {
   loadStoredSessionPreview,
   loadWorktreeSessionHints,
   hasStoredSession,
+  findSessionTranscriptPath: findCodexSessionFile,
   async createResumeLaunch(session) {
     // Resume in the directory the session was recorded under (provided by the
     // caller), not the repo root. Codex keys each session by its cwd and, if
