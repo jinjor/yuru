@@ -26,6 +26,7 @@ export interface PendingSession extends PendingTerminal {
   providerSessionId: string | null;
   existingProviderSessionIds: ReadonlySet<string>;
   initialInput: string | null;
+  initialPrompt: string | null;
 }
 
 export interface LaunchRequest {
@@ -36,6 +37,9 @@ export interface LaunchRequest {
   // Message typed into the PTY as the first user prompt once the session is
   // up. Used by providers without a launch-flag injection mechanism.
   initialInput?: string;
+  // Message typed after initialInput. Kimi uses this for the requested task
+  // because its worktree context already occupies the first user message.
+  initialPrompt?: string;
 }
 
 export interface WorktreeContext {
@@ -43,6 +47,7 @@ export interface WorktreeContext {
   worktreePath: string;
   worktreeName: string;
   branchName: string;
+  initialPrompt?: string;
 }
 
 export interface ResumeSessionTarget {

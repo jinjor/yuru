@@ -123,6 +123,80 @@ test("createApiRequestHandler は worktree.create の不正な引数を拒否す
   });
 });
 
+test("createApiRequestHandler は session.create を service に渡す", async () => {
+  const calls = [];
+  const handler = createApiRequestHandler({
+    async createSessionForWorktreePath(worktreePath, provider, initialPrompt) {
+      calls.push({ worktreePath, provider, initialPrompt });
+      return {
+        ok: true,
+        data: {
+          worktreePath,
+          provider,
+          providerSessionId: provider === "codex" ? null : "provider-session-id",
+        },
+      };
+    },
+  });
+
+  assert.deepEqual(
+    await handler({
+      command: "session.create",
+      args: {
+        worktreePath: "/repo/.yuru/worktrees/child-task",
+        provider: "kimi",
+        prompt: "Continue from the parent session.\nImplement step 3.",
+      },
+    }),
+    {
+      ok: true,
+      data: {
+        worktreePath: "/repo/.yuru/worktrees/child-task",
+        provider: "kimi",
+        providerSessionId: "provider-session-id",
+      },
+    },
+  );
+  assert.deepEqual(calls, [
+    {
+      worktreePath: "/repo/.yuru/worktrees/child-task",
+      provider: "kimi",
+      initialPrompt: "Continue from the parent session.\nImplement step 3.",
+    },
+  ]);
+});
+
+test("createApiRequestHandler は session.create の不正な引数を拒否する", async () => {
+  const handler = createApiRequestHandler({
+    async createSessionForWorktreePath() {
+      throw new Error("must not be called");
+    },
+  });
+  const expected = {
+    ok: false,
+    error: {
+      code: "unknown",
+      message:
+        "session.create requires string worktreePath, a supported provider, and an optional string prompt.",
+    },
+  };
+
+  assert.deepEqual(
+    await handler({
+      command: "session.create",
+      args: { worktreePath: "/repo/worktree", provider: "other" },
+    }),
+    expected,
+  );
+  assert.deepEqual(
+    await handler({
+      command: "session.create",
+      args: { worktreePath: "/repo/worktree", provider: "claude", prompt: 42 },
+    }),
+    expected,
+  );
+});
+
 test("API server は 0600 の Unix socket で NDJSON を往復し、停止時に削除する", async (t) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-api-server-"));
   const socketPath = path.join(tempDir, "run", "api.sock");

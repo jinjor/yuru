@@ -336,6 +336,43 @@ test("provider worktree launch は repo root で起動して hidden context を�
   assert.ok(kimiLaunch.existingProviderSessionIds.has(kimiSessionId));
 });
 
+test("provider worktree launch は initial prompt を最初の依頼として渡す", async () => {
+  const repoPath = path.join(tempDir, "launch-with-prompt-repo");
+  const worktreePath = path.join(repoPath, ".yuru", "worktrees", "task-b");
+  const initialPrompt =
+    'Review the parent result, then implement step 3.\nSay "done" when finished.';
+  const context = {
+    repoPath,
+    worktreePath,
+    worktreeName: "task-b",
+    branchName: "feature/task-b",
+    initialPrompt,
+  };
+  const worktreePrompt =
+    "Yuru opened this session for the task worktree 'task-b' on branch 'feature/task-b'. " +
+    `Use ${worktreePath} as the working directory for this task. ` +
+    `When reading files, editing files, applying patches, running commands, building, or testing, operate in ${worktreePath}. ` +
+    "When mentioning a file, use a path relative to its Git worktree when the intended worktree is unambiguous from context. Use an absolute path when the worktree is ambiguous or the file is outside any worktree. " +
+    `The repository root ${repoPath} is only the parent repository that Yuru used to launch this provider session; do not treat it as the task workspace unless the user explicitly asks you to.`;
+
+  assert.deepEqual(await claudeProvider.createWorktreeLaunch(context), {
+    cwd: repoPath,
+    args: ["--append-system-prompt", worktreePrompt, initialPrompt],
+    worktreePath,
+  });
+
+  const codexLaunch = await codexProvider.createWorktreeLaunch(context);
+  assert.deepEqual(codexLaunch.args, [
+    "-c",
+    `developer_instructions=${JSON.stringify(worktreePrompt)}`,
+    initialPrompt,
+  ]);
+
+  const kimiLaunch = await kimiProvider.createWorktreeLaunch(context);
+  assert.equal(kimiLaunch.initialInput, worktreePrompt);
+  assert.equal(kimiLaunch.initialPrompt, initialPrompt);
+});
+
 test("loadSuggestedWorktreeSessions は suggested session を worktree ごとに dedup して並べる", async () => {
   const projectsDir = path.join(claudeDir, "projects", "repo");
   fs.mkdirSync(projectsDir, { recursive: true });

@@ -389,9 +389,13 @@ export const sessionProvider: SessionProviderAdapter = {
   },
   async createWorktreeLaunch(context) {
     const prompt = await loadWorktreeContextPrompt(context);
+    const args = ["-c", `developer_instructions=${JSON.stringify(prompt)}`];
+    if (context.initialPrompt !== undefined) {
+      args.push(context.initialPrompt);
+    }
     return {
       cwd: context.repoPath,
-      args: ["-c", `developer_instructions=${JSON.stringify(prompt)}`],
+      args,
       worktreePath: context.worktreePath,
       existingProviderSessionIds: await listExistingSessionIds(),
     };

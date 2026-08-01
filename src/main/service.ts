@@ -410,6 +410,7 @@ export class YuruService {
   async createSessionForWorktree(
     worktreeId: string,
     provider: SessionProvider,
+    initialPrompt?: string,
   ): Promise<Result<WorktreeSessionSelection>> {
     const worktree = await this.findGitWorktree(worktreeId);
     if (!worktree) {
@@ -425,7 +426,9 @@ export class YuruService {
       upsertTaskWorktree(worktree.repoId, worktree.worktreePath);
       pending = this.launchPendingSession(
         providerAdapter,
-        await providerAdapter.createWorktreeLaunch(this.createContextForExistingWorktree(worktree)),
+        await providerAdapter.createWorktreeLaunch(
+          this.createContextForExistingWorktree(worktree, initialPrompt),
+        ),
         "Failed to create worktree session",
         path.resolve(worktree.worktreePath) === path.resolve(worktree.repoPath)
           ? undefined
@@ -453,6 +456,48 @@ export class YuruService {
         ? fail<WorktreeSessionSelection>(appError)
         : this.failAndReport<WorktreeSessionSelection>(appError);
     }
+  }
+
+  async createSessionForWorktreePath(
+    worktreePath: string,
+    provider: SessionProvider,
+    initialPrompt?: string,
+  ): Promise<
+    Result<{
+      worktreePath: string;
+      provider: SessionProvider;
+      providerSessionId: string | null;
+    }>
+  > {
+    let repo;
+    try {
+      repo = await findRepoByWorktreePath(worktreePath);
+    } catch (error) {
+      return this.failAndReport(toAppError(error, { command: "git" }));
+    }
+    if (!repo) {
+      return this.failAndReport({
+        code: "unknown",
+        message: `Worktree "${worktreePath}" does not belong to a repository registered in Yuru.`,
+      });
+    }
+
+    const resolvedWorktreePath = path.resolve(worktreePath);
+    const result = await this.createSessionForWorktree(
+      toWorktreeId(repo.id, resolvedWorktreePath),
+      provider,
+      initialPrompt,
+    );
+    if (!result.ok) {
+      return result;
+    }
+    const providerSessionId =
+      this.terminalRuntimeMap.get(result.data.terminalRuntimeId)?.providerSessionId ?? null;
+    return ok({
+      worktreePath: resolvedWorktreePath,
+      provider,
+      providerSessionId,
+    });
   }
 
   async openWorktreeTerminal(worktreeId: string): Promise<Result<WorktreeSessionSelection>> {
@@ -1049,6 +1094,7 @@ export class YuruService {
       providerSessionId: null,
       existingProviderSessionIds: request.existingProviderSessionIds ?? new Set<string>(),
       initialInput: request.initialInput ?? null,
+      initialPrompt: request.initialPrompt ?? null,
     });
   }
 
@@ -1238,7 +1284,7 @@ export class YuruService {
       pending.providerSessionId = providerSessionId;
       pending.startupSettled = true;
       this.updateTerminalRuntimeProviderSessionId(terminalRuntimeId, providerSessionId);
-      this.deliverInitialInput(providerAdapter, pending);
+      this.deliverInitialMessages(providerAdapter, pending);
       if (!this.terminalRuntimeMap.has(terminalRuntimeId)) {
         return;
       }
@@ -1485,12 +1531,15 @@ export class YuruService {
     return null;
   }
 
-  private createContextForExistingWorktree(worktree: {
-    repoPath: string;
-    worktreePath: string;
-    branch: string | null;
-    headSha: string | null;
-  }): WorktreeContext {
+  private createContextForExistingWorktree(
+    worktree: {
+      repoPath: string;
+      worktreePath: string;
+      branch: string | null;
+      headSha: string | null;
+    },
+    initialPrompt?: string,
+  ): WorktreeContext {
     const fallbackBranchName = worktree.headSha
       ? `detached @ ${worktree.headSha.slice(0, 7)}`
       : "no commits";
@@ -1499,6 +1548,7 @@ export class YuruService {
       worktreePath: worktree.worktreePath,
       worktreeName: path.basename(worktree.worktreePath),
       branchName: worktree.branch ?? fallbackBranchName,
+      initialPrompt,
     };
   }
 
@@ -1614,12 +1664,27 @@ export class YuruService {
     return this.resumePrimaryWorktreeSession(worktreeId, providerSessionKey);
   }
 
-  private deliverInitialInput(
+  private deliverInitialMessages(
     providerAdapter: SessionProviderAdapter,
     pending: PendingSession,
   ): void {
-    const initialInput = pending.initialInput;
-    if (!initialInput || pending.exited) {
+    void (async () => {
+      if (pending.initialInput !== null) {
+        await this.deliverInitialMessage(providerAdapter, pending, pending.initialInput, "context");
+      }
+      if (pending.initialPrompt !== null) {
+        await this.deliverInitialMessage(providerAdapter, pending, pending.initialPrompt, "prompt");
+      }
+    })();
+  }
+
+  private async deliverInitialMessage(
+    providerAdapter: SessionProviderAdapter,
+    pending: PendingSession,
+    initialInput: string,
+    kind: "context" | "prompt",
+  ): Promise<void> {
+    if (pending.exited) {
       return;
     }
     const providerSessionId = pending.providerSessionId;
@@ -1637,31 +1702,35 @@ export class YuruService {
       },
     };
     this.markTerminalRuntimeInput(pending.terminalRuntimeId);
-    void deliverInitialInput(writer, initialInput, { verify })
-      .then((verified) => {
-        if (verified) {
-          return;
-        }
-        console.warn("[Yuru] initial input was not recorded by the provider", {
-          terminalRuntimeId: pending.terminalRuntimeId,
-          provider: pending.provider,
-          providerSessionId,
-        });
-        recordAppWarning({
-          code: "unknown",
-          message: `The worktree instructions may not have been delivered to the ${providerAdapter.definition.label} session.`,
-          detail:
-            "The session started in the repository root without its task worktree context. " +
-            "Confirm where it is working before relying on it, or restart the session.",
-        });
-      })
-      .catch((error: unknown) => {
-        console.warn("[Yuru] failed to deliver initial input", {
-          terminalRuntimeId: pending.terminalRuntimeId,
-          provider: pending.provider,
-          error,
-        });
+    try {
+      const verified = await deliverInitialInput(writer, initialInput, { verify });
+      if (verified) {
+        return;
+      }
+      console.warn("[Yuru] initial input was not recorded by the provider", {
+        terminalRuntimeId: pending.terminalRuntimeId,
+        provider: pending.provider,
+        providerSessionId,
       });
+      recordAppWarning({
+        code: "unknown",
+        message:
+          kind === "context"
+            ? `The worktree instructions may not have been delivered to the ${providerAdapter.definition.label} session.`
+            : `The initial prompt may not have been delivered to the ${providerAdapter.definition.label} session.`,
+        detail:
+          kind === "context"
+            ? "The session started in the repository root without its task worktree context. " +
+              "Confirm where it is working before relying on it, or restart the session."
+            : "The session started without the requested first task. Confirm its conversation before relying on it, or send the prompt again.",
+      });
+    } catch (error) {
+      console.warn("[Yuru] failed to deliver initial input", {
+        terminalRuntimeId: pending.terminalRuntimeId,
+        provider: pending.provider,
+        error,
+      });
+    }
   }
 
   private async startSession(
@@ -1681,7 +1750,7 @@ export class YuruService {
 
     const providerSessionId = await providerAdapter.waitForSessionId(pending);
     this.registerTerminalRuntime(pending, providerSessionId);
-    this.deliverInitialInput(providerAdapter, pending);
+    this.deliverInitialMessages(providerAdapter, pending);
     return {
       terminalRuntimeId,
       providerSessionId,

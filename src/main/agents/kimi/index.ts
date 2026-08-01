@@ -286,6 +286,7 @@ export const sessionProvider: SessionProviderAdapter = {
       args: [],
       worktreePath: context.worktreePath,
       initialInput: await loadWorktreeContextPrompt(context),
+      initialPrompt: context.initialPrompt,
       existingProviderSessionIds: await listExistingSessionIds(),
     };
   },

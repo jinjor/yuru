@@ -41,6 +41,9 @@ Commands:
   yuru ping   Check the connection to the running Yuru app
   yuru worktree create <branch-name>
               Create a task worktree from the current worktree's repository
+  yuru session create --worktree <path> --provider <claude|codex|kimi>
+              [--prompt <text> | --prompt-file <path>]
+              Create a provider session for a task worktree
   yuru help   Show this message
 `);
 }
@@ -215,6 +218,95 @@ async function worktree(args) {
     fail("Usage: yuru worktree create <branch-name>");
   }
   await createTaskWorktree(args.slice(1));
+}
+
+const sessionCreateUsage =
+  "Usage: yuru session create --worktree <path> --provider <claude|codex|kimi> [--prompt <text> | --prompt-file <path>]";
+const sessionProviders = new Set(["claude", "codex", "kimi"]);
+
+function parseSessionCreateArgs(args) {
+  let worktreePath;
+  let provider;
+  let prompt;
+  let promptFile;
+
+  for (let index = 0; index < args.length; index += 2) {
+    const option = args[index];
+    const value = args[index + 1];
+    if (value === undefined) {
+      fail(sessionCreateUsage);
+    }
+    if (option === "--worktree" && worktreePath === undefined) {
+      worktreePath = value;
+      continue;
+    }
+    if (option === "--provider" && provider === undefined) {
+      provider = value;
+      continue;
+    }
+    if (option === "--prompt" && prompt === undefined && promptFile === undefined) {
+      prompt = value;
+      continue;
+    }
+    if (option === "--prompt-file" && prompt === undefined && promptFile === undefined) {
+      promptFile = value;
+      continue;
+    }
+    fail(sessionCreateUsage);
+  }
+
+  if (!worktreePath || !provider || !sessionProviders.has(provider)) {
+    fail(sessionCreateUsage);
+  }
+  return { worktreePath, provider, prompt, promptFile };
+}
+
+async function createSession(args) {
+  const { worktreePath, provider, prompt: inlinePrompt, promptFile } = parseSessionCreateArgs(args);
+  apiSocketPath();
+
+  let prompt = inlinePrompt;
+  if (promptFile !== undefined) {
+    try {
+      prompt = fs.readFileSync(promptFile, "utf8");
+    } catch (error) {
+      fail(`Could not read prompt file "${promptFile}": ${errorMessage(error)}`);
+    }
+  }
+
+  let response;
+  try {
+    response = await requestApi("session.create", {
+      worktreePath,
+      provider,
+      prompt,
+    });
+  } catch (error) {
+    fail(`Could not connect to Yuru: ${errorMessage(error)}`);
+  }
+
+  if (!response.ok) {
+    fail(response.error.message);
+  }
+  if (
+    !response.data ||
+    typeof response.data !== "object" ||
+    Array.isArray(response.data) ||
+    typeof response.data.worktreePath !== "string" ||
+    response.data.provider !== provider ||
+    (response.data.providerSessionId !== null &&
+      typeof response.data.providerSessionId !== "string")
+  ) {
+    fail("Yuru returned an invalid session create response.");
+  }
+  console.log(`Created ${response.data.provider} session for ${response.data.worktreePath}`);
+}
+
+async function sessionCommand(args) {
+  if (args[0] !== "create") {
+    fail(sessionCreateUsage);
+  }
+  await createSession(args.slice(1));
 }
 
 function ensureManagedRepo() {
@@ -398,6 +490,9 @@ switch (command) {
     break;
   case "worktree":
     await worktree(process.argv.slice(3));
+    break;
+  case "session":
+    await sessionCommand(process.argv.slice(3));
     break;
   case "help":
   case "--help":

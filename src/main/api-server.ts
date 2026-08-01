@@ -2,6 +2,7 @@ import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import type { AppError, Result } from "../shared/ipc.js";
+import { SESSION_PROVIDER_IDS, type SessionProvider } from "../shared/session.js";
 import { toAppError } from "./errors.js";
 import { getYuruHome } from "./yuru-home.js";
 
@@ -22,6 +23,17 @@ interface ApiService {
     worktreePath: string,
     branchName: string,
   ): Promise<Result<{ worktreePath: string; branchName: string }>>;
+  createSessionForWorktreePath(
+    worktreePath: string,
+    provider: SessionProvider,
+    initialPrompt?: string,
+  ): Promise<
+    Result<{
+      worktreePath: string;
+      provider: SessionProvider;
+      providerSessionId: string | null;
+    }>
+  >;
 }
 
 interface StartApiServerOptions {
@@ -44,6 +56,10 @@ function invalidRequest(message: string): Result<never> {
     code: "unknown",
     message,
   });
+}
+
+function isSessionProvider(value: unknown): value is SessionProvider {
+  return SESSION_PROVIDER_IDS.some((provider) => provider === value);
 }
 
 function parseRequest(line: string): ApiRequest | Result<never> {
@@ -137,17 +153,31 @@ export function handleApiRequest(request: ApiRequest): Result<unknown> {
 
 export function createApiRequestHandler(service: ApiService): ApiRequestHandler {
   return (request) => {
-    if (request.command !== "worktree.create") {
-      return handleApiRequest(request);
+    if (request.command === "worktree.create") {
+      const { worktreePath, branchName } = request.args;
+      if (typeof worktreePath !== "string" || typeof branchName !== "string") {
+        return invalidRequest(
+          "worktree.create requires string worktreePath and branchName arguments.",
+        );
+      }
+      return service.createTaskWorktreeFromWorktreePath(worktreePath, branchName);
     }
 
-    const { worktreePath, branchName } = request.args;
-    if (typeof worktreePath !== "string" || typeof branchName !== "string") {
-      return invalidRequest(
-        "worktree.create requires string worktreePath and branchName arguments.",
-      );
+    if (request.command === "session.create") {
+      const { worktreePath, provider, prompt } = request.args;
+      if (
+        typeof worktreePath !== "string" ||
+        !isSessionProvider(provider) ||
+        (prompt !== undefined && typeof prompt !== "string")
+      ) {
+        return invalidRequest(
+          "session.create requires string worktreePath, a supported provider, and an optional string prompt.",
+        );
+      }
+      return service.createSessionForWorktreePath(worktreePath, provider, prompt);
     }
-    return service.createTaskWorktreeFromWorktreePath(worktreePath, branchName);
+
+    return handleApiRequest(request);
   };
 }
 

@@ -280,9 +280,13 @@ export const sessionProvider: SessionProviderAdapter = {
     };
   },
   async createWorktreeLaunch(context) {
+    const args = ["--append-system-prompt", await loadWorktreeContextPrompt(context)];
+    if (context.initialPrompt !== undefined) {
+      args.push(context.initialPrompt);
+    }
     return {
       cwd: context.repoPath,
-      args: ["--append-system-prompt", await loadWorktreeContextPrompt(context)],
+      args,
       worktreePath: context.worktreePath,
     };
   },

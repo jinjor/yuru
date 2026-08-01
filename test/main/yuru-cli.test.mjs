@@ -284,6 +284,135 @@ test("yuru worktree create は branch name を必須にする", async () => {
   });
 });
 
+test("yuru session create は worktree、provider、prompt を渡して作成結果を表示する", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-cli-session-create-"));
+  const socketPath = path.join(tempDir, "api.sock");
+  const requests = [];
+  const server = await startApiServer({
+    socketPath,
+    handleRequest(request) {
+      requests.push(request);
+      return {
+        ok: true,
+        data: {
+          worktreePath: "/repo/.yuru/worktrees/child-task",
+          provider: "claude",
+          providerSessionId: "claude-session-id",
+        },
+      };
+    },
+  });
+  t.after(async () => {
+    await server.stop();
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  const result = await runCli(
+    [
+      "session",
+      "create",
+      "--worktree",
+      "/repo/.yuru/worktrees/child-task",
+      "--provider",
+      "claude",
+      "--prompt",
+      "Implement step 3.\nKeep the change focused.",
+    ],
+    {
+      ...process.env,
+      YURU_API_SOCKET: socketPath,
+    },
+  );
+
+  assert.deepEqual(result, {
+    code: 0,
+    stdout: "Created claude session for /repo/.yuru/worktrees/child-task\n",
+    stderr: "",
+  });
+  assert.deepEqual(requests, [
+    {
+      command: "session.create",
+      args: {
+        worktreePath: "/repo/.yuru/worktrees/child-task",
+        provider: "claude",
+        prompt: "Implement step 3.\nKeep the change focused.",
+      },
+    },
+  ]);
+});
+
+test("yuru session create は prompt file の内容を渡す", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-cli-session-prompt-file-"));
+  const socketPath = path.join(tempDir, "api.sock");
+  const promptPath = path.join(tempDir, "handoff.md");
+  const requests = [];
+  fs.writeFileSync(promptPath, "# Handoff\n\nContinue the implementation.\n");
+  const server = await startApiServer({
+    socketPath,
+    handleRequest(request) {
+      requests.push(request);
+      return {
+        ok: true,
+        data: {
+          worktreePath: "/repo/.yuru/worktrees/child-task",
+          provider: "codex",
+          providerSessionId: null,
+        },
+      };
+    },
+  });
+  t.after(async () => {
+    await server.stop();
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  const result = await runCli(
+    [
+      "session",
+      "create",
+      "--provider",
+      "codex",
+      "--prompt-file",
+      promptPath,
+      "--worktree",
+      "/repo/.yuru/worktrees/child-task",
+    ],
+    { ...process.env, YURU_API_SOCKET: socketPath },
+  );
+
+  assert.equal(result.code, 0);
+  assert.deepEqual(requests[0].args, {
+    worktreePath: "/repo/.yuru/worktrees/child-task",
+    provider: "codex",
+    prompt: "# Handoff\n\nContinue the implementation.\n",
+  });
+});
+
+test("yuru session create は prompt と prompt file の同時指定を拒否する", async () => {
+  const result = await runCli(
+    [
+      "session",
+      "create",
+      "--worktree",
+      "/repo/worktree",
+      "--provider",
+      "kimi",
+      "--prompt",
+      "task",
+      "--prompt-file",
+      "/tmp/handoff.md",
+    ],
+    process.env,
+  );
+
+  assert.deepEqual(result, {
+    code: 1,
+    stdout: "",
+    stderr:
+      "Usage: yuru session create --worktree <path> --provider <claude|codex|kimi> [--prompt <text> | --prompt-file <path>]\n",
+  });
+});
+
 test(
   "yuru latest audits the pulled lockfile before installing dependencies",
   { skip: process.platform !== "darwin" },
