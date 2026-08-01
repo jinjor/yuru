@@ -27,6 +27,7 @@ interface ApiService {
     worktreePath: string,
     provider: SessionProvider,
     initialPrompt?: string,
+    model?: string,
   ): Promise<
     Result<{
       worktreePath: string;
@@ -165,17 +166,18 @@ export function createApiRequestHandler(service: ApiService): ApiRequestHandler 
     }
 
     if (request.command === "session.create") {
-      const { worktreePath, provider, prompt } = request.args;
+      const { worktreePath, provider, prompt, model } = request.args;
       if (
         typeof worktreePath !== "string" ||
         !isSessionProvider(provider) ||
-        (prompt !== undefined && typeof prompt !== "string")
+        (prompt !== undefined && typeof prompt !== "string") ||
+        (model !== undefined && (typeof model !== "string" || model.length === 0))
       ) {
         return invalidRequest(
-          "session.create requires string worktreePath, a supported provider, and an optional string prompt.",
+          "session.create requires string worktreePath, a supported provider, an optional string prompt, and an optional non-empty string model.",
         );
       }
-      return service.createSessionForWorktreePath(worktreePath, provider, prompt);
+      return service.createSessionForWorktreePath(worktreePath, provider, prompt, model);
     }
 
     if (request.command === "session.transcript-path") {

@@ -37,6 +37,14 @@ node "$YURU_CLI" session create \
   --provider <claude|codex|kimi>
 ```
 
+To select a model, add:
+
+```sh
+--model <model>
+```
+
+Yuru passes the value unchanged to the selected provider's `--model` option.
+
 To make a prompt the session's first user message, add exactly one of:
 
 ```sh
@@ -45,6 +53,27 @@ To make a prompt the session's first user message, add exactly one of:
 ```
 
 `--prompt-file` reads the file in the CLI process and sends its contents as the prompt. It does not move, retain, or delete the file.
+
+When making a temporary prompt file, reserve a unique directory with `mktemp -d` and create the prompt inside it. Do not invent a fixed path under `/tmp`.
+
+## Exchange a result through a file
+
+When the new session needs to return a durable result to the calling session, reserve a unique directory and use a not-yet-created path inside it:
+
+```sh
+handoff_dir="$(mktemp -d)"
+printf '%s/result.md\n' "$handoff_dir"
+```
+
+Keep the printed absolute path and include it in the new session's prompt. Tell the new session to write to a temporary sibling path and rename it to the requested result path only after the result is complete. This keeps a partial result distinct from a completed result.
+
+The calling session can wait for the completed path to appear. Use the literal absolute path printed above when the wait runs in a separate shell invocation:
+
+```sh
+until [ -f <absolute-result-path> ]; do sleep 5; done
+```
+
+Do not use `mktemp` to create the result file itself: the file would already exist before the new session finishes writing it.
 
 ## Find a session transcript
 

@@ -42,7 +42,7 @@ Commands:
   yuru worktree create <branch-name>
               Create a task worktree from the current worktree's repository
   yuru session create --worktree <path> --provider <claude|codex|kimi>
-              [--prompt <text> | --prompt-file <path>]
+              [--model <model>] [--prompt <text> | --prompt-file <path>]
               Create a provider session for a task worktree
   yuru session transcript-path [--worktree <path>]
               Print the primary session transcript path for a task worktree
@@ -223,12 +223,13 @@ async function worktree(args) {
 }
 
 const sessionCreateUsage =
-  "Usage: yuru session create --worktree <path> --provider <claude|codex|kimi> [--prompt <text> | --prompt-file <path>]";
+  "Usage: yuru session create --worktree <path> --provider <claude|codex|kimi> [--model <model>] [--prompt <text> | --prompt-file <path>]";
 const sessionProviders = new Set(["claude", "codex", "kimi"]);
 
 function parseSessionCreateArgs(args) {
   let worktreePath;
   let provider;
+  let model;
   let prompt;
   let promptFile;
 
@@ -246,6 +247,10 @@ function parseSessionCreateArgs(args) {
       provider = value;
       continue;
     }
+    if (option === "--model" && model === undefined) {
+      model = value;
+      continue;
+    }
     if (option === "--prompt" && prompt === undefined && promptFile === undefined) {
       prompt = value;
       continue;
@@ -257,14 +262,25 @@ function parseSessionCreateArgs(args) {
     fail(sessionCreateUsage);
   }
 
-  if (!worktreePath || !provider || !sessionProviders.has(provider)) {
+  if (
+    !worktreePath ||
+    !provider ||
+    !sessionProviders.has(provider) ||
+    (model !== undefined && !model)
+  ) {
     fail(sessionCreateUsage);
   }
-  return { worktreePath, provider, prompt, promptFile };
+  return { worktreePath, provider, model, prompt, promptFile };
 }
 
 async function createSession(args) {
-  const { worktreePath, provider, prompt: inlinePrompt, promptFile } = parseSessionCreateArgs(args);
+  const {
+    worktreePath,
+    provider,
+    model,
+    prompt: inlinePrompt,
+    promptFile,
+  } = parseSessionCreateArgs(args);
   apiSocketPath();
 
   let prompt = inlinePrompt;
@@ -281,6 +297,7 @@ async function createSession(args) {
     response = await requestApi("session.create", {
       worktreePath,
       provider,
+      model,
       prompt,
     });
   } catch (error) {

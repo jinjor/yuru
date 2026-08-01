@@ -390,7 +390,11 @@ export const sessionProvider: SessionProviderAdapter = {
   },
   async createWorktreeLaunch(context) {
     const prompt = await loadWorktreeContextPrompt(context);
-    const args = ["-c", `developer_instructions=${JSON.stringify(prompt)}`];
+    const args: string[] = [];
+    if (context.model !== undefined) {
+      args.push("--model", context.model);
+    }
+    args.push("-c", `developer_instructions=${JSON.stringify(prompt)}`);
     if (context.initialPrompt !== undefined) {
       args.push(context.initialPrompt);
     }

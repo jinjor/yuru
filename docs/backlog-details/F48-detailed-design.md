@@ -107,8 +107,9 @@ Codex 対応は設計判断が要るので「相談事項」に分離した (後
   レスポンス: 成功 `{ "ok": true, "data": ... }` / 失敗 `{ "ok": false, "error": { "code", "message" } }`
 - コマンドは `YuruService` に追加する公開メソッドへの薄いマッピングにする。
   既存の `Result<T>` 規約に乗せ、例外は IPC ハンドラと同じ要領で error レスポンスに変換する
-- renderer への反映: 呼ぶのが既存の service メソッドなので、既存の events / WorktreeWatcher
-  経由の更新がそのまま効く (新規の通知経路は作らない)
+- renderer への反映: worktree 作成は既存の WorktreeWatcher、session 作成は API 用 service
+  メソッドから既存の `repos:changed` event を送る。renderer 内からの session 作成と違い、API caller は
+  選択結果を renderer へ直接返せないため、明示的な一覧更新が必要 (新規の通知経路は作らない)
 
 提供するコマンド (CLI サブコマンドと 1:1):
 
@@ -118,9 +119,11 @@ Codex 対応は設計判断が要るので「相談事項」に分離した (後
      metadata の `repos` + Git worktree 一覧から、その worktree を含む repo を引く
      (PTY ごとに env を注入するので、複数 repo を開いていても曖昧にならない)
    - 応答: `{ worktreePath, branchName }`
-2. `session create --worktree <path> --provider <claude|codex|kimi> [--prompt-file <path> | --prompt <text>]`
+2. `session create --worktree <path> --provider <claude|codex|kimi> [--model <model>] [--prompt-file <path> | --prompt <text>]`
    - 指定 worktree で provider session を開始する。内部は `createSessionForWorktree` と同じ流れ
      (後述の initialPrompt 対応を含む)
+   - `--model` は指定した provider の `--model` 起動引数へ文字列をそのまま渡す。
+     provider ごとの model 名を Yuru は解釈・検証しない
    - prompt は「最初のユーザーメッセージ」として投入する (後述)。
      `--prompt-file` は CLI がファイルを読んで中身を送る (main はファイルを読まない)
    - 応答: `{ worktreePath, provider }` (provider session id は取れたら添える。lazy な provider は null)
@@ -175,9 +178,10 @@ metadata の primary → adapter のパス解決、という API 側の導出に
   1. `~/.agents/skills/yuru/` (Codex / Kimi 用)
   2. `~/.yuru/plugin/` (Claude 用 plugin 形式: `.claude-plugin/plugin.json` + `skills/yuru/SKILL.md`)
 - パッケージ版でも原本を同梱できるよう、skill 原本は app の resources に含める
-- skill の中身は API の使い方のみ: `node "$YURU_CLI" worktree create ...` の各コマンド、
-  引数、エラーの意味、Codex での制約 (後述)。ユースケース・handoff の書き方は書かない
-  (中立性の原則)
+- skill の中身は API の使い方と、session 間でファイルを受け渡すための最小規約:
+  `node "$YURU_CLI" worktree create ...` の各コマンド、引数、エラーの意味、Codex での制約
+  (後述)、一時パスの確保と完成ファイルの公開方法。特定のユースケースや handoff の内容は
+  書かない (中立性の原則)
 - `yuru` という名前は予約。ユーザーのカスタム skill は別名で同じ場所に置く運用を
   skill の末尾に 1 行だけ書く
 
@@ -199,8 +203,8 @@ provider ごとにネイティブな経路を使う (adapter が差を吸収す�
   (`src/main/initial-input.ts` の `deliverInitialInput`) で PTY に打ち込む。
   Kimi は worktree context も initialInput で入れているので、context 投入の後に続けて入れる
 
-実装上は、`createWorktreeLaunch` の context (`LaunchRequest`) に optional の
-`initialPrompt` を足し、各 adapter が自分の方式で launch args / initialInput に畳み込む形が自然。
+実装上は、`createWorktreeLaunch` の `WorktreeContext` に optional の `initialPrompt` と `model` を足し、
+各 adapter が自分の方式で launch args / initialInput に畳み込む。
 positional prompt の shell エスケープは既存の `buildShellExecCommand`
 (`src/main/shell-launch.ts`) がシングルクォートで処理しているので、その経路に乗せる。
 
@@ -211,6 +215,21 @@ Kimi の context 投入と同じく「記録されたか検証できる provider
 handoff をファイルとして残すかどうかは **Yuru の関知するところではない** (未決をこう決める)。
 CLI は `--prompt-file` でファイルの中身を受け取るだけで、そのファイルをどこに置くか、
 残すか捨てるかは呼び出し側 (ユーザー層の skill / プロンプト) が決める。
+
+session 間の一時的な受け渡しにファイルを使う場合は、skill で次を規約化する。
+
+- 固定の `/tmp/<name>` は使わず、`mktemp -d` で専用ディレクトリを確保し、その中の
+  まだ存在しないパスを完成ファイルにする
+- 子 session は同じディレクトリの一時ファイルへ書き、完成時に `mv` で完成パスへ rename する
+- 親 session が待つ場合は完成パスの出現をポーリングする
+
+`mktemp` で完成ファイル自体を作ると、書き込み前から存在して完成待ちが即時終了するため使わない。
+
+### model 指定
+
+`session create --model <model>` は provider 固有の model 名を opaque な文字列として受け取り、
+各 adapter が新規 session の起動引数へ `--model <model>` を追加する。Claude / Codex / Kimi の
+ローカル CLI で同じ起動オプションが使えることを確認済み。未指定時は各 provider の既定値を使う。
 
 ### Codex sandbox 問題への対応
 
@@ -262,16 +281,16 @@ CLI は `--prompt-file` でファイルの中身を受け取るだけで、そ�
 
 ### Step 3: `session create` + initial prompt
 
-- `LaunchRequest` / adapter に `initialPrompt` (optional) を追加し、
+- `WorktreeContext` / adapter に `initialPrompt` と `model` (optional) を追加し、
   Claude (positional) / Codex (positional) / Kimi (initialInput 2 発目) に実装
-- service の API メソッドと CLI `session create` を追加
+- service の API メソッドと CLI `session create` を追加。`model` は 3 provider の `--model` へ渡す
 - テスト: 各 adapter の launch args 組み立ての単体テスト (既存テストの流儀に倣う)。
   手動確認: セッション内から `session create --prompt` で子セッションが立ち、
   最初のメッセージとして prompt が入っていること (3 provider)
 
 ### Step 4: skill のマテリアライズ + Claude の `--plugin-dir`
 
-- `skills/yuru/SKILL.md` を作成 (API の使い方のみ)
+- `skills/yuru/SKILL.md` を作成 (API の使い方と session 間の一時ファイル受け渡し規約)
 - 起動時に `~/.agents/skills/yuru/` と `~/.yuru/plugin/` へ上書きコピーする処理
 - Claude adapter の新規・resume 両方に `--plugin-dir` を追加
 - 手動確認: 3 provider のセッションで「yuru の skill を使って worktree を作って」が通ること。
@@ -328,6 +347,17 @@ CLI は `--prompt-file` でファイルの中身を受け取るだけで、そ�
   修正 PR も紐づいていない。0.146.0 の実機でも sandbox 内の Unix socket 接続が
   `EPERM` になったため、この制約は引き続き有効
 - `skills/yuru/SKILL.md` の記述は実機結果と一致していたため、変更は不要だった
+
+### Step 7: 実機利用で見つかった不足の修正
+
+- `session create` に optional の `--model <model>` を追加し、3 provider の `--model` へ渡す
+- API 経由の session 作成成功時に repo 一覧の更新を renderer へ通知する。renderer 内からの
+  作成と違って API caller は選択結果を直接受け取らないため、通知がないと session runtime と
+  primary metadata が作られても card は session なしの表示に残る。lazy に session ID を解決する
+  Codex も、ID 解決前から worktree の active runtime として表示する
+- ブレストで決めた session 間のファイル受け渡し規約を skill に反映する。`mktemp -d` で
+  一意なディレクトリを確保し、完成パスは未作成にしておき、子 session が一時ファイルから
+  rename して完成を公開する
 
 ### 後回し (この設計のスコープ外)
 

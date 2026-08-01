@@ -361,6 +361,7 @@ test("provider worktree launch は initial prompt を最初の依頼として渡
     worktreeName: "task-b",
     branchName: "feature/task-b",
     initialPrompt,
+    model: "selected-model",
   };
   const worktreePrompt =
     "Yuru opened this session for the task worktree 'task-b' on branch 'feature/task-b'. " +
@@ -374,6 +375,8 @@ test("provider worktree launch は initial prompt を最初の依頼として渡
     args: [
       "--plugin-dir",
       path.join(tempDir, ".yuru", "plugin"),
+      "--model",
+      "selected-model",
       "--append-system-prompt",
       worktreePrompt,
       initialPrompt,
@@ -383,12 +386,15 @@ test("provider worktree launch は initial prompt を最初の依頼として渡
 
   const codexLaunch = await codexProvider.createWorktreeLaunch(context);
   assert.deepEqual(codexLaunch.args, [
+    "--model",
+    "selected-model",
     "-c",
     `developer_instructions=${JSON.stringify(worktreePrompt)}`,
     initialPrompt,
   ]);
 
   const kimiLaunch = await kimiProvider.createWorktreeLaunch(context);
+  assert.deepEqual(kimiLaunch.args, ["--model", "selected-model"]);
   assert.equal(kimiLaunch.initialInput, worktreePrompt);
   assert.equal(kimiLaunch.initialPrompt, initialPrompt);
 });

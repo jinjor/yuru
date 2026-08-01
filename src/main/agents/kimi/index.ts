@@ -293,7 +293,7 @@ export const sessionProvider: SessionProviderAdapter = {
     // prompt is delivered as the first user message typed into the PTY.
     return {
       cwd: context.repoPath,
-      args: [],
+      args: context.model === undefined ? [] : ["--model", context.model],
       worktreePath: context.worktreePath,
       initialInput: await loadWorktreeContextPrompt(context),
       initialPrompt: context.initialPrompt,

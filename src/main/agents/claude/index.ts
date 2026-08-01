@@ -282,12 +282,11 @@ export const sessionProvider: SessionProviderAdapter = {
     };
   },
   async createWorktreeLaunch(context) {
-    const args = [
-      "--plugin-dir",
-      getYuruClaudePluginDir(),
-      "--append-system-prompt",
-      await loadWorktreeContextPrompt(context),
-    ];
+    const args = ["--plugin-dir", getYuruClaudePluginDir()];
+    if (context.model !== undefined) {
+      args.push("--model", context.model);
+    }
+    args.push("--append-system-prompt", await loadWorktreeContextPrompt(context));
     if (context.initialPrompt !== undefined) {
       args.push(context.initialPrompt);
     }

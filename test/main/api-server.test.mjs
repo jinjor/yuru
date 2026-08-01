@@ -126,8 +126,8 @@ test("createApiRequestHandler は worktree.create の不正な引数を拒否す
 test("createApiRequestHandler は session.create を service に渡す", async () => {
   const calls = [];
   const handler = createApiRequestHandler({
-    async createSessionForWorktreePath(worktreePath, provider, initialPrompt) {
-      calls.push({ worktreePath, provider, initialPrompt });
+    async createSessionForWorktreePath(worktreePath, provider, initialPrompt, model) {
+      calls.push({ worktreePath, provider, initialPrompt, model });
       return {
         ok: true,
         data: {
@@ -145,6 +145,7 @@ test("createApiRequestHandler は session.create を service に渡す", async (
       args: {
         worktreePath: "/repo/.yuru/worktrees/child-task",
         provider: "kimi",
+        model: "kimi-code/k3",
         prompt: "Continue from the parent session.\nImplement step 3.",
       },
     }),
@@ -162,6 +163,7 @@ test("createApiRequestHandler は session.create を service に渡す", async (
       worktreePath: "/repo/.yuru/worktrees/child-task",
       provider: "kimi",
       initialPrompt: "Continue from the parent session.\nImplement step 3.",
+      model: "kimi-code/k3",
     },
   ]);
 });
@@ -177,7 +179,7 @@ test("createApiRequestHandler は session.create の不正な引数を拒否す�
     error: {
       code: "unknown",
       message:
-        "session.create requires string worktreePath, a supported provider, and an optional string prompt.",
+        "session.create requires string worktreePath, a supported provider, an optional string prompt, and an optional non-empty string model.",
     },
   };
 
@@ -192,6 +194,13 @@ test("createApiRequestHandler は session.create の不正な引数を拒否す�
     await handler({
       command: "session.create",
       args: { worktreePath: "/repo/worktree", provider: "claude", prompt: 42 },
+    }),
+    expected,
+  );
+  assert.deepEqual(
+    await handler({
+      command: "session.create",
+      args: { worktreePath: "/repo/worktree", provider: "claude", model: "" },
     }),
     expected,
   );

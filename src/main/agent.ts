@@ -48,6 +48,7 @@ export interface WorktreeContext {
   worktreeName: string;
   branchName: string;
   initialPrompt?: string;
+  model?: string;
 }
 
 export interface ResumeSessionTarget {

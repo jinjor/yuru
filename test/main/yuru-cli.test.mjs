@@ -284,7 +284,7 @@ test("yuru worktree create は branch name を必須にする", async () => {
   });
 });
 
-test("yuru session create は worktree、provider、prompt を渡して作成結果を表示する", async (t) => {
+test("yuru session create は worktree、provider、model、prompt を渡して作成結果を表示する", async (t) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-cli-session-create-"));
   const socketPath = path.join(tempDir, "api.sock");
   const requests = [];
@@ -315,6 +315,8 @@ test("yuru session create は worktree、provider、prompt を渡して作成結
       "/repo/.yuru/worktrees/child-task",
       "--provider",
       "claude",
+      "--model",
+      "claude-sonnet-5",
       "--prompt",
       "Implement step 3.\nKeep the change focused.",
     ],
@@ -335,6 +337,7 @@ test("yuru session create は worktree、provider、prompt を渡して作成結
       args: {
         worktreePath: "/repo/.yuru/worktrees/child-task",
         provider: "claude",
+        model: "claude-sonnet-5",
         prompt: "Implement step 3.\nKeep the change focused.",
       },
     },
@@ -409,7 +412,7 @@ test("yuru session create は prompt と prompt file の同時指定を拒否す
     code: 1,
     stdout: "",
     stderr:
-      "Usage: yuru session create --worktree <path> --provider <claude|codex|kimi> [--prompt <text> | --prompt-file <path>]\n",
+      "Usage: yuru session create --worktree <path> --provider <claude|codex|kimi> [--model <model>] [--prompt <text> | --prompt-file <path>]\n",
   });
 });
 

@@ -411,6 +411,7 @@ export class YuruService {
     worktreeId: string,
     provider: SessionProvider,
     initialPrompt?: string,
+    model?: string,
   ): Promise<Result<WorktreeSessionSelection>> {
     const worktree = await this.findGitWorktree(worktreeId);
     if (!worktree) {
@@ -427,7 +428,7 @@ export class YuruService {
       pending = this.launchPendingSession(
         providerAdapter,
         await providerAdapter.createWorktreeLaunch(
-          this.createContextForExistingWorktree(worktree, initialPrompt),
+          this.createContextForExistingWorktree(worktree, initialPrompt, model),
         ),
         "Failed to create worktree session",
         path.resolve(worktree.worktreePath) === path.resolve(worktree.repoPath)
@@ -462,6 +463,7 @@ export class YuruService {
     worktreePath: string,
     provider: SessionProvider,
     initialPrompt?: string,
+    model?: string,
   ): Promise<
     Result<{
       worktreePath: string;
@@ -487,12 +489,17 @@ export class YuruService {
       toWorktreeId(repo.id, resolvedWorktreePath),
       provider,
       initialPrompt,
+      model,
     );
     if (!result.ok) {
       return result;
     }
     const providerSessionId =
       this.terminalRuntimeMap.get(result.data.terminalRuntimeId)?.providerSessionId ?? null;
+    // API callers do not receive the renderer selection result used by the in-app
+    // session start flow. Push a repo refresh so the new runtime appears on its
+    // worktree card immediately, including while a lazy provider session ID is unresolved.
+    this.events.repoListChanged();
     return ok({
       worktreePath: resolvedWorktreePath,
       provider,
@@ -1569,6 +1576,7 @@ export class YuruService {
       headSha: string | null;
     },
     initialPrompt?: string,
+    model?: string,
   ): WorktreeContext {
     const fallbackBranchName = worktree.headSha
       ? `detached @ ${worktree.headSha.slice(0, 7)}`
@@ -1579,6 +1587,7 @@ export class YuruService {
       worktreeName: path.basename(worktree.worktreePath),
       branchName: worktree.branch ?? fallbackBranchName,
       initialPrompt,
+      model,
     };
   }
 
