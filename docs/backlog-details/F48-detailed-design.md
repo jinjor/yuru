@@ -299,7 +299,7 @@ CLI は `--prompt-file` でファイルの中身を受け取るだけで、そ�
 ### Step 6: Codex の sandbox 対応 (実機検証)
 
 - 方針は決定済み (Yuru は何も注入しない。skill に事実を書いて終わり)
-- 残るのは TUI の実機検証。バイナリ内の指示文からの確認で、実際の TUI の挙動は未検証:
+- TUI の実機検証では次を確認する:
   - `require_escalated` での再実行 → 承認プロンプトが出ること
   - 承認の prefix 再利用 (`approve_for_session`) で同じ CLI 呼び出しが
     session 中 2 回目以降は承認なしで通ること
@@ -307,6 +307,27 @@ CLI は `--prompt-file` でファイルの中身を受け取るだけで、そ�
     (バイナリ内に "you cannot ask for escalated permissions if the approval policy is ..."
     という文言がある)。デフォルト以外の policy ではどうなるか
 - 上流 #25416 の修正状況は実施時点で再確認する
+
+実機確認 (2026-08-01、Codex CLI 0.146.0):
+
+- 検証を実行する親も Codex だったため、親の OS sandbox 外で検証用 TUI を起動し、
+  Yuru と検証用 Codex の両方から親由来の `CODEX_*` 環境変数を除外した。
+  検証用 Codex には `YURU_API_SOCKET` / `YURU_CLI` / `YURU_WORKTREE_PATH` だけを
+  Yuru 固有の環境変数として渡し、手動承認を観察するため
+  `approvals_reviewer = "user"` を起動引数で固定した
+- `approval_policy = "on-request"` では、通常実行が
+  `connect EPERM <socket path>` で失敗した後、同じコマンドの `require_escalated` 再実行で
+  承認プロンプトが表示された。prefix を session 中再利用する選択肢を承認すると 1 回目は
+  `pong`、同じコマンドの 2 回目も追加の承認プロンプトなしで `pong` になった
+- `approval_policy = "untrusted"` では、最初の sandbox 内実行前にコマンド実行の承認が
+  1 回必要だった。承認後の実行は `connect EPERM` になり、続く `require_escalated` は
+  policy によって承認プロンプトを出す前に拒否された
+- `approval_policy = "never"` では、通常実行が `connect EPERM` になった後も
+  `require_escalated` を要求できず、承認プロンプトは表示されなかった
+- [openai/codex#25416](https://github.com/openai/codex/issues/25416) は Open のままで、
+  修正 PR も紐づいていない。0.146.0 の実機でも sandbox 内の Unix socket 接続が
+  `EPERM` になったため、この制約は引き続き有効
+- `skills/yuru/SKILL.md` の記述は実機結果と一致していたため、変更は不要だった
 
 ### 後回し (この設計のスコープ外)
 
