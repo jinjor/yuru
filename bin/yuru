@@ -5,7 +5,7 @@ set -euo pipefail
 YURU_HOME="${YURU_HOME:-$HOME/.yuru}"
 YURU_REPO_DIR="${YURU_REPO_DIR:-$YURU_HOME/repo}"
 YURU_APPLICATIONS_DIR="${YURU_APPLICATIONS_DIR:-$HOME/Applications}"
-CLI_PATH="$YURU_REPO_DIR/scripts/yuru-cli.mjs"
+CLI_PATH="$YURU_REPO_DIR/scripts/yuru-cli/index.mjs"
 APP_PATH="$YURU_APPLICATIONS_DIR/Yuru.app"
 COMMAND="${1:-open}"
 

@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { startApiServer } from "../../src/main/api-server.ts";
 
-const cliPath = path.resolve("scripts/yuru-cli.mjs");
+const cliPath = path.resolve("scripts/yuru-cli/index.mjs");
 
 function read(command, args, cwd) {
   return execFileSync(command, args, {
