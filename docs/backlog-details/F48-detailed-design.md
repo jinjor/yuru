@@ -119,13 +119,12 @@ Codex 対応は設計判断が要るので「相談事項」に分離した (後
      metadata の `repos` + Git worktree 一覧から、その worktree を含む repo を引く
      (PTY ごとに env を注入するので、複数 repo を開いていても曖昧にならない)
    - 応答: `{ worktreePath, branchName }`
-2. `session create --worktree <path> --provider <claude|codex|kimi> [--model <model>] [--prompt-file <path> | --prompt <text>]`
+2. `session create --worktree <path> --provider <claude|codex|kimi> [--model <model>] [--prompt <text>]`
    - 指定 worktree で provider session を開始する。内部は `createSessionForWorktree` と同じ流れ
      (後述の initialPrompt 対応を含む)
    - `--model` は指定した provider の `--model` 起動引数へ文字列をそのまま渡す。
      provider ごとの model 名を Yuru は解釈・検証しない
-   - prompt は「最初のユーザーメッセージ」として投入する (後述)。
-     `--prompt-file` は CLI がファイルを読んで中身を送る (main はファイルを読まない)
+   - prompt は「最初のユーザーメッセージ」として投入する (後述)
    - 応答: `{ worktreePath, provider }` (provider session id は取れたら添える。lazy な provider は null)
 3. `session transcript-path [--worktree <path>]`
    - 対象 worktree の primary session の会話ログ (JSONL) の絶対パスを返す。
@@ -213,7 +212,7 @@ Kimi の context 投入と同じく「記録されたか検証できる provider
 だめなら warning を出す」既存の流儀に合わせる。
 
 handoff をファイルとして残すかどうかは **Yuru の関知するところではない** (未決をこう決める)。
-CLI は `--prompt-file` でファイルの中身を受け取るだけで、そのファイルをどこに置くか、
+CLI は `--prompt <text>` で文字列を受け取るだけで、そのファイルをどこに置くか、
 残すか捨てるかは呼び出し側 (ユーザー層の skill / プロンプト) が決める。
 
 session 間の一時的な受け渡しにファイルを使う場合は、skill で次を規約化する。

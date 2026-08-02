@@ -45,35 +45,27 @@ To select a model, add:
 
 Yuru passes the value unchanged to the selected provider's `--model` option.
 
-To make a prompt the session's first user message, add exactly one of:
+To make a prompt the session's first user message, add:
 
 ```sh
 --prompt <text>
---prompt-file <path>
 ```
 
-`--prompt-file` reads the file in the CLI process and sends its contents as the prompt. It does not move, retain, or delete the file.
+Yuru passes the text to the selected provider as the session's first user message.
 
-When making a temporary prompt file, reserve a unique directory with `mktemp -d` and create the prompt inside it. Do not invent a fixed path under `/tmp`.
+## Exchange data through a file
 
-## Exchange a result through a file
+You may need to pass data between sessions through a file: a prompt too large for `--prompt`, a result the caller will read later, or content that multiple sessions share or append to. File-based exchange is optional; when `--prompt` is enough, use `--prompt`.
 
-When the new session needs to return a durable result to the calling session, reserve a unique directory and use a not-yet-created path inside it:
+The main case for a file is when a session you created needs to send a result back to you. You can tell the new session what to do through `session create --prompt`, but the new session has no API to call you back. Reserve a file path, include it in the prompt, and tell the new session to write its result there.
 
-```sh
-handoff_dir="$(mktemp -d)"
-printf '%s/result.md\n' "$handoff_dir"
-```
+Because sessions share the same filesystem, keep the following in mind:
 
-Keep the printed absolute path and include it in the new session's prompt. Tell the new session to write to a temporary sibling path and rename it to the requested result path only after the result is complete. This keeps a partial result distinct from a completed result.
+- **Avoid collisions with other sessions.** If two sessions write to the same path at the same time, one may read partial or mixed content. Use a session- or task-specific path. Creating a unique temporary directory with `mktemp -d` is one easy way; a task-scoped path such as `/tmp/f99-some-feature/review.md` is also fine.
 
-The calling session can wait for the completed path to appear. Use the literal absolute path printed above when the wait runs in a separate shell invocation:
+- **Do not let a watcher consume a partially written file.** When the reader watches for a file asynchronously ("read it once it exists"), the writer should write to a sibling temporary path and rename it to the final path only when the content is complete. The reader waits for the final path to appear. This prevents the reader from seeing the file while it is still being written.
 
-```sh
-until [ -f <absolute-result-path> ]; do sleep 5; done
-```
-
-Do not use `mktemp` to create the result file itself: the file would already exist before the new session finishes writing it.
+You may share or append to the same file across sessions when the use case calls for it; just avoid collisions and partial-read issues.
 
 ## Find a session transcript
 

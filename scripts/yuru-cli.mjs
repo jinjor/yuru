@@ -42,7 +42,7 @@ Commands:
   yuru worktree create <branch-name>
               Create a task worktree from the current worktree's repository
   yuru session create --worktree <path> --provider <claude|codex|kimi>
-              [--model <model>] [--prompt <text> | --prompt-file <path>]
+              [--model <model>] [--prompt <text>]
               Create a provider session for a task worktree
   yuru session transcript-path [--worktree <path>]
               Print the primary session transcript path for a task worktree
@@ -223,7 +223,7 @@ async function worktree(args) {
 }
 
 const sessionCreateUsage =
-  "Usage: yuru session create --worktree <path> --provider <claude|codex|kimi> [--model <model>] [--prompt <text> | --prompt-file <path>]";
+  "Usage: yuru session create --worktree <path> --provider <claude|codex|kimi> [--model <model>] [--prompt <text>]";
 const sessionProviders = new Set(["claude", "codex", "kimi"]);
 
 function parseSessionCreateArgs(args) {
@@ -231,7 +231,6 @@ function parseSessionCreateArgs(args) {
   let provider;
   let model;
   let prompt;
-  let promptFile;
 
   for (let index = 0; index < args.length; index += 2) {
     const option = args[index];
@@ -251,12 +250,8 @@ function parseSessionCreateArgs(args) {
       model = value;
       continue;
     }
-    if (option === "--prompt" && prompt === undefined && promptFile === undefined) {
+    if (option === "--prompt" && prompt === undefined) {
       prompt = value;
-      continue;
-    }
-    if (option === "--prompt-file" && prompt === undefined && promptFile === undefined) {
-      promptFile = value;
       continue;
     }
     fail(sessionCreateUsage);
@@ -270,27 +265,12 @@ function parseSessionCreateArgs(args) {
   ) {
     fail(sessionCreateUsage);
   }
-  return { worktreePath, provider, model, prompt, promptFile };
+  return { worktreePath, provider, model, prompt };
 }
 
 async function createSession(args) {
-  const {
-    worktreePath,
-    provider,
-    model,
-    prompt: inlinePrompt,
-    promptFile,
-  } = parseSessionCreateArgs(args);
+  const { worktreePath, provider, model, prompt } = parseSessionCreateArgs(args);
   apiSocketPath();
-
-  let prompt = inlinePrompt;
-  if (promptFile !== undefined) {
-    try {
-      prompt = fs.readFileSync(promptFile, "utf8");
-    } catch (error) {
-      fail(`Could not read prompt file "${promptFile}": ${errorMessage(error)}`);
-    }
-  }
 
   let response;
   try {
