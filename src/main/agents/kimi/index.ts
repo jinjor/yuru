@@ -170,15 +170,6 @@ async function hasStoredSession(providerSessionId: string): Promise<boolean> {
   return (await findKimiSessionRef(providerSessionId)) !== null;
 }
 
-async function findSessionTranscriptPath(providerSessionId: string): Promise<string | null> {
-  const entry = await findKimiSessionRef(providerSessionId);
-  if (!entry) {
-    return null;
-  }
-  const transcriptPath = kimiWireLogPath(entry.sessionDir);
-  return fs.existsSync(transcriptPath) ? transcriptPath : null;
-}
-
 async function loadWorktreeSessionHints(
   worktreePaths: readonly string[],
 ): Promise<WorktreeSessionHint[]> {
@@ -290,7 +281,6 @@ export const sessionProvider: SessionProviderAdapter = {
   loadStoredSessionPreview,
   loadWorktreeSessionHints,
   hasStoredSession,
-  findSessionTranscriptPath,
   async createResumeLaunch(session) {
     // kimi refuses to resume unless the process cwd equals the session's
     // recorded workDir, so resume exactly where the session was recorded.

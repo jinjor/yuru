@@ -67,14 +67,6 @@ Because sessions share the same filesystem, keep the following in mind:
 
 You may share or append to the same file across sessions when the use case calls for it; just avoid collisions and partial-read issues.
 
-## Find a session transcript
-
-```sh
-node "$YURU_CLI" session transcript-path [--worktree <absolute-worktree-path>]
-```
-
-This prints the absolute path of the task worktree's primary session transcript. Without `--worktree`, it uses the current Yuru task worktree. Yuru returns the path without reading the transcript.
-
 ## Handle errors
 
 - If the CLI says the Yuru API is unavailable, run it inside a terminal created by the running Yuru app.

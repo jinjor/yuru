@@ -35,7 +35,6 @@ interface ApiService {
       providerSessionId: string | null;
     }>
   >;
-  getSessionTranscriptPath(worktreePath: string): Promise<Result<{ transcriptPath: string }>>;
 }
 
 interface StartApiServerOptions {
@@ -178,14 +177,6 @@ export function createApiRequestHandler(service: ApiService): ApiRequestHandler 
         );
       }
       return service.createSessionForWorktreePath(worktreePath, provider, prompt, model);
-    }
-
-    if (request.command === "session.transcript-path") {
-      const { worktreePath } = request.args;
-      if (typeof worktreePath !== "string") {
-        return invalidRequest("session.transcript-path requires a string worktreePath argument.");
-      }
-      return service.getSessionTranscriptPath(worktreePath);
     }
 
     return handleApiRequest(request);

@@ -126,14 +126,6 @@ Codex 対応は設計判断が要るので「相談事項」に分離した (後
      provider ごとの model 名を Yuru は解釈・検証しない
    - prompt は「最初のユーザーメッセージ」として投入する (後述)
    - 応答: `{ worktreePath, provider }` (provider session id は取れたら添える。lazy な provider は null)
-3. `session transcript-path [--worktree <path>]`
-   - 対象 worktree の primary session の会話ログ (JSONL) の絶対パスを返す。
-     `--worktree` 省略時は呼び出し元の `YURU_WORKTREE_PATH`
-   - Yuru は中身を読まずパスだけ返す。読むのはエージェント (= 「セッションを読む」primitive。
-     会話フォーマットを公開契約にしない)
-   - パス解決ロジックは各 provider adapter に既にある (`findClaudeSessionFile` など。
-     `src/main/agents/<provider>/index.ts` 内部) ので、adapter の公開面に 1 メソッド足す
-   - primary がない / session id 未解決 / ファイルなし はエラー応答
 
 どのコマンドも用途 (分岐・レビュー) を名乗らない。命名は中立に `worktree` / `session` の語だけ使う。
 
@@ -161,7 +153,7 @@ session 系・standalone 両方の PTY 起動がここを通る。
   開発時は app root 配下のもの。パッケージ版 (`scripts/package-local-app.mjs`) では
   app bundle に `yuru-cli.mjs` を同梱してそのパスを指す (同梱の仕組みがなければ足す)
 - `YURU_WORKTREE_PATH`: task worktree の session / terminal にだけ注入
-  (repo の逆引きと `session transcript-path` のデフォルト引数に使う)。
+  (repo の逆引きに使う)。
   main worktree の standalone terminal には入れない (task worktree ではないため)
 
 provider session id の env 注入は **しない** (F48-branch-work.md の未決をこう決める)。
@@ -307,14 +299,7 @@ session 間の一時的な受け渡しにファイルを使う場合は、skill 
 - `npm run package:local` の一時出力で、app bundle 内の `skills/yuru/SKILL.md` が原本と
   一致し、同 bundle に `scripts/yuru-cli.mjs` も同梱されることを確認した
 
-### Step 5: `session transcript-path`
-
-- adapter 公開面に transcript path 解決を追加 (既存の内部関数を公開)
-- service / CLI に `session transcript-path` を追加
-- テスト: path 解決の単体テスト。手動確認: 子セッションから親の
-  `session transcript-path` を取り、その JSONL を読めること
-
-### Step 6: Codex の sandbox 対応 (実機検証)
+### Step 5: Codex の sandbox 対応 (実機検証)
 
 - 方針は決定済み (Yuru は何も注入しない。skill に事実を書いて終わり)
 - TUI の実機検証では次を確認する:
@@ -347,7 +332,7 @@ session 間の一時的な受け渡しにファイルを使う場合は、skill 
   `EPERM` になったため、この制約は引き続き有効
 - `skills/yuru/SKILL.md` の記述は実機結果と一致していたため、変更は不要だった
 
-### Step 7: 実機利用で見つかった不足の修正
+### Step 6: 実機利用で見つかった不足の修正
 
 - `session create` に optional の `--model <model>` を追加し、3 provider の `--model` へ渡す
 - API 経由の session 作成成功時に repo 一覧の更新を renderer へ通知する。renderer 内からの
