@@ -24,8 +24,12 @@ function runInstall(t, { shell = "/bin/zsh", yuruBinOnPath = false } = {}) {
   const repoDir = path.join(yuruHome, "repo");
   const yuruBinDir = path.join(yuruHome, "bin");
   const commandBinDir = path.join(tempDir, "commands");
+  const cliPath = path.join(repoDir, "scripts", "yuru-cli", "index.mjs");
+  const nodeInvocationPath = path.join(tempDir, "node-invocation");
+  fs.mkdirSync(path.dirname(cliPath), { recursive: true });
   fs.mkdirSync(path.join(repoDir, ".git"), { recursive: true });
   fs.mkdirSync(commandBinDir);
+  fs.writeFileSync(cliPath, "");
 
   writeExecutable(
     path.join(commandBinDir, "git"),
@@ -35,7 +39,13 @@ case "$*" in
 esac
 `,
   );
-  writeExecutable(path.join(commandBinDir, "node"), "#!/bin/sh\n");
+  writeExecutable(
+    path.join(commandBinDir, "node"),
+    `#!/bin/sh
+printf '%s\n' "$*" > "$YURU_TEST_NODE_INVOCATION"
+printf 'yuru latest invoked\n'
+`,
+  );
   writeExecutable(path.join(commandBinDir, "npm"), "#!/bin/sh\n");
 
   const pathEntries = [commandBinDir, "/usr/bin", "/bin"];
@@ -50,6 +60,7 @@ esac
       HOME: homeDir,
       PATH: pathEntries.join(":"),
       SHELL: shell,
+      YURU_TEST_NODE_INVOCATION: nodeInvocationPath,
       YURU_APPLICATIONS_DIR: path.join(homeDir, "Applications"),
       YURU_HOME: yuruHome,
       YURU_REPO_DIR: repoDir,
@@ -60,32 +71,39 @@ esac
 
   return {
     homeDir,
+    latestInvocation: fs.readFileSync(nodeInvocationPath, "utf8").trim(),
     output: result.stdout,
     stderr: result.stderr,
     wrapperPath: path.join(yuruBinDir, "yuru"),
   };
 }
 
-test("install.sh installs the launcher at ~/.yuru/bin and prints zsh PATH setup", (t) => {
-  const { homeDir, output, wrapperPath } = runInstall(t);
+test("install.sh installs the launcher, builds the app, and prints zsh PATH setup", (t) => {
+  const { homeDir, latestInvocation, output, wrapperPath } = runInstall(t);
 
   assert.equal(fs.readFileSync(wrapperPath, "utf8"), fs.readFileSync(wrapperSourcePath, "utf8"));
   assert.equal(fs.statSync(wrapperPath).mode & 0o777, 0o755);
   assert.equal(fs.existsSync(path.join(homeDir, ".zshrc")), false);
+  assert.equal(
+    latestInvocation,
+    `${path.join(homeDir, ".yuru", "repo", "scripts", "yuru-cli", "index.mjs")} latest`,
+  );
+  assert.ok(output.indexOf("yuru latest invoked") < output.indexOf("Copy and run these commands"));
   assert.match(output, /Installed yuru to .*\/\.yuru\/bin\/yuru/);
   assert.match(output, /Copy and run these commands/);
   assert.match(
     output,
     /printf '\\nexport PATH="\$HOME\/\.yuru\/bin:\$PATH"\\n' >> "\$HOME\/\.zshrc"/,
   );
-  assert.match(output, /source "\$HOME\/\.zshrc"\n  yuru latest/);
+  assert.match(output, /source "\$HOME\/\.zshrc"/);
+  assert.doesNotMatch(output, /\n  yuru latest/);
 });
 
 test("install.sh skips shell-specific setup when ~/.yuru/bin is already on PATH", (t) => {
   const { output } = runInstall(t, { yuruBinOnPath: true });
 
   assert.doesNotMatch(output, /Copy and run these commands/);
-  assert.match(output, /Next: run 'yuru latest'/);
+  assert.match(output, /Yuru is ready\. Run 'yuru' to open it\./);
 });
 
 test("install.sh only prints .zshrc setup for zsh", (t) => {

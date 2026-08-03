@@ -138,6 +138,7 @@ worktree context prompt は `~/.yuru/worktree-context-prompt.txt` で差し替�
 
 - install
   - launcher は `~/.yuru/bin/yuru` に固定し、managed checkout は `~/.yuru/repo` に置く
+  - launcher の絶対パスで `yuru latest` を実行して初回の `Yuru.app` を生成した後、shell の設定手順を表示する
   - `~/.yuru/bin` が現在の `PATH` に無い場合は、`$SHELL` に応じた設定手順を表示する。現在は zsh だけに対応し、`.zshrc` を installer 自身では変更しない
 - `yuru latest`
   - managed checkout の `main` を fast-forward した直後に `~/.yuru/bin/yuru` を更新する

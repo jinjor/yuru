@@ -97,11 +97,10 @@ install_wrapper() {
 print_zsh_path_setup() {
   cat <<'EOF'
 
-Copy and run these commands to add Yuru to PATH and build Yuru.app:
+Copy and run these commands to add Yuru to PATH:
 
   printf '\nexport PATH="$HOME/.yuru/bin:$PATH"\n' >> "$HOME/.zshrc"
   source "$HOME/.zshrc"
-  yuru latest
 EOF
 }
 
@@ -113,9 +112,13 @@ print_shell_path_setup() {
     *)
       echo
       echo "PATH setup is not supported yet for shell: ${SHELL:-unknown}" >&2
-      echo "Add $YURU_BIN_DIR to PATH, then run 'yuru latest'." >&2
+      echo "Add $YURU_BIN_DIR to PATH to run 'yuru'." >&2
       ;;
   esac
+}
+
+install_app() {
+  "$WRAPPER_TARGET" latest
 }
 
 print_next_steps() {
@@ -123,7 +126,7 @@ print_next_steps() {
   echo "Managed repo: $YURU_REPO_DIR"
   echo "App location: $YURU_APPLICATIONS_DIR/Yuru.app"
   if [[ ":$PATH:" == *":$YURU_BIN_DIR:"* ]]; then
-    echo "Next: run 'yuru latest' to build Yuru.app locally."
+    echo "Yuru is ready. Run 'yuru' to open it."
     return
   fi
 
@@ -140,6 +143,7 @@ main() {
   warn_if_bin_dir_is_world_writable
   initialize_managed_repo
   install_wrapper
+  install_app
   print_next_steps
 }
 
