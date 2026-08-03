@@ -28,7 +28,8 @@ UI 改善も機能追加も同じ土俵で扱う。
 |---|---|---|---|---|
 | P18 | polish | Changes | Changes のファイル表示順を最適化する | 確認したい変更へ素早くたどり着けるようにしたい |
 | F7 | feature | Terminal | ファイル名が改行を跨いでもリンクできるようにする | linkifier 改善 |
-| F51 | feature | Files / Persistence | worktree ごとに開いていたファイルを覚えておく | worktree を切り替えて戻った時に、直前のファイルから作業を再開したい |
+| F51 | feature | Files / Persistence | worktree ごとに開いていたファイルを覚えておく | worktree を切り替えて戻った時に、直前のファイルから作業を再開したい。詳細: docs/backlog-details/F51-worktree-keep-alive.md |
+| P22 | polish | App / Sessions | worktree の表示データを App の一括配布から worktreeId 単位の取得・購読に変える | SessionView が worktree オブジェクトを props で受け取っており、session の push 1 件で無関係な表示まで再描画が波及する。F51 の keep-alive で instance が増えると影響が拡大する。詳細: docs/backlog-details/P22-worktree-data-subscription.md |
 | F54 | feature | Changes | ショートカットキーでレビュー済みにできるようにする | ファイルレビューを素早く進めたい |
 | I21 | investigate | Sessions | primary session の体験を見直す | 詳細: docs/backlog-details/I21-primary-session-experience.md |
 
