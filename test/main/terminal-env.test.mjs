@@ -5,7 +5,7 @@ import { createTerminalEnv } from "../../src/main/terminal-env.ts";
 
 const terminalEnvOptions = {
   apiSocketPath: "/tmp/yuru/run/123.sock",
-  yuruCliPath: "/app/scripts/yuru-cli.mjs",
+  yuruCliPath: "/app/scripts/yuru-cli/index.mjs",
 };
 
 test("createTerminalEnv は親プロセスの NO_COLOR を引き継がない", () => {

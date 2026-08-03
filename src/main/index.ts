@@ -35,7 +35,7 @@ let servicesStopped = false;
 
 const HIDE_WINDOW_FOR_E2E = process.env.YURU_E2E_HIDE_WINDOW === "1";
 const apiSocketPath = getApiSocketPath();
-const yuruCliPath = path.join(app.getAppPath(), "scripts", "yuru-cli.mjs");
+const yuruCliPath = path.join(app.getAppPath(), "scripts", "yuru-cli", "index.mjs");
 const yuruSkillSourcePath = path.join(app.getAppPath(), "skills", "yuru", "SKILL.md");
 
 app.setName(APP_NAME);

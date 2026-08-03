@@ -112,16 +112,18 @@ async function main() {
       throw new Error("Packager did not produce Yuru.app.");
     }
 
-    const packagedCliPath = path.join(
+    const packagedCliDir = path.join(
       stagedAppPath,
       "Contents",
       "Resources",
       "app",
       "scripts",
-      "yuru-cli.mjs",
+      "yuru-cli",
     );
-    fs.mkdirSync(path.dirname(packagedCliPath), { recursive: true });
-    fs.copyFileSync(path.join(repoDir, "scripts", "yuru-cli.mjs"), packagedCliPath);
+    fs.mkdirSync(path.dirname(packagedCliDir), { recursive: true });
+    fs.cpSync(path.join(repoDir, "scripts", "yuru-cli"), packagedCliDir, {
+      recursive: true,
+    });
 
     pruneRendererBuild(
       path.join(stagedAppPath, "Contents", "Resources", "app", "dist", "renderer"),
