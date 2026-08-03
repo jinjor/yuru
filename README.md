@@ -11,10 +11,9 @@ Updating and building Yuru requires npm 11.16.0 or later.
 git clone git@github.com:jinjor/yuru.git
 cd yuru
 ./install.sh
-yuru latest
 ```
 
-`install.sh` installs a thin `yuru` launcher into `~/bin`, creates a managed checkout in `~/.yuru/repo`, and prepares `~/Applications/Yuru.app` as the local app destination.
+`install.sh` installs a thin `yuru` launcher at `~/.yuru/bin/yuru`, creates a managed checkout in `~/.yuru/repo`, and prepares `~/Applications/Yuru.app` as the local app destination. If `~/.yuru/bin` is not already on `PATH`, the installer prints zsh commands that can be copied and run to configure it and build the app. The installer does not edit shell configuration files itself.
 
 ## Use
 
@@ -34,7 +33,7 @@ To update the managed checkout and rebuild the local app:
 yuru latest
 ```
 
-`yuru latest` updates `~/.yuru/repo`, audits the locked dependencies, runs `npm ci`, rebuilds the app, and replaces `~/Applications/Yuru.app`. It does not launch the app automatically.
+`yuru latest` updates `~/.yuru/repo` and the installed launcher, audits the locked dependencies, runs `npm ci`, rebuilds the app, and replaces `~/Applications/Yuru.app`. It does not launch the app automatically.
 
 ## Trust Model
 

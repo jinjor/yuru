@@ -12,6 +12,7 @@ const repoDir = process.env.YURU_REPO_DIR ?? path.join(yuruHome, "repo");
 const appsDir = process.env.YURU_APPLICATIONS_DIR ?? path.join(os.homedir(), "Applications");
 const appPath = path.join(appsDir, "Yuru.app");
 const metadataPath = process.env.YURU_METADATA_PATH ?? path.join(yuruHome, "metadata.json");
+const launcherPath = path.join(yuruHome, "bin", "yuru");
 const allowedRemotes = new Set([
   "git@github.com:jinjor/yuru",
   "git@github.com:jinjor/yuru.git",
@@ -203,8 +204,21 @@ export function updateApp() {
 
   run("git", ["fetch", "origin", "main"]);
   run("git", ["pull", "--ff-only", "origin", "main"]);
+  updateLauncher();
   run("npm", ["audit", "--package-lock-only", "--audit-level=high"]);
   run("npm", ["ci"]);
   run("npm", ["run", "build"]);
   run("npm", ["run", "package:local"]);
+}
+
+function updateLauncher() {
+  const nextLauncherPath = `${launcherPath}.new`;
+  fs.mkdirSync(path.dirname(launcherPath), { recursive: true });
+  try {
+    fs.copyFileSync(path.join(repoDir, "bin", "yuru"), nextLauncherPath);
+    fs.chmodSync(nextLauncherPath, 0o755);
+    fs.renameSync(nextLauncherPath, launcherPath);
+  } finally {
+    fs.rmSync(nextLauncherPath, { force: true });
+  }
 }

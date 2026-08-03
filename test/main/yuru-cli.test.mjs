@@ -37,9 +37,14 @@ function createLatestFixture(t, { auditExitCode = 0, npmVersion = "11.16.0" } = 
 
   const repoDir = path.join(tempDir, "repo");
   const binDir = path.join(tempDir, "bin");
+  const yuruHome = path.join(tempDir, ".yuru");
+  const launcherPath = path.join(yuruHome, "bin", "yuru");
   const commandLogPath = path.join(tempDir, "commands.log");
   fs.mkdirSync(path.join(repoDir, ".git"), { recursive: true });
+  fs.mkdirSync(path.join(repoDir, "bin"));
   fs.mkdirSync(binDir);
+
+  writeExecutable(path.join(repoDir, "bin", "yuru"), "updated yuru launcher\n");
 
   writeExecutable(
     path.join(binDir, "git"),
@@ -68,12 +73,14 @@ fi
 
   return {
     commandLogPath,
+    launcherPath,
     env: cleanGitEnv({
       ...process.env,
       PATH: `${binDir}:${process.env.PATH}`,
       YURU_APPLICATIONS_DIR: path.join(tempDir, "Applications"),
       YURU_AUDIT_EXIT: String(auditExitCode),
       YURU_COMMAND_LOG: commandLogPath,
+      YURU_HOME: yuruHome,
       YURU_NPM_VERSION: npmVersion,
       YURU_REPO_DIR: repoDir,
     }),
@@ -348,9 +355,13 @@ test(
   "yuru latest audits the pulled lockfile before installing dependencies",
   { skip: process.platform !== "darwin" },
   (t) => {
-    const { commandLogPath, env } = createLatestFixture(t);
+    const { commandLogPath, env, launcherPath } = createLatestFixture(t);
 
     runLatest(env);
+
+    assert.equal(fs.readFileSync(launcherPath, "utf8"), "updated yuru launcher\n");
+    assert.equal(fs.statSync(launcherPath).mode & 0o777, 0o755);
+    assert.equal(fs.existsSync(`${launcherPath}.new`), false);
 
     const npmCommands = fs
       .readFileSync(commandLogPath, "utf8")
@@ -371,12 +382,16 @@ test(
   "yuru latest stops before npm ci when the audit fails",
   { skip: process.platform !== "darwin" },
   (t) => {
-    const { commandLogPath, env } = createLatestFixture(t, { auditExitCode: 1 });
+    const { commandLogPath, env, launcherPath } = createLatestFixture(t, {
+      auditExitCode: 1,
+    });
 
     assert.throws(
       () => runLatest(env),
       (error) => error.status === 1,
     );
+
+    assert.equal(fs.readFileSync(launcherPath, "utf8"), "updated yuru launcher\n");
 
     const npmCommands = fs
       .readFileSync(commandLogPath, "utf8")

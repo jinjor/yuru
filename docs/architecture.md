@@ -1,6 +1,6 @@
 # Architecture Notes
 
-Last updated: 2026-07-25
+Last updated: 2026-08-03
 
 この文書は現在の Yuru のアーキテクチャをまとめる。
 実装の細部、型定義、処理手順の正確な姿はコードを正とする。
@@ -136,6 +136,12 @@ worktree context prompt は `~/.yuru/worktree-context-prompt.txt` で差し替�
 
 ## Operations
 
+- install
+  - launcher は `~/.yuru/bin/yuru` に固定し、managed checkout は `~/.yuru/repo` に置く
+  - `~/.yuru/bin` が現在の `PATH` に無い場合は、`$SHELL` に応じた設定手順を表示する。現在は zsh だけに対応し、`.zshrc` を installer 自身では変更しない
+- `yuru latest`
+  - managed checkout の `main` を fast-forward した直後に `~/.yuru/bin/yuru` を更新する
+  - その後、lockfile audit、`npm ci`、build、local packaging の順に実行し、`~/Applications/Yuru.app` を置き換える
 - `yuru add <directory>`
   - 指定した directory から Git repo root を解決し、Yuru metadata に repo を登録する
   - すでに登録済みなら重複登録しない

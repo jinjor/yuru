@@ -5,7 +5,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 YURU_HOME="${YURU_HOME:-$HOME/.yuru}"
 YURU_REPO_DIR="${YURU_REPO_DIR:-$YURU_HOME/repo}"
-YURU_BIN_DIR="${YURU_BIN_DIR:-$HOME/bin}"
+YURU_BIN_DIR="$YURU_HOME/bin"
 YURU_APPLICATIONS_DIR="${YURU_APPLICATIONS_DIR:-$HOME/Applications}"
 WRAPPER_SOURCE="$ROOT_DIR/bin/yuru"
 WRAPPER_TARGET="$YURU_BIN_DIR/yuru"
@@ -94,14 +94,40 @@ install_wrapper() {
   chmod 755 "$WRAPPER_TARGET"
 }
 
+print_zsh_path_setup() {
+  cat <<'EOF'
+
+Copy and run these commands to add Yuru to PATH and build Yuru.app:
+
+  printf '\nexport PATH="$HOME/.yuru/bin:$PATH"\n' >> "$HOME/.zshrc"
+  source "$HOME/.zshrc"
+  yuru latest
+EOF
+}
+
+print_shell_path_setup() {
+  case "$(basename "${SHELL:-}")" in
+    zsh)
+      print_zsh_path_setup
+      ;;
+    *)
+      echo
+      echo "PATH setup is not supported yet for shell: ${SHELL:-unknown}" >&2
+      echo "Add $YURU_BIN_DIR to PATH, then run 'yuru latest'." >&2
+      ;;
+  esac
+}
+
 print_next_steps() {
   echo "Installed yuru to $WRAPPER_TARGET"
   echo "Managed repo: $YURU_REPO_DIR"
   echo "App location: $YURU_APPLICATIONS_DIR/Yuru.app"
-  if [[ ":$PATH:" != *":$YURU_BIN_DIR:"* ]]; then
-    echo "Note: add $YURU_BIN_DIR to your PATH to run 'yuru' directly."
+  if [[ ":$PATH:" == *":$YURU_BIN_DIR:"* ]]; then
+    echo "Next: run 'yuru latest' to build Yuru.app locally."
+    return
   fi
-  echo "Next: run 'yuru latest' to build Yuru.app locally."
+
+  print_shell_path_setup
 }
 
 main() {
