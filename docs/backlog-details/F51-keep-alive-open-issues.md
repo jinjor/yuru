@@ -1,10 +1,10 @@
 # F51 B 案 (keep-alive + Activity) の残課題リスト
 
-Last updated: 2026-08-03
+Last updated: 2026-08-04
 
 B 案 (keep-alive) 検討時の議論記録。決定版の詳細設計は F51-worktree-keep-alive.md に
-まとめてあり、以後の更新はそちらだけ行う。Step 0 (スパイク) の検証結果の追記先としてのみ
-このファイルを使う。
+まとめてあり、以後の更新はそちらだけ行う。Step 0 の検証結果は
+F51-keep-alive-spike-results.md に記録している。
 
 | # | 課題 | 状態 |
 |---|---|---|
@@ -13,14 +13,14 @@ B 案 (keep-alive) 検討時の議論記録。決定版の詳細設計は F51-wo
 | 3 | App の構造変更 (描画集合の導出 + Activity 列挙) | 方針決定 |
 | 4 | タブ切替の扱い | 方針決定 (同パターン適用) |
 | 5 | 初 mount のタイミング前提 | 決定 (main worktree だけ例外) |
-| 6 | Activity の実挙動の検証 | スパイクで検証 |
-| 7 | xterm / IME の検証 | スパイクで検証 |
-| 8 | lazy + Suspense との組み合わせの検証 | スパイクで検証 |
-| 9 | scroll 位置の扱い | 決定 (期待値に入れない) |
+| 6 | Activity の実挙動の検証 | 検証済み |
+| 7 | xterm / IME の検証 | xterm / composition は検証済み、macOS native IME は手動確認待ち |
+| 8 | lazy + Suspense との組み合わせの検証 | 検証済み |
+| 9 | scroll 位置の扱い | 決定・観測済み (期待値に入れない) |
 | 10 | イベント購読で同期する state の規律 | 縮小して合意 |
 | 11 | effect の「復帰で再実行される」前提の規律 | 合意 (B 特有ではない) |
 | 12 | E2E セレクタが hidden DOM に当たる問題 | 未議論 |
-| 13 | hidden instance の再描画コスト | 対策方針決定 (根絶は P22) |
+| 13 | hidden instance の再描画コスト | 対策方針決定・計測済み (根絶は P22) |
 | 14 | メモリ | 解決 |
 | 15 | P20 前提のコメント・architecture.md の追従 | 未着手 |
 

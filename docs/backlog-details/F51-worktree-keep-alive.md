@@ -1,6 +1,6 @@
 # F51 詳細設計: worktree ごとに開いていたファイルを覚えておく (keep-alive)
 
-Last updated: 2026-08-03
+Last updated: 2026-08-04
 
 これは決定版の詳細設計。議論の経緯と個別課題の決着は
 F51-keep-alive-open-issues.md に記録がある。
@@ -119,21 +119,22 @@ Step 1・2 は挙動を変えない準備で、単体でも価値がある。
 ### Step 0: スパイク (使い捨てブランチ、merge しない)
 
 App の SessionView 描画を雑に Activity で包んだブランチを作り、以下を実機確認する。
-結果は F51-keep-alive-open-issues.md の該当項目に追記する。
+結果は F51-keep-alive-spike-results.md に課題番号との対応が分かる形で記録する。
 
-- [ ] Activity の基本挙動: hidden で effect の cleanup が走る / state と DOM が残る /
+- [x] Activity の基本挙動: hidden で effect の cleanup が走る / state と DOM が残る /
       復帰で effect が再実行される
-- [ ] SessionView は fragment で複数のトップレベル要素 (`.session-view-column`、
+- [x] SessionView は fragment で複数のトップレベル要素 (`.session-view-column`、
       resize handle、ExplorerPanel の `<aside>`) を返す。Activity hidden が
       その全てを非表示にし、`.app` の flex レイアウトが崩れないこと。
       崩れる場合は SessionView を単一のコンテナ要素で包む CSS 調整を先に行う
 - [ ] xterm: hidden で `term.dispose()` (TerminalPanel の cleanup) が走り、復帰で
       再生成 + main (headless xterm) からの復元が今の remount と同じに動くこと。
-      IME 入力 (日本語変換) を含めて確認
-- [ ] DiffPreviewPanel の lazy + Suspense (EditModeEditor / HtmlPreview /
+      IME 入力 (日本語変換) を含めて確認。xterm / Chromium composition は検証済みで、
+      macOS native IME の手動確認だけが残る
+- [x] DiffPreviewPanel の lazy + Suspense (EditModeEditor / HtmlPreview /
       MarkdownPreview) が hidden / 復帰で壊れないこと
-- [ ] scroll 位置が保持されるかを一応観察する (保持は期待値にしない。結果の記録のみ)
-- [ ] 再描画コストの絶対値計測: active session 4〜5 本 + それぞれ大きい diff を
+- [x] scroll 位置が保持されるかを一応観察する (保持は期待値にしない。結果の記録のみ)
+- [x] 再描画コストの絶対値計測: active session 4〜5 本 + それぞれ大きい diff を
       開いた状態で、streaming 中の CPU と React Profiler の commit を記録する。
       Step 1 の対策あり / なしの両方で測ると効果が数字で残る
 
