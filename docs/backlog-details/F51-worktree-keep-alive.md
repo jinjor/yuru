@@ -142,19 +142,21 @@ App の SessionView 描画を雑に Activity で包んだブランチを作り�
 
 挙動を変えない準備。単一 instance の現状でも無駄な再描画が減る。
 
-- [ ] `applySessionUpdate` / `applyPullRequestUpdates` / `samePullRequest` /
+- [x] `applySessionUpdate` / `applyPullRequestUpdates` / `samePullRequest` /
       `findWorktree` を App.tsx から新モジュール `src/renderer/utils/repoList.ts` へ移す
       (App.tsx は xterm の css を import しているため `node --test` から読めない。
       移動はテストのための必須作業)
-- [ ] `applySessionUpdate` を参照保存スタイルに書き直す: 対象 runtime を含む worktree
+- [x] `applySessionUpdate` を参照保存スタイルに書き直す: 対象 runtime を含む worktree
       だけ新オブジェクトにし、他の worktree / repo は同じ参照を返す。
       どこにも該当がなければ prev そのものを返す
-- [ ] unit test `test/renderer/utils/repoList.test.mjs` を追加:
+- [x] unit test `test/renderer/utils/repoList.test.mjs` を追加:
       「該当しない worktree / repo は変更前と `===` で同一」
       「該当なしなら prev そのものが返る」を applySessionUpdate と
       applyPullRequestUpdates の両方に対して固定する
-- [ ] `SessionView` を `memo` で包む
-- [ ] 確認: `npm test` と既存 e2e が通ること
+- [x] `SessionView` を `memo` で包む
+- [x] 確認: `npm test` が通ること
+- [x] 確認: `test/e2e/session-view-memo.test.ts` が通ること
+- [x] 確認: 既存 e2e が全件通ること
 
 ### Step 2: FilesPane の「初期化」と「接続」の分離
 
