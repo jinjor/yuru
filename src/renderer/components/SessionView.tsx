@@ -1,5 +1,12 @@
-import type { RefObject } from "react";
-import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
+import {
+  memo,
+  type CSSProperties,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import type { AgentDefinition } from "../../shared/agent";
 import type {
   GitPathState,
@@ -59,7 +66,7 @@ function isPathChangedInScope(
   return Boolean(entry.indexStatus || entry.worktreeStatus);
 }
 
-export function SessionView({
+export const SessionView = memo(function SessionView({
   appRef,
   onOpenExternal,
   providers,
@@ -68,6 +75,12 @@ export function SessionView({
   worktreeId,
   onSessionsChanged,
 }: SessionViewProps) {
+  // memo の実効性を E2E で固定するための、計測専用の意図的な render 副作用。
+  // hidden 中は effect が動かないため、Step 3 の複数 instance 計測でも effect では代替できない。
+  window.__yuruSessionViewRenderCounts ??= {};
+  window.__yuruSessionViewRenderCounts[worktreeId] =
+    (window.__yuruSessionViewRenderCounts[worktreeId] ?? 0) + 1;
+
   const sessionViewColumnRef = useRef<HTMLDivElement>(null);
   // この worktree でいま表示している terminal runtime。session 未開始や終了直後は null で、
   // その間 Terminal は session start surface を出す。
@@ -386,4 +399,4 @@ export function SessionView({
       )}
     </>
   );
-}
+});
