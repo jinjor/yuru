@@ -5,11 +5,12 @@ import type { PreviewSelection } from "../../types";
 import { buildIgnoredPathSet, buildTreeStatusMap, treeStatusClass } from "../../utils/git";
 import { resultDataOrNull } from "../../utils/result";
 import {
+  applyDirectoryListing,
   buildWatchTargets,
   buildVisibleTreeRows,
   collectAncestorDirectories,
   normalizeExpandedDirectories,
-  replaceNodeChildren,
+  removeDirectorySubtrees,
   retainLoadedDirectories,
   ROOT_DIRECTORY_PATH,
   type VisibleTreeRow,
@@ -24,16 +25,14 @@ interface FilesPaneProps {
   worktreeId: string;
 }
 
-interface FilesState {
-  expandedDirectories: Set<string>;
+interface FilesCache {
   loadedDirectories: Set<string>;
   loadingDirectories: Set<string>;
   treeData: FileTreeNode[];
 }
 
-function createEmptyFilesState(): FilesState {
+function createEmptyFilesCache(): FilesCache {
   return {
-    expandedDirectories: new Set(),
     loadedDirectories: new Set(),
     loadingDirectories: new Set(),
     treeData: [],
@@ -48,28 +47,41 @@ export function FilesPane({
   previewSelection,
   worktreeId,
 }: FilesPaneProps) {
-  const [filesState, setFilesState] = useState<FilesState>(() => createEmptyFilesState());
-  const filesStateRef = useRef<FilesState>(filesState);
+  const [expandedDirectories, setExpandedDirectories] = useState<Set<string>>(() => new Set());
+  const expandedDirectoriesRef = useRef<Set<string>>(expandedDirectories);
+  const [filesCache, setFilesCache] = useState<FilesCache>(() => createEmptyFilesCache());
+  const filesCacheRef = useRef<FilesCache>(filesCache);
   const inFlightLoadsRef = useRef<Map<string, Promise<void>>>(new Map());
   const pendingForcedReloadsRef = useRef<Set<string>>(new Set());
   const sessionGenerationRef = useRef(0);
   const treeStatusByPath = buildTreeStatusMap(gitPathStates);
   const treeIgnoredPaths = buildIgnoredPathSet(gitPathStates);
-  const { expandedDirectories, loadingDirectories, treeData } = filesState;
+  const { loadingDirectories, treeData } = filesCache;
   const visibleRows = buildVisibleTreeRows(treeData, expandedDirectories);
 
-  const replaceFilesState = useCallback((nextFilesState: FilesState): void => {
-    filesStateRef.current = nextFilesState;
-    setFilesState(nextFilesState);
+  const replaceExpandedDirectories = useCallback((nextDirectories: Set<string>): void => {
+    expandedDirectoriesRef.current = nextDirectories;
+    setExpandedDirectories(nextDirectories);
   }, []);
 
-  const updateFilesState = useCallback((updater: (prev: FilesState) => FilesState): void => {
-    setFilesState((prev) => {
-      const next = updater(prev);
-      filesStateRef.current = next;
-      return next;
-    });
+  const updateExpandedDirectories = useCallback(
+    (updater: (prev: Set<string>) => Set<string>): void => {
+      replaceExpandedDirectories(updater(expandedDirectoriesRef.current));
+    },
+    [replaceExpandedDirectories],
+  );
+
+  const replaceFilesCache = useCallback((nextFilesCache: FilesCache): void => {
+    filesCacheRef.current = nextFilesCache;
+    setFilesCache(nextFilesCache);
   }, []);
+
+  const updateFilesCache = useCallback(
+    (updater: (prev: FilesCache) => FilesCache): void => {
+      replaceFilesCache(updater(filesCacheRef.current));
+    },
+    [replaceFilesCache],
+  );
 
   const syncWatchTargets = useCallback(
     (relativePaths: ReadonlySet<string>): void => {
@@ -80,29 +92,29 @@ export function FilesPane({
 
   const applyTreeUpdate = useCallback(
     (relativePath: string, nextNodes: FileTreeNode[]): void => {
-      updateFilesState((prev) => {
-        const nextTreeData =
-          relativePath === ROOT_DIRECTORY_PATH
-            ? nextNodes
-            : replaceNodeChildren(prev.treeData, relativePath, nextNodes);
-
-        return {
-          ...prev,
-          treeData: nextTreeData,
-          loadedDirectories: retainLoadedDirectories(
-            new Set(prev.loadedDirectories).add(relativePath),
-            nextTreeData,
-          ),
-          expandedDirectories: normalizeExpandedDirectories(prev.expandedDirectories, nextTreeData),
-        };
+      const prevCache = filesCacheRef.current;
+      const update = applyDirectoryListing(prevCache.treeData, relativePath, nextNodes);
+      replaceFilesCache({
+        ...prevCache,
+        treeData: update.treeData,
+        loadedDirectories: retainLoadedDirectories(
+          new Set(prevCache.loadedDirectories).add(relativePath),
+          update.treeData,
+        ),
       });
+
+      if (update.removedDirectoryPaths.length > 0) {
+        updateExpandedDirectories((prev) =>
+          removeDirectorySubtrees(prev, update.removedDirectoryPaths),
+        );
+      }
     },
-    [updateFilesState],
+    [replaceFilesCache, updateExpandedDirectories],
   );
 
   const loadDirectory = useCallback(
     async (relativePath = ROOT_DIRECTORY_PATH, force = false): Promise<void> => {
-      if (!force && filesStateRef.current.loadedDirectories.has(relativePath)) {
+      if (!force && filesCacheRef.current.loadedDirectories.has(relativePath)) {
         return;
       }
 
@@ -124,7 +136,7 @@ export function FilesPane({
 
       const generation = sessionGenerationRef.current;
       const request = (async () => {
-        updateFilesState((prev) => ({
+        updateFilesCache((prev) => ({
           ...prev,
           loadingDirectories: new Set(prev.loadingDirectories).add(relativePath),
         }));
@@ -142,7 +154,7 @@ export function FilesPane({
       })().finally(() => {
         inFlightLoadsRef.current.delete(relativePath);
         if (sessionGenerationRef.current === generation) {
-          updateFilesState((prev) => {
+          updateFilesCache((prev) => {
             const nextLoadingDirectories = new Set(prev.loadingDirectories);
             nextLoadingDirectories.delete(relativePath);
             return {
@@ -156,29 +168,26 @@ export function FilesPane({
       inFlightLoadsRef.current.set(relativePath, request);
       return request;
     },
-    [applyTreeUpdate, updateFilesState, worktreeId],
+    [applyTreeUpdate, updateFilesCache, worktreeId],
   );
 
   const toggleDirectory = useCallback(
     (relativePath: string): void => {
-      const isOpen = filesStateRef.current.expandedDirectories.has(relativePath);
-      updateFilesState((prev) => {
-        const nextExpandedDirectories = new Set(prev.expandedDirectories);
+      const isOpen = expandedDirectoriesRef.current.has(relativePath);
+      updateExpandedDirectories((prev) => {
+        const nextExpandedDirectories = new Set(prev);
         if (isOpen) {
           nextExpandedDirectories.delete(relativePath);
         } else {
           nextExpandedDirectories.add(relativePath);
         }
-        return {
-          ...prev,
-          expandedDirectories: nextExpandedDirectories,
-        };
+        return nextExpandedDirectories;
       });
       if (!isOpen) {
         void loadDirectory(relativePath);
       }
     },
-    [loadDirectory, updateFilesState],
+    [loadDirectory, updateExpandedDirectories],
   );
 
   const revealChangedDirectories = useCallback(async (): Promise<void> => {
@@ -189,18 +198,14 @@ export function FilesPane({
       await loadDirectory(directoryPath);
     }
 
-    updateFilesState((prev) => ({
-      ...prev,
-      expandedDirectories: normalizeExpandedDirectories(directoryPaths, prev.treeData),
-    }));
-  }, [changedFiles, loadDirectory, updateFilesState]);
+    replaceExpandedDirectories(
+      normalizeExpandedDirectories(directoryPaths, filesCacheRef.current.treeData),
+    );
+  }, [changedFiles, loadDirectory, replaceExpandedDirectories]);
 
   const collapseAllDirectories = useCallback((): void => {
-    updateFilesState((prev) => ({
-      ...prev,
-      expandedDirectories: new Set(),
-    }));
-  }, [updateFilesState]);
+    replaceExpandedDirectories(new Set());
+  }, [replaceExpandedDirectories]);
 
   useEffect(() => {
     syncWatchTargets(expandedDirectories);
@@ -210,9 +215,10 @@ export function FilesPane({
     sessionGenerationRef.current += 1;
     inFlightLoadsRef.current = new Map();
     pendingForcedReloadsRef.current = new Set();
-    replaceFilesState(createEmptyFilesState());
+    replaceExpandedDirectories(new Set());
+    replaceFilesCache(createEmptyFilesCache());
     void loadDirectory(ROOT_DIRECTORY_PATH);
-  }, [loadDirectory, replaceFilesState]);
+  }, [loadDirectory, replaceExpandedDirectories, replaceFilesCache]);
 
   useEffect(() => {
     const dispose = window.electronAPI.onFileTreeChanged((changedWorktreeId, relativePath) => {

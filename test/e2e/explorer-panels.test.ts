@@ -38,6 +38,13 @@ test("Files タブで追跡ファイルを表示しクリックしたファイ�
 
     await window.locator(".file-tree-row", { hasText: "src" }).click();
     await expect(window.locator(".file-tree-name", { hasText: "app.ts" })).toBeVisible();
+
+    await writeFiles(repoDir, { "after-expand.txt": "root changed after src was loaded\n" });
+    await expect(window.locator(".file-tree-name", { hasText: "after-expand.txt" })).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(window.locator(".file-tree-name", { hasText: "app.ts" })).toBeVisible();
+
     await window.locator(".file-tree-row", { hasText: "app.ts" }).click();
 
     await expectPreviewPath(window, "src/app.ts");
@@ -311,10 +318,10 @@ test("Files タブには選択中 worktree のファイルだけが出る", asyn
   let app: ElectronApplication | null = null;
   try {
     const repoDir = await createCommittedRepo(context, {
-      "main-only.txt": "main\n",
+      "main-dir/main-only.txt": "main\n",
     });
     const taskWorktreePath = await createGitWorktree(context, repoDir, "task-files-only");
-    await writeFiles(taskWorktreePath, { "task-only.txt": "task\n" });
+    await writeFiles(taskWorktreePath, { "task-dir/task-only.txt": "task\n" });
     await registerRepo(context, repoDir);
     const launched = await launchWindow(context);
     app = launched.app;
@@ -322,8 +329,22 @@ test("Files タブには選択中 worktree のファイルだけが出る", asyn
     await openMainTerminal(window);
 
     await window.locator(".panel-tab", { hasText: "Files" }).click();
+    await window.locator(".file-tree-row", { hasText: "main-dir" }).click();
     await expect(window.locator(".file-tree-name", { hasText: "main-only.txt" })).toBeVisible();
-    await expect(window.locator(".file-tree-name", { hasText: "task-only.txt" })).toHaveCount(0);
+    await expect(window.locator(".file-tree-name", { hasText: "task-dir" })).toHaveCount(0);
+
+    await window.locator(".task-worktree-card", { hasText: "task-files-only" }).click();
+    await window.locator(".panel-tab", { hasText: "Files" }).click();
+    await expect(window.locator(".file-tree-name", { hasText: "task-dir" })).toBeVisible();
+    await expect(window.locator(".file-tree-name", { hasText: "main-only.txt" })).toHaveCount(0);
+    await window.locator(".file-tree-row", { hasText: "task-dir" }).click();
+    await expect(window.locator(".file-tree-name", { hasText: "task-only.txt" })).toBeVisible();
+
+    await window.locator(".task-worktree-card", { hasText: "main" }).click();
+    await window.locator(".panel-tab", { hasText: "Files" }).click();
+    await expect(window.locator(".file-tree-name", { hasText: "main-dir" })).toBeVisible();
+    await expect(window.locator(".file-tree-name", { hasText: "main-only.txt" })).toHaveCount(0);
+    await expect(window.locator(".file-tree-name", { hasText: "task-dir" })).toHaveCount(0);
   } finally {
     await closeYuru(app);
     await context.cleanup();

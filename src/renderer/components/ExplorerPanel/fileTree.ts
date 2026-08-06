@@ -8,6 +8,11 @@ export interface VisibleTreeRow {
   node: FileTreeNode;
 }
 
+export interface DirectoryListingUpdate {
+  removedDirectoryPaths: string[];
+  treeData: FileTreeNode[];
+}
+
 function compareDirectoryPaths(left: string, right: string): number {
   const depthDiff = left.split("/").length - right.split("/").length;
   if (depthDiff !== 0) {
@@ -16,26 +21,88 @@ function compareDirectoryPaths(left: string, right: string): number {
   return left.localeCompare(right);
 }
 
-export function replaceNodeChildren(
-  nodes: FileTreeNode[],
-  targetPath: string,
-  nextChildren: FileTreeNode[],
+function mergeRetainedDirectoryChildren(
+  previousNodes: readonly FileTreeNode[],
+  nextNodes: readonly FileTreeNode[],
 ): FileTreeNode[] {
-  return nodes.map((node) => {
-    if (node.path === targetPath) {
-      return {
-        ...node,
-        children: nextChildren,
-      };
-    }
-    if (!node.children || node.children.length === 0) {
+  const previousDirectories = new Map(
+    previousNodes
+      .filter((node) => node.kind === "directory")
+      .map((node) => [node.path, node] as const),
+  );
+
+  return nextNodes.map((node) => {
+    if (node.kind !== "directory") {
       return node;
     }
-    return {
-      ...node,
-      children: replaceNodeChildren(node.children, targetPath, nextChildren),
-    };
+    const previousNode = previousDirectories.get(node.path);
+    return previousNode ? { ...node, children: previousNode.children } : node;
   });
+}
+
+function collectRemovedDirectoryPaths(
+  previousNodes: readonly FileTreeNode[],
+  nextNodes: readonly FileTreeNode[],
+): string[] {
+  const nextDirectoryPaths = new Set(
+    nextNodes.filter((node) => node.kind === "directory").map((node) => node.path),
+  );
+  return previousNodes
+    .filter((node) => node.kind === "directory" && !nextDirectoryPaths.has(node.path))
+    .map((node) => node.path);
+}
+
+export function applyDirectoryListing(
+  treeData: FileTreeNode[],
+  parentPath: string,
+  nextNodes: FileTreeNode[],
+): DirectoryListingUpdate {
+  if (parentPath === ROOT_DIRECTORY_PATH) {
+    return {
+      removedDirectoryPaths: collectRemovedDirectoryPaths(treeData, nextNodes),
+      treeData: mergeRetainedDirectoryChildren(treeData, nextNodes),
+    };
+  }
+
+  let removedDirectoryPaths: string[] = [];
+  const replaceChildren = (nodes: FileTreeNode[]): FileTreeNode[] =>
+    nodes.map((node) => {
+      if (node.path === parentPath) {
+        const previousChildren = node.children ?? [];
+        removedDirectoryPaths = collectRemovedDirectoryPaths(previousChildren, nextNodes);
+        return {
+          ...node,
+          children: mergeRetainedDirectoryChildren(previousChildren, nextNodes),
+        };
+      }
+      if (!node.children || node.children.length === 0) {
+        return node;
+      }
+      return {
+        ...node,
+        children: replaceChildren(node.children),
+      };
+    });
+
+  const nextTreeData = replaceChildren(treeData);
+  return {
+    removedDirectoryPaths,
+    treeData: nextTreeData,
+  };
+}
+
+export function removeDirectorySubtrees(
+  directoryPaths: Iterable<string>,
+  removedDirectoryPaths: readonly string[],
+): Set<string> {
+  return new Set(
+    Array.from(directoryPaths).filter(
+      (path) =>
+        !removedDirectoryPaths.some(
+          (removedPath) => path === removedPath || path.startsWith(`${removedPath}/`),
+        ),
+    ),
+  );
 }
 
 export function collectAncestorDirectories(filePaths: string[]): string[] {

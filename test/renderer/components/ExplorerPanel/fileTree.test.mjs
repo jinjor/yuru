@@ -3,9 +3,11 @@ import test from "node:test";
 
 import {
   ROOT_DIRECTORY_PATH,
+  applyDirectoryListing,
   buildVisibleTreeRows,
   buildWatchTargets,
   normalizeExpandedDirectories,
+  removeDirectorySubtrees,
   retainLoadedDirectories,
 } from "../../../../src/renderer/components/ExplorerPanel/fileTree.ts";
 
@@ -59,6 +61,47 @@ test("normalizeExpandedDirectories は親が開いていない子孫 path を落
   const expanded = normalizeExpandedDirectories(["src/components"], tree);
 
   assert.deepEqual(Array.from(expanded), []);
+});
+
+test("applyDirectoryListing は残っている directory の取得済み子孫を維持する", () => {
+  const update = applyDirectoryListing(tree, ROOT_DIRECTORY_PATH, [
+    directory("src"),
+    directory("vendor"),
+    file("package.json"),
+  ]);
+
+  assert.deepEqual(update.removedDirectoryPaths, ["docs"]);
+  assert.deepEqual(
+    update.treeData.map((node) => node.path),
+    ["src", "vendor", "package.json"],
+  );
+  assert.deepEqual(
+    update.treeData[0].children.map((node) => node.path),
+    ["src/components", "src/index.ts"],
+  );
+  assert.deepEqual(
+    update.treeData[0].children[0].children.map((node) => node.path),
+    ["src/components/Button.tsx", "src/components/Input.tsx"],
+  );
+});
+
+test("applyDirectoryListing は更新対象の直下から消えた directory を返す", () => {
+  const update = applyDirectoryListing(tree, "src", [file("src/index.ts")]);
+
+  assert.deepEqual(update.removedDirectoryPaths, ["src/components"]);
+  assert.deepEqual(
+    update.treeData[1].children.map((node) => node.path),
+    ["src/index.ts"],
+  );
+});
+
+test("removeDirectorySubtrees は削除が確定した directory 配下だけを除去する", () => {
+  const remaining = removeDirectorySubtrees(
+    ["docs", "src", "src/components", "src/components/forms", "not-yet-loaded"],
+    ["src/components"],
+  );
+
+  assert.deepEqual(Array.from(remaining), ["docs", "src", "not-yet-loaded"]);
 });
 
 test("buildVisibleTreeRows は展開中の directory だけを辿る", () => {
