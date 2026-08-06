@@ -8,7 +8,6 @@ import {
   buildWatchTargets,
   normalizeExpandedDirectories,
   removeDirectorySubtrees,
-  retainLoadedDirectories,
 } from "../../../../src/renderer/components/ExplorerPanel/fileTree.ts";
 
 function file(path) {
@@ -95,6 +94,10 @@ test("applyDirectoryListing は更新対象の直下から消えた directory �
   );
 });
 
+test("applyDirectoryListing は更新対象が既に消えていれば更新しない", () => {
+  assert.equal(applyDirectoryListing(tree, "missing", [file("missing/index.ts")]), null);
+});
+
 test("removeDirectorySubtrees は削除が確定した directory 配下だけを除去する", () => {
   const remaining = removeDirectorySubtrees(
     ["docs", "src", "src/components", "src/components/forms", "not-yet-loaded"],
@@ -138,15 +141,6 @@ test("buildVisibleTreeRows は展開済みの子孫 directory の中身も含め
       "package.json",
     ],
   );
-});
-
-test("retainLoadedDirectories は root を維持しつつ消えた directory を落とす", () => {
-  const loaded = retainLoadedDirectories(
-    [ROOT_DIRECTORY_PATH, "src", "src/components", "missing"],
-    tree,
-  );
-
-  assert.deepEqual(Array.from(loaded), [ROOT_DIRECTORY_PATH, "src", "src/components"]);
 });
 
 test("buildWatchTargets は root を常に含めて path をソートする", () => {

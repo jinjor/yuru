@@ -56,7 +56,7 @@ export function applyDirectoryListing(
   treeData: FileTreeNode[],
   parentPath: string,
   nextNodes: FileTreeNode[],
-): DirectoryListingUpdate {
+): DirectoryListingUpdate | null {
   if (parentPath === ROOT_DIRECTORY_PATH) {
     return {
       removedDirectoryPaths: collectRemovedDirectoryPaths(treeData, nextNodes),
@@ -64,10 +64,12 @@ export function applyDirectoryListing(
     };
   }
 
+  let parentFound = false;
   let removedDirectoryPaths: string[] = [];
   const replaceChildren = (nodes: FileTreeNode[]): FileTreeNode[] =>
     nodes.map((node) => {
       if (node.path === parentPath) {
+        parentFound = true;
         const previousChildren = node.children ?? [];
         removedDirectoryPaths = collectRemovedDirectoryPaths(previousChildren, nextNodes);
         return {
@@ -85,10 +87,7 @@ export function applyDirectoryListing(
     });
 
   const nextTreeData = replaceChildren(treeData);
-  return {
-    removedDirectoryPaths,
-    treeData: nextTreeData,
-  };
+  return parentFound ? { removedDirectoryPaths, treeData: nextTreeData } : null;
 }
 
 export function removeDirectorySubtrees(
@@ -163,22 +162,6 @@ export function normalizeExpandedDirectories(
   }
 
   return normalized;
-}
-
-export function retainLoadedDirectories(
-  loadedDirectories: Iterable<string>,
-  nodes: readonly FileTreeNode[],
-): Set<string> {
-  const validPaths = collectDirectoryPaths(nodes);
-  const nextLoadedDirectories = new Set<string>([ROOT_DIRECTORY_PATH]);
-
-  for (const relativePath of loadedDirectories) {
-    if (relativePath === ROOT_DIRECTORY_PATH || validPaths.has(relativePath)) {
-      nextLoadedDirectories.add(relativePath);
-    }
-  }
-
-  return nextLoadedDirectories;
 }
 
 export function buildWatchTargets(expandedDirectories: ReadonlySet<string>): string[] {

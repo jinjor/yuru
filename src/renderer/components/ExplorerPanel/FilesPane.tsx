@@ -11,7 +11,6 @@ import {
   collectAncestorDirectories,
   normalizeExpandedDirectories,
   removeDirectorySubtrees,
-  retainLoadedDirectories,
   ROOT_DIRECTORY_PATH,
   type VisibleTreeRow,
 } from "./fileTree";
@@ -70,12 +69,15 @@ export function FilesPane({
     (relativePath: string, nextNodes: FileTreeNode[]): void => {
       const prevCache = filesCacheRef.current;
       const update = applyDirectoryListing(prevCache.treeData, relativePath, nextNodes);
+      if (!update) {
+        return;
+      }
       commitFilesCache({
         ...prevCache,
         treeData: update.treeData,
-        loadedDirectories: retainLoadedDirectories(
+        loadedDirectories: removeDirectorySubtrees(
           new Set(prevCache.loadedDirectories).add(relativePath),
-          update.treeData,
+          update.removedDirectoryPaths,
         ),
       });
 
