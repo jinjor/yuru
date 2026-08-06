@@ -165,20 +165,22 @@ ROOT を load」しており、effect が再実行される環境では保持し
 このリセットは、pane が生きたまま worktreeId が入れ替わっていた旧構造
 (2026-04-19, c39443c7) の名残で、key で作り直される現構造では冗長。
 
-- [ ] mount effect から `replaceFilesState(createEmptyFilesState())` と ref 類のリセットを
-      削除する。state の初期化は `useState(createEmptyFilesState)` だけが担う
-- [ ] effect 本体を「`filesStateRef.current.expandedDirectories` を読み、
+- [x] connection effect から `setExpandedDirectories(new Set())`、
+      `commitFilesCache(createEmptyFilesCache())`、load 管理のリセットを削除する。
+      state と ref の初期化はそれぞれの `useState` / `useRef` だけが担う
+- [x] connection effect 本体を「`expandedDirectoriesRef.current` を読み、
       ROOT + 展開中ディレクトリを親から順に `loadDirectory(path, force = true)` で
       直列に再読込」にする。順序は `revealChangedDirectories` と同じ理由で必須
-      (親より先に子を load すると `replaceNodeChildren` が反映先を見つけられない)。
-      並べ替えには `fileTree.ts` の `compareDirectoryPaths` を export して使う
-- [ ] 展開セットは effect の依存に入れない (展開のたびに全再読込が走ってしまう)。
+      (親より先に子を load すると `applyDirectoryListing` が反映先を見つけられない)。
+      ROOT の追加と並べ替えには既存の `buildWatchTargets` を使う
+- [x] 展開セットは effect の依存に入れない (展開のたびに全再読込が走ってしまう)。
       ref 経由で「effect 実行時点の展開状態」を読む
-- [ ] 消えていたディレクトリの掃除は既存の `normalizeExpandedDirectories` に任せる。
+- [x] 消えていたディレクトリの掃除は、親の最新一覧を適用する既存の
+      `applyDirectoryListing` / `removeDirectorySubtrees` に任せる。
       追加の存在チェックは書かない
-- [ ] generation / in-flight の無効化機構は変更しない (hidden 時は既存の cleanup effect が
-      generation を進めるので、古い load 結果は復帰後に適用されない)
-- [ ] 確認: 現構造 (毎回 fresh mount) では従来と同じ挙動になること。
+- [x] load の無効化機構は変更しない (hidden 時は既存の cleanup effect が
+      `directoryLoadsRef` を空にするので、古い load 結果は復帰後に適用されない)
+- [x] 確認: 現構造 (毎回 fresh mount) では従来と同じ挙動になること。
       既存の explorer-panels e2e が通ること
 
 ### Step 3: SessionView の keep-alive 化 (本体)

@@ -52,6 +52,7 @@ export function FilesPane({
   worktreeId,
 }: FilesPaneProps) {
   const [expandedDirectories, setExpandedDirectories] = useState<Set<string>>(() => new Set());
+  const expandedDirectoriesRef = useRef(expandedDirectories);
   const [filesCache, setFilesCache] = useState<FilesCache>(() => createEmptyFilesCache());
   const filesCacheRef = useRef<FilesCache>(filesCache);
   const directoryLoadsRef = useRef<Map<string, DirectoryLoad>>(new Map());
@@ -63,6 +64,11 @@ export function FilesPane({
   const commitFilesCache = useCallback((nextFilesCache: FilesCache): void => {
     filesCacheRef.current = nextFilesCache;
     setFilesCache(nextFilesCache);
+  }, []);
+
+  const commitExpandedDirectories = useCallback((nextExpandedDirectories: Set<string>): void => {
+    expandedDirectoriesRef.current = nextExpandedDirectories;
+    setExpandedDirectories(nextExpandedDirectories);
   }, []);
 
   const applyTreeUpdate = useCallback(
@@ -82,12 +88,12 @@ export function FilesPane({
       });
 
       if (update.removedDirectoryPaths.length > 0) {
-        setExpandedDirectories((prev) =>
-          removeDirectorySubtrees(prev, update.removedDirectoryPaths),
+        commitExpandedDirectories(
+          removeDirectorySubtrees(expandedDirectoriesRef.current, update.removedDirectoryPaths),
         );
       }
     },
-    [commitFilesCache],
+    [commitExpandedDirectories, commitFilesCache],
   );
 
   const loadDirectory = useCallback(
@@ -154,7 +160,7 @@ export function FilesPane({
     } else {
       nextExpandedDirectories.add(relativePath);
     }
-    setExpandedDirectories(nextExpandedDirectories);
+    commitExpandedDirectories(nextExpandedDirectories);
     if (!isOpen) {
       void loadDirectory(relativePath);
     }
@@ -168,14 +174,40 @@ export function FilesPane({
       await loadDirectory(directoryPath);
     }
 
-    setExpandedDirectories(
+    commitExpandedDirectories(
       normalizeExpandedDirectories(directoryPaths, filesCacheRef.current.treeData),
     );
   };
 
   const collapseAllDirectories = (): void => {
-    setExpandedDirectories(new Set());
+    commitExpandedDirectories(new Set());
   };
+
+  const reloadConnectedDirectories = useCallback(
+    async (signal: AbortSignal): Promise<void> => {
+      const prevCache = filesCacheRef.current;
+      if (prevCache.loadingDirectories.size > 0) {
+        commitFilesCache({
+          ...prevCache,
+          loadingDirectories: new Set(),
+        });
+      }
+
+      for (const relativePath of buildWatchTargets(expandedDirectoriesRef.current)) {
+        if (signal.aborted) {
+          return;
+        }
+        if (
+          relativePath !== ROOT_DIRECTORY_PATH &&
+          !expandedDirectoriesRef.current.has(relativePath)
+        ) {
+          continue;
+        }
+        await loadDirectory(relativePath, true);
+      }
+    },
+    [commitFilesCache, loadDirectory],
+  );
 
   useEffect(() => {
     void window.electronAPI.syncFileWatchTargets(
@@ -185,11 +217,12 @@ export function FilesPane({
   }, [expandedDirectories, worktreeId]);
 
   useEffect(() => {
-    directoryLoadsRef.current = new Map();
-    setExpandedDirectories(new Set());
-    commitFilesCache(createEmptyFilesCache());
-    void loadDirectory(ROOT_DIRECTORY_PATH);
-  }, [commitFilesCache, loadDirectory]);
+    const controller = new AbortController();
+    void reloadConnectedDirectories(controller.signal);
+    return () => {
+      controller.abort();
+    };
+  }, [reloadConnectedDirectories]);
 
   useEffect(() => {
     const dispose = window.electronAPI.onFileTreeChanged((changedWorktreeId, relativePath) => {
