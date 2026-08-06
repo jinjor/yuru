@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-07-28
+Last updated: 2026-08-07
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -30,6 +30,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F7 | feature | Terminal | ファイル名が改行を跨いでもリンクできるようにする | linkifier 改善 |
 | F51 | feature | Files / Persistence | worktree ごとに開いていたファイルを覚えておく | worktree を切り替えて戻った時に、直前のファイルから作業を再開したい |
 | F54 | feature | Changes | ショートカットキーでレビュー済みにできるようにする | ファイルレビューを素早く進めたい |
+| I21 | investigate | Sessions | primary session の体験を見直す | 詳細: docs/backlog-details/I21-primary-session-experience.md |
 
 ## Next
 
