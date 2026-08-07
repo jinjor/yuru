@@ -9,6 +9,7 @@ import {
   expectPreviewPath,
   git,
   launchWindow,
+  openMainTerminal,
   registerRepo,
   seedCodexHome,
   visibleSessionView,
@@ -56,7 +57,9 @@ test("worktree の表示状態は session の有無に関わらず保持され�
 
     await worktreeCard(window, "keep-alive-idle").click();
     await expect(sessionView.locator(".terminal-session-start")).toBeVisible();
-    await expect(sessionView.locator(".empty-changes")).toBeVisible();
+    // ExplorerPanel の Changes/Files/Search は常に同時に mount されているため、
+    // FilesPane の "No files" 空状態と .empty-changes クラスが衝突する。ChangesPane 側に絞る。
+    await expect(sessionView.locator(".changes-list .empty-changes")).toBeVisible();
     // mount 直後の git state 取得が render count に混ざらないよう完了を待つ。
     await window.waitForTimeout(500);
 
@@ -148,6 +151,62 @@ test("worktree の表示状態は session の有無に関わらず保持され�
 
     await expect(sessionView.locator(".panel-tab.active", { hasText: "Changes" })).toBeVisible();
     await expect(sessionView.locator(".preview-panel")).toHaveCount(0);
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+test("同一 worktree 内で Files ⇄ Changes ⇄ Search を往復しても展開・検索語が残る", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context, {
+      "README.md": "# tab keep-alive e2e\n",
+      "src/needle.ts": "export const YURU_TAB_KEEPALIVE_NEEDLE = true;\n",
+    });
+    await registerRepo(context, repoDir);
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+    await openMainTerminal(window);
+    const sessionView = visibleSessionView(window);
+
+    // Files: src を展開する
+    await sessionView.locator(".panel-tab", { hasText: "Files" }).click();
+    await sessionView.locator(".file-tree-row", { hasText: "src" }).click();
+    await expect(sessionView.locator(".file-tree-name", { hasText: "needle.ts" })).toBeVisible();
+
+    // Changes を経由して Search を開き、検索語を入力する
+    await sessionView.locator(".panel-tab", { hasText: "Changes" }).click();
+    await sessionView.locator(".panel-tab", { hasText: "Search" }).click();
+    await sessionView.locator(".code-search-input").fill("YURU_TAB_KEEPALIVE_NEEDLE");
+    await expect(sessionView.locator(".code-search-status")).toContainText("1 matches", {
+      timeout: 10_000,
+    });
+
+    // Files に戻ると展開状態が残っている (unmount されていない)
+    await sessionView.locator(".panel-tab", { hasText: "Files" }).click();
+    await expect(sessionView.locator(".file-tree-name", { hasText: "needle.ts" })).toBeVisible();
+
+    // Search に戻ると検索語・結果が残っている (再検索し直しにならない)
+    await sessionView.locator(".panel-tab", { hasText: "Search" }).click();
+    await expect(sessionView.locator(".code-search-input")).toHaveValue(
+      "YURU_TAB_KEEPALIVE_NEEDLE",
+    );
+    await expect(sessionView.locator(".code-search-status")).toContainText("1 matches");
+
+    // 検索結果は取得した時点のスナップショットとして扱う: 裏でマッチが増えるファイル変更が
+    // あっても、query を打ち直さない限りタブに戻っただけでは再検索しない。
+    // (再検索すれば "YURU_TAB_KEEPALIVE_NEEDLE" を含む行が2行になり 2 matches になるはず)
+    await writeFile(
+      path.join(repoDir, "src/needle.ts"),
+      "export const YURU_TAB_KEEPALIVE_NEEDLE = true;\nexport const YURU_TAB_KEEPALIVE_NEEDLE_2 = true;\n",
+    );
+    await sessionView.locator(".panel-tab", { hasText: "Files" }).click();
+    await sessionView.locator(".panel-tab", { hasText: "Search" }).click();
+    await expect(sessionView.locator(".code-search-status")).toContainText("1 matches");
+    await expect(sessionView.locator(".code-search-match-row")).toHaveCount(1);
   } finally {
     await closeYuru(app);
     await context.cleanup();

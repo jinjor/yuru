@@ -466,7 +466,10 @@ test("Changes タブは変更が無いと No changes を表示する", async () 
     const window = launched.window;
     await openMainTerminal(window);
 
-    await expect(window.locator(".empty-changes")).toHaveText("No changes");
+    // Step 4 で Changes/Files/Search が常に同時に mount されるようになったため、
+    // FilesPane の "No files" 空状態と .empty-changes クラスが衝突する。ChangesPane 側
+    // (.changes-list 配下) に絞って一致させる。
+    await expect(window.locator(".changes-list .empty-changes")).toHaveText("No changes");
     await expect(window.locator(".panel-tab.active", { hasText: "Changes" })).toContainText("0");
   } finally {
     await closeYuru(app);

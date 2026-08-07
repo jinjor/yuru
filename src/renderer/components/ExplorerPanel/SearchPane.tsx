@@ -52,6 +52,12 @@ export function SearchPane({
   const [isSearching, setIsSearching] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const requestIdRef = useRef(0);
+  // 直近に検索が完了した (成功・失敗を問わない) query。タブを離れて戻ると Activity の
+  // 再 mount でこの effect も再実行されるが、query 自体が変わっていなければ検索結果は
+  // VSCode などと同じ「取得した時点のスナップショット」として扱い、取り直さない。
+  // debounce 中に離脱してキャンセルされた場合は完了扱いにしないので、戻った時に
+  // 未完了だった検索がちゃんと走る。
+  const lastCompletedQueryRef = useRef<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -87,15 +93,19 @@ export function SearchPane({
   }, [flatMatches.length]);
 
   useEffect(() => {
-    const requestId = ++requestIdRef.current;
-
     if (query.trim().length === 0) {
+      lastCompletedQueryRef.current = null;
       setResult(null);
       setError(null);
       setIsSearching(false);
       return;
     }
 
+    if (lastCompletedQueryRef.current === query) {
+      return;
+    }
+
+    const requestId = ++requestIdRef.current;
     setIsSearching(true);
     setError(null);
     const timeout = window.setTimeout(() => {
@@ -105,6 +115,7 @@ export function SearchPane({
           if (requestIdRef.current !== requestId) {
             return;
           }
+          lastCompletedQueryRef.current = query;
           setIsSearching(false);
           if (searchResult.ok) {
             setResult(searchResult.data);
@@ -118,6 +129,7 @@ export function SearchPane({
           if (requestIdRef.current !== requestId) {
             return;
           }
+          lastCompletedQueryRef.current = query;
           setIsSearching(false);
           setResult(null);
           setError({
@@ -166,6 +178,9 @@ export function SearchPane({
     // 入力イベントの時点で古い検索リクエストと結果を無効にして、rg もすぐ停止する。
     requestIdRef.current += 1;
     void window.electronAPI.cancelCodeSearch(worktreeId);
+    // ここで result/error を空にするので、後段の effect が「この query は完了済み」と
+    // 誤判定しないよう完了記録も一緒に捨てる (打ち直して同じ文字列に戻るケースの対策)。
+    lastCompletedQueryRef.current = null;
     setQuery(nextQuery);
     setResult(null);
     setError(null);

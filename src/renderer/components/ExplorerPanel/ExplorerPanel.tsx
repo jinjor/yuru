@@ -1,3 +1,4 @@
+import { Activity } from "react";
 import type { GitPathState, GitReviewState } from "../../../shared/ipc";
 import { useElementSize } from "../../hooks/useElementSize";
 import type { PreviewSelection } from "../../types";
@@ -71,7 +72,7 @@ export function ExplorerPanel({
           </button>
         </div>
       </div>
-      {activeTab === "changes" ? (
+      <Activity mode={activeTab === "changes" ? "visible" : "hidden"}>
         <ChangesPane
           conflictedFiles={conflictedFiles}
           onPreviewSelectionChange={onPreviewSelectionChange}
@@ -80,14 +81,16 @@ export function ExplorerPanel({
           stagedFiles={stagedFiles}
           unstagedFiles={unstagedFiles}
         />
-      ) : activeTab === "search" ? (
+      </Activity>
+      <Activity mode={activeTab === "search" ? "visible" : "hidden"}>
         <SearchPane
           focusRequest={searchFocusRequest}
           onPreviewSelectionChange={onPreviewSelectionChange}
           previewSelection={previewSelection}
           worktreeId={worktreeId}
         />
-      ) : (
+      </Activity>
+      <Activity mode={activeTab === "files" ? "visible" : "hidden"}>
         <FilesPane
           changedFiles={changedFiles}
           gitPathStates={gitPathStates}
@@ -96,7 +99,7 @@ export function ExplorerPanel({
           previewSelection={previewSelection}
           worktreeId={worktreeId}
         />
-      )}
+      </Activity>
     </aside>
   );
 }
