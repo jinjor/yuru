@@ -23,7 +23,7 @@ export class TerminalScreen {
   private title = "";
 
   constructor(cols: number, rows: number) {
-    this.terminal = new Terminal({ cols, rows });
+    this.terminal = new Terminal({ cols, rows, scrollback: 4000 });
     this.serializeAddon = new SerializeAddon();
     this.terminal.loadAddon(this.serializeAddon);
     this.terminal.onTitleChange((title) => {

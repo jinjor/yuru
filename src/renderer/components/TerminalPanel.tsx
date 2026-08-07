@@ -65,6 +65,7 @@ export function TerminalPanel({
       cursorBlink: true,
       fontSize: 12,
       fontFamily: "Menlo, Monaco, monospace",
+      scrollback: 4000,
       // OSC 8 ハイパーリンクも既定ブラウザで開く。未設定だと xterm.js 内蔵の
       // confirm ダイアログ + window.open が走り、Electron の子ウインドウが開いてしまう。
       linkHandler: {
