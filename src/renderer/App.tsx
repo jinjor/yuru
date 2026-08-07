@@ -31,6 +31,11 @@ export function App() {
   const [repos, setRepos] = useState<RepoListItem[]>([]);
   const [availableProviders, setAvailableProviders] = useState<AgentDefinition[]>([]);
   const [selectedWorktreeId, setSelectedWorktreeId] = useState<string | null>(null);
+  // 一度選択した worktree の id。keep-alive の対象 (main ∪ 訪問済み ∪ 選択中) を決める。
+  // 選択解除 (削除・作成中断など) では触らない — 一度訪れた worktree はそのまま残す。
+  const [visitedWorktreeIds, setVisitedWorktreeIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [worktreeTarget, setWorktreeTarget] = useState<string | null>(null);
   const [worktreeError, setWorktreeError] = useState<string | null>(null);
   const [removalTargetId, setRemovalTargetId] = useState<string | null>(null);
@@ -39,7 +44,16 @@ export function App() {
   const [errorNotices, setErrorNotices] = useState<AppErrorNotice[]>([]);
   const [isErrorLogOpen, setIsErrorLogOpen] = useState(false);
   const removalTarget = findWorktree(repos, removalTargetId);
-  const keepAliveWorktrees = collectKeepAliveWorktrees(repos, selectedWorktreeId);
+  const keepAliveWorktrees = collectKeepAliveWorktrees(
+    repos,
+    selectedWorktreeId,
+    visitedWorktreeIds,
+  );
+
+  const selectWorktree = useCallback((worktreeId: string): void => {
+    setSelectedWorktreeId(worktreeId);
+    setVisitedWorktreeIds((prev) => (prev.has(worktreeId) ? prev : new Set(prev).add(worktreeId)));
+  }, []);
 
   const refreshRepos = useCallback(async (): Promise<RepoListItem[] | null> => {
     const requestId = ++repoRefreshRequestRef.current;
@@ -192,11 +206,11 @@ export function App() {
         return;
       }
 
-      setSelectedWorktreeId(result.data.worktreeId);
+      selectWorktree(result.data.worktreeId);
       setWorktreeTarget(null);
       void refreshRepos();
     },
-    [refreshRepos, worktreeTarget],
+    [refreshRepos, selectWorktree, worktreeTarget],
   );
 
   const errorCount = errorNotices.filter((notice) => notice.severity === "error").length;
@@ -217,7 +231,7 @@ export function App() {
               setWorktreeError(null);
               setWorktreeTarget(repoPath);
             }}
-            onSelectWorktree={(worktree) => setSelectedWorktreeId(worktree.worktreeId)}
+            onSelectWorktree={(worktree) => selectWorktree(worktree.worktreeId)}
             onRequestRemoveWorktree={setRemovalTargetId}
           />
         </div>

@@ -64,6 +64,7 @@ export async function loadRepoList(
   activeTerminalRuntimesByWorktreePath?: ReadonlyMap<string, ActiveTerminalRuntimeWorktreeSession>,
   getGitHubPullRequest?: GetGitHubPullRequest,
   agentActivityStatesByTerminalRuntimeId?: ReadonlyMap<TerminalRuntimeId, AgentActivityState>,
+  allTerminalRuntimeIdsByWorktreePath?: ReadonlyMap<string, readonly string[]>,
 ): Promise<RepoListItem[]> {
   const metadata = loadMetadata();
   const repoEntries = (
@@ -104,6 +105,7 @@ export async function loadRepoList(
           ? getGitHubPullRequest?.(repo.repoPath, gitWorktree.branch, gitWorktree.headSha)
           : undefined,
         agentActivityStatesByTerminalRuntimeId,
+        allTerminalRuntimeIdsByWorktreePath,
       ),
     );
     return {
@@ -118,6 +120,7 @@ export async function loadRepoList(
         [],
         undefined,
         undefined,
+        allTerminalRuntimeIdsByWorktreePath,
         true,
       ),
       taskWorktrees,
@@ -153,6 +156,7 @@ function toWorktreeListItem(
   agentActivityStatesByTerminalRuntimeId:
     | ReadonlyMap<TerminalRuntimeId, AgentActivityState>
     | undefined,
+  allTerminalRuntimeIdsByWorktreePath: ReadonlyMap<string, readonly string[]> | undefined,
   isMainWorktree = false,
 ): WorktreeListItem {
   const worktreePath = gitWorktree.path;
@@ -211,6 +215,9 @@ function toWorktreeListItem(
     headCommittedAt: gitWorktree.headCommittedAt,
     primarySession: primarySessionItem,
     suggestedSessions: suggestedSessionItems,
+    activeTerminalRuntimeIds: [
+      ...(allTerminalRuntimeIdsByWorktreePath?.get(toWorktreePathKey(worktreePath)) ?? []),
+    ],
   };
 
   if (githubPullRequest !== undefined) {

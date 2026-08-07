@@ -15,7 +15,7 @@ import {
   worktreeCard,
 } from "./helpers";
 
-test("active worktree の表示状態を保持し、hidden 中の更新・終了・削除に追従する", async () => {
+test("worktree の表示状態は session の有無に関わらず保持され、hidden 中の更新・終了・削除に追従する", async () => {
   test.setTimeout(120_000);
   const context = await createE2eContext();
   let app: ElectronApplication | null = null;
@@ -72,8 +72,8 @@ test("active worktree の表示状態を保持し、hidden 中の更新・終了
       { runtimeId: ids.runtime, preview: marker },
     );
 
-    // session preview の push が App まで届いた直後に、hidden B の render だけが増えて、
-    // 表示中 A と無関係な main は再描画されないことを固定する。
+    // session preview の push が App まで届いた直後に、hidden な active worktree の render
+    // だけが増えて、表示中 idle と無関係な main は再描画されないことを固定する。
     await expect(
       worktreeCard(window, "keep-alive-active").locator(".task-worktree-session-preview"),
     ).toContainText(marker);
@@ -101,8 +101,21 @@ test("active worktree の表示状態を保持し、hidden 中の更新・終了
       "changed while hidden",
     );
 
-    // active session が hidden 中に終了すると repos から active 判定が消え、instance ごと破棄される。
+    // session の無い worktree でも、切り替えて戻ると Files の展開・preview が残る
+    // (keep-alive の単位は worktree であって session ではない)。
     await worktreeCard(window, "keep-alive-idle").click();
+    await sessionView.locator(".panel-tab", { hasText: "Files" }).click();
+    await sessionView.locator(".file-tree-row", { hasText: "src" }).click();
+    await sessionView.locator(".file-tree-row", { hasText: "kept.ts" }).click();
+    await expectPreviewPath(window, "src/kept.ts");
+    await worktreeCard(window, "keep-alive-active").click();
+    await worktreeCard(window, "keep-alive-idle").click();
+    await expect(sessionView.locator(".panel-tab.active", { hasText: "Files" })).toBeVisible();
+    await expectPreviewPath(window, "src/kept.ts");
+
+    // session が hidden 中に終了しても、worktree は訪問済みとして生き続けるので instance は
+    // 破棄されない。terminal だけ死んだ runtime を指さず start surface に戻るが、
+    // Explorer 側の状態 (active worktree の Changes タブ・開いていた diff) は残る。
     const preparation = await window.evaluate((worktreeId) => {
       return window.electronAPI.prepareWorktreeRemoval(worktreeId, true);
     }, ids.active);
@@ -116,6 +129,10 @@ test("active worktree の表示状態を保持し、hidden 中の更新・終了
     await expect(sessionView.locator(".terminal-session-start")).toBeVisible();
     await expect(sessionView.locator(".new-session-action", { hasText: "Codex" })).toBeVisible();
     await expect(sessionView.locator(".xterm")).toHaveCount(0);
+    await expect(sessionView.locator(".panel-tab.active", { hasText: "Changes" })).toBeVisible();
+    await expect(sessionView.locator(".source-line.diff-added")).toContainText(
+      "changed while hidden",
+    );
 
     // 削除直前の表示状態を作り、同じ path/name で作り直しても前の instance を引き継がないことを確認する。
     await sessionView.locator(".panel-tab", { hasText: "Files" }).click();

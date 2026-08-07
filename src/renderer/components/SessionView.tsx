@@ -82,11 +82,20 @@ export const SessionView = memo(function SessionView({
     (window.__yuruSessionViewRenderCounts[worktreeId] ?? 0) + 1;
 
   const sessionViewColumnRef = useRef<HTMLDivElement>(null);
-  // この worktree でいま表示している terminal runtime。session 未開始や終了直後は null で、
-  // その間 Terminal は session start surface を出す。
+  // この worktree でいま表示している (つもりの) terminal runtime。session 未開始や
+  // 終了直後は null で、その間 Terminal は session start surface を出す。
   const [terminalRuntimeId, setTerminalRuntimeId] = useState<TerminalRuntimeId | null>(
     () => worktree?.primarySession?.activeTerminalRuntimeId ?? null,
   );
+  // shell (この SessionView instance) は worktree が repos にある限り生き続けるが、
+  // terminalRuntimeId は event 購読でしか更新されないため hidden 中の exit を
+  // 聞き逃すことがある。表示直前に props (worktree.activeTerminalRuntimeIds、main が
+  // 生きている runtime だけを載せる) と突き合わせ、死んだ runtime を指していれば
+  // 描画しない。実際に描画に使うのはこちらで、terminalRuntimeId 自体は書き換えない。
+  const displayedTerminalRuntimeId =
+    terminalRuntimeId && (worktree?.activeTerminalRuntimeIds ?? []).includes(terminalRuntimeId)
+      ? terminalRuntimeId
+      : null;
   const [previewSelection, setPreviewSelection] = useState<PreviewSelection | null>(null);
   const [gitPathStates, setGitPathStates] = useState<GitPathState[]>([]);
   const [reviewState, setReviewState] = useState<GitReviewState | null>(null);
@@ -134,9 +143,8 @@ export const SessionView = memo(function SessionView({
 
   // resume / promote / 新規 session / standalone terminal 開始 / detach の共通ガード。
   // 実行中は後続の session 操作を無視して、二重起動や開始と解除の競合を防ぐ。
-  // worktree ごとに instance が分かれているため、hidden 中に完了した結果も自分自身にしか
-  // 届かず、別の worktree の表示を引き戻さない。active でない task worktree は従来どおり
-  // 選択解除時に unmount される。
+  // worktree ごとに instance が worktree の訪問中ずっと生きているため、hidden 中に完了した
+  // 結果も自分自身にしか届かず、別の worktree の表示を引き戻さない。
   const isStartingRef = useRef(false);
   const startTerminalRuntime = useCallback(
     async (start: () => Promise<Result<WorktreeSessionSelection>>): Promise<void> => {
@@ -150,7 +158,10 @@ export const SessionView = memo(function SessionView({
           return;
         }
         setTerminalRuntimeId(result.data.terminalRuntimeId);
-        void onSessionsChanged();
+        // repos が新しい runtime を含むまでは activeTerminalRuntimeIds 側に載っておらず
+        // displayedTerminalRuntimeId が一時的に null (start surface) に戻る。ガードを
+        // 外すのをここまで待つことで、その間の再クリックを無視して二重起動を防ぐ。
+        await onSessionsChanged();
       } finally {
         isStartingRef.current = false;
       }
@@ -326,8 +337,9 @@ export const SessionView = memo(function SessionView({
             aria-hidden="true"
           />
         )}
-        {terminalRuntimeId ? (
+        {displayedTerminalRuntimeId ? (
           <TerminalPanel
+            key={displayedTerminalRuntimeId}
             changesPanelWidth={paneLayout.changesPanelWidth}
             currentBranch={currentBranch}
             currentGitHub={currentGitHub}
@@ -337,7 +349,7 @@ export const SessionView = memo(function SessionView({
             }}
             onOpenExternal={onOpenExternal}
             previewRatio={paneLayout.previewRatio}
-            terminalRuntimeId={terminalRuntimeId}
+            terminalRuntimeId={displayedTerminalRuntimeId}
           />
         ) : (
           <TerminalSessionStart

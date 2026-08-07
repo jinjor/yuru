@@ -1,9 +1,12 @@
 # F51 詳細設計: worktree ごとに開いていたファイルを覚えておく (keep-alive)
 
-Last updated: 2026-08-04
+Last updated: 2026-08-06
 
 これは決定版の詳細設計。議論の経緯と個別課題の決着は
 F51-keep-alive-open-issues.md に記録がある。
+keep-alive の対象条件と runtime の生存判定は、後続の修正設計
+F51-keep-alive-shell-separation.md で「session の active/inactive」から
+「訪問済みかどうか」に変わっている。本文中の該当箇所はその内容に更新済み。
 
 ## 何が問題か
 
@@ -20,7 +23,9 @@ Files / Search はタブ切り替えでも unmount されるため、同一 work
   React の `<Activity mode="hidden">` で非表示にする。表示状態は各コンポーネントの
   local state が持ち主のまま動かさない。外部の保管庫・新しい state は作らない
 - 描画する instance の集合は既存 state からの導出:
-  **「各 repo の main worktree (常時) ∪ primary session が active な worktree ∪ 選択中」**
+  **「各 repo の main worktree (常時) ∪ 訪問済み worktree ∪ 選択中」**。
+  keep-alive の単位は worktree (shell) であり、session の active/inactive はこの集合に
+  影響しない (F51-keep-alive-shell-separation.md)
 - ExplorerPanel のタブ (Changes / Files / Search) にも同じパターンを適用する
 - データの鮮度は「復帰時の effect 再実行」で回復する。「復元」という特別な処理は
   存在しないため、失敗時挙動は常にライブ操作と同一で、新しいフォールバックを作らない
@@ -41,34 +46,33 @@ hidden な子への更新は低優先度で適用される。React 19.2 で追�
 
 ### 描画する instance の集合
 
-App が repos と selectedWorktreeId から毎 render 導出する。専用の state は持たない。
+App が repos・selectedWorktreeId・visitedWorktreeIds (worktree を選択した時にだけ足す
+state) から毎 render 導出する。keep-alive の単位は worktree (shell) であり、
+その中の terminal runtime の生死とは別に管理する
+(詳細は F51-keep-alive-shell-separation.md)。
 
-- 各 repo の main worktree: **常時**。standalone terminal (provider なしの素のシェル) は
-  repos データの active 判定に載らない (`service.ts` の `getTerminalRuntimesByWorktreePath`
-  が provider なしの runtime を除外している) ため、導出では拾えない。
-  「standalone でバックログを表示しながら他の worktree に作業させる」ユースケースが
-  必須のため、例外として常時描画する
-- `primarySession?.state === "active"` な task worktree (= active な terminal runtime を持つ)
-- 選択中の worktree (session がなくても Files / Changes / preview を使えるという
-  現行仕様を後退させないため)
+- 各 repo の main worktree: **常時**
+- 訪問済みの task worktree (一度でも選択した worktree。session の有無・active/inactive は
+  条件に入らない)
+- 選択中の worktree (訪問済みなら重複するが、選択即座に反映するため条件として残す)
 
 このライフサイクル規則が複数の問題を同時に解決する:
 
-- **exit の聞き逃しが構造的に起こらない**: hidden 中に session が exit すると、
-  App が exit 通知で repos を取り直し、その worktree は集合から抜けて instance ごと
-  unmount される。死んだ runtime を指す state は残らない。復帰時の生存確認は不要
-- **メモリが有界**: instance 数 = main worktree 数 + 同時 active session 数 + 選択中 1。
-  eviction は作らない
+- **メモリが有界**: instance 数 = main worktree 数 + その app 起動中に訪問した
+  worktree 数。eviction は作らない (visited set からの削除も行わない。YAGNI)
 - **掃除が自動**: worktree の削除 (Yuru 内・外部とも) は repos 一覧から消えることに
   収斂し、描画対象から外れて React が破棄する。同名で作り直しても前世の状態を
   引き継がない
-- session のない task worktree は選択中しか保持されない (選択解除で忘れる)。
-  これは今と同じ挙動で、F51 の適用範囲の線引きとして受け入れる
+- session のない task worktree も選択解除後に状態が残る (訪問済みなら keep-alive
+  対象のため)
 
-補足 (race): 「session 開始操作の完了前に別 worktree へ切り替える」と、その worktree は
-まだ active でないため unmount され、runtime 起動完了後に active として hidden で
-mount し直される。これは唯一の「hidden での初 mount」だが、terminalRuntimeId の
-useState initializer が worktree prop から activeTerminalRuntimeId を拾うので正しく動く。
+表示中 terminal runtime の生死は、instance の unmount には頼らず
+`WorktreeListItem.activeTerminalRuntimeIds` (props) との突き合わせで判定する
+(SessionView の `displayedTerminalRuntimeId`)。hidden 中に runtime が exit しても
+instance ごと消えないため、次に visible になった時にこの突き合わせで
+死んだ runtime を指さないようにする。main worktree の standalone terminal も
+同じ仕組みで判定されるため、以前あった「main は常時描画なので exit を
+instance 消滅に頼れない」穴も解消されている。
 
 ### P20 との整合
 
@@ -88,7 +92,7 @@ P20 の「切り替え = unmount による古い非同期結果の構造的無�
 |---|---|---|---|
 | ユーザー操作でのみ変わる | previewSelection, explorerTab, expandedDirectories, 検索語, isCommittedExpanded, pane 分割幅, FileSearch の開閉 | 変わりようがない | なし (そのまま残るのが本機能) |
 | effect で取得・polling | gitPathStates, reviewState, diff 内容, treeData, 検索結果 | 更新が止まり古くなる | 復帰時の effect 再実行で取得し直す |
-| イベント購読で同期 | terminalRuntimeId | 聞き逃すが、exit したら instance ごと消えるので残らない | なし |
+| イベント購読で同期 | terminalRuntimeId | 聞き逃す (instance は消えないため放置すると死んだ runtime を指したままになる) | 表示直前に props (`activeTerminalRuntimeIds`) と突き合わせて回復する (`displayedTerminalRuntimeId`)。state 自体は書き換えない |
 
 新しい state を追加する時はこの分類を意識する。イベント購読で同期する state を
 足す場合は「hidden 中に聞き逃して大丈夫か」の説明が必要 (architecture.md に規律として
@@ -264,7 +268,6 @@ Step 2 が前提。worktree 切り替えとは独立に入れられる。
 - scroll 位置の保持 (display:none 中の保持はブラウザ依存。残ればおまけ)
 - pane 分割幅の全 worktree 共通化 (keep-alive により worktree ごとに保持される。
   「切り替えでリセット」よりは良く、共通化したければ別件)
-- session のない task worktree の状態保持 (選択解除で忘れる。今と同じ)
 - 再描画コストの根絶 (P22: worktreeId 単位の取得・購読)
 
 ## 検討して採らなかった案 (要点のみ。経緯は open-issues と会話ログ)

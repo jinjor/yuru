@@ -182,6 +182,7 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
         isMainWorktree: true,
         primarySession: undefined,
         suggestedSessions: [],
+        activeTerminalRuntimeIds: [],
       },
       taskWorktrees: [
         {
@@ -200,6 +201,7 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
             preview: "",
           },
           suggestedSessions: [],
+          activeTerminalRuntimeIds: [],
         },
         {
           worktreeId: toWorktreeId("repo-1", taskB),
@@ -210,6 +212,7 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
           headCommittedAt: undefined,
           primarySession: undefined,
           suggestedSessions: [],
+          activeTerminalRuntimeIds: [],
         },
         {
           worktreeId: toWorktreeId("repo-1", gitOnly),
@@ -220,6 +223,7 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
           headCommittedAt: undefined,
           primarySession: undefined,
           suggestedSessions: [],
+          activeTerminalRuntimeIds: [],
         },
       ],
     },
@@ -236,6 +240,7 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
         isMainWorktree: true,
         primarySession: undefined,
         suggestedSessions: [],
+        activeTerminalRuntimeIds: [],
       },
       taskWorktrees: [],
     },

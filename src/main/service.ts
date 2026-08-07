@@ -313,6 +313,7 @@ export class YuruService {
       this.getTerminalRuntimesByWorktreePath(),
       getLastKnownGitHubPullRequest,
       agentActivityStates,
+      this.getAllTerminalRuntimeIdsByWorktreePath(),
     );
   }
 
@@ -1067,6 +1068,24 @@ export class YuruService {
       });
     }
     return terminalRuntimesByWorktreePath;
+  }
+
+  // renderer が「表示中の runtime がまだ生きているか」を props から判定するための一覧。
+  // provider なしの standalone terminal も含め、その worktree を cwd とする全 runtime を返す
+  // (上の getTerminalRuntimesByWorktreePath は card の primary 合成用で 1 worktree 1 件・
+  // provider ありのみのため、用途が違い流用できない)。
+  private getAllTerminalRuntimeIdsByWorktreePath(): Map<string, string[]> {
+    const runtimeIdsByWorktreePath = new Map<string, string[]>();
+    for (const [terminalRuntimeId, info] of this.terminalRuntimeMap) {
+      const worktreePathKey = path.resolve(info.worktreePath);
+      const runtimeIds = runtimeIdsByWorktreePath.get(worktreePathKey);
+      if (runtimeIds) {
+        runtimeIds.push(terminalRuntimeId);
+      } else {
+        runtimeIdsByWorktreePath.set(worktreePathKey, [terminalRuntimeId]);
+      }
+    }
+    return runtimeIdsByWorktreePath;
   }
 
   private launchPendingSession(

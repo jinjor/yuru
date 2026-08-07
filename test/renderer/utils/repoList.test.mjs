@@ -48,31 +48,32 @@ function repo(id, taskWorktrees) {
   };
 }
 
-test("collectKeepAliveWorktrees は repo 順で main・active・選択中を重複なく返す", () => {
-  const activeSelected = worktree("active-selected", {
-    primarySession: primarySession("runtime-active-selected"),
+test("collectKeepAliveWorktrees は repo 順で main・訪問済み・選択中を重複なく返す", () => {
+  const visitedSelected = worktree("visited-selected");
+  const visitedOther = worktree("visited-other");
+  const unvisitedActive = worktree("unvisited-active", {
+    primarySession: primarySession("runtime-unvisited-active"),
   });
-  const inactiveSelected = worktree("inactive-selected", {
-    primarySession: { ...primarySession("runtime-inactive-selected"), state: "inactive" },
-  });
-  const active = worktree("active", {
-    primarySession: primarySession("runtime-active"),
-  });
-  const inactive = worktree("inactive", {
-    primarySession: { ...primarySession("runtime-inactive"), state: "inactive" },
-  });
+  const unvisited = worktree("unvisited");
   const repos = [
-    repo("repo-a", [inactive, activeSelected]),
-    repo("repo-b", [inactiveSelected, active]),
+    repo("repo-a", [unvisited, visitedSelected]),
+    repo("repo-b", [visitedOther, unvisitedActive]),
   ];
+  const visitedWorktreeIds = new Set(["visited-selected", "visited-other"]);
 
+  // 訪問済みなら session の有無に関わらず含む。session が active でも未訪問なら含まない
+  // (keep-alive の単位は worktree であって session ではない)。
   assert.deepEqual(
-    collectKeepAliveWorktrees(repos, "active-selected").map((entry) => entry.worktreeId),
-    ["repo-a-main", "active-selected", "repo-b-main", "active"],
+    collectKeepAliveWorktrees(repos, "visited-selected", visitedWorktreeIds).map(
+      (entry) => entry.worktreeId,
+    ),
+    ["repo-a-main", "visited-selected", "repo-b-main", "visited-other"],
   );
+
+  // 選択中は visited に無くても単独で含む。
   assert.deepEqual(
-    collectKeepAliveWorktrees(repos, "inactive-selected").map((entry) => entry.worktreeId),
-    ["repo-a-main", "active-selected", "repo-b-main", "inactive-selected", "active"],
+    collectKeepAliveWorktrees(repos, "unvisited", new Set()).map((entry) => entry.worktreeId),
+    ["repo-a-main", "unvisited", "repo-b-main"],
   );
 });
 
@@ -83,7 +84,7 @@ test("collectKeepAliveWorktrees は選択中の main worktree を重複させな
   const repos = [repo("repo-a", []), repo("repo-b", [duplicateMainId])];
 
   assert.deepEqual(
-    collectKeepAliveWorktrees(repos, "repo-a-main").map((entry) => entry.worktreeId),
+    collectKeepAliveWorktrees(repos, "repo-a-main", new Set()).map((entry) => entry.worktreeId),
     ["repo-a-main", "repo-b-main"],
   );
 });
