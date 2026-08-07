@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   applyPullRequestUpdates,
   applySessionUpdate,
+  collectKeepAliveWorktrees,
 } from "../../../src/renderer/utils/repoList.ts";
 
 function primarySession(runtimeId, preview = "before") {
@@ -46,6 +47,46 @@ function repo(id, taskWorktrees) {
     taskWorktrees,
   };
 }
+
+test("collectKeepAliveWorktrees は repo 順で main・active・選択中を重複なく返す", () => {
+  const activeSelected = worktree("active-selected", {
+    primarySession: primarySession("runtime-active-selected"),
+  });
+  const inactiveSelected = worktree("inactive-selected", {
+    primarySession: { ...primarySession("runtime-inactive-selected"), state: "inactive" },
+  });
+  const active = worktree("active", {
+    primarySession: primarySession("runtime-active"),
+  });
+  const inactive = worktree("inactive", {
+    primarySession: { ...primarySession("runtime-inactive"), state: "inactive" },
+  });
+  const repos = [
+    repo("repo-a", [inactive, activeSelected]),
+    repo("repo-b", [inactiveSelected, active]),
+  ];
+
+  assert.deepEqual(
+    collectKeepAliveWorktrees(repos, "active-selected").map((entry) => entry.worktreeId),
+    ["repo-a-main", "active-selected", "repo-b-main", "active"],
+  );
+  assert.deepEqual(
+    collectKeepAliveWorktrees(repos, "inactive-selected").map((entry) => entry.worktreeId),
+    ["repo-a-main", "active-selected", "repo-b-main", "inactive-selected", "active"],
+  );
+});
+
+test("collectKeepAliveWorktrees は選択中の main worktree を重複させない", () => {
+  const duplicateMainId = worktree("repo-a-main", {
+    primarySession: primarySession("runtime-duplicate"),
+  });
+  const repos = [repo("repo-a", []), repo("repo-b", [duplicateMainId])];
+
+  assert.deepEqual(
+    collectKeepAliveWorktrees(repos, "repo-a-main").map((entry) => entry.worktreeId),
+    ["repo-a-main", "repo-b-main"],
+  );
+});
 
 test("applySessionUpdate は該当 runtime の worktree と repo だけを差し替える", () => {
   const target = worktree("target", {

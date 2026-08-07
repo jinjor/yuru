@@ -1,4 +1,5 @@
 import {
+  Activity,
   type MouseEvent as ReactMouseEvent,
   useCallback,
   useEffect,
@@ -16,7 +17,12 @@ import { RepoList } from "./components/RepoList";
 import { SessionView } from "./components/SessionView";
 import { WorktreeRemovalDialog } from "./components/WorktreeRemovalDialog";
 import { clamp, runPointerDrag } from "./utils/layout";
-import { applyPullRequestUpdates, applySessionUpdate, findWorktree } from "./utils/repoList";
+import {
+  applyPullRequestUpdates,
+  applySessionUpdate,
+  collectKeepAliveWorktrees,
+  findWorktree,
+} from "./utils/repoList";
 
 export function App() {
   const appRef = useRef<HTMLDivElement>(null);
@@ -32,8 +38,8 @@ export function App() {
   const [sidebarWidth, setSidebarWidth] = useState(390);
   const [errorNotices, setErrorNotices] = useState<AppErrorNotice[]>([]);
   const [isErrorLogOpen, setIsErrorLogOpen] = useState(false);
-  const selectedWorktree = findWorktree(repos, selectedWorktreeId);
   const removalTarget = findWorktree(repos, removalTargetId);
+  const keepAliveWorktrees = collectKeepAliveWorktrees(repos, selectedWorktreeId);
 
   const refreshRepos = useCallback(async (): Promise<RepoListItem[] | null> => {
     const requestId = ++repoRefreshRequestRef.current;
@@ -233,20 +239,23 @@ export function App() {
         onMouseDown={handleSidebarResizeStart}
         aria-hidden="true"
       />
-      {selectedWorktreeId ? (
-        <SessionView
-          key={selectedWorktreeId}
-          appRef={appRef}
-          onOpenExternal={openExternal}
-          providers={availableProviders}
-          sidebarWidth={sidebarWidth}
-          worktree={selectedWorktree}
-          worktreeId={selectedWorktreeId}
-          onSessionsChanged={refreshRepos}
-        />
-      ) : (
-        <SessionPlaceholder />
-      )}
+      {keepAliveWorktrees.map((worktree) => (
+        <Activity
+          key={worktree.worktreeId}
+          mode={worktree.worktreeId === selectedWorktreeId ? "visible" : "hidden"}
+        >
+          <SessionView
+            appRef={appRef}
+            onOpenExternal={openExternal}
+            providers={availableProviders}
+            sidebarWidth={sidebarWidth}
+            worktree={worktree}
+            worktreeId={worktree.worktreeId}
+            onSessionsChanged={refreshRepos}
+          />
+        </Activity>
+      ))}
+      {!selectedWorktreeId && <SessionPlaceholder />}
       {worktreeTarget && (
         <BranchNameInput
           onSubmit={handleCreateWorktree}

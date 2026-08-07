@@ -185,13 +185,13 @@ ROOT を load」しており、effect が再実行される環境では保持し
 
 ### Step 3: SessionView の keep-alive 化 (本体)
 
-- [ ] `src/renderer/utils/repoList.ts` に導出関数
+- [x] `src/renderer/utils/repoList.ts` に導出関数
       `collectKeepAliveWorktrees(repos, selectedWorktreeId): WorktreeListItem[]` を追加:
       main worktree (常時) + `primarySession?.state === "active"` + 選択中。
       worktreeId で重複排除 (選択中が main や active と重なるため。key 重複は
       React が壊れるので必須)。並び順は repos の並びに従い安定させる。
       unit test を追加 (重複排除・選択中の包含・active の包含)
-- [ ] App.tsx: `key={selectedWorktreeId}` の単一 SessionView 描画を、導出リストの
+- [x] App.tsx: `key={selectedWorktreeId}` の単一 SessionView 描画を、導出リストの
       Activity 列挙に置き換える:
 
       ```tsx
@@ -208,18 +208,18 @@ ROOT を load」しており、effect が再実行される環境では保持し
       ```
 
       選択なしの場合の `SessionPlaceholder` は従来通り (hidden instance とは共存する)
-- [ ] SessionView に描画カウンタを仕込む: render 中に
+- [x] SessionView に描画カウンタを仕込む: render 中に
       `window.__yuruSessionViewRenderCounts[worktreeId]` をインクリメントする
       (計測専用の意図的な render 副作用であることをコメントで明示。
       hidden 中は effect が動かないため、effect でのカウントでは代替できない)
-- [ ] SessionView / App 内の「切り替えで unmount されるので古い結果が戻らない」系の
+- [x] SessionView / App 内の「切り替えで unmount されるので古い結果が戻らない」系の
       コメントを新しい前提 (active でない worktree は従来通り unmount、active は
       hidden 保持) に書き直す
-- [ ] 既存 e2e の全セレクタ監査: hidden instance の DOM が残るため、SessionView 配下を
+- [x] 既存 e2e の全セレクタ監査: hidden instance の DOM が残るため、SessionView 配下を
       触る locator が複数マッチして Playwright の strict mode で落ちる。
       `test/e2e/helpers.ts` に「表示中の SessionView にスコープした locator を返す」
       ヘルパーを追加し、既存テストをそれ経由に直す。全 e2e が通るまでがこのタスク
-- [ ] 新規 e2e `test/e2e/session-view-keep-alive.test.ts`:
+- [x] 新規 e2e `test/e2e/session-view-keep-alive.test.ts`:
       - 保持: worktree A でファイルを開き Files タブでディレクトリを展開 → B へ切り替え
         (A は session を active にしておく) → A に戻ると preview・タブ・展開が残っている
       - 破棄: A の session を hidden 中に exit させる → A に戻ると session start surface
@@ -227,12 +227,12 @@ ROOT を load」しており、effect が再実行される環境では保持し
       - 掃除: worktree を削除して同名で作り直す → 前の表示状態を引き継がない
       - 追従: hidden 中に agent がファイルを変更 → 復帰後 polling 1 周期 (3 秒) 以内に
         Changes / diff が追いつく
-- [ ] 新規 e2e (再描画の不変条件): worktree B で session を動かして push を流しながら
+- [x] 新規 e2e (再描画の不変条件): worktree B で session を動かして push を流しながら
       A を表示。B の preview / activity の変化 (push が届いた証拠) を待つ間、
       無関係な A と main worktree のカウンタが増えないことを assert する。
       session の起動は session-activity.test.ts と同じ仕組みを流用する。
       hidden の描画は低優先度なので、カウンタの読み取りは expect.poll 等で待つ
-- [ ] 確認: `npm run build && npm run app:restart` で手動確認 + 全テスト
+- [x] 確認: `npm run build && npm run app:restart` で手動確認 + 全テスト
 
 ### Step 4: ExplorerPanel タブの keep-alive 化
 

@@ -10,6 +10,7 @@ import {
   registerRepo,
   seedClaudeHome,
   seedCodexHome,
+  visibleSessionView,
   worktreeCard,
   type E2eContext,
 } from "./helpers";
@@ -33,7 +34,9 @@ const providers: ProviderActivityE2e[] = [
     seedHome: seedClaudeHome,
     hasAssistantReply: claudeHasAssistantReply,
     async waitForReady(window) {
-      await expect(window.locator(".xterm")).toContainText("Claude Code", { timeout: 30_000 });
+      await expect(visibleSessionView(window).locator(".xterm")).toContainText("Claude Code", {
+        timeout: 30_000,
+      });
       await window.waitForTimeout(9000);
     },
   },
@@ -45,7 +48,9 @@ const providers: ProviderActivityE2e[] = [
     seedHome: seedCodexHome,
     hasAssistantReply: (home) => codexHasAssistantReply(home),
     async waitForReady(window) {
-      await expect(window.locator(".xterm")).toContainText("OpenAI Codex", { timeout: 30_000 });
+      await expect(visibleSessionView(window).locator(".xterm")).toContainText("OpenAI Codex", {
+        timeout: 30_000,
+      });
       await window.waitForTimeout(1000);
     },
   },
@@ -86,8 +91,9 @@ async function startWorktreeSession(window: Page, provider: ProviderActivityE2e)
   await window.locator(".worktree-name-input").fill(provider.branchName);
   await window.locator(".worktree-create-btn").click();
   // worktree 作成後、Terminal の session start surface から provider を選ぶ。
-  await window.locator(".new-session-action", { hasText: provider.label }).click();
-  await expect(window.locator(".xterm")).toBeVisible({ timeout: 30_000 });
+  const sessionView = visibleSessionView(window);
+  await sessionView.locator(".new-session-action", { hasText: provider.label }).click();
+  await expect(sessionView.locator(".xterm")).toBeVisible({ timeout: 30_000 });
   await provider.waitForReady(window);
 }
 
@@ -120,21 +126,24 @@ async function runModelCommand(window: Page, provider: ProviderActivityE2e): Pro
   await window.waitForTimeout(1000);
   await window.keyboard.press("Enter");
   if (provider.id === "codex") {
-    await expect(window.locator(".xterm")).toContainText("Select Reasoning Level", {
-      timeout: 20_000,
-    });
+    await expect(visibleSessionView(window).locator(".xterm")).toContainText(
+      "Select Reasoning Level",
+      {
+        timeout: 20_000,
+      },
+    );
     await window.keyboard.press("Enter");
   }
-  await expect(window.locator(".xterm")).toContainText(provider.modelCommandCompleteText, {
-    timeout: 20_000,
-  });
+  await expect(visibleSessionView(window).locator(".xterm")).toContainText(
+    provider.modelCommandCompleteText,
+    {
+      timeout: 20_000,
+    },
+  );
   await expectActivity(window, provider, "waiting", 20_000);
 }
 
-async function runPermissionPrompt(
-  window: Page,
-  provider: ProviderActivityE2e,
-): Promise<void> {
+async function runPermissionPrompt(window: Page, provider: ProviderActivityE2e): Promise<void> {
   await submitPrompt(
     window,
     [
@@ -143,7 +152,7 @@ async function runPermissionPrompt(
     ].join(" "),
   );
   await expectActivity(window, provider, "working", 30_000);
-  await expect(window.locator(".xterm")).toContainText(
+  await expect(visibleSessionView(window).locator(".xterm")).toContainText(
     "Would you like to run the following command?",
     { timeout: 60_000 },
   );
@@ -151,14 +160,13 @@ async function runPermissionPrompt(
   // permission menu is open. That output must not make the session look busy.
   await expectActivity(window, provider, "waiting", 10_000);
   await window.keyboard.press("Escape");
-  await expect(window.locator(".xterm")).toContainText("canceled", { timeout: 10_000 });
+  await expect(visibleSessionView(window).locator(".xterm")).toContainText("canceled", {
+    timeout: 10_000,
+  });
   await expectActivity(window, provider, "waiting", 20_000);
 }
 
-async function runInterrupt(
-  window: Page,
-  provider: ProviderActivityE2e,
-): Promise<void> {
+async function runInterrupt(window: Page, provider: ProviderActivityE2e): Promise<void> {
   await submitPrompt(
     window,
     [
@@ -167,13 +175,13 @@ async function runInterrupt(
     ].join(" "),
   );
   await expectActivity(window, provider, "working", 30_000);
-  await window.locator(".xterm").click();
+  await visibleSessionView(window).locator(".xterm").click();
   await window.keyboard.press("Control+C");
   await expectActivity(window, provider, "waiting", 20_000);
 }
 
 async function submitPrompt(window: Page, prompt: string): Promise<void> {
-  await window.locator(".xterm").click();
+  await visibleSessionView(window).locator(".xterm").click();
   await window.keyboard.type(prompt, { delay: PROMPT_TYPE_DELAY_MS });
   await window.waitForTimeout(300);
   await window.keyboard.press("Enter");
@@ -208,7 +216,7 @@ function sessionDot(window: Page, provider: ProviderActivityE2e, activity: "work
 }
 
 async function readTerminalText(window: Page): Promise<string> {
-  return window
+  return visibleSessionView(window)
     .locator(".xterm")
     .evaluate((element) => element.querySelector(".xterm-rows")?.textContent ?? "");
 }
@@ -219,7 +227,5 @@ async function readSessionDotLabels(
 ): Promise<string[]> {
   return worktreeCard(window, provider.branchName)
     .locator(".session-provider-dot")
-    .evaluateAll((dots) =>
-      dots.map((dot) => dot.getAttribute("aria-label") ?? "(no aria-label)"),
-    );
+    .evaluateAll((dots) => dots.map((dot) => dot.getAttribute("aria-label") ?? "(no aria-label)"));
 }

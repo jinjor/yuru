@@ -7,6 +7,7 @@ import {
   launchWindow,
   readMetadata,
   registerRepo,
+  visibleSessionView,
   worktreeCard,
 } from "./helpers";
 
@@ -34,13 +35,14 @@ test("inactive primary を detach すると strong link だけが外れ session 
 
     // inactive primary の surface には Resume と Detach が並ぶ。
     await card.click();
-    await expect(window.locator(".resume-primary-action")).toBeVisible();
-    await window.locator(".detach-primary-action").click();
+    const sessionView = visibleSessionView(window);
+    await expect(sessionView.locator(".resume-primary-action")).toBeVisible();
+    await sessionView.locator(".detach-primary-action").click();
 
     // primary が外れると同じ worktree のまま既存 / 新規 session の選択肢に切り替わる。
     // (この repo には provider store が無いので Existing Session は出ない。)
-    await expect(window.locator(".new-session-action", { hasText: "Claude" })).toBeVisible();
-    await expect(window.locator(".resume-primary-action")).toHaveCount(0);
+    await expect(sessionView.locator(".new-session-action", { hasText: "Claude" })).toBeVisible();
+    await expect(sessionView.locator(".resume-primary-action")).toHaveCount(0);
     await expect(card.locator('[aria-label="Claude primary session inactive"]')).toHaveCount(0);
 
     // metadata からは strong link だけが消え、task worktree の record は残る。

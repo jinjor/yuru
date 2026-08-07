@@ -7,6 +7,7 @@ import {
   launchWindow,
   openMainTerminal,
   registerRepo,
+  visibleSessionView,
   writeMetadata,
 } from "./helpers";
 
@@ -21,23 +22,26 @@ test("main worktree の standalone terminal を開いて入力と exit を扱え
     const window = launched.window;
 
     await openMainTerminal(window);
-    await expect(window.locator(".terminal-bar-branch")).toContainText("main");
+    const sessionView = visibleSessionView(window);
+    await expect(sessionView.locator(".terminal-bar-branch")).toContainText("main");
 
-    await window.locator(".xterm").click();
+    await sessionView.locator(".xterm").click();
     await window.keyboard.type("printf 'YURU_ECHO_OK\\n'");
     await window.keyboard.press("Enter");
-    await expect(window.locator(".xterm")).toContainText("YURU_ECHO_OK", { timeout: 10_000 });
+    await expect(sessionView.locator(".xterm")).toContainText("YURU_ECHO_OK", {
+      timeout: 10_000,
+    });
 
     // terminal が終了しても worktree の選択は保たれ、Terminal は
     // Open Terminal を出す session start surface に戻る。
     await window.keyboard.type("exit");
     await window.keyboard.press("Enter");
-    await expect(window.locator(".open-terminal-action")).toBeVisible({ timeout: 10_000 });
-    await expect(window.locator(".xterm")).toHaveCount(0);
+    await expect(sessionView.locator(".open-terminal-action")).toBeVisible({ timeout: 10_000 });
+    await expect(sessionView.locator(".xterm")).toHaveCount(0);
 
     // Open Terminal で同じ worktree に新しい terminal を開き直せる。
-    await window.locator(".open-terminal-action").click();
-    await expect(window.locator(".xterm")).toBeVisible({ timeout: 10_000 });
+    await sessionView.locator(".open-terminal-action").click();
+    await expect(sessionView.locator(".xterm")).toBeVisible({ timeout: 10_000 });
   } finally {
     await closeYuru(app);
     await context.cleanup();
@@ -62,36 +66,45 @@ test("worktree 選択を切り替えると対応する terminal runtime に切�
     const window = launched.window;
 
     await mainTerminalCardForRepo(window, firstRepo).click();
-    await expect(window.locator(".xterm")).toBeVisible({ timeout: 10_000 });
-    await window.locator(".xterm").click();
+    const sessionView = visibleSessionView(window);
+    await expect(sessionView.locator(".xterm")).toBeVisible({ timeout: 10_000 });
+    await sessionView.locator(".xterm").click();
     await window.keyboard.type("printf 'FIRST_RUNTIME\\n'");
     await window.keyboard.press("Enter");
-    await expect(window.locator(".xterm")).toContainText("FIRST_RUNTIME", { timeout: 10_000 });
+    await expect(sessionView.locator(".xterm")).toContainText("FIRST_RUNTIME", {
+      timeout: 10_000,
+    });
 
     await mainTerminalCardForRepo(window, secondRepo).click();
-    await expect(window.locator(".xterm")).toBeVisible({ timeout: 10_000 });
+    await expect(sessionView.locator(".xterm")).toBeVisible({ timeout: 10_000 });
     // Wait until the second runtime has rendered its own shell prompt (which shows
     // that repo's directory) before typing. Otherwise the first terminal is still
     // mounted/focused during the switch and the keystrokes land in it.
-    await expect(window.locator(".xterm")).toContainText(path.basename(secondRepo), {
+    await expect(sessionView.locator(".xterm")).toContainText(path.basename(secondRepo), {
       timeout: 10_000,
     });
-    await window.locator(".xterm").click();
+    await sessionView.locator(".xterm").click();
     await window.keyboard.type("printf 'SECOND_RUNTIME\\n'");
     await window.keyboard.press("Enter");
-    await expect(window.locator(".xterm")).toContainText("SECOND_RUNTIME", { timeout: 10_000 });
+    await expect(sessionView.locator(".xterm")).toContainText("SECOND_RUNTIME", {
+      timeout: 10_000,
+    });
 
     await mainTerminalCardForRepo(window, firstRepo).click();
-    await expect(window.locator(".xterm")).toContainText("FIRST_RUNTIME", { timeout: 10_000 });
+    await expect(sessionView.locator(".xterm")).toContainText("FIRST_RUNTIME", {
+      timeout: 10_000,
+    });
     // Run a fresh command on the re-selected runtime and wait for its echo. This
     // anchors the negative assertion below: by the time the new output appears,
     // any (buggy) leaked output from the other runtime would already have surfaced,
     // so checking absence here is not racing against late-arriving data.
-    await window.locator(".xterm").click();
+    await sessionView.locator(".xterm").click();
     await window.keyboard.type("printf 'BACK_ON_FIRST\\n'");
     await window.keyboard.press("Enter");
-    await expect(window.locator(".xterm")).toContainText("BACK_ON_FIRST", { timeout: 10_000 });
-    await expect(window.locator(".xterm")).not.toContainText("SECOND_RUNTIME");
+    await expect(sessionView.locator(".xterm")).toContainText("BACK_ON_FIRST", {
+      timeout: 10_000,
+    });
+    await expect(sessionView.locator(".xterm")).not.toContainText("SECOND_RUNTIME");
   } finally {
     await closeYuru(app);
     await context.cleanup();

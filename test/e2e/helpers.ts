@@ -1,17 +1,15 @@
-import { _electron as electron, expect, type ElectronApplication, type Page } from "@playwright/test";
+import {
+  _electron as electron,
+  expect,
+  type ElectronApplication,
+  type Locator,
+  type Page,
+} from "@playwright/test";
 import type { SessionProvider } from "../../src/shared/session";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { appendFileSync, existsSync, readFileSync, realpathSync, readdirSync } from "node:fs";
-import {
-  appendFile,
-  copyFile,
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  writeFile,
-} from "node:fs/promises";
+import { appendFile, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 
@@ -273,9 +271,9 @@ export async function seedCodexHome(home: string, trustedRepoPath: string): Prom
 // transcript. Pre-seed the cache with the update already dismissed and just
 // checked so codex never prompts during a test.
 async function seedCodexVersionCheck(codexDir: string): Promise<void> {
-  const real = JSON.parse(
-    readFileSync(path.join(homedir(), ".codex", "version.json"), "utf8"),
-  ) as { latest_version: string };
+  const real = JSON.parse(readFileSync(path.join(homedir(), ".codex", "version.json"), "utf8")) as {
+    latest_version: string;
+  };
   await writeFile(
     path.join(codexDir, "version.json"),
     JSON.stringify({
@@ -382,17 +380,26 @@ export async function seedClaudeStoredSession(
 
 export async function openMainTerminal(window: Page): Promise<void> {
   await worktreeCard(window, "terminal").click();
-  await expect(window.locator(".xterm")).toBeVisible({ timeout: 10_000 });
+  await expect(visibleSessionView(window).locator(".xterm")).toBeVisible({ timeout: 10_000 });
 }
 
 // ヘッダはファイル名とディレクトリを分けて出すので、両者をまとめて検証する。
 export async function expectPreviewPath(window: Page, fullPath: string): Promise<void> {
+  const sessionView = visibleSessionView(window);
   const lastSlash = fullPath.lastIndexOf("/");
   const name = lastSlash < 0 ? fullPath : fullPath.slice(lastSlash + 1);
-  await expect(window.locator(".preview-filename")).toHaveText(name);
+  await expect(sessionView.locator(".preview-filename")).toHaveText(name);
   if (lastSlash >= 0) {
-    await expect(window.locator(".preview-dir")).toHaveText(fullPath.slice(0, lastSlash));
+    await expect(sessionView.locator(".preview-dir")).toHaveText(fullPath.slice(0, lastSlash));
   }
+}
+
+// Activity で hidden な SessionView の DOM も残るため、右ペインを触る E2E は
+// 表示中の各トップレベル要素に scope して strict mode の複数 match を避ける。
+export function visibleSessionView(window: Page): Locator {
+  return window
+    .locator(".app > .session-view-column, .app > .changes-panel, .app > .file-search")
+    .filter({ visible: true });
 }
 
 export function worktreeCard(window: Page, text: string) {

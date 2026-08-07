@@ -14,6 +14,7 @@ import {
   readMetadata,
   registerRepo,
   seedClaudeStoredSession,
+  visibleSessionView,
   worktreeCard,
   writeMetadata,
 } from "./helpers";
@@ -201,12 +202,14 @@ test("provider store から primary と suggested Claude session の概要を表
     const window = launched.window;
 
     const primaryCard = worktreeCard(window, "Primary preview from store");
-    await expect(primaryCard.locator('[aria-label="Claude primary session inactive"]')).toBeVisible();
+    await expect(
+      primaryCard.locator('[aria-label="Claude primary session inactive"]'),
+    ).toBeVisible();
 
     const suggestedCard = worktreeCard(window, "1 existing session");
     await expect(suggestedCard).toContainText("suggested-row");
     await suggestedCard.click();
-    await expect(window.locator(".suggested-session-action")).toContainText(
+    await expect(visibleSessionView(window).locator(".suggested-session-action")).toContainText(
       "Suggested preview from store",
     );
   } finally {
@@ -240,7 +243,7 @@ test("suggested session が複数ある worktree は件数を表示する", asyn
     const card = worktreeCard(window, "2 existing sessions");
     await expect(card).toContainText("many-suggestions");
     await card.click();
-    await expect(window.locator(".suggested-session-action")).toHaveCount(2);
+    await expect(visibleSessionView(window).locator(".suggested-session-action")).toHaveCount(2);
   } finally {
     await closeYuru(app);
     await context.cleanup();
@@ -268,10 +271,12 @@ test("provider store から消えた primary session は選択時に detach さ�
     await expect(card.locator('[aria-label="Claude primary session inactive"]')).toBeVisible();
     // 選択では resume しないため、detach は Terminal からの明示 resume で起こる。
     await card.click();
-    await window.locator(".resume-primary-action").click();
+    await visibleSessionView(window).locator(".resume-primary-action").click();
 
     await expect(
-      worktreeCard(window, "missing-primary").locator('[aria-label="Claude primary session inactive"]'),
+      worktreeCard(window, "missing-primary").locator(
+        '[aria-label="Claude primary session inactive"]',
+      ),
     ).toHaveCount(0);
     await expect(worktreeCard(window, "missing-primary")).toContainText("empty");
     const metadata = await readMetadata(context);

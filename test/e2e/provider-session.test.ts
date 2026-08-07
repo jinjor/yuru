@@ -20,6 +20,7 @@ import {
   seedCodexHome,
   trustClaudeProject,
   trustCodexProject,
+  visibleSessionView,
   worktreeCard,
   type E2eContext,
 } from "./helpers";
@@ -79,7 +80,9 @@ const providers: ProviderE2e[] = [
     conversationCount: (home) => codexConversationCount(home),
     hasAssistantReply: (home) => codexHasAssistantReply(home),
     async waitForReady(window) {
-      await expect(window.locator(".xterm")).toContainText("OpenAI Codex", { timeout: 20_000 });
+      await expect(visibleSessionView(window).locator(".xterm")).toContainText("OpenAI Codex", {
+        timeout: 20_000,
+      });
       await window.waitForTimeout(1000);
     },
   },
@@ -112,11 +115,12 @@ async function createSessionWithTurn(
   await window.locator(".repo-row-new-btn").click();
   await window.locator(".worktree-name-input").fill(provider.branchName);
   await window.locator(".worktree-create-btn").click();
-  await window.locator(".new-session-action", { hasText: provider.label }).click();
-  await expect(window.locator(".xterm")).toBeVisible({ timeout: 30_000 });
+  const sessionView = visibleSessionView(window);
+  await sessionView.locator(".new-session-action", { hasText: provider.label }).click();
+  await expect(sessionView.locator(".xterm")).toBeVisible({ timeout: 30_000 });
 
   await provider.waitForReady(window);
-  await window.locator(".xterm").click();
+  await sessionView.locator(".xterm").click();
   await window.keyboard.type(`Reply with exactly: ${marker}`, { delay: PROMPT_TYPE_DELAY_MS });
   // Give the TUI a moment to ingest the line before submitting, otherwise Enter
   // races the input and the turn is never sent.
@@ -134,10 +138,7 @@ async function createSessionWithTurn(
     // A turn that never lands looks identical from the outside whether the CLI
     // hit a usage limit, never received the prompt, or is still thinking. The
     // terminal says which, so print it before failing.
-    const rows = await window.evaluate(() => {
-      const rowsEl = document.querySelector(".xterm-rows");
-      return rowsEl ? Array.from(rowsEl.children).map((r) => (r as HTMLElement).innerText) : [];
-    });
+    const rows = await sessionView.locator(".xterm-rows > div").allInnerTexts();
     console.log(`### TERMINAL AT FAILURE (${provider.label} / ${marker}) ###`);
     console.log(rows.filter((row) => row.trim() !== "").join("\n"));
     console.log("### END ###");
@@ -200,11 +201,14 @@ for (const provider of providers) {
         // card クリックは worktree の選択だけ。inactive primary の復元は
         // Terminal の session start surface からの明示操作になる。
         await card.click();
-        await expect(window.locator(".terminal-session-start")).toBeVisible();
-        await window.locator(".resume-primary-action").click();
+        const sessionView = visibleSessionView(window);
+        await expect(sessionView.locator(".terminal-session-start")).toBeVisible();
+        await sessionView.locator(".resume-primary-action").click();
 
-        await expect(window.locator(".xterm")).toBeVisible({ timeout: 30_000 });
-        await expect(window.locator(".xterm")).toContainText("RESUME_OK", { timeout: 30_000 });
+        await expect(sessionView.locator(".xterm")).toBeVisible({ timeout: 30_000 });
+        await expect(sessionView.locator(".xterm")).toContainText("RESUME_OK", {
+          timeout: 30_000,
+        });
         await expect(primarySessionActiveDot(window, provider.branchName, provider)).toBeVisible();
       } finally {
         await closeYuru(app);
@@ -225,16 +229,19 @@ for (const provider of providers) {
         app = launched.app;
         const window = launched.window;
         await createSessionWithTurn(provider, context, window, repoDir, "REUSE_OK");
-        await expect(window.locator(".xterm")).toContainText("REUSE_OK", { timeout: 30_000 });
+        const sessionView = visibleSessionView(window);
+        await expect(sessionView.locator(".xterm")).toContainText("REUSE_OK", {
+          timeout: 30_000,
+        });
 
         // Type a draft into the TUI input box without submitting it. This unsent
         // input lives only in the running PTY's in-memory state; a newly launched
         // (or resumed) PTY would start with an empty input box. It is the one
         // signal that distinguishes "re-attached to the same live PTY" from
         // "spawned a new PTY and resumed the same session".
-        await window.locator(".xterm").click();
+        await sessionView.locator(".xterm").click();
         await window.keyboard.type("UNSENT_DRAFT_PROBE");
-        await expect(window.locator(".xterm")).toContainText("UNSENT_DRAFT_PROBE", {
+        await expect(sessionView.locator(".xterm")).toContainText("UNSENT_DRAFT_PROBE", {
           timeout: 10_000,
         });
 
@@ -244,10 +251,10 @@ for (const provider of providers) {
         await openMainTerminal(window);
         await worktreeCard(window, provider.branchName).click();
 
-        await expect(window.locator(".xterm")).toBeVisible({ timeout: 30_000 });
+        await expect(sessionView.locator(".xterm")).toBeVisible({ timeout: 30_000 });
         // The unsent draft survived, proving the same live PTY was re-attached
         // rather than a fresh one launched, and no second conversation was created.
-        await expect(window.locator(".xterm")).toContainText("UNSENT_DRAFT_PROBE", {
+        await expect(sessionView.locator(".xterm")).toContainText("UNSENT_DRAFT_PROBE", {
           timeout: 30_000,
         });
         expect(provider.conversationCount(context.tmpHome, repoDir)).toBe(1);
@@ -284,11 +291,14 @@ for (const provider of providers) {
         const card = worktreeCard(window, "feat-external");
         await expect(card).toContainText("1 existing session");
         await card.click();
-        await window.locator(".suggested-session-action").first().click();
+        const sessionView = visibleSessionView(window);
+        await sessionView.locator(".suggested-session-action").first().click();
 
         // Promoting resumes the session in the worktree where it was created and
         // restores its conversation.
-        await expect(window.locator(".xterm")).toContainText("PROMOTE_OK", { timeout: 30_000 });
+        await expect(sessionView.locator(".xterm")).toContainText("PROMOTE_OK", {
+          timeout: 30_000,
+        });
         await expect(primarySessionActiveDot(window, "feat-external", provider)).toBeVisible();
       } finally {
         await closeYuru(app);

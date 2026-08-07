@@ -21,6 +21,36 @@ export function findWorktree(
   return null;
 }
 
+export function collectKeepAliveWorktrees(
+  repos: RepoListItem[],
+  selectedWorktreeId: string | null,
+): WorktreeListItem[] {
+  const worktrees: WorktreeListItem[] = [];
+  const collectedWorktreeIds = new Set<string>();
+
+  const collect = (worktree: WorktreeListItem): void => {
+    if (collectedWorktreeIds.has(worktree.worktreeId)) {
+      return;
+    }
+    collectedWorktreeIds.add(worktree.worktreeId);
+    worktrees.push(worktree);
+  };
+
+  for (const repo of repos) {
+    collect(repo.mainWorktree);
+    for (const worktree of repo.taskWorktrees) {
+      if (
+        worktree.worktreeId === selectedWorktreeId ||
+        worktree.primarySession?.state === "active"
+      ) {
+        collect(worktree);
+      }
+    }
+  }
+
+  return worktrees;
+}
+
 // メインプロセスから push されたセッション更新を、該当セッションを表示している項目に merge する。
 export function applySessionUpdate(
   repos: RepoListItem[],

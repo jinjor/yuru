@@ -11,6 +11,7 @@ import {
   launchWindow,
   readMetadata,
   registerRepo,
+  visibleSessionView,
   worktreeCard,
   writeFiles,
 } from "./helpers";
@@ -34,7 +35,10 @@ test("＋ボタンで Create Worktree モーダルが開き Escape と外側ク�
     expect(
       await input.evaluate((element) => {
         const inputElement = element as HTMLInputElement;
-        return inputElement.selectionStart === 0 && inputElement.selectionEnd === inputElement.value.length;
+        return (
+          inputElement.selectionStart === 0 &&
+          inputElement.selectionEnd === inputElement.value.length
+        );
       }),
     ).toBe(true);
 
@@ -82,13 +86,14 @@ test("provider を選ばず worktree を作成でき、Terminal に session の�
     await expect(worktreeCard(window, "feature/f43-create")).toHaveClass(/selected/);
 
     // session はまだ始まっていない: PTY はなく、Terminal に Claude / Codex の選択肢が出る。
-    await expect(window.locator(".terminal-session-start")).toBeVisible();
-    await expect(window.locator(".new-session-action", { hasText: "Claude" })).toBeVisible();
-    await expect(window.locator(".new-session-action", { hasText: "Codex" })).toBeVisible();
-    await expect(window.locator(".xterm")).toHaveCount(0);
+    const sessionView = visibleSessionView(window);
+    await expect(sessionView.locator(".terminal-session-start")).toBeVisible();
+    await expect(sessionView.locator(".new-session-action", { hasText: "Claude" })).toBeVisible();
+    await expect(sessionView.locator(".new-session-action", { hasText: "Codex" })).toBeVisible();
+    await expect(sessionView.locator(".xterm")).toHaveCount(0);
 
     // session がなくても右ペイン (Files / Changes) は選択中 worktree に対して使える。
-    await expect(window.locator(".changes-panel")).toBeVisible();
+    await expect(window.locator(".changes-panel").filter({ visible: true })).toBeVisible();
 
     const metadata = await readMetadata(context);
     expect(metadata.taskWorktrees.map((entry) => entry.worktreePath)).toEqual([
@@ -120,9 +125,9 @@ test("既存 branch 名で作成するとエラーを出してモーダルを維
     await expect(window.locator(".worktree-error")).toContainText(
       'Branch "already-there" already exists',
     );
-    await expect(
-      window.locator(".task-worktree-card", { hasText: "already-there" }),
-    ).toHaveCount(0);
+    await expect(window.locator(".task-worktree-card", { hasText: "already-there" })).toHaveCount(
+      0,
+    );
     expect(existsSync(path.join(repoDir, ".yuru", "worktrees", "already-there"))).toBe(false);
   } finally {
     await closeYuru(app);

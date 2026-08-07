@@ -134,8 +134,9 @@ export const SessionView = memo(function SessionView({
 
   // resume / promote / 新規 session / standalone terminal 開始 / detach の共通ガード。
   // 実行中は後続の session 操作を無視して、二重起動や開始と解除の競合を防ぐ。
-  // 完了前に別の worktree へ切り替えた場合はこの SessionView ごと unmount されるので、
-  // 古い結果が表示を引き戻すことはない。
+  // worktree ごとに instance が分かれているため、hidden 中に完了した結果も自分自身にしか
+  // 届かず、別の worktree の表示を引き戻さない。active でない task worktree は従来どおり
+  // 選択解除時に unmount される。
   const isStartingRef = useRef(false);
   const startTerminalRuntime = useCallback(
     async (start: () => Promise<Result<WorktreeSessionSelection>>): Promise<void> => {

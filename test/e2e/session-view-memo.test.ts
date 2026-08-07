@@ -6,6 +6,7 @@ import {
   createGitWorktree,
   launchWindow,
   registerRepo,
+  visibleSessionView,
   worktreeCard,
 } from "./helpers";
 
@@ -21,14 +22,25 @@ test("App の無関係な state 更新では SessionView を再描画しない",
     const window = launched.window;
 
     await worktreeCard(window, "memo-task").click();
-    await expect(window.locator(".terminal-session-start")).toBeVisible();
+    const sessionView = visibleSessionView(window);
+    await expect(sessionView.locator(".terminal-session-start")).toBeVisible();
     // providers の非同期取得が props に反映された後を基準にする。
-    await expect(window.locator(".new-session-action").first()).toBeVisible();
+    await expect(sessionView.locator(".new-session-action").first()).toBeVisible();
+    // mount 直後の git state 取得が render count に混ざらないよう、初回取得の完了を待つ。
+    await window.waitForTimeout(500);
+    const worktreeId = await window.evaluate(async () => {
+      const repos = await window.electronAPI.getRepos();
+      const worktree = repos[0]?.taskWorktrees.find((entry) => entry.name === "memo-task");
+      if (!worktree) {
+        throw new Error("memo-task was not found");
+      }
+      return worktree.worktreeId;
+    });
 
-    const before = await totalSessionViewRenderCount(window);
+    const before = await sessionViewRenderCount(window, worktreeId);
     await window.locator(".sidebar-errors-row").click();
     await expect(window.locator(".error-log")).toBeVisible();
-    const after = await totalSessionViewRenderCount(window);
+    const after = await sessionViewRenderCount(window, worktreeId);
 
     expect(after).toBe(before);
   } finally {
@@ -37,13 +49,14 @@ test("App の無関係な state 更新では SessionView を再描画しない",
   }
 });
 
-function totalSessionViewRenderCount(window: Page): Promise<number> {
-  return window.evaluate(() => {
-    const counts = (
-      globalThis as typeof globalThis & {
-        __yuruSessionViewRenderCounts?: Record<string, number>;
-      }
-    ).__yuruSessionViewRenderCounts;
-    return Object.values(counts ?? {}).reduce((total, count) => total + count, 0);
-  });
+function sessionViewRenderCount(window: Page, worktreeId: string): Promise<number> {
+  return window.evaluate(
+    (id) =>
+      (
+        globalThis as typeof globalThis & {
+          __yuruSessionViewRenderCounts?: Record<string, number>;
+        }
+      ).__yuruSessionViewRenderCounts?.[id] ?? 0,
+    worktreeId,
+  );
 }

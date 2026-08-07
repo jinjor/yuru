@@ -10,6 +10,7 @@ import {
   launchWindow,
   openMainTerminal,
   registerRepo,
+  visibleSessionView,
   writeFiles,
 } from "./helpers";
 
@@ -328,23 +329,33 @@ test("Files タブには選択中 worktree のファイルだけが出る", asyn
     const window = launched.window;
     await openMainTerminal(window);
 
-    await window.locator(".panel-tab", { hasText: "Files" }).click();
-    await window.locator(".file-tree-row", { hasText: "main-dir" }).click();
-    await expect(window.locator(".file-tree-name", { hasText: "main-only.txt" })).toBeVisible();
-    await expect(window.locator(".file-tree-name", { hasText: "task-dir" })).toHaveCount(0);
+    const sessionView = visibleSessionView(window);
+    await sessionView.locator(".panel-tab", { hasText: "Files" }).click();
+    await sessionView.locator(".file-tree-row", { hasText: "main-dir" }).click();
+    await expect(
+      sessionView.locator(".file-tree-name", { hasText: "main-only.txt" }),
+    ).toBeVisible();
+    await expect(sessionView.locator(".file-tree-name", { hasText: "task-dir" })).toHaveCount(0);
 
     await window.locator(".task-worktree-card", { hasText: "task-files-only" }).click();
-    await window.locator(".panel-tab", { hasText: "Files" }).click();
-    await expect(window.locator(".file-tree-name", { hasText: "task-dir" })).toBeVisible();
-    await expect(window.locator(".file-tree-name", { hasText: "main-only.txt" })).toHaveCount(0);
-    await window.locator(".file-tree-row", { hasText: "task-dir" }).click();
-    await expect(window.locator(".file-tree-name", { hasText: "task-only.txt" })).toBeVisible();
+    await sessionView.locator(".panel-tab", { hasText: "Files" }).click();
+    await expect(sessionView.locator(".file-tree-name", { hasText: "task-dir" })).toBeVisible();
+    await expect(sessionView.locator(".file-tree-name", { hasText: "main-only.txt" })).toHaveCount(
+      0,
+    );
+    await sessionView.locator(".file-tree-row", { hasText: "task-dir" }).click();
+    await expect(
+      sessionView.locator(".file-tree-name", { hasText: "task-only.txt" }),
+    ).toBeVisible();
 
     await window.locator(".task-worktree-card", { hasText: "main" }).click();
-    await window.locator(".panel-tab", { hasText: "Files" }).click();
-    await expect(window.locator(".file-tree-name", { hasText: "main-dir" })).toBeVisible();
-    await expect(window.locator(".file-tree-name", { hasText: "main-only.txt" })).toHaveCount(0);
-    await expect(window.locator(".file-tree-name", { hasText: "task-dir" })).toHaveCount(0);
+    await sessionView.locator(".panel-tab", { hasText: "Files" }).click();
+    await expect(sessionView.locator(".file-tree-name", { hasText: "main-dir" })).toBeVisible();
+    // main worktree は keep-alive されるので、切り替え前の展開状態も残る。
+    await expect(
+      sessionView.locator(".file-tree-name", { hasText: "main-only.txt" }),
+    ).toBeVisible();
+    await expect(sessionView.locator(".file-tree-name", { hasText: "task-dir" })).toHaveCount(0);
   } finally {
     await closeYuru(app);
     await context.cleanup();
@@ -533,9 +544,9 @@ test("default branch が master でも Committed の Reviewed は commit 後と�
     await expect(committedRow).toHaveClass(/reviewed/);
 
     // file-reviews.json は metadata と分離され、worktree path ごとに保存される。
-    const stored = JSON.parse(
-      await readFile(`${context.yuruHome}/file-reviews.json`, "utf8"),
-    ) as { worktrees: Record<string, Record<string, string>> };
+    const stored = JSON.parse(await readFile(`${context.yuruHome}/file-reviews.json`, "utf8")) as {
+      worktrees: Record<string, Record<string, string>>;
+    };
     expect(Object.keys(stored.worktrees[taskWorktreePath] ?? {})).toEqual(["src/app.ts"]);
 
     await closeYuru(app);
