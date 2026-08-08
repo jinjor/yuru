@@ -82,20 +82,21 @@ export const SessionView = memo(function SessionView({
     (window.__yuruSessionViewRenderCounts[worktreeId] ?? 0) + 1;
 
   const sessionViewColumnRef = useRef<HTMLDivElement>(null);
-  // この worktree でいま表示している (つもりの) terminal runtime。session 未開始や
-  // 終了直後は null で、その間 Terminal は session start surface を出す。
-  const [terminalRuntimeId, setTerminalRuntimeId] = useState<TerminalRuntimeId | null>(
-    () => worktree?.primarySession?.activeTerminalRuntimeId ?? null,
-  );
-  // shell (この SessionView instance) は worktree が repos にある限り生き続けるが、
-  // terminalRuntimeId は event 購読でしか更新されないため hidden 中の exit を
-  // 聞き逃すことがある。表示直前に props (worktree.activeTerminalRuntimeIds、main が
-  // 生きている runtime だけを載せる) と突き合わせ、死んだ runtime を指していれば
-  // 描画しない。実際に描画に使うのはこちらで、terminalRuntimeId 自体は書き換えない。
+  // この SessionView 内の操作で明示的に選んだ terminal runtime。active primary は repos が
+  // source of truth なので state に複製せず、下の displayedTerminalRuntimeId で導出する。
+  const [selectedTerminalRuntimeId, setSelectedTerminalRuntimeId] =
+    useState<TerminalRuntimeId | null>(null);
+  const activeTerminalRuntimeIds = worktree?.activeTerminalRuntimeIds;
+  const primaryTerminalRuntimeId = worktree?.primarySession?.activeTerminalRuntimeId ?? null;
+  // 現在の明示的な選択が生きていれば維持し、なければ active primary を表示する。
+  // どちらの生死も main が返す activeTerminalRuntimeIds だけで判定するため、hidden 中の
+  // exit や外部 API からの開始も、visible に戻った時の最新 props だけで解決できる。
   const displayedTerminalRuntimeId =
-    terminalRuntimeId && (worktree?.activeTerminalRuntimeIds ?? []).includes(terminalRuntimeId)
-      ? terminalRuntimeId
-      : null;
+    selectedTerminalRuntimeId && activeTerminalRuntimeIds?.includes(selectedTerminalRuntimeId)
+      ? selectedTerminalRuntimeId
+      : primaryTerminalRuntimeId && activeTerminalRuntimeIds?.includes(primaryTerminalRuntimeId)
+        ? primaryTerminalRuntimeId
+        : null;
   const [previewSelection, setPreviewSelection] = useState<PreviewSelection | null>(null);
   const [gitPathStates, setGitPathStates] = useState<GitPathState[]>([]);
   const [reviewState, setReviewState] = useState<GitReviewState | null>(null);
@@ -157,7 +158,7 @@ export const SessionView = memo(function SessionView({
         if (!result.ok) {
           return;
         }
-        setTerminalRuntimeId(result.data.terminalRuntimeId);
+        setSelectedTerminalRuntimeId(result.data.terminalRuntimeId);
         // repos が新しい runtime を含むまでは activeTerminalRuntimeIds 側に載っておらず
         // displayedTerminalRuntimeId が一時的に null (start surface) に戻る。ガードを
         // 外すのをここまで待つことで、その間の再クリックを無視して二重起動を防ぐ。
@@ -197,7 +198,7 @@ export const SessionView = memo(function SessionView({
 
   useEffect(() => {
     return window.electronAPI.onTerminalRuntimeExited((exitedTerminalRuntimeId) => {
-      setTerminalRuntimeId((prev) => (prev === exitedTerminalRuntimeId ? null : prev));
+      setSelectedTerminalRuntimeId((prev) => (prev === exitedTerminalRuntimeId ? null : prev));
     });
   }, []);
 

@@ -1,5 +1,7 @@
 import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
-import { writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { readdir, writeFile } from "node:fs/promises";
+import { promisify } from "node:util";
 import path from "node:path";
 import {
   closeYuru,
@@ -15,6 +17,8 @@ import {
   visibleSessionView,
   worktreeCard,
 } from "./helpers";
+
+const execFileAsync = promisify(execFile);
 
 test("worktree の表示状態は session の有無に関わらず保持され、hidden 中の更新・終了・削除に追従する", async () => {
   test.setTimeout(120_000);
@@ -207,6 +211,73 @@ test("同一 worktree 内で Files ⇄ Changes ⇄ Search を往復しても展�
     await sessionView.locator(".panel-tab", { hasText: "Search" }).click();
     await expect(sessionView.locator(".code-search-status")).toContainText("1 matches");
     await expect(sessionView.locator(".code-search-match-row")).toHaveCount(1);
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+test("訪問済み worktree で外部 API から開始した session を復帰時に表示する", async () => {
+  test.setTimeout(60_000);
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context);
+    const worktreePath = await createGitWorktree(context, repoDir, "keep-alive-external");
+    await registerRepo(context, repoDir, [{ worktreePath }]);
+    await seedCodexHome(context.tmpHome, repoDir);
+
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+    const sessionView = visibleSessionView(window);
+    const card = worktreeCard(window, "keep-alive-external");
+
+    // session がない状態で一度訪問し、SessionView の shell を keep-alive 対象にする。
+    await card.click();
+    await expect(sessionView.locator(".terminal-session-start")).toBeVisible();
+    await openMainTerminal(window);
+
+    const runDir = path.join(context.yuruHome, "run");
+    await expect
+      .poll(async () => (await readdir(runDir)).filter((name) => name.endsWith(".sock")))
+      .toHaveLength(1);
+    const socketName = (await readdir(runDir)).find((name) => name.endsWith(".sock"));
+    if (!socketName) {
+      throw new Error("Yuru API socket was not found");
+    }
+
+    await execFileAsync(
+      process.execPath,
+      [
+        path.join(context.repoRoot, "scripts/yuru-cli/index.mjs"),
+        "session",
+        "create",
+        "--worktree",
+        worktreePath,
+        "--provider",
+        "codex",
+      ],
+      {
+        cwd: context.repoRoot,
+        env: {
+          ...process.env,
+          HOME: context.tmpHome,
+          YURU_API_SOCKET: path.join(runDir, socketName),
+          YURU_HOME: context.yuruHome,
+        },
+      },
+    );
+    await expect(card.locator('[aria-label^="Codex primary session active"]')).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // 外部開始ではこの SessionView の startTerminalRuntime を通らない。それでも repos の
+    // active primary を取り込み、追加操作なしで既存 runtime を表示する。
+    await card.click();
+    await expect(sessionView.locator(".xterm")).toContainText("OpenAI Codex", {
+      timeout: 15_000,
+    });
   } finally {
     await closeYuru(app);
     await context.cleanup();
