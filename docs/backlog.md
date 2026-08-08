@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-08-08
+Last updated: 2026-08-09
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -31,6 +31,8 @@ UI 改善も機能追加も同じ土俵で扱う。
 | P22 | polish | App / Sessions | worktree の表示データを App の一括配布から worktreeId 単位の取得・購読に変える | SessionView が worktree オブジェクトを props で受け取っており、session の push 1 件で無関係な表示まで再描画が波及する。F51 の keep-alive で instance が増えると影響が拡大する。詳細: docs/backlog-details/P22-worktree-data-subscription.md |
 | F54 | feature | Changes | ショートカットキーでレビュー済みにできるようにする | ファイルレビューを素早く進めたい |
 | I21 | investigate | Sessions | primary session の体験を見直す | 詳細: docs/backlog-details/I21-primary-session-experience.md |
+| B14 | bug | App / Packaging | 本番環境で一度 Yuru アイコンが出たが Electron のアイコンに戻ってしまった | 配布版でアプリの識別が崩れている |
+| F58 | feature | Sessions / Providers | rate limit から自動復帰できるようにする | rate limit 解消後に手動操作なしで作業を再開したい |
 
 ## Next
 
@@ -61,6 +63,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | P21 | polish | App | UI をクリックした時のインタラクションを全体的に見直す | 詳細: docs/backlog-details/P21-ui-click-interaction.md |
 | B13 | bug | Sessions / Providers | kimi のセッションを開いただけで作業が発生してトークンを消費する | 起動時の指示に agent が反応して初期調査を始めてしまうと思われる |
 | F57 | feature | Files / Preview | HTML プレビューを手動でリロードできるようにする | CSS/JS 単独の変更は entry の content が変わらないと iframe が再読み込みされず表示に反映されない。現状は表示モードの切り替えで再マウントさせるしかない |
+| F59 | feature | Sessions / Providers | 各プロバイダのトークン消費量を表示する | プロバイダごとの利用状況を把握したい |
 
 ## Later
 
