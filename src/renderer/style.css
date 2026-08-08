@@ -1557,6 +1557,90 @@ button.github-badge {
   background: var(--bg-app);
 }
 
+/* Image preview */
+.image-preview {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  background: var(--viewer-bg);
+}
+
+.image-diff-columns {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.image-side {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.image-side-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.image-side-label.added {
+  color: var(--success);
+}
+
+.image-side-label.deleted {
+  color: var(--danger);
+}
+
+.image-side-meta {
+  color: var(--text-subtle);
+  font-size: 12px;
+  font-family: var(--font-mono);
+}
+
+/* 透過部分が背景と区別できるようにチェッカー柄を敷く */
+.image-stage {
+  position: relative;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  background-color: #1b1f27;
+  background-image:
+    linear-gradient(45deg, #262c37 25%, transparent 25%),
+    linear-gradient(-45deg, #262c37 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #262c37 75%),
+    linear-gradient(-45deg, transparent 75%, #262c37 75%);
+  background-size: 16px 16px;
+  background-position:
+    0 0,
+    0 8px,
+    8px -8px,
+    -8px 0;
+}
+
+/* 自然サイズが分からない画像用。座標系を作らず成り行きで置く */
+.image-stage.auto {
+  display: flex;
+}
+
+.image-auto {
+  display: block;
+  max-width: 100%;
+}
+
+.image-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+}
+
 /* Markdown preview */
 .markdown-preview {
   flex: 1;

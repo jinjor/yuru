@@ -49,6 +49,8 @@ const electronAPI: ElectronAPI = {
   ) => ipcRenderer.invoke("git:setFileReviewed", worktreeId, path, scope, reviewed),
   getGitDiffDocument: (worktreeId: string, filePath: string, scope?: GitDiffScope) =>
     ipcRenderer.invoke("git:diffDocument", worktreeId, filePath, scope),
+  getImageDiffDocument: (worktreeId: string, filePath: string, scope?: GitDiffScope) =>
+    ipcRenderer.invoke("git:imageDiffDocument", worktreeId, filePath, scope),
   createHtmlPreview: (worktreeId: string, filePath: string, content: string) =>
     ipcRenderer.invoke("htmlPreview:create", worktreeId, filePath, content),
   releaseHtmlPreview: (grantId: string) => ipcRenderer.invoke("htmlPreview:release", grantId),

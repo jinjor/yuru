@@ -430,6 +430,13 @@ function registerIpcHandlers(): void {
   );
 
   handleIpc(
+    "git:imageDiffDocument",
+    (_event, worktreeId: string, filePath: string, scope?: GitDiffScope) => {
+      return service.getImageDiffDocument(worktreeId, filePath, scope);
+    },
+  );
+
+  handleIpc(
     "htmlPreview:create",
     async (event, worktreeId: string, filePath: string, content: string) => {
       if (!isMainFrameSender(event)) {

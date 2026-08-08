@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { diffArrays } from "diff";
 import type { GitDiffDocument, GitDiffScope } from "../../shared/ipc";
+import { imageMediaType } from "../../shared/image-preview";
 import type { FileViewMode } from "../types";
 import { computeLineChanges } from "./CodeEditor/lineChanges";
 import { SourceViewer, type SourceLine } from "./SourceViewer";
@@ -11,12 +12,13 @@ import { resultDataOrNull } from "../utils/result";
 
 const EditModeEditor = lazy(() => import("./CodeEditor/EditModeEditor"));
 const HtmlPreview = lazy(() => import("./HtmlPreview"));
+const ImagePreview = lazy(() => import("./ImagePreview"));
 const MarkdownPreview = lazy(() => import("./MarkdownPreview"));
 
 const markdownExtensions = new Set(["md", "markdown"]);
 const htmlExtensions = new Set(["htm", "html"]);
 
-type RenderedPreviewKind = "html" | "markdown";
+type RenderedPreviewKind = "html" | "image" | "markdown";
 
 function renderedPreviewKind(path: string): RenderedPreviewKind | null {
   const ext = path.split(".").pop()?.toLowerCase();
@@ -28,6 +30,10 @@ function renderedPreviewKind(path: string): RenderedPreviewKind | null {
   }
   if (htmlExtensions.has(ext)) {
     return "html";
+  }
+  // SVG は画像として描画できるテキストなので、閲覧モードではそのまま差分も読める。
+  if (imageMediaType(path) !== null) {
+    return "image";
   }
   return null;
 }
@@ -96,6 +102,10 @@ export function DiffPreviewPanel({
   // worktree 外のファイル (ターミナルリンク由来の絶対パス)。git state には載らず、
   // 編集モードも対象外 (worktree 内のファイルだけ書き込みを許す)。
   const isExternalPath = path.startsWith("/");
+  // 中身が動きうるファイルか。外部ファイルは git status に載らず pathChanged が常に false
+  // なので、常に poll して追従する (エージェントと話しながらメモを更新していく用途で使う)。
+  // 差分テキストと画像プレビューは、同じ判定・同じ間隔で追従する。
+  const shouldPollContent = pathChanged || isExternalPath;
   // staged 差分は index を見ているので、作業ツリーを編集する編集モードには入れない。
   // (unstaged / Files から開いた時は current 側が作業ツリーなので編集に入れる)。実在チェックは
   // 編集に入った EditModeEditor が実ファイルを読んで行う (削除済みなら "missing")。
@@ -159,9 +169,7 @@ export function DiffPreviewPanel({
       }
     };
 
-    // 外部ファイルは git status に載らず pathChanged が常に false なので、常に poll して
-    // 追従する (エージェントと話しながらメモを更新していく用途で使う)。
-    if (!pathChanged && !isExternalPath) {
+    if (!shouldPollContent) {
       void fetchDiff();
       return () => {
         cancelled = true;
@@ -174,7 +182,7 @@ export function DiffPreviewPanel({
       cancelled = true;
       stopPolling();
     };
-  }, [path, scope, pathChanged, isExternalPath, worktreeId]);
+  }, [path, scope, shouldPollContent, worktreeId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -215,7 +223,7 @@ export function DiffPreviewPanel({
         showPreview={displayPreviewKind !== null}
         canEdit={canEdit}
         editDisabledReason={editDisabledReason}
-        lineStat={headerLineStat}
+        lineStat={isBinary ? undefined : headerLineStat}
         reviewed={activeReviewed}
         reviewPending={isSettingReviewed || reviewed === undefined}
         onReviewedChange={(nextReviewed) => {
@@ -252,6 +260,14 @@ export function DiffPreviewPanel({
                 content={currentContent ?? ""}
                 path={displayPath}
                 worktreeId={worktreeId}
+              />
+            ) : displayPreviewKind === "image" ? (
+              // 画像は中身を diff document に載せられないので、パネルとは別に自分で取得する。
+              <ImagePreview
+                path={displayPath}
+                scope={scope}
+                worktreeId={worktreeId}
+                poll={shouldPollContent}
               />
             ) : (
               <MarkdownPreview

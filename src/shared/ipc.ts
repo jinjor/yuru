@@ -103,6 +103,21 @@ export interface GitDiffDocument {
   size: number;
 }
 
+export interface ImageDiffSide {
+  // <img> の src にそのまま渡せる data URL。寸法は renderer が読み込んだ img から取る。
+  dataUrl: string;
+  byteLength: number;
+}
+
+// 画像は文字列にできないので、テキストの GitDiffDocument とは別に取得する。
+export interface ImageDiffDocument {
+  path: string;
+  // null は元側にファイルが無いこと (例: 新規追加された画像)。
+  original: ImageDiffSide | null;
+  // null は現在側にファイルが無いこと (例: 削除された画像)。
+  current: ImageDiffSide | null;
+}
+
 export interface HtmlPreviewGrant {
   id: string;
   url: string;
@@ -223,6 +238,12 @@ export interface ElectronAPI {
     filePath: string,
     scope?: GitDiffScope,
   ) => Promise<Result<GitDiffDocument | null>>;
+  // 画像でない path、開けない path は null。
+  getImageDiffDocument: (
+    worktreeId: string,
+    filePath: string,
+    scope?: GitDiffScope,
+  ) => Promise<Result<ImageDiffDocument | null>>;
   createHtmlPreview: (
     worktreeId: string,
     filePath: string,

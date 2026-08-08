@@ -85,6 +85,23 @@ export function resolveHtmlPreviewEntry(
   return { root: workingRoot, path: resolvedPath };
 }
 
+// 絶対パス指定の読み取り。不在・通常ファイルでない場合は null (呼び出し側で範囲を確認済みの前提)。
+export async function readRegularFile(absolutePath: string): Promise<Buffer | null> {
+  try {
+    const stat = await fs.promises.stat(absolutePath);
+    if (!stat.isFile()) {
+      return null;
+    }
+    return await fs.promises.readFile(absolutePath);
+  } catch (error) {
+    // ENOTDIR はパス途中のコンポーネントがファイルだった場合。どちらも「開けない」ので null。
+    if (isFileNotFoundError(error) || (error as { code?: unknown }).code === "ENOTDIR") {
+      return null;
+    }
+    throw error;
+  }
+}
+
 // 編集モードの seed 用。既存テキストは内容 (空は "")、不在は null、範囲外は throw。
 export async function readWorktreeFile(
   workingRoot: string,

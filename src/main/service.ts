@@ -41,6 +41,10 @@ import {
   removeWorktreeForce as removeGitWorktreeForce,
   unlockWorktree as unlockGitWorktree,
 } from "./git.js";
+import {
+  getImageDiffDocument as loadImageDiffDocument,
+  getImageFileDocument,
+} from "./image-diff.js";
 import { hasLiveProcessInWorktree, listLiveProcessesInWorktree } from "./worktree-process-check.js";
 import { getLastKnownGitHubPullRequest } from "./github.js";
 import {
@@ -846,6 +850,23 @@ export class YuruService {
     } catch (error) {
       // 外部ファイルの読み取り失敗 (EACCES 等) は git の失敗ではないのでラベルを分ける。
       // Result の失敗として返し、renderer の表示を Loading のままにしない。
+      return this.failAndReport(
+        toAppError(error, path.isAbsolute(filePath) ? undefined : { command: "git" }),
+      );
+    }
+  }
+
+  async getImageDiffDocument(worktreeId: string, filePath: string, scope?: GitDiffScope) {
+    const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
+    if (!workingRoot) {
+      return ok(null);
+    }
+    try {
+      if (path.isAbsolute(filePath)) {
+        return ok(await getImageFileDocument(filePath));
+      }
+      return ok(await loadImageDiffDocument(workingRoot, filePath, scope));
+    } catch (error) {
       return this.failAndReport(
         toAppError(error, path.isAbsolute(filePath) ? undefined : { command: "git" }),
       );
