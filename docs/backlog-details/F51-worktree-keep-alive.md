@@ -1,6 +1,6 @@
 # F51 詳細設計: worktree ごとに開いていたファイルを覚えておく (keep-alive)
 
-Last updated: 2026-08-06
+Last updated: 2026-08-08
 
 これは決定版の詳細設計。議論の経緯と個別課題の決着は
 F51-keep-alive-open-issues.md に記録がある。
@@ -242,24 +242,34 @@ ROOT を load」しており、effect が再実行される環境では保持し
 
 Step 2 が前提。worktree 切り替えとは独立に入れられる。
 
-- [ ] ExplorerPanel の条件描画 (`activeTab === ... ? <ChangesPane/> : ...`) を、
+- [x] ExplorerPanel の条件描画 (`activeTab === ... ? <ChangesPane/> : ...`) を、
       3 つの pane をそれぞれ `<Activity mode={...}>` で包む形に置き換える
-- [ ] hidden pane の後始末 (watcher 解除・実行中検索のキャンセル) は既存の
+- [x] hidden pane の後始末 (watcher 解除・実行中検索のキャンセル) は既存の
       effect cleanup がそのまま担うことを確認する。追加実装はしない
-- [ ] e2e: 同一 worktree 内で Files → Changes → Files と往復して展開が残ること、
+- [x] e2e: 同一 worktree 内で Files → Changes → Files と往復して展開が残ること、
       Search の検索語と結果が復帰することを keep-alive の e2e に追加
-- [ ] 確認: 手動 + 全テスト
+- [x] 確認: 手動 + 全テスト
+
+3 つとも常時 mount になったことで `.empty-changes` (ChangesPane の「No changes」と
+FilesPane の「No files」が同じクラス) が Step 3 と同種のセレクタ衝突を起こしたため、
+該当 e2e を `.changes-list .empty-changes` に絞って追加修正した (計画外)。
+また手動確認で「Search タブに戻るたびに再検索され、ripgrep の並列実行で結果順序が
+入れ替わる」ことが分かり、SearchPane は query 文字列が変わらない限り再取得しない
+(取得時点のスナップショットとして扱う) 設計に変更した。詳細は architecture.md の
+UI structure 節。
 
 ### Step 5: ドキュメントとコメントの追従
 
-- [ ] architecture.md の UI structure 節を更新:
+- [x] architecture.md の UI structure 節を更新:
       「右ペインは worktree ごとに作り直す (P20)」→「main / active / selected の
       instance を保持し、Activity の hidden で非表示にする。active でない worktree は
       従来通り切り替えで破棄される」。復帰時の effect 再実行の意味論と、
       「イベント購読で同期する state を足す時は hidden 中の聞き逃しを考慮する」
       「effect は復帰での再実行に耐えるように書く」の規律を 1〜2 行で残す
-- [ ] backlog.md の F51 を完了として外す (P22 は残す)
-- [ ] 確認: ドキュメントのみの変更なので rebuild 不要
+      (実際の描画集合は F51-keep-alive-shell-separation.md の通り
+      「main ∪ 訪問済み ∪ 選択中」に変わっているので、その内容で反映した)
+- [x] backlog.md の F51 を完了として外す (P22 は残す)
+- [x] 確認: ドキュメントのみの変更なので rebuild 不要
 
 ## スコープ外
 

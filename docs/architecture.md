@@ -1,6 +1,6 @@
 # Architecture Notes
 
-Last updated: 2026-08-03
+Last updated: 2026-08-08
 
 この文書は現在の Yuru のアーキテクチャをまとめる。
 実装の細部、型定義、処理手順の正確な姿はコードを正とする。
@@ -209,17 +209,37 @@ session lifecycle の操作は選択中 worktree の Terminal が担う。
 - main worktree: standalone terminal を開く操作
 
 右側の `Terminal`, `Files`, `Changes`, preview は選択中の task worktree に連動する。
-App が持つ選択状態は `worktreeId` だけで、右ペイン (SessionView) は worktree ごとに作り直す (P20)。
-「その worktree でいま表示している terminal runtime」は SessionView のローカル state で、
-session 未開始や終了直後は null になり、その間 Terminal は session start surface を出す。
+App が持つ選択状態は `worktreeId` だけである (P20)。右ペイン (SessionView) は選択が
+変わっても作り直さない。keep-alive の対象は「各 repo の main worktree (常時) ∪
+一度でも選択した worktree ∪ 選択中」で、対象外の instance だけが React `<Activity>`
+の hidden から実際に破棄される (worktree が repos 一覧から消えた時など)。表示状態は
+各コンポーネントの local state が持ち主のまま動かない。ExplorerPanel の `Files` /
+`Changes` / `Search` タブも同じ理由で 3 つとも keep-alive し、タブを離れても展開・
+検索語は残る。session の開始などの非同期操作が worktree を切り替えた後に完了しても、
+結果は操作元の (hidden な) instance にしか反映されず、表示中の worktree を引き戻す
+ことはない。
+
+hidden な instance は effect が止まる (polling・watcher・イベント購読が止まる)。
+visible に戻ると effect は再実行され、大半の state (git status、diff、Files の
+ディレクトリ一覧など) はこれで最新化される。新しい state を足す時はこの前提を踏まえる:
+
+- イベント購読でしか同期しない state は、hidden 中の聞き逃しに個別の対応が要る。
+  「その worktree でいま表示している terminal runtime」はこの例で、SessionView の
+  local state で追いかけるが exit イベントを hidden 中に聞き逃し得るため、表示直前に
+  props (`activeTerminalRuntimeIds`、その worktree で今生きている runtime の一覧) と
+  突き合わせて死んだ runtime を描画しないようにしている
+- code search の結果は「復帰時の再実行で最新化する」の対象に**しない**。取得した
+  時点のスナップショットとして扱い、query 文字列が変わらない限り再取得しない
+  (一般的なエディタの検索結果と同じ挙動に合わせた設計判断)。query 自体はユーザー
+  操作でしか変わらない state として保持する
+
 mount 時は primary session の active な terminal runtime があればそれを表示し、
-main worktree では standalone terminal を自動で開く (生きている runtime は IPC 側が再利用する)。
-session 操作 (resume / promote / 新規 session / standalone terminal 開始) も SessionView が担う。
-進行中の操作は worktree を切り替えると SessionView ごと破棄されるので、
-古い結果が表示を引き戻すことはない。
-session がなくても `Files`, `Changes`, preview は worktree に対して使える。
-terminal runtime の exit では worktree の選択を保ち、表示中 runtime だけを外して
-session start surface に戻す。main worktree でも自動では開き直さない。
+main worktree では standalone terminal を自動で開く (生きている runtime は IPC 側が
+再利用する)。session 操作 (resume / promote / 新規 session / standalone terminal
+開始) も SessionView が担う。session がなくても `Files`, `Changes`, preview は
+worktree に対して使える。terminal runtime の exit では worktree の選択を保ち、
+表示中 runtime だけを外して session start surface に戻す。main worktree でも
+自動では開き直さない。
 
 `Changes` は Git の層を `merge-base → HEAD → index → worktree` の重複しない区間に分け、
 `Committed → Staged → Unstaged` の順で表示する。merge conflict は例外として `Conflicted` を先頭に置く。
