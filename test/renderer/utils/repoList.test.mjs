@@ -32,7 +32,7 @@ function worktree(worktreeId, options = {}) {
     name: worktreeId,
     branch: worktreeId,
     headSha: "head",
-    primarySession: options.primarySession,
+    primarySessions: options.primarySessions ?? [],
     suggestedSessions: options.suggestedSessions ?? [],
     githubPullRequest: options.githubPullRequest,
     ...(options.isMainWorktree ? { isMainWorktree: true } : {}),
@@ -52,7 +52,7 @@ test("collectKeepAliveWorktrees は repo 順で main・訪問済み・選択中�
   const visitedSelected = worktree("visited-selected");
   const visitedOther = worktree("visited-other");
   const unvisitedActive = worktree("unvisited-active", {
-    primarySession: primarySession("runtime-unvisited-active"),
+    primarySessions: [primarySession("runtime-unvisited-active")],
   });
   const unvisited = worktree("unvisited");
   const repos = [
@@ -79,7 +79,7 @@ test("collectKeepAliveWorktrees は repo 順で main・訪問済み・選択中�
 
 test("collectKeepAliveWorktrees は選択中の main worktree を重複させない", () => {
   const duplicateMainId = worktree("repo-a-main", {
-    primarySession: primarySession("runtime-duplicate"),
+    primarySessions: [primarySession("runtime-duplicate")],
   });
   const repos = [repo("repo-a", []), repo("repo-b", [duplicateMainId])];
 
@@ -90,15 +90,16 @@ test("collectKeepAliveWorktrees は選択中の main worktree を重複させな
 });
 
 test("applySessionUpdate は該当 runtime の worktree と repo だけを差し替える", () => {
+  const secondary = primarySession("runtime-secondary");
   const target = worktree("target", {
-    primarySession: primarySession("runtime-target"),
+    primarySessions: [primarySession("runtime-target"), secondary],
     suggestedSessions: [suggestedSession("runtime-suggested")],
   });
   const sibling = worktree("sibling", {
-    primarySession: primarySession("runtime-sibling"),
+    primarySessions: [primarySession("runtime-sibling")],
   });
   const otherRepo = repo("repo-b", [
-    worktree("other", { primarySession: primarySession("runtime-other") }),
+    worktree("other", { primarySessions: [primarySession("runtime-other")] }),
   ]);
   const repos = [repo("repo-a", [target, sibling]), otherRepo];
 
@@ -113,9 +114,19 @@ test("applySessionUpdate は該当 runtime の worktree と repo だけを差し
   assert.strictEqual(next[0].mainWorktree, repos[0].mainWorktree);
   assert.notStrictEqual(next[0].taskWorktrees[0], target);
   assert.strictEqual(next[0].taskWorktrees[1], sibling);
-  assert.equal(next[0].taskWorktrees[0].primarySession.preview, "after");
-  assert.equal(next[0].taskWorktrees[0].primarySession.activityState, "working");
+  assert.equal(next[0].taskWorktrees[0].primarySessions[0].preview, "after");
+  assert.equal(next[0].taskWorktrees[0].primarySessions[0].activityState, "working");
+  assert.strictEqual(next[0].taskWorktrees[0].primarySessions[1], secondary);
   assert.strictEqual(next[0].taskWorktrees[0].suggestedSessions, target.suggestedSessions);
+});
+
+test("applySessionUpdate は暫定 UI の代表である先頭 primary だけを更新する", () => {
+  const target = worktree("target", {
+    primarySessions: [primarySession("runtime-primary"), primarySession("runtime-secondary")],
+  });
+  const repos = [repo("repo-a", [target])];
+
+  assert.strictEqual(applySessionUpdate(repos, "runtime-secondary", { preview: "after" }), repos);
 });
 
 test("applySessionUpdate は suggested session の更新にも同じ参照保存を行う", () => {
@@ -123,7 +134,7 @@ test("applySessionUpdate は suggested session の更新にも同じ参照保存
   const targetSuggested = suggestedSession("runtime-target");
   const untouchedSuggested = suggestedSession("runtime-untouched");
   const target = worktree("target", {
-    primarySession: primary,
+    primarySessions: [primary],
     suggestedSessions: [targetSuggested, untouchedSuggested],
   });
   const repos = [repo("repo-a", [target])];
@@ -131,7 +142,7 @@ test("applySessionUpdate は suggested session の更新にも同じ参照保存
   const next = applySessionUpdate(repos, "runtime-target", { preview: "after" });
 
   assert.notStrictEqual(next[0].taskWorktrees[0], target);
-  assert.strictEqual(next[0].taskWorktrees[0].primarySession, primary);
+  assert.strictEqual(next[0].taskWorktrees[0].primarySessions[0], primary);
   assert.notStrictEqual(next[0].taskWorktrees[0].suggestedSessions, target.suggestedSessions);
   assert.notStrictEqual(next[0].taskWorktrees[0].suggestedSessions[0], targetSuggested);
   assert.strictEqual(next[0].taskWorktrees[0].suggestedSessions[1], untouchedSuggested);
@@ -140,7 +151,7 @@ test("applySessionUpdate は suggested session の更新にも同じ参照保存
 
 test("applySessionUpdate は該当 runtime がなければ元の repos を返す", () => {
   const repos = [
-    repo("repo-a", [worktree("task", { primarySession: primarySession("runtime-existing") })]),
+    repo("repo-a", [worktree("task", { primarySessions: [primarySession("runtime-existing")] })]),
   ];
 
   assert.strictEqual(applySessionUpdate(repos, "runtime-missing", { preview: "after" }), repos);

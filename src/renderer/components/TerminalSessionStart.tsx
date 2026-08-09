@@ -36,6 +36,7 @@ export function TerminalSessionStart({
   onCreateSessionForWorktree,
   onOpenWorktreeTerminal,
 }: TerminalSessionStartProps) {
+  const primarySession = worktree?.primarySessions[0];
   return (
     <main className="terminal-container">
       <TerminalBar
@@ -48,9 +49,9 @@ export function TerminalSessionStart({
           <div className="terminal-session-start-panel">
             {worktree.isMainWorktree ? (
               <OpenTerminalSection onOpen={onOpenWorktreeTerminal} />
-            ) : worktree.primarySession ? (
+            ) : primarySession ? (
               <ResumePrimarySection
-                primarySession={worktree.primarySession}
+                primarySession={primarySession}
                 onResume={onResumePrimarySession}
                 onDetach={onDetachPrimarySession}
               />

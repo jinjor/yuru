@@ -161,50 +161,52 @@ function toWorktreeListItem(
 ): WorktreeListItem {
   const worktreePath = gitWorktree.path;
   const worktreeId = toWorktreeId(repoId, worktreePath);
-  const primarySession = metadataEntry?.primarySession;
-  const primarySessionKey = primarySession
-    ? toSessionKey(primarySession.provider, primarySession.providerSessionId)
-    : null;
-  const activeTerminalRuntimeId = primarySessionKey
-    ? (terminalRuntimeIdsBySessionKey?.get(primarySessionKey) ?? null)
-    : null;
-  const activeTerminalRuntime = primarySession
-    ? null
-    : (activeTerminalRuntimesByWorktreePath?.get(toWorktreePathKey(worktreePath)) ?? null);
-  const primaryActivityState = activeTerminalRuntimeId
-    ? (agentActivityStatesByTerminalRuntimeId?.get(activeTerminalRuntimeId) ?? "waiting")
-    : "waiting";
+  const primarySessions = metadataEntry?.primarySessions ?? [];
+  const primarySessionItems = primarySessions.map((primarySession): PrimarySessionListItem => {
+    const providerSessionKey = toSessionKey(
+      primarySession.provider,
+      primarySession.providerSessionId,
+    );
+    const activeTerminalRuntimeId = terminalRuntimeIdsBySessionKey?.get(providerSessionKey) ?? null;
+    return {
+      provider: primarySession.provider,
+      providerSessionKey,
+      activeTerminalRuntimeId,
+      state: activeTerminalRuntimeId ? "active" : "inactive",
+      activityState: activeTerminalRuntimeId
+        ? (agentActivityStatesByTerminalRuntimeId?.get(activeTerminalRuntimeId) ?? "waiting")
+        : "waiting",
+      preview: primarySessionPreviewsByKey?.get(providerSessionKey) ?? "",
+    };
+  });
+  const primarySessionKeys = new Set(
+    primarySessions.map((session) => toSessionKey(session.provider, session.providerSessionId)),
+  );
+  const activeTerminalRuntime =
+    primarySessions.length === 0
+      ? (activeTerminalRuntimesByWorktreePath?.get(toWorktreePathKey(worktreePath)) ?? null)
+      : null;
   const activeTerminalActivityState = activeTerminalRuntime
     ? (agentActivityStatesByTerminalRuntimeId?.get(activeTerminalRuntime.terminalRuntimeId) ??
       "waiting")
     : "waiting";
   const suggestedSessionItems = toSuggestedSessionListItems(
     suggestedSessions,
-    new Set([primarySessionKey].filter((key) => key !== null)),
+    primarySessionKeys,
     terminalRuntimeIdsBySessionKey,
     primarySessionPreviewsByKey,
     agentActivityStatesByTerminalRuntimeId,
   );
-  const primarySessionItem: PrimarySessionListItem | undefined =
-    primarySession && primarySessionKey
-      ? {
-          provider: primarySession.provider,
-          providerSessionKey: primarySessionKey,
-          activeTerminalRuntimeId,
-          state: activeTerminalRuntimeId ? "active" : "inactive",
-          activityState: primaryActivityState,
-          preview: primarySessionPreviewsByKey?.get(primarySessionKey) ?? "",
-        }
-      : activeTerminalRuntime
-        ? {
-            provider: activeTerminalRuntime.provider,
-            providerSessionKey: null,
-            activeTerminalRuntimeId: activeTerminalRuntime.terminalRuntimeId,
-            state: "active",
-            activityState: activeTerminalActivityState,
-            preview: "",
-          }
-        : undefined;
+  if (activeTerminalRuntime) {
+    primarySessionItems.push({
+      provider: activeTerminalRuntime.provider,
+      providerSessionKey: null,
+      activeTerminalRuntimeId: activeTerminalRuntime.terminalRuntimeId,
+      state: "active",
+      activityState: activeTerminalActivityState,
+      preview: "",
+    });
+  }
 
   const item: WorktreeListItem = {
     worktreeId,
@@ -213,7 +215,7 @@ function toWorktreeListItem(
     branch: gitWorktree.branch,
     headSha: gitWorktree.headSha,
     headCommittedAt: gitWorktree.headCommittedAt,
-    primarySession: primarySessionItem,
+    primarySessions: primarySessionItems,
     suggestedSessions: suggestedSessionItems,
     activeTerminalRuntimeIds: [
       ...(allTerminalRuntimeIdsByWorktreePath?.get(toWorktreePathKey(worktreePath)) ?? []),

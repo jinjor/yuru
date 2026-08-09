@@ -294,7 +294,7 @@ async function readKeepAliveIds(window: Page): Promise<{
     const repo = (await window.electronAPI.getRepos())[0];
     const idle = repo?.taskWorktrees.find((worktree) => worktree.name === "keep-alive-idle");
     const active = repo?.taskWorktrees.find((worktree) => worktree.name === "keep-alive-active");
-    const runtime = active?.primarySession?.activeTerminalRuntimeId;
+    const runtime = active?.primarySessions[0]?.activeTerminalRuntimeId;
     if (!repo || !idle || !active || !runtime) {
       throw new Error("keep-alive E2E worktrees are not active");
     }

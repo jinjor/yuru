@@ -1,6 +1,6 @@
 # Architecture Notes
 
-Last updated: 2026-08-08
+Last updated: 2026-08-09
 
 この文書は現在の Yuru のアーキテクチャをまとめる。
 実装の細部、型定義、処理手順の正確な姿はコードを正とする。
@@ -17,8 +17,8 @@ Last updated: 2026-08-08
   - 現在位置は `worktreePath` で表す
 - `primary session`
   - task worktree に attach された session
-  - 1 task worktree に最大 1 つだけ存在する
-  - 1 provider session は同時に複数 task worktree の primary にはならない // これは緩めてもいいかも
+  - 1 task worktree に複数存在でき、attach 順を保持する
+  - 1 provider session は同時に複数 task worktree の primary にはならない
 - `suggested session`
   - Yuru 外で作られ、task worktree に紐づいていると推測される session
   - provider store から推測した weak candidate
@@ -73,16 +73,20 @@ metadata は通常 `~/.yuru/metadata.json` に置く。
     {
       "repoId": "uuid",
       "worktreePath": "/path/to/worktree",
-      "primarySession": {
-        "provider": "codex",
-        "providerSessionId": "..."
-      }
+      "primarySessions": [
+        {
+          "provider": "codex",
+          "providerSessionId": "..."
+        }
+      ]
     }
   ]
 }
 ```
 
-`primarySession` は必須ではない。
+`primarySessions` は strong link がなければ空配列になる。
+旧 schema の `primarySession` は読み込み時に単要素配列へ変換し、以後の書き込みは
+`primarySessions` だけを使う。
 Git 上には存在するが、まだ Yuru metadata に strong link を持たない worktree もありうる。
 
 ファイルのレビュー記録は metadata とライフサイクル・書き込み頻度が異なるため、
@@ -100,7 +104,7 @@ main worktree は task worktree として表示しない。
 task worktree は Git の管理ディレクトリの作成日時が古い順に表示する。
 その上に Yuru metadata、provider store、active terminal runtime を重ねる。
 
-- metadata の `primarySession` が有効なら、その session を task worktree の primary として表示する
+- metadata の `primarySessions` が有効なら、それらを task worktree の primary として扱う
 - provider store の hint から worktree 配下の session を推測できる場合は suggested session として表示する
 - active terminal runtime があれば active として表示する
 - metadata にない Git worktree も、primary なしの task worktree として表示する
@@ -120,8 +124,8 @@ worktree session の create / resume は、Claude / Codex とも cwd = repo root
 PTY 内で `cd` しても、`Files`, `Changes`, diff の作業ルートは runtime cwd ではなく選択中 task worktree の `worktreePath` で決まる。
 
 worktree の作成と provider session の開始は別の操作である (F43)。
-session が紐づいていない task worktree に対して新規 session を開始すると、
-provider session id が起動時に取れる場合はその場で primary に attach し、遅れて分かる provider は session id 解決後に attach する。
+task worktree に対して新規 session を開始すると、provider session id が起動時に取れる場合は
+その場で primary の末尾に attach し、遅れて分かる provider は session id 解決後に attach する。
 初回起動時だけ worktree context を hidden prompt として注入する。
 この prompt は「provider session は repo root で起動しているが、実際の作業場所は task worktree である」ことを明示し、ファイル操作・コマンド実行・build/test は `worktreePath` で行い、回答中のファイルパスは `worktreePath` 基準の相対パスまたは絶対パスで記述するよう指示する。
 
@@ -195,7 +199,7 @@ worktree context prompt は `~/.yuru/worktree-context-prompt.txt` で差し替�
 左カラムは `repo > task worktree` を基本構造にする。
 repo row は task worktree が 0 件でも表示し、新規 worktree session の起点になる。
 
-task worktree row は branch、primary session の状態、provider、preview、suggested session の存在を表示する。
+task worktree row は branch、先頭の primary session の状態、provider、preview、suggested session の存在を表示する。
 row のクリックは常に worktree の選択で、session やプロセスの起動は行わない (F43)。
 row に残る操作は選択と `︙ → Remove worktree` (worktree lifecycle) だけである。
 
@@ -204,8 +208,8 @@ session lifecycle の操作は選択中 worktree の Terminal が担う。
 
 - primary がない worktree: suggested session の一覧 (クリックで primary へ昇格して resume) と、
   新規 session (Claude / Codex) の選択肢
-- inactive primary がある worktree: primary の preview と resume / detach 操作。
-  detach すると primary なしの選択肢に戻り、そこが別 session を始める導線になる
+- inactive primary がある worktree: 先頭 primary の preview と resume / detach 操作。
+  detach すると次の primary が代表になり、残っていなければ primary なしの選択肢に戻る
 - main worktree: standalone terminal を開く操作
 
 右側の `Terminal`, `Files`, `Changes`, preview は選択中の task worktree に連動する。
@@ -233,7 +237,8 @@ visible に戻ると effect は再実行され、大半の state (git status、d
   (一般的なエディタの検索結果と同じ挙動に合わせた設計判断)。query 自体はユーザー
   操作でしか変わらない state として保持する
 
-mount 時は primary session の active な terminal runtime があればそれを表示し、
+現時点の renderer は複数 primary のうち先頭だけを代表として表示する。mount 時は先頭の
+primary session の active な terminal runtime があればそれを表示し、
 main worktree では standalone terminal を自動で開く (生きている runtime は IPC 側が
 再利用する)。session 操作 (resume / promote / 新規 session / standalone terminal
 開始) も SessionView が担う。session がなくても `Files`, `Changes`, preview は

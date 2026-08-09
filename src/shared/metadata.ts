@@ -27,7 +27,7 @@ export interface SuggestedSessionListItem {
 export interface TaskWorktreeMetadata {
   repoId: string;
   worktreePath: string;
-  primarySession?: PrimarySessionMetadata;
+  primarySessions: PrimarySessionMetadata[];
 }
 
 export type WorktreeSessionState = "active" | "inactive";
@@ -51,7 +51,7 @@ export interface WorktreeListItem {
   headCommittedAt?: number;
   isMainWorktree?: boolean;
   githubPullRequest?: GitHubPullRequest | null;
-  primarySession?: PrimarySessionListItem;
+  primarySessions: PrimarySessionListItem[];
   suggestedSessions: SuggestedSessionListItem[];
   // この worktree を cwd とする、今生きている全 terminal runtime (provider の有無を問わない)。
   // renderer 側で「表示中の runtime がまだ生きているか」を props から判定するために使う

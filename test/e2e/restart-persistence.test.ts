@@ -53,8 +53,8 @@ test("起動時 maintenance は stale な task worktree metadata だけを削除
     await writeMetadata(context, {
       repos: [{ id: "repo-1", repoPath: repoDir }],
       taskWorktrees: [
-        { repoId: "repo-1", worktreePath: liveWorktree },
-        { repoId: "repo-1", worktreePath: staleWorktree },
+        { repoId: "repo-1", worktreePath: liveWorktree, primarySessions: [] },
+        { repoId: "repo-1", worktreePath: staleWorktree, primarySessions: [] },
       ],
     });
 

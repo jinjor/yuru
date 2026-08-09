@@ -40,7 +40,7 @@ export function upsertTaskWorktree(repoId: string, worktreePath: string): void {
     existing.repoId = repoId;
     existing.worktreePath = worktreePath;
   } else {
-    metadata.taskWorktrees.push({ repoId, worktreePath });
+    metadata.taskWorktrees.push({ repoId, worktreePath, primarySessions: [] });
   }
   saveMetadata(metadata);
 }
@@ -58,16 +58,15 @@ export function attachPrimarySessionByPath(
     return;
   }
   for (const entry of metadata.taskWorktrees) {
-    if (
-      entry !== target &&
-      entry.primarySession &&
-      entry.primarySession.provider === primary.provider &&
-      entry.primarySession.providerSessionId === primary.providerSessionId
-    ) {
-      delete entry.primarySession;
+    if (entry !== target) {
+      entry.primarySessions = entry.primarySessions.filter(
+        (session) => !samePrimarySession(session, primary),
+      );
     }
   }
-  target.primarySession = primary;
+  if (!target.primarySessions.some((session) => samePrimarySession(session, primary))) {
+    target.primarySessions.push(primary);
+  }
   saveMetadata(metadata);
 }
 
@@ -80,16 +79,22 @@ export function detachPrimarySessionByPath(
   const target = metadata.taskWorktrees.find(
     (entry) => toWorktreePathKey(entry.worktreePath) === worktreePathKey,
   );
-  if (
-    !target?.primarySession ||
-    target.primarySession.provider !== primary.provider ||
-    target.primarySession.providerSessionId !== primary.providerSessionId
-  ) {
+  if (!target) {
     return;
   }
 
-  delete target.primarySession;
+  const primarySessions = target.primarySessions.filter(
+    (session) => !samePrimarySession(session, primary),
+  );
+  if (primarySessions.length === target.primarySessions.length) {
+    return;
+  }
+  target.primarySessions = primarySessions;
   saveMetadata(metadata);
+}
+
+function samePrimarySession(a: PrimarySessionMetadata, b: PrimarySessionMetadata): boolean {
+  return a.provider === b.provider && a.providerSessionId === b.providerSessionId;
 }
 
 export function removeTaskWorktreeByPath(worktreePath: string): void {
@@ -154,6 +159,7 @@ function parseTaskWorktree(value: unknown): TaskWorktreeMetadata {
   const maybe = value as {
     repoId?: unknown;
     worktreePath?: unknown;
+    primarySessions?: unknown;
     primarySession?: unknown;
   };
   if (typeof maybe.repoId !== "string" || typeof maybe.worktreePath !== "string") {
@@ -162,9 +168,15 @@ function parseTaskWorktree(value: unknown): TaskWorktreeMetadata {
   const entry: TaskWorktreeMetadata = {
     repoId: maybe.repoId,
     worktreePath: maybe.worktreePath,
+    primarySessions: [],
   };
-  if (maybe.primarySession !== undefined) {
-    entry.primarySession = parsePrimarySession(maybe.primarySession);
+  if (maybe.primarySessions !== undefined) {
+    if (!Array.isArray(maybe.primarySessions)) {
+      throw new Error("Yuru metadata taskWorktree primarySessions must be an array.");
+    }
+    entry.primarySessions = maybe.primarySessions.map(parsePrimarySession);
+  } else if (maybe.primarySession !== undefined) {
+    entry.primarySessions = [parsePrimarySession(maybe.primarySession)];
   }
   return entry;
 }

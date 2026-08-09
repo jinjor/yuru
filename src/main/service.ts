@@ -1496,24 +1496,23 @@ export class YuruService {
         entry.repoId === worktree.repoId &&
         path.resolve(entry.worktreePath) === path.resolve(worktree.worktreePath),
     );
-    if (!taskWorktree?.primarySession) {
+    if (!taskWorktree) {
       return null;
     }
 
-    const primarySessionKey = toSessionKey(
-      taskWorktree.primarySession.provider,
-      taskWorktree.primarySession.providerSessionId,
+    const primarySession = taskWorktree.primarySessions.find(
+      (session) => toSessionKey(session.provider, session.providerSessionId) === providerSessionKey,
     );
-    if (primarySessionKey !== providerSessionKey) {
+    if (!primarySession) {
       return null;
     }
 
     return {
-      provider: taskWorktree.primarySession.provider,
-      providerSessionId: taskWorktree.primarySession.providerSessionId,
+      provider: primarySession.provider,
+      providerSessionId: primarySession.providerSessionId,
       // Entries written before cwd was recorded predate promote support and were
       // all created at the repo root, so fall back to it.
-      cwd: taskWorktree.primarySession.cwd ?? worktree.repoPath,
+      cwd: primarySession.cwd ?? worktree.repoPath,
       project: taskWorktree.worktreePath,
     };
   }

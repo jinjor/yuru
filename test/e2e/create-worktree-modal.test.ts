@@ -99,7 +99,7 @@ test("provider を選ばず worktree を作成でき、Terminal に session の�
     expect(metadata.taskWorktrees.map((entry) => entry.worktreePath)).toEqual([
       path.join(repoDir, ".yuru", "worktrees", "feature-f43-create"),
     ]);
-    expect(metadata.taskWorktrees[0].primarySession).toBeUndefined();
+    expect(metadata.taskWorktrees[0].primarySessions).toEqual([]);
   } finally {
     await closeYuru(app);
     await context.cleanup();

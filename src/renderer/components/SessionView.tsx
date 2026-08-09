@@ -81,13 +81,13 @@ export const SessionView = memo(function SessionView({
     (window.__yuruSessionViewRenderCounts[worktreeId] ?? 0) + 1;
 
   const sessionViewColumnRef = useRef<HTMLDivElement>(null);
-  // この SessionView 内の操作で明示的に選んだ terminal runtime。active primary は repos が
-  // source of truth なので state に複製せず、下の displayedTerminalRuntimeId で導出する。
+  // この SessionView 内の操作で明示的に選んだ terminal runtime。先頭 primary の active
+  // runtime は repos が source of truth なので state に複製せず、下で導出する。
   const [selectedTerminalRuntimeId, setSelectedTerminalRuntimeId] =
     useState<TerminalRuntimeId | null>(null);
   const activeTerminalRuntimeIds = worktree?.activeTerminalRuntimeIds;
-  const primaryTerminalRuntimeId = worktree?.primarySession?.activeTerminalRuntimeId ?? null;
-  // 現在の明示的な選択が生きていれば維持し、なければ active primary を表示する。
+  const primaryTerminalRuntimeId = worktree?.primarySessions[0]?.activeTerminalRuntimeId ?? null;
+  // 現在の明示的な選択が生きていれば維持し、なければ先頭の active primary を表示する。
   // どちらの生死も main が返す activeTerminalRuntimeIds だけで判定するため、hidden 中の
   // exit や外部 API からの開始も、visible に戻った時の最新 props だけで解決できる。
   const displayedTerminalRuntimeId =

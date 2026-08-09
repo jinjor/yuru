@@ -68,7 +68,27 @@ test("parseMetadata は repos 未定義でも空配列を返す", () => {
   assert.deepEqual(parseMetadata({}), { repos: [], taskWorktrees: [] });
 });
 
-test("parseMetadata は taskWorktrees の primarySession を読み取る", () => {
+test("parseMetadata は taskWorktrees の primarySessions を読み取る", () => {
+  const result = parseMetadata({
+    repos: [],
+    taskWorktrees: [
+      {
+        repoId: "repo-1",
+        worktreePath: "/tmp/wt",
+        primarySessions: [
+          { provider: "claude", providerSessionId: "abc" },
+          { provider: "kimi", providerSessionId: "session_def" },
+        ],
+      },
+    ],
+  });
+  assert.deepEqual(result.taskWorktrees[0].primarySessions, [
+    { provider: "claude", providerSessionId: "abc" },
+    { provider: "kimi", providerSessionId: "session_def" },
+  ]);
+});
+
+test("parseMetadata は旧 primarySession を単要素配列に migrate する", () => {
   const result = parseMetadata({
     repos: [],
     taskWorktrees: [
@@ -77,21 +97,12 @@ test("parseMetadata は taskWorktrees の primarySession を読み取る", () =>
         worktreePath: "/tmp/wt",
         primarySession: { provider: "claude", providerSessionId: "abc" },
       },
-      {
-        repoId: "repo-1",
-        worktreePath: "/tmp/wt2",
-        primarySession: { provider: "kimi", providerSessionId: "session_def" },
-      },
     ],
   });
-  assert.deepEqual(result.taskWorktrees[0].primarySession, {
-    provider: "claude",
-    providerSessionId: "abc",
-  });
-  assert.deepEqual(result.taskWorktrees[1].primarySession, {
-    provider: "kimi",
-    providerSessionId: "session_def",
-  });
+
+  assert.deepEqual(result.taskWorktrees[0].primarySessions, [
+    { provider: "claude", providerSessionId: "abc" },
+  ]);
 });
 
 test("parseMetadata は不正な provider を弾く", () => {
@@ -102,7 +113,7 @@ test("parseMetadata は不正な provider を弾く", () => {
         {
           repoId: "repo-1",
           worktreePath: "/tmp/wt",
-          primarySession: { provider: "unknown", providerSessionId: "abc" },
+          primarySessions: [{ provider: "unknown", providerSessionId: "abc" }],
         },
       ],
     }),
@@ -111,6 +122,14 @@ test("parseMetadata は不正な provider を弾く", () => {
 
 test("parseMetadata は型違いの repos を弾く", () => {
   assert.throws(() => parseMetadata({ repos: "not-array" }));
+});
+
+test("parseMetadata は配列ではない primarySessions を弾く", () => {
+  assert.throws(() =>
+    parseMetadata({
+      taskWorktrees: [{ repoId: "repo-1", worktreePath: "/tmp/wt", primarySessions: {} }],
+    }),
+  );
 });
 
 test("findRepoByPath は登録済みの repo を返す", () => {
@@ -141,7 +160,7 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
       {
         repoId: "repo-1",
         worktreePath: taskA,
-        primarySession: { provider: "codex", providerSessionId: "codex-1" },
+        primarySessions: [{ provider: "codex", providerSessionId: "codex-1" }],
       },
       {
         repoId: "repo-1",
@@ -150,7 +169,7 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
       {
         repoId: "repo-1",
         worktreePath: missingTask,
-        primarySession: { provider: "claude", providerSessionId: "claude-1" },
+        primarySessions: [{ provider: "claude", providerSessionId: "claude-1" }],
       },
     ],
   });
@@ -161,7 +180,11 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
         [
           { path: taskA, branch: "task-a", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" },
           { path: taskB, branch: "task-b", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" },
-          { path: gitOnly, branch: "git-only", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" },
+          {
+            path: gitOnly,
+            branch: "git-only",
+            headSha: "abc1234abc1234abc1234abc1234abc1234abc12",
+          },
         ],
       ],
       [repoB, []],
@@ -180,7 +203,7 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
         headSha: null,
         headCommittedAt: undefined,
         isMainWorktree: true,
-        primarySession: undefined,
+        primarySessions: [],
         suggestedSessions: [],
         activeTerminalRuntimeIds: [],
       },
@@ -192,14 +215,16 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
           branch: "task-a",
           headSha: "abc1234abc1234abc1234abc1234abc1234abc12",
           headCommittedAt: undefined,
-          primarySession: {
-            provider: "codex",
-            providerSessionKey: toSessionKey("codex", "codex-1"),
-            activeTerminalRuntimeId: null,
-            state: "inactive",
-            activityState: "waiting",
-            preview: "",
-          },
+          primarySessions: [
+            {
+              provider: "codex",
+              providerSessionKey: toSessionKey("codex", "codex-1"),
+              activeTerminalRuntimeId: null,
+              state: "inactive",
+              activityState: "waiting",
+              preview: "",
+            },
+          ],
           suggestedSessions: [],
           activeTerminalRuntimeIds: [],
         },
@@ -210,7 +235,7 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
           branch: "task-b",
           headSha: "abc1234abc1234abc1234abc1234abc1234abc12",
           headCommittedAt: undefined,
-          primarySession: undefined,
+          primarySessions: [],
           suggestedSessions: [],
           activeTerminalRuntimeIds: [],
         },
@@ -221,7 +246,7 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
           branch: "git-only",
           headSha: "abc1234abc1234abc1234abc1234abc1234abc12",
           headCommittedAt: undefined,
-          primarySession: undefined,
+          primarySessions: [],
           suggestedSessions: [],
           activeTerminalRuntimeIds: [],
         },
@@ -238,7 +263,7 @@ test("loadRepoList は Git worktree に metadata の primary 状態を重ねて�
         headSha: null,
         headCommittedAt: undefined,
         isMainWorktree: true,
-        primarySession: undefined,
+        primarySessions: [],
         suggestedSessions: [],
         activeTerminalRuntimeIds: [],
       },
@@ -268,7 +293,7 @@ test("loadRepoList は main worktree を repo item に返す", async () => {
   assert.equal(result[0].mainWorktree.branch, "main");
   assert.equal(result[0].mainWorktree.headCommittedAt, Date.parse(committedAt));
   assert.equal(result[0].mainWorktree.isMainWorktree, true);
-  assert.equal(result[0].mainWorktree.primarySession, undefined);
+  assert.equal(result[0].mainWorktree.primarySessions[0], undefined);
   assert.deepEqual(result[0].mainWorktree.suggestedSessions, []);
 });
 
@@ -360,7 +385,7 @@ test("loadRepoList は valid repo の worktree list 失敗を握りつぶさな�
   );
 });
 
-test("loadRepoList は active session key と一致する primary を active として返す", async () => {
+test("loadRepoList は各 primary を session key と一致する runtime の状態で返す", async () => {
   const repoPath = createGitRepo("repo-active-primary");
   const taskA = path.join(repoPath, ".yuru/worktrees/task-a");
   const taskB = path.join(repoPath, ".yuru/worktrees/task-b");
@@ -370,12 +395,15 @@ test("loadRepoList は active session key と一致する primary を active と
       {
         repoId: "repo-1",
         worktreePath: taskA,
-        primarySession: { provider: "codex", providerSessionId: "codex-1" },
+        primarySessions: [
+          { provider: "codex", providerSessionId: "codex-1" },
+          { provider: "claude", providerSessionId: "claude-2" },
+        ],
       },
       {
         repoId: "repo-1",
         worktreePath: taskB,
-        primarySession: { provider: "claude", providerSessionId: "claude-1" },
+        primarySessions: [{ provider: "claude", providerSessionId: "claude-1" }],
       },
     ],
   });
@@ -392,20 +420,42 @@ test("loadRepoList は active session key と一致する primary を active と
   );
 
   const result = await loadRepoList(
-    new Map([[toSessionKey("codex", "codex-1"), "runtime-1"]]),
+    new Map([
+      [toSessionKey("codex", "codex-1"), "runtime-1"],
+      [toSessionKey("claude", "claude-2"), "runtime-2"],
+    ]),
     listGitWorktrees,
+    new Map([
+      [toSessionKey("codex", "codex-1"), "first preview"],
+      [toSessionKey("claude", "claude-2"), "second preview"],
+    ]),
   );
   const taskWorktrees = result[0].taskWorktrees;
-  assert.equal(taskWorktrees[0].primarySession.state, "active");
-  assert.equal(taskWorktrees[0].primarySession.providerSessionKey, toSessionKey("codex", "codex-1"));
-  assert.equal(taskWorktrees[0].primarySession.activeTerminalRuntimeId, "runtime-1");
-  assert.equal(taskWorktrees[0].primarySession.activityState, "waiting");
-  assert.equal(taskWorktrees[0].primarySession.preview, "");
-  assert.equal(taskWorktrees[1].primarySession.state, "inactive");
-  assert.equal(taskWorktrees[1].primarySession.providerSessionKey, toSessionKey("claude", "claude-1"));
-  assert.equal(taskWorktrees[1].primarySession.activeTerminalRuntimeId, null);
-  assert.equal(taskWorktrees[1].primarySession.activityState, "waiting");
-  assert.equal(taskWorktrees[1].primarySession.preview, "");
+  assert.equal(taskWorktrees[0].primarySessions.length, 2);
+  assert.equal(taskWorktrees[0].primarySessions[0].state, "active");
+  assert.equal(
+    taskWorktrees[0].primarySessions[0].providerSessionKey,
+    toSessionKey("codex", "codex-1"),
+  );
+  assert.equal(taskWorktrees[0].primarySessions[0].activeTerminalRuntimeId, "runtime-1");
+  assert.equal(taskWorktrees[0].primarySessions[0].activityState, "waiting");
+  assert.equal(taskWorktrees[0].primarySessions[0].preview, "first preview");
+  assert.equal(taskWorktrees[0].primarySessions[1].state, "active");
+  assert.equal(
+    taskWorktrees[0].primarySessions[1].providerSessionKey,
+    toSessionKey("claude", "claude-2"),
+  );
+  assert.equal(taskWorktrees[0].primarySessions[1].activeTerminalRuntimeId, "runtime-2");
+  assert.equal(taskWorktrees[0].primarySessions[1].activityState, "waiting");
+  assert.equal(taskWorktrees[0].primarySessions[1].preview, "second preview");
+  assert.equal(taskWorktrees[1].primarySessions[0].state, "inactive");
+  assert.equal(
+    taskWorktrees[1].primarySessions[0].providerSessionKey,
+    toSessionKey("claude", "claude-1"),
+  );
+  assert.equal(taskWorktrees[1].primarySessions[0].activeTerminalRuntimeId, null);
+  assert.equal(taskWorktrees[1].primarySessions[0].activityState, "waiting");
+  assert.equal(taskWorktrees[1].primarySessions[0].preview, "");
 });
 
 test("loadRepoList は active primary session の作業状態を返す", async () => {
@@ -418,7 +468,7 @@ test("loadRepoList は active primary session の作業状態を返す", async (
       {
         repoId: "repo-1",
         worktreePath,
-        primarySession: { provider: "codex", providerSessionId: "codex-1" },
+        primarySessions: [{ provider: "codex", providerSessionId: "codex-1" }],
       },
     ],
   });
@@ -447,7 +497,7 @@ test("loadRepoList は active primary session の作業状態を返す", async (
     new Map([["runtime-1", "working"]]),
   );
 
-  assert.equal(result[0].taskWorktrees[0].primarySession.activityState, "working");
+  assert.equal(result[0].taskWorktrees[0].primarySessions[0].activityState, "working");
 });
 
 test("loadRepoList は metadata primary がない worktree に active terminal runtime を合成しない", async () => {
@@ -482,7 +532,7 @@ test("loadRepoList は metadata primary がない worktree に active terminal r
     listGitWorktrees,
   );
 
-  assert.equal(result[0].taskWorktrees[0].primarySession, undefined);
+  assert.equal(result[0].taskWorktrees[0].primarySessions[0], undefined);
 });
 
 test("loadRepoList は primary 未確定の active terminal runtime を worktree に重ねる", async () => {
@@ -501,7 +551,13 @@ test("loadRepoList は primary 未確定の active terminal runtime を worktree
     new Map([
       [
         repoPath,
-        [{ path: worktreePath, branch: "task-a", headSha: "abc1234abc1234abc1234abc1234abc1234abc12" }],
+        [
+          {
+            path: worktreePath,
+            branch: "task-a",
+            headSha: "abc1234abc1234abc1234abc1234abc1234abc12",
+          },
+        ],
       ],
     ]),
   );
@@ -522,7 +578,7 @@ test("loadRepoList は primary 未確定の active terminal runtime を worktree
     ]),
   );
 
-  assert.deepEqual(result[0].taskWorktrees[0].primarySession, {
+  assert.deepEqual(result[0].taskWorktrees[0].primarySessions[0], {
     provider: "codex",
     providerSessionKey: null,
     activeTerminalRuntimeId: "runtime-1",
@@ -541,7 +597,7 @@ test("loadRepoList は primary session の preview を返す", async () => {
       {
         repoId: "repo-1",
         worktreePath,
-        primarySession: { provider: "codex", providerSessionId: "codex-1" },
+        primarySessions: [{ provider: "codex", providerSessionId: "codex-1" }],
       },
     ],
   });
@@ -566,7 +622,7 @@ test("loadRepoList は primary session の preview を返す", async () => {
     new Map([[toSessionKey("codex", "codex-1"), "preview text"]]),
   );
 
-  assert.equal(result[0].taskWorktrees[0].primarySession.preview, "preview text");
+  assert.equal(result[0].taskWorktrees[0].primarySessions[0].preview, "preview text");
 });
 
 test("loadRepoList は worktree branch の GitHub PR を返す", async () => {
@@ -808,7 +864,7 @@ test("loadRepoList は複数の active suggested session をそれぞれ active 
   ]);
 });
 
-test("loadRepoList は primary と同じ session を suggested から除外する", async () => {
+test("loadRepoList は全 primary と同じ session を suggested から除外する", async () => {
   const repoPath = createGitRepo("repo-primary-excludes-suggested");
   const worktreePath = path.join(repoPath, ".yuru/worktrees/task-a");
   seed({
@@ -817,7 +873,10 @@ test("loadRepoList は primary と同じ session を suggested から除外す�
       {
         repoId: "repo-1",
         worktreePath,
-        primarySession: { provider: "claude", providerSessionId: "claude-1" },
+        primarySessions: [
+          { provider: "claude", providerSessionId: "claude-1" },
+          { provider: "codex", providerSessionId: "codex-1" },
+        ],
       },
     ],
   });
@@ -849,12 +908,30 @@ test("loadRepoList は primary と同じ session を suggested から除外す�
               provider: "claude",
               providerSessionId: "claude-1",
             },
+            {
+              provider: "codex",
+              providerSessionId: "codex-1",
+            },
+            {
+              provider: "kimi",
+              providerSessionId: "kimi-1",
+            },
           ],
         ],
       ]),
   );
 
-  assert.deepEqual(result[0].taskWorktrees[0].suggestedSessions, []);
+  assert.deepEqual(result[0].taskWorktrees[0].suggestedSessions, [
+    {
+      provider: "kimi",
+      providerSessionKey: toSessionKey("kimi", "kimi-1"),
+      activeTerminalRuntimeId: null,
+      state: "inactive",
+      activityState: "waiting",
+      preview: "",
+      timestamp: 0,
+    },
+  ]);
 });
 
 test("loadRepoList は suggested worktree session を並び替えずに返す", async () => {
@@ -917,20 +994,22 @@ test("cleanupStaleTaskWorktrees は list に成功した repo の stale task wor
       {
         repoId: "repo-1",
         worktreePath: "/tmp/repo-a/worktrees/keep/.",
-        primarySession: { provider: "codex", providerSessionId: "codex-1" },
+        primarySessions: [{ provider: "codex", providerSessionId: "codex-1" }],
       },
       {
         repoId: "repo-1",
         worktreePath: "/tmp/repo-a/worktrees/stale",
-        primarySession: { provider: "claude", providerSessionId: "claude-1" },
+        primarySessions: [{ provider: "claude", providerSessionId: "claude-1" }],
       },
       {
         repoId: "repo-2",
         worktreePath: "/tmp/repo-b/worktrees/stale",
+        primarySessions: [],
       },
       {
         repoId: "unknown-repo",
         worktreePath: "/tmp/unknown/worktrees/stale",
+        primarySessions: [],
       },
     ],
   });
@@ -949,9 +1028,10 @@ test("cleanupStaleTaskWorktrees は list に成功した repo の stale task wor
   });
 
   assert.equal(result.removedTaskWorktreeCount, 1);
-  assert.deepEqual(result.skippedRepos.map(({ repoId, repoPath }) => ({ repoId, repoPath })), [
-    { repoId: "repo-2", repoPath: "/tmp/repo-b" },
-  ]);
+  assert.deepEqual(
+    result.skippedRepos.map(({ repoId, repoPath }) => ({ repoId, repoPath })),
+    [{ repoId: "repo-2", repoPath: "/tmp/repo-b" }],
+  );
   assert.equal(result.skippedRepos[0].error instanceof Error, true);
   assert.deepEqual(loadMetadata(), {
     repos: [
@@ -962,15 +1042,17 @@ test("cleanupStaleTaskWorktrees は list に成功した repo の stale task wor
       {
         repoId: "repo-1",
         worktreePath: "/tmp/repo-a/worktrees/keep/.",
-        primarySession: { provider: "codex", providerSessionId: "codex-1" },
+        primarySessions: [{ provider: "codex", providerSessionId: "codex-1" }],
       },
       {
         repoId: "repo-2",
         worktreePath: "/tmp/repo-b/worktrees/stale",
+        primarySessions: [],
       },
       {
         repoId: "unknown-repo",
         worktreePath: "/tmp/unknown/worktrees/stale",
+        primarySessions: [],
       },
     ],
   });
@@ -983,7 +1065,7 @@ test("cleanupStaleTaskWorktrees は list に失敗した repo の metadata を�
       {
         repoId: "repo-1",
         worktreePath: "/tmp/repo-a/worktrees/stale",
-        primarySession: { provider: "claude", providerSessionId: "claude-1" },
+        primarySessions: [{ provider: "claude", providerSessionId: "claude-1" }],
       },
     ],
   });
@@ -993,15 +1075,16 @@ test("cleanupStaleTaskWorktrees は list に失敗した repo の metadata を�
   });
 
   assert.equal(result.removedTaskWorktreeCount, 0);
-  assert.deepEqual(result.skippedRepos.map(({ repoId, repoPath }) => ({ repoId, repoPath })), [
-    { repoId: "repo-1", repoPath: "/tmp/repo-a" },
-  ]);
+  assert.deepEqual(
+    result.skippedRepos.map(({ repoId, repoPath }) => ({ repoId, repoPath })),
+    [{ repoId: "repo-1", repoPath: "/tmp/repo-a" }],
+  );
   assert.equal(result.skippedRepos[0].error instanceof Error, true);
   assert.deepEqual(loadMetadata().taskWorktrees, [
     {
       repoId: "repo-1",
       worktreePath: "/tmp/repo-a/worktrees/stale",
-      primarySession: { provider: "claude", providerSessionId: "claude-1" },
+      primarySessions: [{ provider: "claude", providerSessionId: "claude-1" }],
     },
   ]);
 });
@@ -1014,6 +1097,7 @@ test("upsertTaskWorktree は新規登録する", () => {
   assert.equal(taskWorktrees.length, 1);
   assert.equal(taskWorktrees[0].repoId, "repo-1");
   assert.equal(taskWorktrees[0].worktreePath, "/tmp/wt");
+  assert.deepEqual(taskWorktrees[0].primarySessions, []);
 });
 
 test("upsertTaskWorktree は同一 path を二重登録しない", () => {
@@ -1027,18 +1111,49 @@ test("upsertTaskWorktree は同一 path を二重登録しない", () => {
   assert.equal(taskWorktrees[0].worktreePath, "/tmp/wt");
 });
 
-test("attachPrimarySessionByPath は path で primary を付ける", () => {
+test("attachPrimarySessionByPath は既存 primary を残して末尾へ追加し新形式で書く", () => {
   seed({
     repos: [{ id: "repo-1", repoPath: "/tmp/repo" }],
-    taskWorktrees: [{ repoId: "repo-1", worktreePath: "/tmp/wt" }],
+    taskWorktrees: [
+      {
+        repoId: "repo-1",
+        worktreePath: "/tmp/wt",
+        primarySession: { provider: "codex", providerSessionId: "original" },
+      },
+    ],
   });
 
   attachPrimarySessionByPath("/tmp/wt", { provider: "claude", providerSessionId: "abc" });
 
-  assert.deepEqual(loadMetadata().taskWorktrees[0].primarySession, {
-    provider: "claude",
-    providerSessionId: "abc",
+  assert.deepEqual(loadMetadata().taskWorktrees[0].primarySessions, [
+    { provider: "codex", providerSessionId: "original" },
+    { provider: "claude", providerSessionId: "abc" },
+  ]);
+  const written = JSON.parse(fs.readFileSync(metadataPath, "utf8"));
+  assert.equal("primarySession" in written.taskWorktrees[0], false);
+  assert.deepEqual(written.taskWorktrees[0].primarySessions, [
+    { provider: "codex", providerSessionId: "original" },
+    { provider: "claude", providerSessionId: "abc" },
+  ]);
+});
+
+test("attachPrimarySessionByPath は同じ provider session を二重追加しない", () => {
+  seed({
+    repos: [],
+    taskWorktrees: [
+      {
+        repoId: "repo-1",
+        worktreePath: "/tmp/wt",
+        primarySessions: [{ provider: "claude", providerSessionId: "abc" }],
+      },
+    ],
   });
+
+  attachPrimarySessionByPath("/tmp/wt", { provider: "claude", providerSessionId: "abc" });
+
+  assert.deepEqual(loadMetadata().taskWorktrees[0].primarySessions, [
+    { provider: "claude", providerSessionId: "abc" },
+  ]);
 });
 
 test("attachPrimarySessionByPath は同じ provider session を別の worktree から外す", () => {
@@ -1048,9 +1163,16 @@ test("attachPrimarySessionByPath は同じ provider session を別の worktree �
       {
         repoId: "repo-1",
         worktreePath: "/tmp/wt-a",
-        primarySession: { provider: "claude", providerSessionId: "abc" },
+        primarySessions: [
+          { provider: "codex", providerSessionId: "keep-a" },
+          { provider: "claude", providerSessionId: "abc" },
+        ],
       },
-      { repoId: "repo-1", worktreePath: "/tmp/wt-b" },
+      {
+        repoId: "repo-1",
+        worktreePath: "/tmp/wt-b",
+        primarySessions: [{ provider: "kimi", providerSessionId: "keep-b" }],
+      },
     ],
   });
 
@@ -1059,8 +1181,11 @@ test("attachPrimarySessionByPath は同じ provider session を別の worktree �
   const taskWorktrees = loadMetadata().taskWorktrees;
   const a = taskWorktrees.find((entry) => entry.worktreePath === "/tmp/wt-a");
   const b = taskWorktrees.find((entry) => entry.worktreePath === "/tmp/wt-b");
-  assert.equal(a.primarySession, undefined);
-  assert.deepEqual(b.primarySession, { provider: "claude", providerSessionId: "abc" });
+  assert.deepEqual(a.primarySessions, [{ provider: "codex", providerSessionId: "keep-a" }]);
+  assert.deepEqual(b.primarySessions, [
+    { provider: "kimi", providerSessionId: "keep-b" },
+    { provider: "claude", providerSessionId: "abc" },
+  ]);
 });
 
 test("attachPrimarySessionByPath は対象 path が無ければ何もしない", () => {
@@ -1076,12 +1201,15 @@ test("detachPrimarySessionByPath は一致する primary だけを外す", () =>
       {
         repoId: "repo-1",
         worktreePath: "/tmp/wt-a",
-        primarySession: { provider: "claude", providerSessionId: "abc" },
+        primarySessions: [
+          { provider: "claude", providerSessionId: "abc" },
+          { provider: "codex", providerSessionId: "keep" },
+        ],
       },
       {
         repoId: "repo-1",
         worktreePath: "/tmp/wt-b",
-        primarySession: { provider: "claude", providerSessionId: "def" },
+        primarySessions: [{ provider: "claude", providerSessionId: "def" }],
       },
     ],
   });
@@ -1092,8 +1220,8 @@ test("detachPrimarySessionByPath は一致する primary だけを外す", () =>
   const a = taskWorktrees.find((entry) => entry.worktreePath === "/tmp/wt-a");
   const b = taskWorktrees.find((entry) => entry.worktreePath === "/tmp/wt-b");
   // strong link だけが消え、task worktree の record 自体は残る
-  assert.equal(a.primarySession, undefined);
-  assert.deepEqual(b.primarySession, { provider: "claude", providerSessionId: "def" });
+  assert.deepEqual(a.primarySessions, [{ provider: "codex", providerSessionId: "keep" }]);
+  assert.deepEqual(b.primarySessions, [{ provider: "claude", providerSessionId: "def" }]);
 });
 
 test("detachPrimarySessionByPath は provider や session id が違えば外さない", () => {
@@ -1103,7 +1231,7 @@ test("detachPrimarySessionByPath は provider や session id が違えば外さ�
       {
         repoId: "repo-1",
         worktreePath: "/tmp/wt",
-        primarySession: { provider: "claude", providerSessionId: "abc" },
+        primarySessions: [{ provider: "claude", providerSessionId: "abc" }],
       },
     ],
   });
@@ -1111,10 +1239,9 @@ test("detachPrimarySessionByPath は provider や session id が違えば外さ�
   detachPrimarySessionByPath("/tmp/wt", { provider: "codex", providerSessionId: "abc" });
   detachPrimarySessionByPath("/tmp/wt", { provider: "claude", providerSessionId: "other" });
 
-  assert.deepEqual(loadMetadata().taskWorktrees[0].primarySession, {
-    provider: "claude",
-    providerSessionId: "abc",
-  });
+  assert.deepEqual(loadMetadata().taskWorktrees[0].primarySessions, [
+    { provider: "claude", providerSessionId: "abc" },
+  ]);
 });
 
 test("removeTaskWorktreeByPath は対象だけ削除する", () => {

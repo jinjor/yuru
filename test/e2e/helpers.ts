@@ -23,10 +23,10 @@ export interface E2eContext {
 
 export interface TaskWorktreeMetadataSeed {
   worktreePath: string;
-  primarySession?: {
+  primarySessions?: Array<{
     provider: SessionProvider;
     providerSessionId: string;
-  };
+  }>;
 }
 
 export interface MetadataSeed {
@@ -37,10 +37,10 @@ export interface MetadataSeed {
   taskWorktrees: Array<{
     repoId: string;
     worktreePath: string;
-    primarySession?: {
+    primarySessions: Array<{
       provider: SessionProvider;
       providerSessionId: string;
-    };
+    }>;
   }>;
 }
 
@@ -211,7 +211,7 @@ export async function registerRepo(
     taskWorktrees: taskWorktrees.map((entry) => ({
       repoId,
       worktreePath: entry.worktreePath,
-      primarySession: entry.primarySession,
+      primarySessions: entry.primarySessions ?? [],
     })),
   });
   return repoId;

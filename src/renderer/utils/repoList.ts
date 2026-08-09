@@ -57,7 +57,8 @@ export function collectKeepAliveWorktrees(
   return worktrees;
 }
 
-// メインプロセスから push されたセッション更新を、該当セッションを表示している項目に merge する。
+// メインプロセスから push されたセッション更新を、暫定表示中の先頭 primary または
+// suggested session に merge する。
 export function applySessionUpdate(
   repos: RepoListItem[],
   terminalRuntimeId: TerminalRuntimeId,
@@ -67,7 +68,7 @@ export function applySessionUpdate(
   const next = repos.map((repo) => {
     let repoChanged = false;
     const taskWorktrees = repo.taskWorktrees.map((worktree) => {
-      const primarySession = worktree.primarySession;
+      const primarySession = worktree.primarySessions[0];
       const primarySessionMatches = primarySession?.activeTerminalRuntimeId === terminalRuntimeId;
       let suggestedSessionsChanged = false;
       const suggestedSessions = worktree.suggestedSessions.map((session) => {
@@ -86,7 +87,9 @@ export function applySessionUpdate(
       repoChanged = true;
       return {
         ...worktree,
-        primarySession: primarySessionMatches ? { ...primarySession, ...update } : primarySession,
+        primarySessions: primarySessionMatches
+          ? [{ ...primarySession, ...update }, ...worktree.primarySessions.slice(1)]
+          : worktree.primarySessions,
         suggestedSessions: suggestedSessionsChanged
           ? suggestedSessions
           : worktree.suggestedSessions,

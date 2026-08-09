@@ -117,7 +117,8 @@ function WorktreeCard({
   onSelectWorktree,
   onRequestRemoveWorktree,
 }: WorktreeCardProps) {
-  const { primarySession, suggestedSessions } = worktree;
+  const { suggestedSessions } = worktree;
+  const primarySession = worktree.primarySessions[0];
   const isSelected = selectedWorktreeId === worktree.worktreeId;
   const isPrimarySessionActive = primarySession?.state === "active";
   // main worktree は削除対象外。task worktree にだけ ︙ メニューを出す。

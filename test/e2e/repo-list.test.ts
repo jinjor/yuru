@@ -193,7 +193,7 @@ test("provider store から primary と suggested Claude session の概要を表
     await registerRepo(context, repoDir, [
       {
         worktreePath: primaryPath,
-        primarySession: { provider: "claude", providerSessionId: primarySessionId },
+        primarySessions: [{ provider: "claude", providerSessionId: primarySessionId }],
       },
     ]);
 
@@ -259,7 +259,7 @@ test("provider store から消えた primary session は選択時に detach さ�
     await registerRepo(context, repoDir, [
       {
         worktreePath,
-        primarySession: { provider: "claude", providerSessionId: "missing-session" },
+        primarySessions: [{ provider: "claude", providerSessionId: "missing-session" }],
       },
     ]);
 
@@ -280,7 +280,7 @@ test("provider store から消えた primary session は選択時に detach さ�
     ).toHaveCount(0);
     await expect(worktreeCard(window, "missing-primary")).toContainText("empty");
     const metadata = await readMetadata(context);
-    expect(metadata.taskWorktrees[0].primarySession).toBeUndefined();
+    expect(metadata.taskWorktrees[0].primarySessions).toEqual([]);
   } finally {
     await closeYuru(app);
     await context.cleanup();
