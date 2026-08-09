@@ -1,14 +1,10 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal, type ILink, type ILinkProvider } from "@xterm/xterm";
 import { useCallback, useEffect, useRef } from "react";
-import type { GitHubPullRequest } from "../../shared/session";
-import { TerminalBar } from "./TerminalBar";
 import { findTerminalLinksInBufferLine } from "./terminalBufferLinks";
 
 interface TerminalPanelProps {
   changesPanelWidth: number;
-  currentBranch: string | null;
-  currentGitHub: GitHubPullRequest | null;
   isPreviewOpen: boolean;
   onFileLinkActivate: (filePath: string, line?: number) => void;
   onOpenExternal: (url: string) => void;
@@ -24,8 +20,6 @@ interface TerminalInstance {
 
 export function TerminalPanel({
   changesPanelWidth,
-  currentBranch,
-  currentGitHub,
   isPreviewOpen,
   onFileLinkActivate,
   onOpenExternal,
@@ -210,16 +204,7 @@ export function TerminalPanel({
     return () => window.removeEventListener("resize", handleResize);
   }, [fitTerminal]);
 
-  return (
-    <main className="terminal-container">
-      <TerminalBar
-        currentBranch={currentBranch}
-        currentGitHub={currentGitHub}
-        onOpenExternal={onOpenExternal}
-      />
-      <div ref={containerRef} className="terminal-host" />
-    </main>
-  );
+  return <div ref={containerRef} className="terminal-host" />;
 }
 
 function terminalKeySequence(event: KeyboardEvent): string | null {

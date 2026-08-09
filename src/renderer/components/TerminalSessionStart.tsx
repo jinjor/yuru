@@ -4,15 +4,11 @@ import type {
   SuggestedSessionListItem,
   WorktreeListItem,
 } from "../../shared/metadata";
-import type { GitHubPullRequest, SessionProvider } from "../../shared/session";
+import type { SessionProvider } from "../../shared/session";
 import { providerLabel } from "../utils/session";
 import { SessionProviderDot } from "./SessionProviderDot";
-import { TerminalBar } from "./TerminalBar";
 
 interface TerminalSessionStartProps {
-  currentBranch: string | null;
-  currentGitHub: GitHubPullRequest | null;
-  onOpenExternal: (url: string) => void;
   providers: SessionProvider[];
   worktree: WorktreeListItem | null;
   onResumePrimarySession: (providerSessionKey: string) => void;
@@ -25,9 +21,6 @@ interface TerminalSessionStartProps {
 // 選択中 worktree に表示すべき terminal runtime がない時に、Terminal パネルの本文に出す
 // session start surface。
 export function TerminalSessionStart({
-  currentBranch,
-  currentGitHub,
-  onOpenExternal,
   providers,
   worktree,
   onResumePrimarySession,
@@ -38,65 +31,56 @@ export function TerminalSessionStart({
 }: TerminalSessionStartProps) {
   const primarySession = worktree?.primarySessions[0];
   return (
-    <main className="terminal-container">
-      <TerminalBar
-        currentBranch={currentBranch}
-        currentGitHub={currentGitHub}
-        onOpenExternal={onOpenExternal}
-      />
-      <div className="terminal-session-start">
-        {worktree && (
-          <div className="terminal-session-start-panel">
-            {worktree.isMainWorktree ? (
-              <OpenTerminalSection onOpen={onOpenWorktreeTerminal} />
-            ) : primarySession ? (
-              <ResumePrimarySection
-                primarySession={primarySession}
-                onResume={onResumePrimarySession}
-                onDetach={onDetachPrimarySession}
-              />
-            ) : (
-              <>
-                {worktree.suggestedSessions.length > 0 && (
-                  <div className="action-surface-section">
-                    <div className="action-surface-label">Existing Session</div>
-                    {worktree.suggestedSessions.map((suggestedSession) => (
-                      <SuggestedSessionAction
-                        key={suggestedSession.providerSessionKey}
-                        suggestedSession={suggestedSession}
-                        onSelect={() =>
-                          onResumeSuggestedSession(suggestedSession.providerSessionKey)
-                        }
-                      />
-                    ))}
-                  </div>
-                )}
+    <div className="terminal-session-start">
+      {worktree && (
+        <div className="terminal-session-start-panel">
+          {worktree.isMainWorktree ? (
+            <OpenTerminalSection onOpen={onOpenWorktreeTerminal} />
+          ) : primarySession ? (
+            <ResumePrimarySection
+              primarySession={primarySession}
+              onResume={onResumePrimarySession}
+              onDetach={onDetachPrimarySession}
+            />
+          ) : (
+            <>
+              {worktree.suggestedSessions.length > 0 && (
                 <div className="action-surface-section">
-                  <div className="action-surface-label">New Session</div>
-                  <div className="new-session-actions">
-                    {providers.map((provider) => (
-                      <button
-                        type="button"
-                        key={provider}
-                        className="action-surface-row new-session-action"
-                        onClick={() => onCreateSessionForWorktree(provider)}
-                        title={`Start new ${providerLabel(provider)} session`}
-                      >
-                        <span
-                          className={`session-provider-dot provider-${provider}`}
-                          aria-hidden="true"
-                        />
-                        <span className="action-surface-row-main">{providerLabel(provider)}</span>
-                      </button>
-                    ))}
-                  </div>
+                  <div className="action-surface-label">Existing Session</div>
+                  {worktree.suggestedSessions.map((suggestedSession) => (
+                    <SuggestedSessionAction
+                      key={suggestedSession.providerSessionKey}
+                      suggestedSession={suggestedSession}
+                      onSelect={() => onResumeSuggestedSession(suggestedSession.providerSessionKey)}
+                    />
+                  ))}
                 </div>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-    </main>
+              )}
+              <div className="action-surface-section">
+                <div className="action-surface-label">New Session</div>
+                <div className="new-session-actions">
+                  {providers.map((provider) => (
+                    <button
+                      type="button"
+                      key={provider}
+                      className="action-surface-row new-session-action"
+                      onClick={() => onCreateSessionForWorktree(provider)}
+                      title={`Start new ${providerLabel(provider)} session`}
+                    >
+                      <span
+                        className={`session-provider-dot provider-${provider}`}
+                        aria-hidden="true"
+                      />
+                      <span className="action-surface-row-main">{providerLabel(provider)}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

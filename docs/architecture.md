@@ -203,14 +203,21 @@ task worktree row は branch、先頭の primary session の状態、provider、
 row のクリックは常に worktree の選択で、session やプロセスの起動は行わない (F43)。
 row に残る操作は選択と `︙ → Remove worktree` (worktree lifecycle) だけである。
 
-session lifecycle の操作は選択中 worktree の Terminal が担う。
-表示すべき terminal runtime がない間、Terminal は session start surface を表示する。
+session lifecycle の操作は選択中 worktree の Terminal が担う。Terminal のヘッダは
+`[ホーム] [live terminal runtime...]` のタブ列で、runtime の生成・終了から一覧を導出する。
+ホームは常設で、現在の session start surface を表示する。
 
 - primary がない worktree: suggested session の一覧 (クリックで primary へ昇格して resume) と、
   新規 session (Claude / Codex) の選択肢
-- inactive primary がある worktree: 先頭 primary の preview と resume / detach 操作。
-  detach すると次の primary が代表になり、残っていなければ primary なしの選択肢に戻る
+- primary がある worktree: 先頭 primary の preview と resume 操作。inactive の時だけ detach
+  も表示し、detach すると次の primary が代表になる。残っていなければ primary なしの
+  選択肢に戻る
 - main worktree: standalone terminal を開く操作
+
+runtime タブは `activeTerminalRuntimeIds` の順に並び、対応する primary session があれば
+preview と provider/activity のドットを表示する。session id がまだ解決していない runtime と
+standalone terminal は `Terminal` と表示する。× は terminal runtime だけを kill し、provider
+session の履歴と primary link は残す。
 
 右側の `Terminal`, `Files`, `Changes`, preview は選択中の task worktree に連動する。
 App が持つ選択状態は `worktreeId` だけである (P20)。右ペイン (SessionView) は選択が
@@ -228,23 +235,22 @@ visible に戻ると effect は再実行され、大半の state (git status、d
 ディレクトリ一覧など) はこれで最新化される。新しい state を足す時はこの前提を踏まえる:
 
 - イベント購読でしか同期しない state は、hidden 中の聞き逃しに個別の対応が要る。
-  「その worktree でいま表示している terminal runtime」はこの例で、SessionView の
-  local state で追いかけるが exit イベントを hidden 中に聞き逃し得るため、表示直前に
-  props (`activeTerminalRuntimeIds`、その worktree で今生きている runtime の一覧) と
-  突き合わせて死んだ runtime を描画しないようにしている
+  「その worktree でいま選んでいる terminal runtime」は SessionView の local state で
+  保持するが、exit イベントを hidden 中に聞き逃し得るため、表示直前に props
+  (`activeTerminalRuntimeIds`、その worktree で今生きている runtime の一覧) と突き合わせる。
+  選択先が死んでいればホームを表示する
 - code search の結果は「復帰時の再実行で最新化する」の対象に**しない**。取得した
   時点のスナップショットとして扱い、query 文字列が変わらない限り再取得しない
   (一般的なエディタの検索結果と同じ挙動に合わせた設計判断)。query 自体はユーザー
   操作でしか変わらない state として保持する
 
-現時点の renderer は複数 primary のうち先頭だけを代表として表示する。mount 時は先頭の
-primary session の active な terminal runtime があればそれを表示し、
-main worktree では standalone terminal を自動で開く (生きている runtime は IPC 側が
-再利用する)。session 操作 (resume / promote / 新規 session / standalone terminal
-開始) も SessionView が担う。session がなくても `Files`, `Changes`, preview は
-worktree に対して使える。terminal runtime の exit では worktree の選択を保ち、
-表示中 runtime だけを外して session start surface に戻す。main worktree でも
-自動では開き直さない。
+現時点のホームは複数 primary のうち先頭だけを代表として表示する。fresh mount はホームを
+表示し、session 操作 (resume / promote / 新規 session / standalone terminal 開始) が成功した
+時だけ、その runtime タブを選択する。API など外部から生まれた runtime はタブだけを増やし、
+現在タブを変えない。main worktree は初回選択時に standalone terminal を自動で開く
+(生きている runtime は IPC 側が再利用する)。session がなくても `Files`, `Changes`, preview
+は worktree に対して使える。terminal runtime の exit では worktree の選択を保ち、表示中
+runtime が終わった時だけホームへ戻る。main worktree でも自動では開き直さない。
 
 `Changes` は Git の層を `merge-base → HEAD → index → worktree` の重複しない区間に分け、
 `Committed → Staged → Unstaged` の順で表示する。merge conflict は例外として `Conflicted` を先頭に置く。

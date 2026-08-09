@@ -1,17 +1,33 @@
 import { GitBranch } from "lucide-react";
 import type { GitHubPullRequest } from "../../shared/session";
 import { GitHubBadge } from "./GitHubBadge";
+import { SessionTabs, type SessionTabsProps } from "./SessionTabs";
 
-interface TerminalBarProps {
+interface TerminalBarProps extends SessionTabsProps {
   currentBranch: string | null;
   currentGitHub: GitHubPullRequest | null;
   onOpenExternal: (url: string) => void;
 }
 
-export function TerminalBar({ currentBranch, currentGitHub, onOpenExternal }: TerminalBarProps) {
+export function TerminalBar({
+  activeTerminalRuntimeIds,
+  currentBranch,
+  currentGitHub,
+  onKillTerminalRuntime,
+  onOpenExternal,
+  onSelectTerminalRuntime,
+  primarySessions,
+  selectedTerminalRuntimeId,
+}: TerminalBarProps) {
   return (
     <div className="panel-header terminal-bar">
-      <h2>Terminal</h2>
+      <SessionTabs
+        activeTerminalRuntimeIds={activeTerminalRuntimeIds}
+        primarySessions={primarySessions}
+        selectedTerminalRuntimeId={selectedTerminalRuntimeId}
+        onSelectTerminalRuntime={onSelectTerminalRuntime}
+        onKillTerminalRuntime={onKillTerminalRuntime}
+      />
       <div className="terminal-bar-meta">
         {currentBranch && (
           <span className="terminal-bar-branch">

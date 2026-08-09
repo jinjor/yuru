@@ -406,6 +406,10 @@ function registerIpcHandlers(): void {
     return service.openWorktreeTerminal(worktreeId);
   });
 
+  handleIpc("terminalRuntime:kill", (_event, terminalRuntimeId: string) => {
+    return service.killTerminalRuntime(terminalRuntimeId);
+  });
+
   handleIpc("worktree:create", (_event, repoPath: string, branchName: string) => {
     return service.createTaskWorktree(repoPath, branchName);
   });

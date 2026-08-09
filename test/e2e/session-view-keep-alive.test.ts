@@ -217,7 +217,7 @@ test("同一 worktree 内で Files ⇄ Changes ⇄ Search を往復しても展�
   }
 });
 
-test("訪問済み worktree で外部 API から開始した session を復帰時に表示する", async () => {
+test("訪問済み worktree で外部 API から開始した session をタブから表示する", async () => {
   test.setTimeout(60_000);
   const context = await createE2eContext();
   let app: ElectronApplication | null = null;
@@ -272,9 +272,11 @@ test("訪問済み worktree で外部 API から開始した session を復帰�
       timeout: 15_000,
     });
 
-    // 外部開始ではこの SessionView の startTerminalRuntime を通らない。それでも repos の
-    // active primary を取り込み、追加操作なしで既存 runtime を表示する。
+    // 外部開始ではこの SessionView の startTerminalRuntime を通らないため、現在タブは
+    // ホームのまま変えない。runtime は props からタブに追加され、そこから選択できる。
     await card.click();
+    await expect(sessionView.locator(".terminal-session-start")).toBeVisible();
+    await sessionView.locator(".session-tab:not(.session-tab-home)").click();
     await expect(sessionView.locator(".xterm")).toContainText("OpenAI Codex", {
       timeout: 15_000,
     });

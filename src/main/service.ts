@@ -551,6 +551,14 @@ export class YuruService {
     }
   }
 
+  async killTerminalRuntime(terminalRuntimeId: string): Promise<void> {
+    const proc = this.ptyProcesses.get(terminalRuntimeId);
+    if (!proc) {
+      return;
+    }
+    await killPtyAndWait(proc);
+  }
+
   async createTaskWorktree(
     repoPath: string,
     branchName: string,

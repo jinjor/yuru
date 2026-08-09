@@ -211,6 +211,7 @@ export interface ElectronAPI {
     provider: SessionProvider,
   ) => Promise<Result<WorktreeSessionSelection>>;
   openWorktreeTerminal: (worktreeId: string) => Promise<Result<WorktreeSessionSelection>>;
+  killTerminalRuntime: (terminalRuntimeId: TerminalRuntimeId) => Promise<void>;
   createTaskWorktree: (
     repoPath: string,
     branchName: string,

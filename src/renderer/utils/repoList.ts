@@ -57,8 +57,8 @@ export function collectKeepAliveWorktrees(
   return worktrees;
 }
 
-// メインプロセスから push されたセッション更新を、暫定表示中の先頭 primary または
-// suggested session に merge する。
+// メインプロセスから push されたセッション更新を、対応する primary または suggested
+// session に merge する。
 export function applySessionUpdate(
   repos: RepoListItem[],
   terminalRuntimeId: TerminalRuntimeId,
@@ -68,8 +68,14 @@ export function applySessionUpdate(
   const next = repos.map((repo) => {
     let repoChanged = false;
     const taskWorktrees = repo.taskWorktrees.map((worktree) => {
-      const primarySession = worktree.primarySessions[0];
-      const primarySessionMatches = primarySession?.activeTerminalRuntimeId === terminalRuntimeId;
+      let primarySessionsChanged = false;
+      const primarySessions = worktree.primarySessions.map((session) => {
+        if (session.activeTerminalRuntimeId !== terminalRuntimeId) {
+          return session;
+        }
+        primarySessionsChanged = true;
+        return { ...session, ...update };
+      });
       let suggestedSessionsChanged = false;
       const suggestedSessions = worktree.suggestedSessions.map((session) => {
         if (session.activeTerminalRuntimeId !== terminalRuntimeId) {
@@ -79,7 +85,7 @@ export function applySessionUpdate(
         return { ...session, ...update };
       });
 
-      if (!primarySessionMatches && !suggestedSessionsChanged) {
+      if (!primarySessionsChanged && !suggestedSessionsChanged) {
         return worktree;
       }
 
@@ -87,9 +93,7 @@ export function applySessionUpdate(
       repoChanged = true;
       return {
         ...worktree,
-        primarySessions: primarySessionMatches
-          ? [{ ...primarySession, ...update }, ...worktree.primarySessions.slice(1)]
-          : worktree.primarySessions,
+        primarySessions: primarySessionsChanged ? primarySessions : worktree.primarySessions,
         suggestedSessions: suggestedSessionsChanged
           ? suggestedSessions
           : worktree.suggestedSessions,

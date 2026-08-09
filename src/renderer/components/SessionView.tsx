@@ -14,10 +14,11 @@ import type {
   WorktreeSessionSelection,
 } from "../../shared/ipc";
 import type { WorktreeListItem } from "../../shared/metadata";
-import type { TerminalRuntimeId } from "../../shared/session";
+import type { SessionProvider, TerminalRuntimeId } from "../../shared/session";
 import { DiffPreviewPanel } from "./DiffPreviewPanel";
 import { ExplorerPanel, type ExplorerTab } from "./ExplorerPanel";
 import { FileSearch } from "./FileSearch";
+import { TerminalBar } from "./TerminalBar";
 import { TerminalPanel } from "./TerminalPanel";
 import { TerminalSessionStart } from "./TerminalSessionStart";
 import { usePaneLayout } from "../hooks/usePaneLayout";
@@ -81,21 +82,16 @@ export const SessionView = memo(function SessionView({
     (window.__yuruSessionViewRenderCounts[worktreeId] ?? 0) + 1;
 
   const sessionViewColumnRef = useRef<HTMLDivElement>(null);
-  // この SessionView 内の操作で明示的に選んだ terminal runtime。先頭 primary の active
-  // runtime は repos が source of truth なので state に複製せず、下で導出する。
+  // この worktree で明示的に選んだ terminal runtime。null はホームを表す。
   const [selectedTerminalRuntimeId, setSelectedTerminalRuntimeId] =
     useState<TerminalRuntimeId | null>(null);
-  const activeTerminalRuntimeIds = worktree?.activeTerminalRuntimeIds;
-  const primaryTerminalRuntimeId = worktree?.primarySessions[0]?.activeTerminalRuntimeId ?? null;
-  // 現在の明示的な選択が生きていれば維持し、なければ先頭の active primary を表示する。
-  // どちらの生死も main が返す activeTerminalRuntimeIds だけで判定するため、hidden 中の
-  // exit や外部 API からの開始も、visible に戻った時の最新 props だけで解決できる。
+  const activeTerminalRuntimeIds = worktree?.activeTerminalRuntimeIds ?? [];
+  // 選択した runtime が生きている間だけ表示する。fresh mount、ホーム選択、表示中 runtime
+  // の exit はすべてホームになる。生死は props から導出するため hidden 中の exit も漏れない。
   const displayedTerminalRuntimeId =
-    selectedTerminalRuntimeId && activeTerminalRuntimeIds?.includes(selectedTerminalRuntimeId)
+    selectedTerminalRuntimeId && activeTerminalRuntimeIds.includes(selectedTerminalRuntimeId)
       ? selectedTerminalRuntimeId
-      : primaryTerminalRuntimeId && activeTerminalRuntimeIds?.includes(primaryTerminalRuntimeId)
-        ? primaryTerminalRuntimeId
-        : null;
+      : null;
   const [previewSelection, setPreviewSelection] = useState<PreviewSelection | null>(null);
   const [gitPathStates, setGitPathStates] = useState<GitPathState[]>([]);
   const [reviewState, setReviewState] = useState<GitReviewState | null>(null);
@@ -194,6 +190,21 @@ export const SessionView = memo(function SessionView({
     },
     [onSessionsChanged, worktreeId],
   );
+
+  const killingTerminalRuntimeIdsRef = useRef(new Set<TerminalRuntimeId>());
+  const killTerminalRuntime = useCallback(async (terminalRuntimeId: TerminalRuntimeId) => {
+    if (killingTerminalRuntimeIdsRef.current.has(terminalRuntimeId)) {
+      return;
+    }
+    killingTerminalRuntimeIdsRef.current.add(terminalRuntimeId);
+    try {
+      await window.electronAPI.killTerminalRuntime(terminalRuntimeId);
+    } catch (error) {
+      console.error("Failed to kill terminal runtime.", error);
+    } finally {
+      killingTerminalRuntimeIdsRef.current.delete(terminalRuntimeId);
+    }
+  }, []);
 
   useEffect(() => {
     return window.electronAPI.onTerminalRuntimeExited((exitedTerminalRuntimeId) => {
@@ -337,50 +348,61 @@ export const SessionView = memo(function SessionView({
             aria-hidden="true"
           />
         )}
-        {displayedTerminalRuntimeId ? (
-          <TerminalPanel
-            key={displayedTerminalRuntimeId}
-            changesPanelWidth={paneLayout.changesPanelWidth}
+        <main className="terminal-container">
+          <TerminalBar
+            activeTerminalRuntimeIds={activeTerminalRuntimeIds}
             currentBranch={currentBranch}
             currentGitHub={currentGitHub}
-            isPreviewOpen={previewSelection !== null}
-            onFileLinkActivate={(filePath, line) => {
-              void handleFileLinkActivate(filePath, line);
+            primarySessions={worktree?.primarySessions ?? []}
+            selectedTerminalRuntimeId={displayedTerminalRuntimeId}
+            onKillTerminalRuntime={(terminalRuntimeId) => {
+              void killTerminalRuntime(terminalRuntimeId);
             }}
             onOpenExternal={onOpenExternal}
-            previewRatio={paneLayout.previewRatio}
-            terminalRuntimeId={displayedTerminalRuntimeId}
+            onSelectTerminalRuntime={setSelectedTerminalRuntimeId}
           />
-        ) : (
-          <TerminalSessionStart
-            currentBranch={currentBranch}
-            currentGitHub={currentGitHub}
-            onOpenExternal={onOpenExternal}
-            providers={providers}
-            worktree={worktree}
-            onResumePrimarySession={(providerSessionKey) => {
-              void startTerminalRuntime(() =>
-                window.electronAPI.resumePrimarySession(worktreeId, providerSessionKey),
-              );
-            }}
-            onDetachPrimarySession={(providerSessionKey) => {
-              void detachPrimarySession(providerSessionKey);
-            }}
-            onResumeSuggestedSession={(providerSessionKey) => {
-              void startTerminalRuntime(() =>
-                window.electronAPI.resumeSuggestedSession(worktreeId, providerSessionKey),
-              );
-            }}
-            onCreateSessionForWorktree={(provider) => {
-              void startTerminalRuntime(() =>
-                window.electronAPI.createSessionForWorktree(worktreeId, provider),
-              );
-            }}
-            onOpenWorktreeTerminal={() => {
-              void startTerminalRuntime(() => window.electronAPI.openWorktreeTerminal(worktreeId));
-            }}
-          />
-        )}
+          {displayedTerminalRuntimeId ? (
+            <TerminalPanel
+              key={displayedTerminalRuntimeId}
+              changesPanelWidth={paneLayout.changesPanelWidth}
+              isPreviewOpen={previewSelection !== null}
+              onFileLinkActivate={(filePath, line) => {
+                void handleFileLinkActivate(filePath, line);
+              }}
+              onOpenExternal={onOpenExternal}
+              previewRatio={paneLayout.previewRatio}
+              terminalRuntimeId={displayedTerminalRuntimeId}
+            />
+          ) : (
+            <TerminalSessionStart
+              providers={providers}
+              worktree={worktree}
+              onResumePrimarySession={(providerSessionKey) => {
+                void startTerminalRuntime(() =>
+                  window.electronAPI.resumePrimarySession(worktreeId, providerSessionKey),
+                );
+              }}
+              onDetachPrimarySession={(providerSessionKey) => {
+                void detachPrimarySession(providerSessionKey);
+              }}
+              onResumeSuggestedSession={(providerSessionKey) => {
+                void startTerminalRuntime(() =>
+                  window.electronAPI.resumeSuggestedSession(worktreeId, providerSessionKey),
+                );
+              }}
+              onCreateSessionForWorktree={(provider) => {
+                void startTerminalRuntime(() =>
+                  window.electronAPI.createSessionForWorktree(worktreeId, provider),
+                );
+              }}
+              onOpenWorktreeTerminal={() => {
+                void startTerminalRuntime(() =>
+                  window.electronAPI.openWorktreeTerminal(worktreeId),
+                );
+              }}
+            />
+          )}
+        </main>
       </div>
       <div
         className="pane-resize-handle vertical"
