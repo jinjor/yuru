@@ -21,6 +21,7 @@ import {
   kimiSessionsDir,
   kimiWireLogPath,
 } from "./paths.js";
+import { loadKimiPlanUsage } from "./plan-usage.js";
 import {
   detectKimiMentionHints,
   detectKimiWorkDirHint,
@@ -281,6 +282,7 @@ export const sessionProvider: SessionProviderAdapter = {
   loadStoredSessionPreview,
   loadWorktreeSessionHints,
   hasStoredSession,
+  loadPlanUsage: loadKimiPlanUsage,
   async createResumeLaunch(session) {
     // kimi refuses to resume unless the process cwd equals the session's
     // recorded workDir, so resume exactly where the session was recorded.

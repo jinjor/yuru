@@ -7,7 +7,6 @@ import {
   useRef,
   useState,
 } from "react";
-import type { AgentDefinition } from "../../shared/agent";
 import type {
   GitPathState,
   GitReviewState,
@@ -29,7 +28,7 @@ import { resultDataOrNull } from "../utils/result";
 interface SessionViewProps {
   appRef: RefObject<HTMLDivElement | null>;
   onOpenExternal: (url: string) => void;
-  providers: AgentDefinition[];
+  providers: SessionProvider[];
   sidebarWidth: number;
   worktree: WorktreeListItem | null;
   worktreeId: string;

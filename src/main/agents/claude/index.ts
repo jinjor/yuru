@@ -20,6 +20,7 @@ import {
 import { loadWorktreeContextPrompt } from "../../worktree-context-prompt.js";
 import { IncrementalSessionPreviewReader } from "../../session-preview-reader.js";
 import { getYuruClaudePluginDir } from "../../skill-materializer.js";
+import { loadClaudePlanUsage } from "./plan-usage.js";
 
 interface ClaudeHistoryEntry {
   sessionId: string;
@@ -273,6 +274,7 @@ export const sessionProvider: SessionProviderAdapter = {
   loadStoredSessionPreview,
   loadWorktreeSessionHints,
   hasStoredSession,
+  loadPlanUsage: loadClaudePlanUsage,
   async createResumeLaunch(session) {
     return {
       cwd: session.cwd,

@@ -1,5 +1,4 @@
 import type { SessionProvider } from "../shared/session.js";
-import type { AgentDefinition } from "../shared/agent.js";
 import type { SessionProviderAdapter } from "./agent.js";
 import { sessionProvider as claudeProvider } from "./agents/claude/index.js";
 import { sessionProvider as codexProvider } from "./agents/codex/index.js";
@@ -17,8 +16,4 @@ export function getSessionProvider(providerId: SessionProvider): SessionProvider
     throw new Error(`Unknown session provider: ${providerId}`);
   }
   return provider;
-}
-
-export function listSessionProviderDefinitions(): AgentDefinition[] {
-  return Object.values(sessionProviders).map((provider) => provider.definition);
 }

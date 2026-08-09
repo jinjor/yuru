@@ -151,6 +151,74 @@ body,
 }
 
 /* エラーログへの常設導線。0 件でも見えるように置き、エラーがある時だけ danger 色にする */
+.plan-usage {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  padding: 4px 12px 5px;
+  font-size: 12px;
+}
+
+.plan-usage-heading,
+.plan-usage-row {
+  height: 22px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.plan-usage-heading {
+  height: 16px;
+  color: var(--text-subtle);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.plan-usage-provider {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-usage-window-label,
+.plan-usage-window {
+  width: 96px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  font-family: var(--font-mono);
+}
+
+.plan-usage-window-label {
+  font-family: inherit;
+  justify-content: center;
+}
+
+.plan-usage-percent {
+  width: 34px;
+  text-align: right;
+  color: var(--text);
+}
+
+.plan-usage-percent.high {
+  color: var(--warning);
+}
+
+.plan-usage-remaining {
+  width: 46px;
+  text-align: right;
+  color: var(--text-subtle);
+}
+
+.plan-usage-unavailable {
+  color: var(--text-subtle);
+}
+
 .sidebar-errors-row {
   height: 32px;
   flex-shrink: 0;

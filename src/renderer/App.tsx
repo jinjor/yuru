@@ -8,11 +8,12 @@ import {
 } from "react";
 import "@xterm/xterm/css/xterm.css";
 import { AlertTriangle } from "lucide-react";
-import type { AgentDefinition } from "../shared/agent";
 import type { AppErrorNotice } from "../shared/ipc";
 import type { RepoListItem } from "../shared/metadata";
+import type { ProviderPlanUsage } from "../shared/session";
 import { BranchNameInput, type CreateWorktreeMode } from "./components/BranchNameInput";
 import { ErrorLogModal } from "./components/ErrorLogModal";
+import { ProviderPlanUsageRows } from "./components/ProviderPlanUsageRows";
 import { RepoList } from "./components/RepoList";
 import { SessionView } from "./components/SessionView";
 import { WorktreeRemovalDialog } from "./components/WorktreeRemovalDialog";
@@ -29,7 +30,9 @@ export function App() {
   const repoRefreshRequestRef = useRef(0);
   const worktreeCreateRequestRef = useRef(0);
   const [repos, setRepos] = useState<RepoListItem[]>([]);
-  const [availableProviders, setAvailableProviders] = useState<AgentDefinition[]>([]);
+  // main のポーリングが決めるプラン利用状況。ここに居る provider が
+  // インストール済みの provider でもあるので、新規セッションの選択肢もこれで決まる。
+  const [planUsages, setPlanUsages] = useState<ProviderPlanUsage[]>([]);
   const [selectedWorktreeId, setSelectedWorktreeId] = useState<string | null>(null);
   // 一度選択した worktree の id。keep-alive の対象 (main ∪ 訪問済み ∪ 選択中) を決める。
   // 選択解除 (削除・作成中断など) では触らない — 一度訪れた worktree はそのまま残す。
@@ -44,6 +47,8 @@ export function App() {
   const [errorNotices, setErrorNotices] = useState<AppErrorNotice[]>([]);
   const [isErrorLogOpen, setIsErrorLogOpen] = useState(false);
   const removalTarget = findWorktree(repos, removalTargetId);
+  // インストールされている provider だけが利用状況に現れる。
+  const availableProviders = planUsages.map((usage) => usage.provider);
   const keepAliveWorktrees = collectKeepAliveWorktrees(
     repos,
     selectedWorktreeId,
@@ -83,15 +88,6 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    window.electronAPI
-      .getSessionProviders()
-      .then((providers) => {
-        setAvailableProviders(providers);
-      })
-      .catch((error) => {
-        console.error("Failed to load session providers.", error);
-      });
-
     void refreshRepos();
     const disposeRepoListChanged = window.electronAPI.onRepoListChanged(() => {
       void refreshRepos();
@@ -109,11 +105,13 @@ export function App() {
     const disposePullRequestsChanged = window.electronAPI.onPullRequestsChanged((updates) => {
       setRepos((prev) => applyPullRequestUpdates(prev, updates));
     });
+    const disposePlanUsageChanged = window.electronAPI.onProviderPlanUsageChanged(setPlanUsages);
     return () => {
       disposeRepoListChanged();
       disposeTerminalRuntimeExited();
       disposeSessionChanged();
       disposePullRequestsChanged();
+      disposePlanUsageChanged();
     };
   }, [refreshRepos]);
 
@@ -235,6 +233,7 @@ export function App() {
             onRequestRemoveWorktree={setRemovalTargetId}
           />
         </div>
+        <ProviderPlanUsageRows usages={planUsages} />
         <button
           type="button"
           className={`sidebar-errors-row${errorCount > 0 ? " has-errors" : ""}`}

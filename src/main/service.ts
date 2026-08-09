@@ -55,7 +55,7 @@ import {
   resolveRepoFile as resolveRepoFilePath,
   writeFile as writeRepoFile,
 } from "./files.js";
-import { getSessionProvider, listSessionProviderDefinitions } from "./agent-registry.js";
+import { getSessionProvider } from "./agent-registry.js";
 import {
   CODE_SEARCH_RESULT_LIMIT,
   createEmptyCodeSearchResult,
@@ -319,10 +319,6 @@ export class YuruService {
       agentActivityStates,
       this.getAllTerminalRuntimeIdsByWorktreePath(),
     );
-  }
-
-  getSessionProviders() {
-    return listSessionProviderDefinitions();
   }
 
   // attach 登録から serialize 開始までを同期的に行うことで、attach 前に届いた出力は

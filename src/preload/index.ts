@@ -7,11 +7,10 @@ import type {
   SessionUpdate,
   WorktreeProcessRef,
 } from "../shared/ipc.js";
-import type { SessionProvider } from "../shared/session.js";
+import type { ProviderPlanUsage, SessionProvider } from "../shared/session.js";
 
 const electronAPI: ElectronAPI = {
   getRepos: () => ipcRenderer.invoke("metadata:listRepos"),
-  getSessionProviders: () => ipcRenderer.invoke("providers:list"),
   getErrors: () => ipcRenderer.invoke("errors:list"),
   dismissError: (id: string) => ipcRenderer.invoke("errors:dismiss", id),
   clearErrors: () => ipcRenderer.invoke("errors:clear"),
@@ -108,6 +107,14 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.on("pullRequests:changed", listener);
     return () => {
       ipcRenderer.removeListener("pullRequests:changed", listener);
+    };
+  },
+  onProviderPlanUsageChanged: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, usages: ProviderPlanUsage[]) =>
+      callback(usages);
+    ipcRenderer.on("providerPlanUsage:changed", listener);
+    return () => {
+      ipcRenderer.removeListener("providerPlanUsage:changed", listener);
     };
   },
   onFileTreeChanged: (callback) => {

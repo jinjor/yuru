@@ -19,6 +19,7 @@ import { codexSessionDateDirFromId, getCodexHistoryPath, getCodexSessionsDir } f
 import { loadWorktreeContextPrompt } from "../../worktree-context-prompt.js";
 import { detectCodexWorktreeSessionLines } from "./worktree-session-detection.js";
 import { IncrementalSessionPreviewReader } from "../../session-preview-reader.js";
+import { loadCodexPlanUsage } from "./plan-usage.js";
 
 interface CodexSessionMeta {
   providerSessionId: string;
@@ -377,6 +378,7 @@ export const sessionProvider: SessionProviderAdapter = {
   loadStoredSessionPreview,
   loadWorktreeSessionHints,
   hasStoredSession,
+  loadPlanUsage: loadCodexPlanUsage,
   async createResumeLaunch(session) {
     // Resume in the directory the session was recorded under (provided by the
     // caller), not the repo root. Codex keys each session by its cwd and, if

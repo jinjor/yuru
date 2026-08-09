@@ -63,7 +63,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | P21 | polish | App | UI をクリックした時のインタラクションを全体的に見直す | 詳細: docs/backlog-details/P21-ui-click-interaction.md |
 | B13 | bug | Sessions / Providers | kimi のセッションを開いただけで作業が発生してトークンを消費する | 起動時の指示に agent が反応して初期調査を始めてしまうと思われる |
 | F57 | feature | Files / Preview | HTML プレビューを手動でリロードできるようにする | CSS/JS 単独の変更は entry の content が変わらないと iframe が再読み込みされず表示に反映されない。現状は表示モードの切り替えで再マウントさせるしかない |
-| F59 | feature | Sessions / Providers | 各プロバイダのトークン消費量を表示する | プロバイダごとの利用状況を把握したい |
+| F59 | feature | Sessions / Providers | 各プロバイダのトークン消費量を表示する | プロバイダごとの利用状況を把握したい。詳細: docs/backlog-details/F59-provider-usage.md |
 
 ## Later
 

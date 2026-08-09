@@ -11,6 +11,9 @@ import { toAppError } from "./errors.js";
 import { fetchGitHubPullRequests } from "./github.js";
 import { listWorktrees } from "./git.js";
 import { PullRequestMonitor } from "./pull-request-monitor.js";
+import { ProviderUsageMonitor } from "./provider-usage-monitor.js";
+import { resolveCommandPaths } from "./provider-command.js";
+import { getSessionProvider, sessionProviders } from "./agent-registry.js";
 import type {
   AppErrorNotice,
   GitDiffScope,
@@ -18,7 +21,7 @@ import type {
   SessionUpdate,
   WorktreeProcessRef,
 } from "../shared/ipc.js";
-import type { SessionProvider } from "../shared/session.js";
+import type { ProviderPlanUsage, SessionProvider } from "../shared/session.js";
 import { HTML_PREVIEW_CSP, HTML_PREVIEW_SCHEME, HtmlPreviewGrants } from "./html-preview.js";
 import {
   createApiRequestHandler,
@@ -82,6 +85,19 @@ const pullRequestMonitor = new PullRequestMonitor({
   pullRequestsChanged: sendPullRequestsChanged,
 });
 
+// プランの利用状況のポーリング。PR と同じくフォーカス中だけ動く。この結果が
+// 「どの provider を出すか」も決めるので、起動直後にも 1 回走らせる。
+const providerUsageMonitor = new ProviderUsageMonitor({
+  listProviders: () =>
+    Object.values(sessionProviders).map((provider) => ({
+      provider: provider.definition.id,
+      command: provider.command,
+    })),
+  resolveCommandPaths: (commands) => resolveCommandPaths(commands),
+  loadPlanUsage: (provider, commandPath) => getSessionProvider(provider).loadPlanUsage(commandPath),
+  planUsageChanged: sendProviderPlanUsageChanged,
+});
+
 function sendToRenderer(channel: string, ...args: unknown[]): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return;
@@ -107,6 +123,10 @@ function sendSessionChanged(terminalRuntimeId: string, update: SessionUpdate): v
 
 function sendPullRequestsChanged(updates: PullRequestUpdate[]): void {
   sendToRenderer("pullRequests:changed", updates);
+}
+
+function sendProviderPlanUsageChanged(usages: ProviderPlanUsage[]): void {
+  sendToRenderer("providerPlanUsage:changed", usages);
 }
 
 function sendRepoListChanged(): void {
@@ -292,6 +312,7 @@ async function stopApplicationServices(): Promise<void> {
   }
   servicesStopped = true;
   pullRequestMonitor.stop();
+  providerUsageMonitor.stop();
   worktreeWatcher?.stop();
   try {
     await apiServer?.stop();
@@ -319,7 +340,6 @@ function handleIpc<Args extends unknown[]>(
 
 function registerIpcHandlers(): void {
   handleIpc("metadata:listRepos", () => service.getRepos());
-  handleIpc("providers:list", () => service.getSessionProviders());
 
   handleIpc("pty:attach", (_event, terminalRuntimeId: string) => {
     return service.attachPty(terminalRuntimeId);
@@ -557,14 +577,18 @@ app.whenReady().then(async () => {
 
   app.on("browser-window-focus", () => {
     pullRequestMonitor.start();
+    providerUsageMonitor.start();
   });
   app.on("browser-window-blur", () => {
     pullRequestMonitor.stop();
+    providerUsageMonitor.stop();
   });
   // 起動時にすでにフォーカスされていると focus イベントが来ないことがあるため。
   if (mainWindow?.isFocused()) {
     pullRequestMonitor.start();
   }
+  // provider の一覧はこのポーリングが決めるので、フォーカスに関わらず 1 回は走らせる。
+  providerUsageMonitor.start();
 });
 
 app.on("before-quit", (event) => {

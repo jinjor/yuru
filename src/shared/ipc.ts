@@ -1,8 +1,8 @@
-import type { AgentDefinition } from "./agent.js";
 import type { RepoListItem } from "./metadata.js";
 import type {
   AgentActivityState,
   GitHubPullRequest,
+  ProviderPlanUsage,
   TerminalRuntimeId,
   SessionProvider,
 } from "./session.js";
@@ -191,7 +191,6 @@ export interface PullRequestUpdate {
 
 export interface ElectronAPI {
   getRepos: () => Promise<RepoListItem[]>;
-  getSessionProviders: () => Promise<AgentDefinition[]>;
   getErrors: () => Promise<AppErrorNotice[]>;
   dismissError: (id: string) => Promise<void>;
   clearErrors: () => Promise<void>;
@@ -266,6 +265,8 @@ export interface ElectronAPI {
     callback: (terminalRuntimeId: TerminalRuntimeId, update: SessionUpdate) => void,
   ) => () => void;
   onPullRequestsChanged: (callback: (updates: PullRequestUpdate[]) => void) => () => void;
+  // プランの利用状況。この配列に居る provider がインストール済みの provider でもある。
+  onProviderPlanUsageChanged: (callback: (usages: ProviderPlanUsage[]) => void) => () => void;
   onFileTreeChanged: (callback: (worktreeId: string, relativePath: string) => void) => () => void;
   attachPty: (terminalRuntimeId: TerminalRuntimeId) => Promise<string>;
   readyPty: (terminalRuntimeId: TerminalRuntimeId) => Promise<void>;

@@ -1,5 +1,4 @@
 import { Terminal as TerminalIcon, Unlink } from "lucide-react";
-import type { AgentDefinition } from "../../shared/agent";
 import type {
   PrimarySessionListItem,
   SuggestedSessionListItem,
@@ -14,7 +13,7 @@ interface TerminalSessionStartProps {
   currentBranch: string | null;
   currentGitHub: GitHubPullRequest | null;
   onOpenExternal: (url: string) => void;
-  providers: AgentDefinition[];
+  providers: SessionProvider[];
   worktree: WorktreeListItem | null;
   onResumePrimarySession: (providerSessionKey: string) => void;
   onDetachPrimarySession: (providerSessionKey: string) => void;
@@ -77,16 +76,16 @@ export function TerminalSessionStart({
                     {providers.map((provider) => (
                       <button
                         type="button"
-                        key={provider.id}
+                        key={provider}
                         className="action-surface-row new-session-action"
-                        onClick={() => onCreateSessionForWorktree(provider.id)}
-                        title={`Start new ${provider.label} session`}
+                        onClick={() => onCreateSessionForWorktree(provider)}
+                        title={`Start new ${providerLabel(provider)} session`}
                       >
                         <span
-                          className={`session-provider-dot provider-${provider.id}`}
+                          className={`session-provider-dot provider-${provider}`}
                           aria-hidden="true"
                         />
-                        <span className="action-surface-row-main">{provider.label}</span>
+                        <span className="action-surface-row-main">{providerLabel(provider)}</span>
                       </button>
                     ))}
                   </div>

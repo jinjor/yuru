@@ -1,4 +1,4 @@
-import type { SessionProvider } from "../shared/session.js";
+import type { PlanUsageWindow, SessionProvider } from "../shared/session.js";
 import type { AgentDefinition } from "../shared/agent.js";
 import type { PendingTerminal, TerminalRuntimeInfo } from "./terminal-runtime.js";
 import type { WorktreeSessionHint } from "./worktree-session-detection.js";
@@ -59,6 +59,18 @@ export interface ResumeSessionTarget {
   project: string;
 }
 
+// provider が返したプランの利用状況。取得そのものに失敗した場合は例外になるので、
+// ここには「取れなかった」状態は現れない (呼び出し側が failed として扱う)。
+export type PlanUsage =
+  | {
+      state: "ok";
+      // その provider がその枠を持たないときは null。
+      fiveHour: PlanUsageWindow | null;
+      weekly: PlanUsageWindow | null;
+    }
+  | { state: "logged-out" }
+  | { state: "no-plan-limits" };
+
 export interface SessionProviderAdapter {
   definition: AgentDefinition;
   command: string;
@@ -67,6 +79,9 @@ export interface SessionProviderAdapter {
   loadStoredSessionPreview(providerSessionId: string): Promise<SessionPreview | null>;
   loadWorktreeSessionHints(worktreePaths: readonly string[]): Promise<WorktreeSessionHint[]>;
   hasStoredSession(providerSessionId: string): Promise<boolean>;
+  // commandPath はログインシェルで解決した CLI の絶対パス。Yuru は認証情報を
+  // 自分では扱わず、CLI に自分のログインを使わせる。
+  loadPlanUsage(commandPath: string): Promise<PlanUsage>;
   createResumeLaunch(session: ResumeSessionTarget): Promise<LaunchRequest>;
   createWorktreeLaunch(context: WorktreeContext): Promise<LaunchRequest>;
   waitForSessionId(pending: PendingSession): Promise<string>;
