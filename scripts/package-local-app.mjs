@@ -58,6 +58,13 @@ function ensureBuildOutput() {
 }
 
 function stageReplacement(stagedAppPath) {
+  // Electron's archive gives the app bundle root a normalized 1980 timestamp.
+  // LaunchServices uses this timestamp to decide whether cached metadata such
+  // as the app icon needs refreshing, so stamp the completed bundle before it
+  // is moved into the stable installation path.
+  const installedAt = new Date();
+  fs.utimesSync(stagedAppPath, installedAt, installedAt);
+
   fs.rmSync(backupAppPath, { recursive: true, force: true });
 
   if (!fs.existsSync(finalAppPath)) {
