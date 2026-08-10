@@ -105,6 +105,13 @@ export function App() {
     const disposePullRequestsChanged = window.electronAPI.onPullRequestsChanged((updates) => {
       setRepos((prev) => applyPullRequestUpdates(prev, updates));
     });
+    // push を購読する前に最初の tick が終わっている場合があるので、最新値も取りに行く。
+    window.electronAPI
+      .getProviderPlanUsage()
+      .then(setPlanUsages)
+      .catch((error) => {
+        console.error("Failed to load provider plan usage.", error);
+      });
     const disposePlanUsageChanged = window.electronAPI.onProviderPlanUsageChanged(setPlanUsages);
     return () => {
       disposeRepoListChanged();

@@ -11,6 +11,7 @@ import type { ProviderPlanUsage, SessionProvider } from "../shared/session.js";
 
 const electronAPI: ElectronAPI = {
   getRepos: () => ipcRenderer.invoke("metadata:listRepos"),
+  getProviderPlanUsage: () => ipcRenderer.invoke("providerPlanUsage:list"),
   getErrors: () => ipcRenderer.invoke("errors:list"),
   dismissError: (id: string) => ipcRenderer.invoke("errors:dismiss", id),
   clearErrors: () => ipcRenderer.invoke("errors:clear"),

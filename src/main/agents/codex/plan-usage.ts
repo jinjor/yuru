@@ -2,6 +2,7 @@ import type { Readable, Writable } from "stream";
 import type { PlanUsageWindow } from "../../../shared/session.js";
 import type { PlanUsage } from "../../agent.js";
 import { readJsonLines, withPlanUsageProcess } from "../../plan-usage-io.js";
+import type { ResolvedProviderCommand } from "../../provider-command.js";
 
 const TIMEOUT_MS = 10_000;
 const FIVE_HOUR_WINDOW_MINS = 300;
@@ -10,8 +11,8 @@ const WEEKLY_WINDOW_MINS = 10080;
 // Codex は app-server (stdio の JSON-RPC) にプランの利用状況を聞く口を持っている。
 // スレッドを作らないのでモデルは動かず、rollout ファイルも session_index も増えない。
 // app-server は Codex 側で experimental 扱い。
-export async function loadCodexPlanUsage(commandPath: string): Promise<PlanUsage> {
-  return withPlanUsageProcess(commandPath, ["app-server"], TIMEOUT_MS, async (child) => {
+export async function loadCodexPlanUsage(command: ResolvedProviderCommand): Promise<PlanUsage> {
+  return withPlanUsageProcess(command, ["app-server"], TIMEOUT_MS, async (child) => {
     const connection = new AppServerConnection(child.stdin, child.stdout);
     await connection.request("initialize", {
       clientInfo: { name: "yuru", version: "0" },
@@ -19,8 +20,16 @@ export async function loadCodexPlanUsage(commandPath: string): Promise<PlanUsage
     // 未ログインだと account/rateLimits/read はエラーを返す。エラー文言に頼らず、
     // 先にアカウントの有無を聞いて「ログインしていないだけ」を切り分ける。
     const account = await connection.request("account/read", {});
-    if (!isRecord(account) || account.account === null || account.account === undefined) {
+    if (!isRecord(account) || !("account" in account)) {
+      throw new Error("codex account/read did not report an account field");
+    }
+    // ログインしていないときだけ account が null になる。それ以外の形は
+    // 応答が変わった可能性があるので、未ログインと決めつけず失敗として扱う。
+    if (account.account === null) {
       return { state: "logged-out" };
+    }
+    if (!isRecord(account.account)) {
+      throw new Error("codex account/read returned an unreadable account");
     }
     const rateLimits = await connection.request("account/rateLimits/read", null);
     if (!isRecord(rateLimits) || !isRecord(rateLimits.rateLimits)) {

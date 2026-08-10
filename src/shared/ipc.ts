@@ -191,6 +191,8 @@ export interface PullRequestUpdate {
 
 export interface ElectronAPI {
   getRepos: () => Promise<RepoListItem[]>;
+  // 購読を始める前の分を取りこぼさないための初期値。以降は push で置き換える。
+  getProviderPlanUsage: () => Promise<ProviderPlanUsage[]>;
   getErrors: () => Promise<AppErrorNotice[]>;
   dismissError: (id: string) => Promise<void>;
   clearErrors: () => Promise<void>;

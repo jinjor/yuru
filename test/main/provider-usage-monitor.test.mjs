@@ -19,7 +19,12 @@ function createMonitor(overrides = {}) {
   const monitor = new ProviderUsageMonitor({
     listProviders: () => allProviders,
     resolveCommandPaths: async (commands) =>
-      new Map(commands.map((command) => [command, `/bin/${command}`])),
+      new Map(
+        commands.map((command) => [
+          command,
+          { path: `/bin/${command}`, pathEnv: "/bin:/usr/bin" },
+        ]),
+      ),
     loadPlanUsage: async () => ({ state: "ok", fiveHour: null, weekly: null }),
     planUsageChanged: (usages) => pushed.push(usages),
     ...overrides,
@@ -30,7 +35,8 @@ function createMonitor(overrides = {}) {
 test("解決できなかった provider は結果に現れない", async () => {
   clearErrorNotices();
   const { monitor, pushed } = createMonitor({
-    resolveCommandPaths: async () => new Map([["claude", "/bin/claude"]]),
+    resolveCommandPaths: async () =>
+      new Map([["claude", { path: "/bin/claude", pathEnv: "/bin:/usr/bin" }]]),
   });
   monitor.start();
   monitor.stop();
@@ -123,4 +129,22 @@ test("取得できた枠は取得時刻つきで返る", async () => {
   assert.deepEqual(usage.fiveHour, { usedPercent: 28, resetsAt: 1786000000000 });
   assert.deepEqual(usage.weekly, { usedPercent: 13, resetsAt: null });
   assert.ok(usage.fetchedAt >= before);
+});
+
+test("refreshOnce は 1 回取得するだけで定期取得を始めない", async () => {
+  clearErrorNotices();
+  let ticks = 0;
+  const { monitor, pushed } = createMonitor({
+    listProviders: () => [{ provider: "claude", command: "claude" }],
+    loadPlanUsage: async () => {
+      ticks += 1;
+      return { state: "ok", fiveHour: null, weekly: null };
+    },
+  });
+  await monitor.refreshOnce();
+
+  assert.equal(ticks, 1);
+  assert.equal(pushed.length, 1);
+  // 定期取得が始まっていないので stop() は不要。始まっていれば以降も動き続ける。
+  monitor.stop();
 });

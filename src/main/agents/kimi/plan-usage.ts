@@ -1,6 +1,7 @@
 import type { PlanUsageWindow } from "../../../shared/session.js";
 import type { PlanUsage } from "../../agent.js";
 import { withPlanUsageProcess } from "../../plan-usage-io.js";
+import type { ResolvedProviderCommand } from "../../provider-command.js";
 
 const TIMEOUT_MS = 15_000;
 // 起動時に標準出力へ出る URL。--port 0 を渡すと実際に割り当てられたポートがここに出る。
@@ -11,9 +12,9 @@ const FIVE_HOUR_LABEL_PATTERN = /^(\d+)h limit$/;
 // kimi はプランの利用状況を返す口をローカルサーバ側に持っている (`kimi web` が立てる
 // REST の /oauth/usage)。その先は kimi 自身が OAuth トークンを付けて upstream を引く。
 // モデルは動かず、セッションも作られない。
-export async function loadKimiPlanUsage(commandPath: string): Promise<PlanUsage> {
+export async function loadKimiPlanUsage(command: ResolvedProviderCommand): Promise<PlanUsage> {
   return withPlanUsageProcess(
-    commandPath,
+    command,
     ["web", "--no-open", "--port", "0", "--log-level", "error"],
     TIMEOUT_MS,
     async (child) => {
@@ -57,11 +58,18 @@ function readServerUrl(stdout: NodeJS.ReadableStream): Promise<KimiServer> {
 
 async function isLoggedIn(server: KimiServer): Promise<boolean> {
   const auth = await getJson(server, "/api/v1/auth");
-  if (!isRecord(auth)) {
-    throw new Error("kimi auth request returned a non-object response");
+  if (!isRecord(auth) || !("managed_provider" in auth)) {
+    throw new Error("kimi auth request did not report managed_provider");
   }
-  // ログインしていないと managed_provider が null になる。
-  return isRecord(auth.managed_provider);
+  // ログインしていないときだけ managed_provider が null になる。それ以外の形は
+  // 応答が変わった可能性があるので、未ログインと決めつけず失敗として扱う。
+  if (auth.managed_provider === null) {
+    return false;
+  }
+  if (!isRecord(auth.managed_provider)) {
+    throw new Error("kimi auth request returned an unreadable managed_provider");
+  }
+  return true;
 }
 
 // この REST は成否を HTTP ではなく本体の code / data で返す。

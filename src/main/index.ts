@@ -125,7 +125,13 @@ function sendPullRequestsChanged(updates: PullRequestUpdate[]): void {
   sendToRenderer("pullRequests:changed", updates);
 }
 
+// renderer は push で受け取るが、購読を始める前に最初の tick が終わることも、
+// 再読み込みで購読し直すこともある。取りこぼすと provider の一覧ごと空になり
+// セッションを開始できなくなるので、最後の結果を持っておいて初期表示に配る。
+let latestPlanUsages: ProviderPlanUsage[] = [];
+
 function sendProviderPlanUsageChanged(usages: ProviderPlanUsage[]): void {
+  latestPlanUsages = usages;
   sendToRenderer("providerPlanUsage:changed", usages);
 }
 
@@ -356,6 +362,7 @@ function registerIpcHandlers(): void {
     service.detachPty(terminalRuntimeId);
   });
 
+  handleIpc("providerPlanUsage:list", () => latestPlanUsages);
   handleIpc("errors:list", () => service.getErrors());
 
   handleIpc("errors:dismiss", (_event, id: string) => {
@@ -586,9 +593,12 @@ app.whenReady().then(async () => {
   // 起動時にすでにフォーカスされていると focus イベントが来ないことがあるため。
   if (mainWindow?.isFocused()) {
     pullRequestMonitor.start();
+    providerUsageMonitor.start();
+  } else {
+    // 非フォーカスで起動した場合、blur イベントは来ないので start() すると
+    // 定期取得が止まらなくなる。provider の一覧は必要なので 1 回だけ取る。
+    void providerUsageMonitor.refreshOnce();
   }
-  // provider の一覧はこのポーリングが決めるので、フォーカスに関わらず 1 回は走らせる。
-  providerUsageMonitor.start();
 });
 
 app.on("before-quit", (event) => {

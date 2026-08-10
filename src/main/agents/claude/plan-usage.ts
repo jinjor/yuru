@@ -1,8 +1,7 @@
-import os from "os";
 import type { PlanUsageWindow } from "../../../shared/session.js";
 import type { PlanUsage } from "../../agent.js";
-import { exec } from "../../exec.js";
-import { readJsonLines, withPlanUsageProcess } from "../../plan-usage-io.js";
+import { readJsonLines, runPlanUsageCommand, withPlanUsageProcess } from "../../plan-usage-io.js";
+import type { ResolvedProviderCommand } from "../../provider-command.js";
 
 const REQUEST_ID = "yuru-plan-usage";
 const TIMEOUT_MS = 10_000;
@@ -13,17 +12,18 @@ const TIMEOUT_MS = 10_000;
 // CLAUDE.md を読ませず、ユーザーメッセージを送らないので transcript も残らない。
 //
 // get_usage は Claude Code 側で experimental (応答の形が変わりうる) と明記されている。
-// 形が変わったら例外にして「取れなかった」に倒す。
-export async function loadClaudePlanUsage(commandPath: string): Promise<PlanUsage> {
-  const usage = await requestUsage(commandPath);
-  if (!isRecord(usage)) {
-    throw new Error("claude get_usage returned a non-object response");
+// 知っている形でなければ例外にして「取れなかった」に倒す。未ログインと取り違えて
+// 黙って表示すると、ユーザーは再ログインしても直らない原因不明の状態に置かれる。
+export async function loadClaudePlanUsage(command: ResolvedProviderCommand): Promise<PlanUsage> {
+  const usage = await requestUsage(command);
+  if (!isRecord(usage) || typeof usage.rate_limits_available !== "boolean") {
+    throw new Error("claude get_usage did not report rate_limits_available");
   }
   // rate_limits_available が false のときは rate_limits も null になる。これは
   // 「未ログイン」と「API キーなどでプランのリミットが適用されない」の両方を含むので、
   // ここでだけログイン状態を聞いて分ける。
-  if (usage.rate_limits_available !== true) {
-    return (await isLoggedIn(commandPath)) ? { state: "no-plan-limits" } : { state: "logged-out" };
+  if (!usage.rate_limits_available) {
+    return (await isLoggedIn(command)) ? { state: "no-plan-limits" } : { state: "logged-out" };
   }
   const rateLimits = usage.rate_limits;
   if (!isRecord(rateLimits)) {
@@ -36,9 +36,9 @@ export async function loadClaudePlanUsage(commandPath: string): Promise<PlanUsag
   };
 }
 
-async function requestUsage(commandPath: string): Promise<unknown> {
+async function requestUsage(command: ResolvedProviderCommand): Promise<unknown> {
   return withPlanUsageProcess(
-    commandPath,
+    command,
     [
       "--print",
       "--safe-mode",
@@ -80,9 +80,9 @@ async function requestUsage(commandPath: string): Promise<unknown> {
   );
 }
 
-async function isLoggedIn(commandPath: string): Promise<boolean> {
+async function isLoggedIn(command: ResolvedProviderCommand): Promise<boolean> {
   const status: unknown = JSON.parse(
-    await exec(commandPath, ["auth", "status", "--json"], os.tmpdir()),
+    await runPlanUsageCommand(command, ["auth", "status", "--json"], TIMEOUT_MS),
   );
   if (!isRecord(status) || typeof status.loggedIn !== "boolean") {
     throw new Error("claude auth status did not report loggedIn");
@@ -91,10 +91,12 @@ async function isLoggedIn(commandPath: string): Promise<boolean> {
 }
 
 function toWindow(raw: unknown): PlanUsageWindow | null {
-  if (!isRecord(raw)) {
+  // その枠を返さないときは null が入る。Claude は 5 時間枠と週枠の両方を返すが、
+  // 枠の有無は provider 側の都合なので、無い形も受け入れる。
+  if (raw === null || raw === undefined) {
     return null;
   }
-  if (typeof raw.utilization !== "number") {
+  if (!isRecord(raw) || typeof raw.utilization !== "number") {
     throw new Error("claude rate limit window has no utilization");
   }
   return {

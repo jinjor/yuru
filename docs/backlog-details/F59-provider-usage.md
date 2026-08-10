@@ -1,6 +1,6 @@
 # F59 詳細設計: 各プロバイダの利用状況を表示する
 
-Last updated: 2026-08-09
+Last updated: 2026-08-10
 
 取得方法の調査結果と、実際に 3 provider から値を取れることの確認は
 F59-provider-usage-spike.md に記録がある。
@@ -138,6 +138,12 @@ token ファイルの読み取りも要らない。
 構造的に見分ける。文字列マッチはしない。実際にログアウト状態を作って確認した
 (Codex は `CODEX_HOME`、Kimi は `KIMI_CODE_HOME`、Claude は `HOME` を空のディレクトリに向ける)。
 
+判定に使うのは、そこで確認した既知の値だけにする。
+フィールドが消えた・形が変わった場合は未ログインと決めつけず例外にする。
+Claude の `get_usage` と Codex の app-server は experimental なので応答が変わりうるが、
+それを「ログインしていないだけ」と表示すると、ユーザーは再ログインしても直らないうえ
+error center にも残らない。
+
 | provider | 判定 | 追加コスト |
 |---|---|---|
 | claude | `get_usage` の `rate_limits_available` が `false` (このとき `rate_limits` も `null`)。これは「未ログイン」と「API キー等でプラン外」の両方を含むので、この状態のときだけ `claude auth status --json` を実行し、`loggedIn` で分ける | この状態のときだけ 1 プロセス追加 (実測 0.2 秒) |
@@ -182,12 +188,21 @@ Yuru は provider をユーザーのログインシェル経由で起動して�
 なのでログインシェルに 1 回だけ聞く。3 provider をまとめて 1 プロセスで解決する。
 
 ```
-$SHELL -i -l -c 'command -v claude; command -v codex; command -v kimi'
+$SHELL -i -l -c 'PATH と、見つかった command のパスと、最後に目印を出す'
 ```
 
 実測 0.46 秒。見つかった provider は絶対パスが返り、見つからない provider は
 行が出ない。以降の起動はこの絶対パスを直接使う (毎回ログインシェルを挟むと
 1 回 0.46 秒が provider ごとにかかる)。
+
+**同じスクリプトで `PATH` も持ち帰り、provider を起動するときに渡す。**
+実行ファイルが絶対パスでも、shebang のインタプリタは PATH から探されるため。
+codex は `#!/usr/bin/env node` なので、Electron の最小 PATH のままでは
+`env: node: No such file or directory` で 127 終了する (実測)。
+
+シェルが起動できたかどうかは終了コードでは判定できない。`command -v` が 1 つも
+当たらないとシェル自体も非 0 で終わるためで、「1 つも入っていない」正常な場合と
+区別が付かない。スクリプトの最後に目印を出力させ、その行が来たかどうかで見る。
 
 この結果が **利用状況の行と、新規セッションの provider 選択肢の両方を制御する**。
 「インストールされていない provider はどこにも出さない」を 1 か所で決めるため。
@@ -195,7 +210,7 @@ $SHELL -i -l -c 'command -v claude; command -v codex; command -v kimi'
 解決は利用状況の取得と同じ tick で毎回やり直す。ユーザーが Yuru を開いたまま
 CLI を入れた場合に、再起動なしで出てくる。
 
-ログインシェル自体の起動に失敗した場合は、その回の判定結果を捨てて
+ログインシェル自体が起動しなかった場合 (目印の行が来ない) は、その回の判定結果を捨てて
 前回の一覧を保つ (起動できないのは想定外なのでエラーとして記録する)。
 起動直後で前回が無ければ選択肢は空になる。ここで「全部入っていることにする」と、
 入っていない provider を選べてしまい、起動して初めて失敗することになるので、
@@ -204,10 +219,10 @@ CLI を入れた場合に、再起動なしで出てくる。
 ### provider ごとの差異を閉じる場所
 
 `SessionProviderAdapter` (provider ごとの差異を集めているインターフェース) に
-1 メソッド足す。引数はログインシェルで解決した絶対パス。
+1 メソッド足す。引数はログインシェルで解決した絶対パスと PATH。
 
 ```ts
-loadPlanUsage(commandPath: string): Promise<ProviderPlanUsage>;
+loadPlanUsage(command: ResolvedProviderCommand): Promise<PlanUsage>;
 ```
 
 「plan」を名前に入れるのは、セッション内のトークン消費量と区別するため。
@@ -297,6 +312,8 @@ PullRequestMonitor と同じ作り:
 
 - `browser-window-focus` で `start()`、`browser-window-blur` で `stop()`
 - tick は 60 秒。start 時に即 1 回走る
+- 非フォーカスで起動したときは `start()` ではなく 1 回だけの取得を走らせる。
+  `start()` にすると、blur イベントが来ないまま定期取得が止まらなくなる
 - 前の tick が終わっていなければその回はスキップ
 - 1 tick の中身は「ログインシェルで 3 provider のパスを解決 → 見つかった provider を
   並列に取得」
@@ -324,9 +341,11 @@ PullRequestMonitor と同じ作り:
   未ログインの CLI を起動するとログインの導線がターミナルに出るので、
   そこから入るのは正しい使い方
 
-初期値取得用の IPC は作らない。start は `browser-window-focus` に加えて起動時にも
-1 回走らせる (フォーカスイベントが来ないことがあるため、既存の PullRequestMonitor でも
-同じ手当てをしている)。最初の push が届くまでの 1〜2 秒は選択肢が空になる。
+main は最後に push した結果を持っておき、初期値取得の IPC (`getProviderPlanUsage`) で
+返す。renderer は購読開始と同時にこれも取りに行く。push だけにすると、
+renderer が購読する前に最初の tick が終わった場合や、renderer を再読み込みした場合に
+取りこぼし、次の tick までの 60 秒間 provider の一覧ごと空になってセッションを
+開始できなくなる。error center が `getErrors` + push を併用しているのと同じ形。
 
 ## 失敗時の挙動
 
@@ -415,6 +434,9 @@ session パネル上部の TerminalBar は選択中 worktree の情報 (branch /
   「そろそろ切り替えを考える」ラインが一目で分かればよく、段階を増やす必要はない
 - 行の tooltip にリセットの絶対時刻と取得時刻を出す
   (`5h resets 21:19 · 7d resets 8/14 19:59 · updated 19:11:11`)
+- sidebar は 220px まで縮められる。そこまで狭いと使用率と残り時間は並ばないので、
+  残り時間だけ落として使用率を優先する (リセット時刻は tooltip に残る)。
+  provider 名が消えると行の意味が分からなくなるため、名前の幅は最後まで残す
 - クリックできる要素にはしない。手動更新は 60 秒の定期取得で足りる
 
 ### 却下した案

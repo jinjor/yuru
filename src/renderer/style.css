@@ -150,12 +150,14 @@ body,
   overflow: hidden;
 }
 
-/* エラーログへの常設導線。0 件でも見えるように置き、エラーがある時だけ danger 色にする */
+/* provider ごとのプラン利用状況。worktree に紐づかないアプリ全体の情報なので、
+   同じくアプリ全体の情報である Errors 行と並べて sidebar のフッタに置く */
 .plan-usage {
   flex-shrink: 0;
   border-top: 1px solid var(--border);
   padding: 4px 12px 5px;
   font-size: 12px;
+  container-type: inline-size;
 }
 
 .plan-usage-heading,
@@ -174,8 +176,9 @@ body,
 }
 
 .plan-usage-provider {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 auto;
+  /* sidebar を最小幅まで縮めても provider が分かるように、名前の分は残す。 */
+  min-width: 68px;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -219,6 +222,20 @@ body,
   color: var(--text-subtle);
 }
 
+/* sidebar は 220px まで縮められる。そこまで狭いと使用率と残り時間は並ばないので、
+   残り時間を落として使用率を優先する (リセット時刻は行の tooltip に残る)。 */
+@container (max-width: 280px) {
+  .plan-usage-remaining {
+    display: none;
+  }
+
+  .plan-usage-window-label,
+  .plan-usage-window {
+    width: 44px;
+  }
+}
+
+/* エラーログへの常設導線。0 件でも見えるように置き、エラーがある時だけ danger 色にする */
 .sidebar-errors-row {
   height: 32px;
   flex-shrink: 0;

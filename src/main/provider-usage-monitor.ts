@@ -2,6 +2,7 @@ import type { ProviderPlanUsage, SessionProvider } from "../shared/session.js";
 import type { PlanUsage } from "./agent.js";
 import { recordAppWarning } from "./error-center.js";
 import { toAppError } from "./errors.js";
+import type { ResolvedProviderCommand } from "./provider-command.js";
 
 // ウィンドウがフォーカスされている間だけ動くプラン利用状況のポーリング。
 // 1 tick で「ログインシェルに 3 provider のパスを解決させる → 見つかった provider を
@@ -10,8 +11,8 @@ const TICK_INTERVAL_MS = 60_000;
 
 export interface ProviderUsageMonitorDeps {
   listProviders(): { provider: SessionProvider; command: string }[];
-  resolveCommandPaths(commands: readonly string[]): Promise<Map<string, string>>;
-  loadPlanUsage(provider: SessionProvider, commandPath: string): Promise<PlanUsage>;
+  resolveCommandPaths(commands: readonly string[]): Promise<Map<string, ResolvedProviderCommand>>;
+  loadPlanUsage(provider: SessionProvider, command: ResolvedProviderCommand): Promise<PlanUsage>;
   planUsageChanged(usages: ProviderPlanUsage[]): void;
 }
 
@@ -34,6 +35,12 @@ export class ProviderUsageMonitor {
     void this.tick();
   }
 
+  // 一覧が空だと新規セッションを開始できないので、フォーカスが無くても起動時に
+  // 1 回だけ取る。定期取得は始めない。
+  async refreshOnce(): Promise<void> {
+    await this.tick();
+  }
+
   stop(): void {
     if (this.timer) {
       clearInterval(this.timer);
@@ -48,9 +55,9 @@ export class ProviderUsageMonitor {
     this.ticking = true;
     try {
       const providers = this.deps.listProviders();
-      let commandPaths: Map<string, string>;
+      let commands: Map<string, ResolvedProviderCommand>;
       try {
-        commandPaths = await this.deps.resolveCommandPaths(
+        commands = await this.deps.resolveCommandPaths(
           providers.map((provider) => provider.command),
         );
       } catch (error) {
@@ -63,8 +70,8 @@ export class ProviderUsageMonitor {
       // 見つからなかった provider は結果に入れない。「一覧に居ない = 入っていない」
       // として、利用状況の行にも新規セッションの選択肢にも出さない。
       const installed = providers.flatMap((provider) => {
-        const commandPath = commandPaths.get(provider.command);
-        return commandPath === undefined ? [] : [{ ...provider, commandPath }];
+        const command = commands.get(provider.command);
+        return command === undefined ? [] : [{ ...provider, resolved: command }];
       });
       this.deps.planUsageChanged(await Promise.all(installed.map((entry) => this.loadOne(entry))));
     } finally {
@@ -75,11 +82,11 @@ export class ProviderUsageMonitor {
   private async loadOne(entry: {
     provider: SessionProvider;
     command: string;
-    commandPath: string;
+    resolved: ResolvedProviderCommand;
   }): Promise<ProviderPlanUsage> {
     const provider = entry.provider;
     try {
-      const usage = await this.deps.loadPlanUsage(provider, entry.commandPath);
+      const usage = await this.deps.loadPlanUsage(provider, entry.resolved);
       if (usage.state !== "ok") {
         // 未ログインとプラン外は「そういう状態である」だけなのでエラーにしない。
         return { provider, state: usage.state };

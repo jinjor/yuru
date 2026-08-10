@@ -1,6 +1,7 @@
 import type { PlanUsageWindow, SessionProvider } from "../shared/session.js";
 import type { AgentDefinition } from "../shared/agent.js";
 import type { PendingTerminal, TerminalRuntimeInfo } from "./terminal-runtime.js";
+import type { ResolvedProviderCommand } from "./provider-command.js";
 import type { WorktreeSessionHint } from "./worktree-session-detection.js";
 
 export interface SessionSnapshot {
@@ -79,9 +80,9 @@ export interface SessionProviderAdapter {
   loadStoredSessionPreview(providerSessionId: string): Promise<SessionPreview | null>;
   loadWorktreeSessionHints(worktreePaths: readonly string[]): Promise<WorktreeSessionHint[]>;
   hasStoredSession(providerSessionId: string): Promise<boolean>;
-  // commandPath はログインシェルで解決した CLI の絶対パス。Yuru は認証情報を
+  // command はログインシェルで解決した CLI の絶対パスと PATH。Yuru は認証情報を
   // 自分では扱わず、CLI に自分のログインを使わせる。
-  loadPlanUsage(commandPath: string): Promise<PlanUsage>;
+  loadPlanUsage(command: ResolvedProviderCommand): Promise<PlanUsage>;
   createResumeLaunch(session: ResumeSessionTarget): Promise<LaunchRequest>;
   createWorktreeLaunch(context: WorktreeContext): Promise<LaunchRequest>;
   waitForSessionId(pending: PendingSession): Promise<string>;
