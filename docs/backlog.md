@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-08-09
+Last updated: 2026-08-11
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -59,7 +59,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F28 | feature | Files | ファイル検索の最近開いたファイル履歴 | Cmd+P 空入力時に履歴を出したい |
 | I11 | investigate | App | モーダルとショートカットの管理設計を決める (詳細: docs/backlog-details/I11-modal-management.md) | FileSearch 導入時に Cmd+P が他モーダル裏で発火する問題が出たため、場当たり対応せず設計として直したい |
 | P17 | polish | Repos / Sessions | getRepos が毎回全セッションのログを読むのをやめる | 一覧は ID と並び順程度に痩せさせ、プレビュー等のセッション表示状態はカード側が個別に取得する。session:changed push の続きで、将来のカード単位購読にも繋がる |
-| F56 | feature | Sessions / Review | 別の agent に会話コンテキスト付きでレビューを依頼しやすくする | 実装時の会話にある要件・確認済みの事実・設計判断を、別 provider のレビューへ簡単に引き継ぎたい。詳細: docs/backlog-details/F56-conversation-context-review.md |
 | P21 | polish | App | UI をクリックした時のインタラクションを全体的に見直す | 詳細: docs/backlog-details/P21-ui-click-interaction.md |
 | B13 | bug | Sessions / Providers | kimi のセッションを開いただけで作業が発生してトークンを消費する | 起動時の指示に agent が反応して初期調査を始めてしまうと思われる |
 | F57 | feature | Files / Preview | HTML プレビューを手動でリロードできるようにする | CSS/JS 単独の変更は entry の content が変わらないと iframe が再読み込みされず表示に反映されない。現状は表示モードの切り替えで再マウントさせるしかない |

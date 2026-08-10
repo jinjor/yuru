@@ -1,0 +1,4 @@
+interface:
+  display_name: "Yuru でレビューを依頼"
+  short_description: "Yuru で独立したコードレビューを開始"
+  default_prompt: "$request-yuru-review を使って、現在の Yuru worktree の独立したレビューを開始してください。"
