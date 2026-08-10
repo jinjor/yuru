@@ -3,6 +3,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -48,7 +49,7 @@ export function App() {
   const [isErrorLogOpen, setIsErrorLogOpen] = useState(false);
   const removalTarget = findWorktree(repos, removalTargetId);
   // インストールされている provider だけが利用状況に現れる。
-  const availableProviders = planUsages.map((usage) => usage.provider);
+  const availableProviders = useMemo(() => planUsages.map((usage) => usage.provider), [planUsages]);
   const keepAliveWorktrees = collectKeepAliveWorktrees(
     repos,
     selectedWorktreeId,

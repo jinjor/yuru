@@ -164,8 +164,8 @@ worktree context prompt は `~/.yuru/worktree-context-prompt.txt` で差し替�
   - 過去に provider 別の配置 (`.claude/worktrees` / `.yuru/worktrees`) で作られた worktree は
     移行せず、そのまま Git worktree として扱う
 - start session for worktree
-  - session が紐づいていない task worktree を選択すると、Terminal に
-    既存 session (suggested) と新規 session (Claude / Codex) の選択肢が出る
+  - task worktree の Terminal ホームには、primary session 全件、既存 session (suggested)、
+    新規 session (Claude / Codex) の選択肢が常に出る
   - 新規作成した worktree も既存の Git worktree も、この同じ flow で session を開始する
   - session の起動に失敗しても worktree は削除しない
 - resume primary session
@@ -205,13 +205,14 @@ row に残る操作は選択と `︙ → Remove worktree` (worktree lifecycle) �
 
 session lifecycle の操作は選択中 worktree の Terminal が担う。Terminal のヘッダは
 `[ホーム] [live terminal runtime...]` のタブ列で、runtime の生成・終了から一覧を導出する。
-ホームは常設で、現在の session start surface を表示する。
+ホームは常設で、session の一覧と開始操作を表示する。
 
-- primary がない worktree: suggested session の一覧 (クリックで primary へ昇格して resume) と、
-  新規 session (Claude / Codex) の選択肢
-- primary がある worktree: 先頭 primary の preview と resume 操作。inactive の時だけ detach
-  も表示し、detach すると次の primary が代表になる。残っていなければ primary なしの
-  選択肢に戻る
+- task worktree: primary session 全件、suggested session 全件、新規 session (Claude / Codex)
+  を primary の有無に関わらず表示する
+- active な primary 行: 対応する runtime タブを選択する
+- inactive な primary 行: provider session を resume する。detach は行の副操作として表示し、
+  strong link だけを外す
+- suggested session 行: primary へ昇格して resume する
 - main worktree: standalone terminal を開く操作
 
 runtime タブは `activeTerminalRuntimeIds` の順に並び、対応する primary session があれば
@@ -244,10 +245,10 @@ visible に戻ると effect は再実行され、大半の state (git status、d
   (一般的なエディタの検索結果と同じ挙動に合わせた設計判断)。query 自体はユーザー
   操作でしか変わらない state として保持する
 
-現時点のホームは複数 primary のうち先頭だけを代表として表示する。fresh mount はホームを
-表示し、session 操作 (resume / promote / 新規 session / standalone terminal 開始) が成功した
-時だけ、その runtime タブを選択する。API など外部から生まれた runtime はタブだけを増やし、
-現在タブを変えない。main worktree は初回選択時に standalone terminal を自動で開く
+ホームは複数 primary をすべて表示し、active 行は既存 runtime タブの選択、inactive 行は
+resume を行う。fresh mount はホームを表示し、session 操作 (resume / promote / 新規 session /
+standalone terminal 開始) が成功した時だけ、その runtime タブを選択する。API など外部から
+生まれた runtime はタブだけを増やし、現在タブを変えない。main worktree は初回選択時に standalone terminal を自動で開く
 (生きている runtime は IPC 側が再利用する)。session がなくても `Files`, `Changes`, preview
 は worktree に対して使える。terminal runtime の exit では worktree の選択を保ち、表示中
 runtime が終わった時だけホームへ戻る。main worktree でも自動では開き直さない。

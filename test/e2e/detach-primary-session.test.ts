@@ -76,18 +76,19 @@ test("先頭 primary を detach すると次の primary が代表になる", asy
     const window = launched.window;
     const card = worktreeCard(window, "feat-detach-next");
 
-    // Step 1 の UI は配列の先頭だけを代表として表示する。
+    // カードは先頭だけを代表として表示し、ホームには全 primary が並ぶ。
     await expect(card.locator('[aria-label="Claude primary session inactive"]')).toBeVisible();
     await expect(card.locator('[aria-label="Codex primary session inactive"]')).toHaveCount(0);
 
     await card.click();
     const sessionView = visibleSessionView(window);
-    await expect(sessionView.locator(".resume-primary-action")).toContainText("Claude");
-    await sessionView.locator(".detach-primary-action").click();
+    const claudeRow = sessionView.locator(".session-home-row", { hasText: "Claude" });
+    await expect(claudeRow).toBeVisible();
+    await claudeRow.locator(".detach-primary-action").click();
 
     await expect(card.locator('[aria-label="Claude primary session inactive"]')).toHaveCount(0);
     await expect(card.locator('[aria-label="Codex primary session inactive"]')).toBeVisible();
-    await expect(sessionView.locator(".resume-primary-action")).toContainText("Codex");
+    await expect(sessionView.locator(".session-home-row", { hasText: "Codex" })).toBeVisible();
     const metadata = await readMetadata(context);
     expect(metadata.taskWorktrees[0].primarySessions).toEqual([
       { provider: "codex", providerSessionId: "detach-session-2" },

@@ -9,6 +9,7 @@ import {
   createE2eContext,
   createGitWorktree,
   launchWindow,
+  readMetadata,
   registerRepo,
   visibleSessionView,
   worktreeCard,
@@ -17,6 +18,112 @@ import {
 const execFileAsync = promisify(execFile);
 const FIRST_SESSION_ID = "019e5862-8776-7723-8de9-3460e9600119";
 const SECOND_SESSION_ID = "019e5862-8776-7723-8de9-3460e9600120";
+const SUGGESTED_SESSION_ID = "019e5862-8776-7723-8de9-3460e9600121";
+
+test("ホームから複数 primary を操作し、suggested を promote できる", async () => {
+  test.setTimeout(60_000);
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context);
+    const worktreePath = await createGitWorktree(context, repoDir, "session-home");
+    await seedCodexStoredSession(
+      context.tmpHome,
+      worktreePath,
+      FIRST_SESSION_ID,
+      "First primary session",
+    );
+    await seedCodexStoredSession(
+      context.tmpHome,
+      worktreePath,
+      SECOND_SESSION_ID,
+      "Second primary session",
+    );
+    await seedCodexStoredSession(
+      context.tmpHome,
+      worktreePath,
+      SUGGESTED_SESSION_ID,
+      "Suggested session to promote",
+    );
+    await registerRepo(context, repoDir, [
+      {
+        worktreePath,
+        primarySessions: [
+          { provider: "codex", providerSessionId: FIRST_SESSION_ID },
+          { provider: "codex", providerSessionId: SECOND_SESSION_ID },
+        ],
+      },
+    ]);
+    const fakeBin = await createFakeCodexBin(context.tmpHome);
+    const launched = await launchWindow(context, {
+      env: { PATH: `${fakeBin}:${process.env.PATH ?? ""}` },
+    });
+    app = launched.app;
+    const window = launched.window;
+    const sessionView = visibleSessionView(window);
+    await worktreeCard(window, "session-home").click();
+
+    const primaryRows = sessionView.locator(".session-home-row");
+    await expect(primaryRows).toHaveCount(2);
+    await expect(primaryRows.nth(0)).toContainText("First primary session");
+    await expect(primaryRows.nth(1)).toContainText("Second primary session");
+    await expect(sessionView.locator(".suggested-session-action")).toContainText(
+      "Suggested session to promote",
+    );
+    await expect(sessionView.locator(".action-surface-label")).toHaveText([
+      "Sessions",
+      "Suggested",
+      "New session",
+    ]);
+
+    // detach は inactive primary 行の副操作であり、他の primary は残る。
+    await primaryRows.nth(1).locator(".detach-primary-action").click();
+    await expect(primaryRows).toHaveCount(1);
+    expect((await readMetadata(context)).taskWorktrees[0].primarySessions).toEqual([
+      { provider: "codex", providerSessionId: FIRST_SESSION_ID },
+    ]);
+
+    // inactive 行は resume して runtime タブを選ぶ。
+    await primaryRows.nth(0).locator(".resume-primary-action").click();
+    await expect(sessionView.locator(".xterm")).toContainText(FIRST_SESSION_ID, {
+      timeout: 10_000,
+    });
+    await expect(
+      sessionView.locator(".session-tab", { hasText: "First primary session" }),
+    ).toHaveClass(/active/);
+
+    // active 行は resume せず、生きている runtime のタブを選ぶ。
+    await sessionView.locator(".session-tab-home").click();
+    const activePrimaryRow = sessionView.locator(".session-home-row", {
+      hasText: "First primary session",
+    });
+    await expect(activePrimaryRow).toHaveClass(/active/);
+    await activePrimaryRow.locator(".resume-primary-action").click();
+    await expect(sessionView.locator(".xterm")).toContainText(FIRST_SESSION_ID);
+    await expect(sessionView.locator(".session-tab:not(.session-tab-home)")).toHaveCount(1);
+
+    // suggested は primary に昇格して resume され、新しいタブが選択される。
+    await sessionView.locator(".session-tab-home").click();
+    await sessionView
+      .locator(".suggested-session-action", { hasText: "Suggested session to promote" })
+      .click();
+    await expect(sessionView.locator(".xterm")).toContainText(SUGGESTED_SESSION_ID, {
+      timeout: 10_000,
+    });
+    await expect(sessionView.locator(".session-tab:not(.session-tab-home)")).toHaveCount(2);
+    expect((await readMetadata(context)).taskWorktrees[0].primarySessions).toEqual([
+      { provider: "codex", providerSessionId: FIRST_SESSION_ID },
+      {
+        provider: "codex",
+        providerSessionId: SUGGESTED_SESSION_ID,
+        cwd: worktreePath,
+      },
+    ]);
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
 
 test("複数 runtime をタブで切り替え、kill と exit 後はホームへ戻る", async () => {
   test.setTimeout(60_000);
@@ -61,7 +168,10 @@ test("複数 runtime をタブで切り替え、kill と exit 後はホームへ
     await expect(sessionView.locator(".session-tab:not(.session-tab-home)")).toHaveCount(0);
 
     // Yuru 内で resume した runtime はタブへ追加され、そのまま選択される。
-    await sessionView.locator(".resume-primary-action").click();
+    await sessionView
+      .locator(".session-home-row", { hasText: "Parent session" })
+      .locator(".resume-primary-action")
+      .click();
     const firstTab = sessionView.locator(".session-tab", { hasText: "Parent session" });
     await expect(firstTab).toHaveClass(/active/);
     await expect(firstTab.locator('[aria-label^="Codex primary session active"]')).toBeVisible();
@@ -161,7 +271,9 @@ test("複数 runtime をタブで切り替え、kill と exit 後はホームへ
     await expect(homeTab).toHaveClass(/active/);
     await expect(sessionView.locator(".terminal-session-start")).toBeVisible();
     await expect(sessionView.locator(".xterm")).toHaveCount(0);
-    await expect(sessionView.locator(".resume-primary-action")).toContainText(updatedPreview);
+    await expect(
+      sessionView.locator(".resume-primary-action", { hasText: updatedPreview }),
+    ).toBeVisible();
   } finally {
     await closeYuru(app);
     await context.cleanup();

@@ -377,6 +377,7 @@ export const SessionView = memo(function SessionView({
             <TerminalSessionStart
               providers={providers}
               worktree={worktree}
+              onSelectPrimarySession={setSelectedTerminalRuntimeId}
               onResumePrimarySession={(providerSessionKey) => {
                 void startTerminalRuntime(() =>
                   window.electronAPI.resumePrimarySession(worktreeId, providerSessionKey),
