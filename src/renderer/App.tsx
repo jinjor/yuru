@@ -9,9 +9,10 @@ import {
 } from "react";
 import "@xterm/xterm/css/xterm.css";
 import { AlertTriangle } from "lucide-react";
-import type { AppErrorNotice } from "../shared/ipc";
+import type { AppError, AppErrorNotice } from "../shared/ipc";
 import type { RepoListItem } from "../shared/metadata";
 import type { ProviderPlanUsage } from "../shared/session";
+import { AppErrorToast } from "./components/AppErrorToast";
 import { BranchNameInput, type CreateWorktreeMode } from "./components/BranchNameInput";
 import { ErrorLogModal } from "./components/ErrorLogModal";
 import { ProviderPlanUsageRows } from "./components/ProviderPlanUsageRows";
@@ -47,6 +48,7 @@ export function App() {
   const [sidebarWidth, setSidebarWidth] = useState(390);
   const [errorNotices, setErrorNotices] = useState<AppErrorNotice[]>([]);
   const [isErrorLogOpen, setIsErrorLogOpen] = useState(false);
+  const [toastError, setToastError] = useState<AppError | null>(null);
   const removalTarget = findWorktree(repos, removalTargetId);
   // インストールされている provider だけが利用状況に現れる。
   const availableProviders = useMemo(() => planUsages.map((usage) => usage.provider), [planUsages]);
@@ -59,6 +61,10 @@ export function App() {
   const selectWorktree = useCallback((worktreeId: string): void => {
     setSelectedWorktreeId(worktreeId);
     setVisitedWorktreeIds((prev) => (prev.has(worktreeId) ? prev : new Set(prev).add(worktreeId)));
+  }, []);
+
+  const dismissToast = useCallback((): void => {
+    setToastError(null);
   }, []);
 
   const refreshRepos = useCallback(async (): Promise<RepoListItem[] | null> => {
@@ -272,6 +278,7 @@ export function App() {
             sidebarWidth={sidebarWidth}
             worktree={worktree}
             worktreeId={worktree.worktreeId}
+            onError={setToastError}
             onSessionsChanged={refreshRepos}
           />
         </Activity>
@@ -300,6 +307,7 @@ export function App() {
       {isErrorLogOpen && (
         <ErrorLogModal notices={errorNotices} onClose={() => setIsErrorLogOpen(false)} />
       )}
+      {toastError && <AppErrorToast error={toastError} onDismiss={dismissToast} />}
     </div>
   );
 }

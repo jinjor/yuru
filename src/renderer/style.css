@@ -2716,6 +2716,72 @@ button.github-badge {
   background: rgba(240, 143, 134, 0.26);
 }
 
+/* その場で失敗を伝える一時通知。詳細は error center にも残る。 */
+.app-error-toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 110;
+  width: min(420px, calc(100vw - 40px));
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 10px 11px 12px;
+  border: 1px solid rgba(240, 143, 134, 0.5);
+  border-radius: 10px;
+  background: #25202a;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.38);
+}
+
+.app-error-toast-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--danger);
+}
+
+.app-error-toast-body {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.app-error-toast-message {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.app-error-toast-detail {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.app-error-toast-dismiss {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-subtle);
+  cursor: pointer;
+}
+
+.app-error-toast-dismiss:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
 /* Error log modal */
 .error-log {
   background: var(--bg-panel);

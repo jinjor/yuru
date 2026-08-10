@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import type {
+  AppError,
   GitPathState,
   GitReviewState,
   Result,
@@ -28,6 +29,7 @@ import { resultDataOrNull } from "../utils/result";
 
 interface SessionViewProps {
   appRef: RefObject<HTMLDivElement | null>;
+  onError: (error: AppError) => void;
   onOpenExternal: (url: string) => void;
   providers: SessionProvider[];
   sidebarWidth: number;
@@ -68,6 +70,7 @@ function isPathChangedInScope(
 
 export const SessionView = memo(function SessionView({
   appRef,
+  onError,
   onOpenExternal,
   providers,
   sidebarWidth,
@@ -151,6 +154,7 @@ export const SessionView = memo(function SessionView({
       try {
         const result = await start();
         if (!result.ok) {
+          onError(result.error);
           return;
         }
         setSelectedTerminalRuntimeId(result.data.terminalRuntimeId);
@@ -162,7 +166,7 @@ export const SessionView = memo(function SessionView({
         isStartingRef.current = false;
       }
     },
-    [onSessionsChanged],
+    [onError, onSessionsChanged],
   );
 
   const detachPrimarySession = useCallback(

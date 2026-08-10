@@ -250,7 +250,7 @@ test("suggested session が複数ある worktree は件数を表示する", asyn
   }
 });
 
-test("provider store から消えた primary session は選択時に detach される", async () => {
+test("provider store から消えた primary session は通知して detach される", async () => {
   const context = await createE2eContext();
   let app: ElectronApplication | null = null;
   try {
@@ -259,7 +259,10 @@ test("provider store から消えた primary session は選択時に detach さ�
     await registerRepo(context, repoDir, [
       {
         worktreePath,
-        primarySessions: [{ provider: "claude", providerSessionId: "missing-session" }],
+        primarySessions: [
+          { provider: "claude", providerSessionId: "missing-claude-session" },
+          { provider: "codex", providerSessionId: "missing-codex-session" },
+        ],
       },
     ]);
 
@@ -271,13 +274,38 @@ test("provider store から消えた primary session は選択時に detach さ�
     await expect(card.locator('[aria-label="Claude primary session inactive"]')).toBeVisible();
     // 選択では resume しないため、detach は Terminal からの明示 resume で起こる。
     await card.click();
-    await visibleSessionView(window).locator(".resume-primary-action").click();
+    const sessionView = visibleSessionView(window);
+    await sessionView
+      .locator(".session-home-row", { hasText: "Claude" })
+      .locator(".resume-primary-action")
+      .click();
+
+    const toast = window.locator(".app-error-toast");
+    await expect(toast).toContainText("This session no longer exists.");
+    await expect(toast).toContainText(
+      "claude session missing-claude-session was not found in saved conversations.",
+    );
 
     await expect(
-      worktreeCard(window, "missing-primary").locator(
-        '[aria-label="Claude primary session inactive"]',
-      ),
+      sessionView.locator(".session-home-row", { hasText: "Claude" }),
     ).toHaveCount(0);
+    await expect(sessionView.locator(".session-home-row", { hasText: "Codex" })).toBeVisible();
+    await expect(window.locator(".sidebar-errors-row .error-count-badge:not(.warning)")).toHaveText(
+      "1",
+    );
+
+    await toast.locator(".app-error-toast-dismiss").click();
+    await expect(toast).toHaveCount(0);
+
+    await sessionView
+      .locator(".session-home-row", { hasText: "Codex" })
+      .locator(".resume-primary-action")
+      .click();
+    await expect(toast).toContainText(
+      "codex session missing-codex-session was not found in saved conversations.",
+    );
+    await expect(toast).toHaveCount(0, { timeout: 7_000 });
+
     await expect(worktreeCard(window, "missing-primary")).toContainText("empty");
     const metadata = await readMetadata(context);
     expect(metadata.taskWorktrees[0].primarySessions).toEqual([]);
