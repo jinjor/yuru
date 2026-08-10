@@ -2719,23 +2719,27 @@ button.github-badge {
 /* その場で失敗を伝える一時通知。詳細は error center にも残る。 */
 .app-error-toast {
   position: fixed;
-  right: 20px;
-  bottom: 20px;
+  right: 16px;
+  bottom: 16px;
   z-index: 110;
-  width: min(420px, calc(100vw - 40px));
+  max-width: min(360px, calc(100vw - 32px));
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 11px 10px 11px 12px;
-  border: 1px solid rgba(240, 143, 134, 0.5);
-  border-radius: 10px;
-  background: #25202a;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.38);
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-left: 3px solid var(--danger);
+  border-radius: 8px;
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
 .app-error-toast-icon {
   flex-shrink: 0;
-  margin-top: 1px;
+  margin-top: 2px;
   color: var(--danger);
 }
 
@@ -2748,9 +2752,6 @@ button.github-badge {
 }
 
 .app-error-toast-message {
-  color: var(--text);
-  font-size: 13px;
-  line-height: 1.4;
   overflow-wrap: anywhere;
 }
 
@@ -2764,13 +2765,13 @@ button.github-badge {
 }
 
 .app-error-toast-dismiss {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: none;
+  border: 0;
   border-radius: 6px;
   background: transparent;
   color: var(--text-subtle);
