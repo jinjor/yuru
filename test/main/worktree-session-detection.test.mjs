@@ -237,6 +237,114 @@ test("detectCodexWorktreeSessions は patch_apply_end.changes を読む", () => 
   ]);
 });
 
+test("detectCodexWorktreeSessions は 0.147 の event_msg item_completed CommandExecution.cwd (file URL) を読む", () => {
+  const hints = detectCodexWorktreeSessions(
+    jsonl(
+      {
+        type: "session_meta",
+        payload: {
+          id: "codex-session",
+          cwd: "/repo",
+        },
+      },
+      {
+        type: "response_item",
+        payload: {
+          type: "custom_tool_call",
+          name: "exec",
+          input:
+            'const r = await tools.exec_command({ cmd: "pwd", workdir: "/repo/.yuru/worktrees/task-a" });',
+        },
+      },
+      {
+        type: "event_msg",
+        payload: {
+          type: "item_completed",
+          item: {
+            type: "CommandExecution",
+            cwd: "file:///repo/.yuru/worktrees/task-a",
+          },
+        },
+      },
+    ),
+    ["/repo/.yuru/worktrees/task-a"],
+  );
+
+  assert.deepEqual(hints, [
+    {
+      provider: "codex",
+      providerSessionId: "codex-session",
+      worktreePath: "/repo/.yuru/worktrees/task-a",
+      worktreeRank: 0,
+    },
+  ]);
+});
+
+test("detectCodexWorktreeSessions は 0.147 の item_completed CommandExecution.cwd が file URL でなければ無視する", () => {
+  const hints = detectCodexWorktreeSessions(
+    jsonl(
+      {
+        type: "session_meta",
+        payload: {
+          id: "codex-session",
+          cwd: "/repo",
+        },
+      },
+      {
+        type: "event_msg",
+        payload: {
+          type: "item_completed",
+          item: {
+            type: "CommandExecution",
+            cwd: "/repo/.yuru/worktrees/task-a",
+          },
+        },
+      },
+    ),
+    ["/repo/.yuru/worktrees/task-a"],
+  );
+
+  assert.deepEqual(hints, []);
+});
+
+test("detectCodexWorktreeSessions は 0.147 の event_msg item_completed FileChange.changes を読む", () => {
+  const hints = detectCodexWorktreeSessions(
+    jsonl(
+      {
+        type: "session_meta",
+        payload: {
+          id: "codex-session",
+          cwd: "/repo",
+        },
+      },
+      {
+        type: "event_msg",
+        payload: {
+          type: "item_completed",
+          item: {
+            type: "FileChange",
+            changes: {
+              "/repo/.yuru/worktrees/task-a/src/file.ts": {
+                type: "update",
+              },
+            },
+          },
+        },
+      },
+    ),
+    ["/repo/.yuru/worktrees/task-a"],
+  );
+
+  assert.deepEqual(hints, [
+    {
+      provider: "codex",
+      providerSessionId: "codex-session",
+      worktreePath: "/repo/.yuru/worktrees/task-a",
+      worktreeRank: 0,
+    },
+  ]);
+});
+
 test("detectCodexWorktreeSessions は session 内の worktreeRank を provider 側で決める", () => {
   const metaWorktree = "/repo/.yuru/worktrees/meta";
   const patchWorktree = "/repo/.yuru/worktrees/patch";

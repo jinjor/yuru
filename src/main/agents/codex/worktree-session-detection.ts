@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { parseJsonLinesAs } from "../../agent-store-utils.js";
 import {
   resolveContainingWorktreePath,
@@ -18,6 +19,14 @@ interface CodexFunctionCallWorkdir {
 }
 
 interface CodexPatchApplyChanges {
+  changedPaths: string[];
+}
+
+interface CodexCommandExecutionCwd {
+  cwd: string;
+}
+
+interface CodexFileChangeChanges {
   changedPaths: string[];
 }
 
@@ -159,6 +168,78 @@ function parseCodexPatchApplyChanges(entry: unknown): CodexPatchApplyChanges | n
   };
 }
 
+// CLI >= 0.147 replaced the exec_command_end / function_call.exec_command payloads with a
+// custom_tool_call (name "exec") whose arguments are a freeform JS snippet, not JSON. The cwd it
+// ran under is instead reported separately as a structured event_msg item_completed CommandExecution.
+function parseCodexCommandExecutionCwd(entry: unknown): CodexCommandExecutionCwd | null {
+  if (typeof entry !== "object" || entry === null) {
+    return null;
+  }
+
+  const maybeEntry = entry as {
+    type?: unknown;
+    payload?: {
+      type?: unknown;
+      item?: {
+        type?: unknown;
+        cwd?: unknown;
+      };
+    };
+  };
+
+  if (
+    maybeEntry.type !== "event_msg" ||
+    maybeEntry.payload?.type !== "item_completed" ||
+    maybeEntry.payload.item?.type !== "CommandExecution" ||
+    typeof maybeEntry.payload.item.cwd !== "string"
+  ) {
+    return null;
+  }
+
+  try {
+    return { cwd: fileURLToPath(maybeEntry.payload.item.cwd) };
+  } catch {
+    return null;
+  }
+}
+
+// Same CLI >= 0.147 change replaced patch_apply_end with an event_msg item_completed FileChange.
+function parseCodexFileChangeChanges(entry: unknown): CodexFileChangeChanges | null {
+  if (typeof entry !== "object" || entry === null) {
+    return null;
+  }
+
+  const maybeEntry = entry as {
+    type?: unknown;
+    payload?: {
+      type?: unknown;
+      item?: {
+        type?: unknown;
+        changes?: unknown;
+      };
+    };
+  };
+
+  if (
+    maybeEntry.type !== "event_msg" ||
+    maybeEntry.payload?.type !== "item_completed" ||
+    maybeEntry.payload.item?.type !== "FileChange"
+  ) {
+    return null;
+  }
+  if (
+    !maybeEntry.payload.item.changes ||
+    typeof maybeEntry.payload.item.changes !== "object" ||
+    Array.isArray(maybeEntry.payload.item.changes)
+  ) {
+    return null;
+  }
+
+  return {
+    changedPaths: Object.keys(maybeEntry.payload.item.changes),
+  };
+}
+
 function parseJsonLineEntries(lines: readonly CodexSessionLine[]): JsonLineEntry[] {
   return lines.flatMap((line) => {
     if (!line.text) {
@@ -254,6 +335,30 @@ function detectCodexWorktreeSessionEntries(
 
   for (const entry of entries) {
     const parsed = parseCodexPatchApplyChanges(entry.entry);
+    if (!parsed) {
+      continue;
+    }
+    for (const changedPath of parsed.changedPaths) {
+      const worktreePath = resolveContainingWorktreePath(changedPath, worktreePaths);
+      if (worktreePath) {
+        addEvidence(worktreePath, CODEX_EVIDENCE_RANK.patch, entry.lineIndex);
+      }
+    }
+  }
+
+  for (const entry of entries) {
+    const parsed = parseCodexCommandExecutionCwd(entry.entry);
+    if (!parsed) {
+      continue;
+    }
+    const worktreePath = resolveContainingWorktreePath(parsed.cwd, worktreePaths);
+    if (worktreePath) {
+      addEvidence(worktreePath, CODEX_EVIDENCE_RANK.cwd, entry.lineIndex);
+    }
+  }
+
+  for (const entry of entries) {
+    const parsed = parseCodexFileChangeChanges(entry.entry);
     if (!parsed) {
       continue;
     }
