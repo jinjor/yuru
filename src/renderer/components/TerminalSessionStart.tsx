@@ -38,30 +38,34 @@ export function TerminalSessionStart({
             <OpenTerminalSection onOpen={onOpenWorktreeTerminal} />
           ) : (
             <>
-              <div className="action-surface-section">
-                <div className="action-surface-label">Sessions</div>
-                {worktree.primarySessions.map((primarySession) => (
-                  <PrimarySessionAction
-                    key={
-                      primarySession.providerSessionKey ?? primarySession.activeTerminalRuntimeId
-                    }
-                    primarySession={primarySession}
-                    onSelectRuntime={onSelectPrimarySession}
-                    onResume={onResumePrimarySession}
-                    onDetach={onDetachPrimarySession}
-                  />
-                ))}
-              </div>
-              <div className="action-surface-section">
-                <div className="action-surface-label">Suggested</div>
-                {worktree.suggestedSessions.map((suggestedSession) => (
-                  <SuggestedSessionAction
-                    key={suggestedSession.providerSessionKey}
-                    suggestedSession={suggestedSession}
-                    onSelect={() => onResumeSuggestedSession(suggestedSession.providerSessionKey)}
-                  />
-                ))}
-              </div>
+              {worktree.primarySessions.length > 0 && (
+                <div className="action-surface-section">
+                  <div className="action-surface-label">Sessions</div>
+                  {worktree.primarySessions.map((primarySession) => (
+                    <PrimarySessionAction
+                      key={
+                        primarySession.providerSessionKey ?? primarySession.activeTerminalRuntimeId
+                      }
+                      primarySession={primarySession}
+                      onSelectRuntime={onSelectPrimarySession}
+                      onResume={onResumePrimarySession}
+                      onDetach={onDetachPrimarySession}
+                    />
+                  ))}
+                </div>
+              )}
+              {worktree.suggestedSessions.length > 0 && (
+                <div className="action-surface-section">
+                  <div className="action-surface-label">Suggested</div>
+                  {worktree.suggestedSessions.map((suggestedSession) => (
+                    <SuggestedSessionAction
+                      key={suggestedSession.providerSessionKey}
+                      suggestedSession={suggestedSession}
+                      onSelect={() => onResumeSuggestedSession(suggestedSession.providerSessionKey)}
+                    />
+                  ))}
+                </div>
+              )}
               <div className="action-surface-section">
                 <div className="action-surface-label">New session</div>
                 <div className="new-session-actions">

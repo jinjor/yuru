@@ -20,6 +20,40 @@ const FIRST_SESSION_ID = "019e5862-8776-7723-8de9-3460e9600119";
 const SECOND_SESSION_ID = "019e5862-8776-7723-8de9-3460e9600120";
 const SUGGESTED_SESSION_ID = "019e5862-8776-7723-8de9-3460e9600121";
 
+test("ホームは空の session セクションを表示しない", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context);
+    const emptyWorktreePath = await createGitWorktree(context, repoDir, "empty-session-home");
+    const primaryWorktreePath = await createGitWorktree(context, repoDir, "primary-session-home");
+    await registerRepo(context, repoDir, [
+      { worktreePath: emptyWorktreePath, primarySessions: [] },
+      {
+        worktreePath: primaryWorktreePath,
+        primarySessions: [{ provider: "codex", providerSessionId: FIRST_SESSION_ID }],
+      },
+    ]);
+
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+    const sessionView = visibleSessionView(window);
+
+    await worktreeCard(window, "empty-session-home").click();
+    await expect(sessionView.locator(".action-surface-label")).toHaveText(["New session"]);
+
+    await worktreeCard(window, "primary-session-home").click();
+    await expect(sessionView.locator(".action-surface-label")).toHaveText([
+      "Sessions",
+      "New session",
+    ]);
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
 test("ホームから複数 primary を操作し、suggested を promote できる", async () => {
   test.setTimeout(60_000);
   const context = await createE2eContext();
