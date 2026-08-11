@@ -1,11 +1,15 @@
 # Architecture Notes
 
-Last updated: 2026-08-09
+Last updated: 2026-08-11
 
 この文書は現在の Yuru のアーキテクチャをまとめる。
 実装の細部、型定義、処理手順の正確な姿はコードを正とする。
 
 ## Core entities
+
+Yuru の中では、Claude Code / Codex CLI / Kimi CLI そのものを `agent` と呼ぶ。
+`provider` は agent の提供元を指し、session store の形式や resume command のように
+提供元ごとに処理が分岐する所にだけ現れる。分岐を隠した抽象の側は agent と呼ぶ。
 
 - `repo`
   - Yuru が左ペインの主導線に表示する単位
@@ -18,10 +22,10 @@ Last updated: 2026-08-09
 - `primary session`
   - task worktree に attach された session
   - 1 task worktree に複数存在でき、attach 順を保持する
-  - 1 provider session は同時に複数 task worktree の primary にはならない
+  - 1 agent session は同時に複数 task worktree の primary にはならない
 - `suggested session`
   - Yuru 外で作られ、task worktree に紐づいていると推測される session
-  - provider store から推測した weak candidate
+  - agent store から推測した weak candidate
   - 明示的な昇格操作までは primary として扱わない
 - `terminal runtime`
   - Yuru が現在起動している PTY process
@@ -35,9 +39,9 @@ Last updated: 2026-08-09
   - worktree path
   - current branch / detached HEAD
   - status, diff, file content
-- provider store
+- agent store
   - Claude / Codex の保存済み session
-  - provider session id
+  - agent session id
   - last message や timestamp
   - worktree session detection 用の path hint
 - Yuru metadata
@@ -53,8 +57,8 @@ Last updated: 2026-08-09
   - file watcher の購読状態
 
 Yuru metadata は source of truth の複製ではない。
-Git や provider store が持っている状態を丸ごとコピーせず、Yuru 自身が主導線を組み立てるために必要な最小限の情報だけを持つ。
-branch、diff、provider session の本文、terminal runtime は metadata に保存しない。
+Git や agent store が持っている状態を丸ごとコピーせず、Yuru 自身が主導線を組み立てるために必要な最小限の情報だけを持つ。
+branch、diff、agent session の本文、terminal runtime は metadata に保存しない。
 
 metadata は通常 `~/.yuru/metadata.json` に置く。
 テストや開発用に `YURU_METADATA_PATH` で保存先を差し替えられる。
@@ -76,7 +80,7 @@ metadata は通常 `~/.yuru/metadata.json` に置く。
       "primarySessions": [
         {
           "provider": "codex",
-          "providerSessionId": "..."
+          "agentSessionId": "..."
         }
       ]
     }
@@ -87,6 +91,7 @@ metadata は通常 `~/.yuru/metadata.json` に置く。
 `primarySessions` は strong link がなければ空配列になる。
 旧 schema の `primarySession` は読み込み時に単要素配列へ変換し、以後の書き込みは
 `primarySessions` だけを使う。
+旧 schema の `providerSessionId` も同じく読み込み時に `agentSessionId` として扱う。
 Git 上には存在するが、まだ Yuru metadata に strong link を持たない worktree もありうる。
 
 ファイルのレビュー記録は metadata とライフサイクル・書き込み頻度が異なるため、
@@ -102,10 +107,10 @@ Git 上には存在するが、まだ Yuru metadata に strong link を持たな
 各 repo の task worktree 一覧は、その repo に対して Git から worktree 群を読んで組み立てる。
 main worktree は task worktree として表示しない。
 task worktree は Git の管理ディレクトリの作成日時が古い順に表示する。
-その上に Yuru metadata、provider store、active terminal runtime を重ねる。
+その上に Yuru metadata、agent store、active terminal runtime を重ねる。
 
 - metadata の `primarySessions` が有効なら、それらを task worktree の primary として扱う
-- provider store の hint から worktree 配下の session を推測できる場合は suggested session として表示する
+- agent store の hint から worktree 配下の session を推測できる場合は suggested session として表示する
 - active terminal runtime があれば active として表示する
 - metadata にない Git worktree も、primary なしの task worktree として表示する
 
@@ -115,19 +120,19 @@ task worktree と primary session の strong link は、作成・昇格・解除
 worktree の外部 rename は自動追跡しない。
 古い path の strong link は起動時 maintenance で削除され、新しい path は primary なしの Git worktree として再発見される。
 
-## Provider sessions
+## Agent sessions
 
 対応 provider は Claude と Codex である。
-provider ごとの session store や resume command の違いは adapter に閉じ込める。
+provider ごとの session store や resume command の違いは agent の実装 (`src/main/agents/`) に閉じ込める。
 
 worktree session の create / resume は、Claude / Codex とも cwd = repo root で起動する。
 PTY 内で `cd` しても、`Files`, `Changes`, diff の作業ルートは runtime cwd ではなく選択中 task worktree の `worktreePath` で決まる。
 
-worktree の作成と provider session の開始は別の操作である (F43)。
-task worktree に対して新規 session を開始すると、provider session id が起動時に取れる場合は
+worktree の作成と agent session の開始は別の操作である (F43)。
+task worktree に対して新規 session を開始すると、agent session id が起動時に取れる場合は
 その場で primary の末尾に attach し、遅れて分かる provider は session id 解決後に attach する。
 初回起動時だけ worktree context を hidden prompt として注入する。
-この prompt は「provider session は repo root で起動しているが、実際の作業場所は task worktree である」ことを明示し、ファイル操作・コマンド実行・build/test は `worktreePath` で行い、回答中のファイルパスは `worktreePath` 基準の相対パスまたは絶対パスで記述するよう指示する。
+この prompt は「agent session は repo root で起動しているが、実際の作業場所は task worktree である」ことを明示し、ファイル操作・コマンド実行・build/test は `worktreePath` で行い、回答中のファイルパスは `worktreePath` 基準の相対パスまたは絶対パスで記述するよう指示する。
 
 - Claude: `--append-system-prompt`
 - Codex: `-c developer_instructions=...`
@@ -170,15 +175,15 @@ worktree context prompt は `~/.yuru/worktree-context-prompt.txt` で差し替�
   - session の起動に失敗しても worktree は削除しない
 - resume primary session
   - primary session がすでに active terminal runtime を持つ場合は、その terminal runtime を選択する
-  - inactive の場合は provider store の session を確認してから resume する
-  - provider store から消えている primary は detach する
+  - inactive の場合は agent store の session を確認してから resume する
+  - agent store から消えている primary は detach する
 - promote suggested session
   - suggested session を primary に昇格し、resume / select する
-  - 同じ provider session が別 task worktree の primary だった場合は、元の strong link を外す
+  - 同じ agent session が別 task worktree の primary だった場合は、元の strong link を外す
 - detach primary session
-  - inactive な primary session の strong link だけを外す。worktree・Git の変更・provider store の session 履歴は消さない
+  - inactive な primary session の strong link だけを外す。worktree・Git の変更・agent store の session 履歴は消さない
   - active な terminal runtime を持つ間は detach できない。先に terminal 内でセッションを終了する
-  - 外した session は provider store の path hint があれば suggested として再発見される
+  - 外した session は agent store の path hint があれば suggested として再発見される
 - remove worktree
   - 確認ダイアログ内の準備と、その後のバックグラウンド削除を分ける
   - 準備の最初に dirty を確認し、dirty ならセッションを止める前に force remove の明示確認へ切り替える
@@ -187,7 +192,7 @@ worktree context prompt は `~/.yuru/worktree-context-prompt.txt` で差し替�
   - プロセス停止の明示確認後は、表示時になかったプロセスを止めないよう再照合して全件へ SIGTERM を送り、終了を確認する。終了していなければ最新の一覧を同じダイアログに表示し、削除へ進まない
   - 追加確認が不要になった時点でダイアログを閉じ、カードを操作不能な `Removing…` 表示にして `git worktree remove` (`force` 承認済みなら `--force`) を実行する
   - 実削除の直前にも新しい session / process がないか再確認する
-  - 削除が成功したら metadata の task worktree record と file review record も削除する。branch と provider session 履歴は残す
+  - 削除が成功したら metadata の task worktree record と file review record も削除する。branch と agent session 履歴は残す
   - 実削除に失敗したら一覧を再取得してカードを実態に合わせ、モーダルは開かない。準備後に dirty / process が発生した場合は warning、その他の失敗は error として Error ログに記録する
 - startup maintenance
   - app 起動時に registered repo ごとに `git worktree list` を実行する
@@ -210,7 +215,7 @@ session lifecycle の操作は選択中 worktree の Terminal が担う。Termin
 - task worktree: primary session 全件、suggested session 全件、新規 session (Claude / Codex)
   を primary の有無に関わらず表示する
 - active な primary 行: 対応する runtime タブを選択する
-- inactive な primary 行: provider session を resume する。detach は行の副操作として表示し、
+- inactive な primary 行: agent session を resume する。detach は行の副操作として表示し、
   strong link だけを外す
 - suggested session 行: primary へ昇格して resume する
 - main worktree: standalone terminal を開く操作
