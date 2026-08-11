@@ -66,7 +66,7 @@ export async function worktree(args) {
 
 const sessionCreateUsage =
   "Usage: yuru session create --worktree <path> --provider <claude|codex|kimi> [--model <model>] [--prompt <text>]";
-const sessionProviders = new Set(["claude", "codex", "kimi"]);
+const agents = new Set(["claude", "codex", "kimi"]);
 
 function parseSessionCreateArgs(args) {
   let worktreePath;
@@ -102,7 +102,7 @@ function parseSessionCreateArgs(args) {
   if (
     !worktreePath ||
     !provider ||
-    !sessionProviders.has(provider) ||
+    !agents.has(provider) ||
     (model !== undefined && !model)
   ) {
     fail(sessionCreateUsage);
@@ -135,8 +135,8 @@ async function createSession(args) {
     Array.isArray(response.data) ||
     typeof response.data.worktreePath !== "string" ||
     response.data.provider !== provider ||
-    (response.data.providerSessionId !== null &&
-      typeof response.data.providerSessionId !== "string")
+    (response.data.agentSessionId !== null &&
+      typeof response.data.agentSessionId !== "string")
   ) {
     fail("Yuru returned an invalid session create response.");
   }

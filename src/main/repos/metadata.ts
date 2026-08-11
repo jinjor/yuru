@@ -94,7 +94,7 @@ export function detachPrimarySessionByPath(
 }
 
 function samePrimarySession(a: PrimarySessionMetadata, b: PrimarySessionMetadata): boolean {
-  return a.provider === b.provider && a.providerSessionId === b.providerSessionId;
+  return a.provider === b.provider && a.agentSessionId === b.agentSessionId;
 }
 
 export function removeTaskWorktreeByPath(worktreePath: string): void {
@@ -185,13 +185,21 @@ function parsePrimarySession(value: unknown): PrimarySessionMetadata {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Yuru metadata primarySession must be an object.");
   }
-  const maybe = value as { provider?: unknown; providerSessionId?: unknown; cwd?: unknown };
+  const maybe = value as {
+    provider?: unknown;
+    agentSessionId?: unknown;
+    providerSessionId?: unknown;
+    cwd?: unknown;
+  };
+  // 旧 schema の providerSessionId は読み込み時に agentSessionId として扱い、
+  // 以後の書き込みは agentSessionId だけを使う。
+  const agentSessionId = maybe.agentSessionId ?? maybe.providerSessionId;
   if (
     !SESSION_PROVIDER_IDS.includes(maybe.provider as SessionProvider) ||
-    typeof maybe.providerSessionId !== "string"
+    typeof agentSessionId !== "string"
   ) {
     throw new Error(
-      `Yuru metadata primarySession must have provider ${SESSION_PROVIDER_IDS.join("|")} and string providerSessionId.`,
+      `Yuru metadata primarySession must have provider ${SESSION_PROVIDER_IDS.join("|")} and string agentSessionId.`,
     );
   }
   if (maybe.cwd !== undefined && typeof maybe.cwd !== "string") {
@@ -199,7 +207,7 @@ function parsePrimarySession(value: unknown): PrimarySessionMetadata {
   }
   const primarySession: PrimarySessionMetadata = {
     provider: maybe.provider as SessionProvider,
-    providerSessionId: maybe.providerSessionId,
+    agentSessionId,
   };
   if (maybe.cwd !== undefined) {
     primarySession.cwd = maybe.cwd;

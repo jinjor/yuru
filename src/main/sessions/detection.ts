@@ -4,7 +4,7 @@ import { isPathWithin } from "../worktree-identity.js";
 
 export interface WorktreeSessionHint {
   provider: SessionProvider;
-  providerSessionId: string;
+  agentSessionId: string;
   worktreePath: string;
   worktreeRank: number;
 }

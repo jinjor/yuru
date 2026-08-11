@@ -12,9 +12,9 @@ interface TerminalSessionStartProps {
   providers: SessionProvider[];
   worktree: WorktreeListItem | null;
   onSelectPrimarySession: (terminalRuntimeId: TerminalRuntimeId) => void;
-  onResumePrimarySession: (providerSessionKey: string) => void;
-  onDetachPrimarySession: (providerSessionKey: string) => void;
-  onResumeSuggestedSession: (providerSessionKey: string) => void;
+  onResumePrimarySession: (agentSessionKey: string) => void;
+  onDetachPrimarySession: (agentSessionKey: string) => void;
+  onResumeSuggestedSession: (agentSessionKey: string) => void;
   onCreateSessionForWorktree: (provider: SessionProvider) => void;
   onOpenWorktreeTerminal: () => void;
 }
@@ -43,9 +43,7 @@ export function TerminalSessionStart({
                   <div className="action-surface-label">Sessions</div>
                   {worktree.primarySessions.map((primarySession) => (
                     <PrimarySessionAction
-                      key={
-                        primarySession.providerSessionKey ?? primarySession.activeTerminalRuntimeId
-                      }
+                      key={primarySession.agentSessionKey ?? primarySession.activeTerminalRuntimeId}
                       primarySession={primarySession}
                       onSelectRuntime={onSelectPrimarySession}
                       onResume={onResumePrimarySession}
@@ -59,9 +57,9 @@ export function TerminalSessionStart({
                   <div className="action-surface-label">Suggested</div>
                   {worktree.suggestedSessions.map((suggestedSession) => (
                     <SuggestedSessionAction
-                      key={suggestedSession.providerSessionKey}
+                      key={suggestedSession.agentSessionKey}
                       suggestedSession={suggestedSession}
-                      onSelect={() => onResumeSuggestedSession(suggestedSession.providerSessionKey)}
+                      onSelect={() => onResumeSuggestedSession(suggestedSession.agentSessionKey)}
                     />
                   ))}
                 </div>
@@ -118,8 +116,8 @@ function OpenTerminalSection({ onOpen }: OpenTerminalSectionProps) {
 interface PrimarySessionActionProps {
   primarySession: PrimarySessionListItem;
   onSelectRuntime: (terminalRuntimeId: TerminalRuntimeId) => void;
-  onResume: (providerSessionKey: string) => void;
-  onDetach: (providerSessionKey: string) => void;
+  onResume: (agentSessionKey: string) => void;
+  onDetach: (agentSessionKey: string) => void;
 }
 
 function PrimarySessionAction({
@@ -130,10 +128,10 @@ function PrimarySessionAction({
 }: PrimarySessionActionProps) {
   const preview = primarySession.preview || "(no messages)";
   const providerName = providerLabel(primarySession.provider);
-  const providerSessionKey = primarySession.providerSessionKey;
+  const agentSessionKey = primarySession.agentSessionKey;
   const terminalRuntimeId = primarySession.activeTerminalRuntimeId;
   const canSelect =
-    primarySession.state === "active" ? terminalRuntimeId !== null : providerSessionKey !== null;
+    primarySession.state === "active" ? terminalRuntimeId !== null : agentSessionKey !== null;
   return (
     <div
       className={`action-surface-row primary-session-action session-home-row ${primarySession.state}`}
@@ -145,8 +143,8 @@ function PrimarySessionAction({
         onClick={() => {
           if (primarySession.state === "active" && terminalRuntimeId) {
             onSelectRuntime(terminalRuntimeId);
-          } else if (primarySession.state === "inactive" && providerSessionKey) {
-            onResume(providerSessionKey);
+          } else if (primarySession.state === "inactive" && agentSessionKey) {
+            onResume(agentSessionKey);
           }
         }}
         title={
@@ -170,11 +168,11 @@ function PrimarySessionAction({
           </span>
         </span>
       </button>
-      {primarySession.state === "inactive" && providerSessionKey !== null && (
+      {primarySession.state === "inactive" && agentSessionKey !== null && (
         <button
           type="button"
           className="session-detach-action detach-primary-action"
-          onClick={() => onDetach(providerSessionKey)}
+          onClick={() => onDetach(agentSessionKey)}
           title={`Detach this ${providerName} session from the worktree. History is kept.`}
         >
           <Unlink size={12} strokeWidth={2} aria-hidden="true" />

@@ -6,7 +6,7 @@ import {
 } from "../../sessions/detection.js";
 
 export interface CodexSessionMetaCwd {
-  providerSessionId: string;
+  agentSessionId: string;
   cwd: string;
 }
 
@@ -74,7 +74,7 @@ function parseCodexSessionMetaCwd(entry: unknown): CodexSessionMetaCwd | null {
   }
 
   return {
-    providerSessionId: maybeEntry.payload.id,
+    agentSessionId: maybeEntry.payload.id,
     cwd: maybeEntry.payload.cwd,
   };
 }
@@ -376,7 +376,7 @@ function detectCodexWorktreeSessionEntries(
       (evidence, worktreeRank) =>
         ({
           provider: "codex",
-          providerSessionId: sessionMeta.providerSessionId,
+          agentSessionId: sessionMeta.agentSessionId,
           worktreePath: evidence.worktreePath,
           worktreeRank,
         }) satisfies WorktreeSessionHint,

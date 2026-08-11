@@ -32,7 +32,7 @@ interface ApiService {
     Result<{
       worktreePath: string;
       provider: SessionProvider;
-      providerSessionId: string | null;
+      agentSessionId: string | null;
     }>
   >;
 }

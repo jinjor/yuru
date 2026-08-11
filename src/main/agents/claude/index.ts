@@ -2,12 +2,7 @@ import { setTimeout } from "node:timers/promises";
 import fs from "fs";
 import path from "path";
 import { streamRipgrepLineMatches } from "../../ripgrep.js";
-import type {
-  PendingSession,
-  SessionPreview,
-  SessionProviderAdapter,
-  SessionSnapshot,
-} from "../agent.js";
+import type { PendingSession, SessionPreview, Agent, SessionSnapshot } from "../agent.js";
 import { parseJsonLinesAs, readTextFileIfExists } from "../store-utils.js";
 import { type WorktreeSessionHint } from "../../sessions/detection.js";
 import { detectClaudeWorktreeSessionLines } from "./session-detection.js";
@@ -134,7 +129,7 @@ async function loadStoredSessions(): Promise<SessionSnapshot[]> {
     if (!existing || entry.timestamp > existing.timestamp) {
       sessionMap.set(entry.sessionId, {
         provider: "claude",
-        providerSessionId: entry.sessionId,
+        agentSessionId: entry.sessionId,
         project: entry.project,
         filePath,
         lastMessage: "",
@@ -145,11 +140,11 @@ async function loadStoredSessions(): Promise<SessionSnapshot[]> {
 
   return Promise.all(
     Array.from(sessionMap.values()).map(async (session) => {
-      sessionFilePathsById.set(session.providerSessionId, session.filePath);
+      sessionFilePathsById.set(session.agentSessionId, session.filePath);
       const preview = await readClaudeSessionPreview(session.filePath);
       return {
         provider: session.provider,
-        providerSessionId: session.providerSessionId,
+        agentSessionId: session.agentSessionId,
         project: session.project,
         lastMessage: preview?.lastMessage ?? "",
         timestamp: Math.max(session.timestamp, preview?.timestamp ?? 0),
@@ -158,8 +153,8 @@ async function loadStoredSessions(): Promise<SessionSnapshot[]> {
   );
 }
 
-async function loadStoredSessionPreview(providerSessionId: string): Promise<SessionPreview | null> {
-  const sessionFilePath = await findClaudeSessionFile(providerSessionId);
+async function loadStoredSessionPreview(agentSessionId: string): Promise<SessionPreview | null> {
+  const sessionFilePath = await findClaudeSessionFile(agentSessionId);
   return sessionFilePath ? readClaudeSessionPreview(sessionFilePath) : null;
 }
 
@@ -171,17 +166,17 @@ async function readClaudeHistoryEntries(): Promise<ClaudeHistoryEntry[]> {
   return parseJsonLinesAs(content, parseClaudeHistoryEntry);
 }
 
-async function findClaudeSessionFile(providerSessionId: string): Promise<string | null> {
-  const cachedFilePath = sessionFilePathsById.get(providerSessionId);
+async function findClaudeSessionFile(agentSessionId: string): Promise<string | null> {
+  const cachedFilePath = sessionFilePathsById.get(agentSessionId);
   if (cachedFilePath && fs.existsSync(cachedFilePath)) {
     return cachedFilePath;
   }
   for (const entry of (await readClaudeHistoryEntries())
-    .filter((historyEntry) => historyEntry.sessionId === providerSessionId)
+    .filter((historyEntry) => historyEntry.sessionId === agentSessionId)
     .sort((a, b) => b.timestamp - a.timestamp)) {
-    const sessionFilePath = claudeSessionFilePath(entry.project, providerSessionId);
+    const sessionFilePath = claudeSessionFilePath(entry.project, agentSessionId);
     if (fs.existsSync(sessionFilePath)) {
-      sessionFilePathsById.set(providerSessionId, sessionFilePath);
+      sessionFilePathsById.set(agentSessionId, sessionFilePath);
       return sessionFilePath;
     }
   }
@@ -238,8 +233,8 @@ function escapeRegex(value: string): string {
   return value.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
 }
 
-async function hasStoredSession(providerSessionId: string): Promise<boolean> {
-  return (await findClaudeSessionFile(providerSessionId)) !== null;
+async function hasStoredSession(agentSessionId: string): Promise<boolean> {
+  return (await findClaudeSessionFile(agentSessionId)) !== null;
 }
 
 async function waitForSessionId(pending: PendingSession): Promise<string> {
@@ -263,7 +258,7 @@ async function waitForSessionId(pending: PendingSession): Promise<string> {
   throw new Error("Timeout waiting for Claude session initialization");
 }
 
-export const sessionProvider: SessionProviderAdapter = {
+export const agent: Agent = {
   definition: {
     id: "claude",
     label: "Claude",
@@ -278,7 +273,7 @@ export const sessionProvider: SessionProviderAdapter = {
   async createResumeLaunch(session) {
     return {
       cwd: session.cwd,
-      args: ["--plugin-dir", getYuruClaudePluginDir(), "--resume", session.providerSessionId],
+      args: ["--plugin-dir", getYuruClaudePluginDir(), "--resume", session.agentSessionId],
       worktreePath: session.project,
     };
   },

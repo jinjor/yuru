@@ -13,7 +13,7 @@ import { listWorktrees } from "./git/worktree.js";
 import { PullRequestMonitor } from "./github/pull-request-monitor.js";
 import { ProviderUsageMonitor } from "./plan-usage/monitor.js";
 import { resolveCommandPaths } from "./plan-usage/command.js";
-import { getSessionProvider, sessionProviders } from "./agents/registry.js";
+import { getAgent, agents } from "./agents/registry.js";
 import type {
   AppErrorNotice,
   GitDiffScope,
@@ -93,12 +93,12 @@ const pullRequestMonitor = new PullRequestMonitor({
 // 「どの provider を出すか」も決めるので、起動直後にも 1 回走らせる。
 const providerUsageMonitor = new ProviderUsageMonitor({
   listProviders: () =>
-    Object.values(sessionProviders).map((provider) => ({
-      provider: provider.definition.id,
-      command: provider.command,
+    Object.values(agents).map((agent) => ({
+      provider: agent.definition.id,
+      command: agent.command,
     })),
   resolveCommandPaths: (commands) => resolveCommandPaths(commands),
-  loadPlanUsage: (provider, commandPath) => getSessionProvider(provider).loadPlanUsage(commandPath),
+  loadPlanUsage: (provider, commandPath) => getAgent(provider).loadPlanUsage(commandPath),
   planUsageChanged: sendProviderPlanUsageChanged,
 });
 
@@ -383,22 +383,22 @@ function registerIpcHandlers(): void {
 
   handleIpc(
     "worktreeSession:resumePrimary",
-    (_event, worktreeId: string, providerSessionKey: string) => {
-      return service.resumePrimarySession(worktreeId, providerSessionKey);
+    (_event, worktreeId: string, agentSessionKey: string) => {
+      return service.resumePrimarySession(worktreeId, agentSessionKey);
     },
   );
 
   handleIpc(
     "worktreeSession:resumeSuggested",
-    (_event, worktreeId: string, providerSessionKey: string) => {
-      return service.resumeSuggestedSession(worktreeId, providerSessionKey);
+    (_event, worktreeId: string, agentSessionKey: string) => {
+      return service.resumeSuggestedSession(worktreeId, agentSessionKey);
     },
   );
 
   handleIpc(
     "worktreeSession:detachPrimary",
-    (_event, worktreeId: string, providerSessionKey: string) => {
-      return service.detachPrimarySession(worktreeId, providerSessionKey);
+    (_event, worktreeId: string, agentSessionKey: string) => {
+      return service.detachPrimarySession(worktreeId, agentSessionKey);
     },
   );
 

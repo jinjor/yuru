@@ -31,7 +31,7 @@ test("ホームは空の session セクションを表示しない", async () =>
       { worktreePath: emptyWorktreePath, primarySessions: [] },
       {
         worktreePath: primaryWorktreePath,
-        primarySessions: [{ provider: "codex", providerSessionId: FIRST_SESSION_ID }],
+        primarySessions: [{ provider: "codex", agentSessionId: FIRST_SESSION_ID }],
       },
     ]);
 
@@ -83,8 +83,8 @@ test("ホームから複数 primary を操作し、suggested を promote でき�
       {
         worktreePath,
         primarySessions: [
-          { provider: "codex", providerSessionId: FIRST_SESSION_ID },
-          { provider: "codex", providerSessionId: SECOND_SESSION_ID },
+          { provider: "codex", agentSessionId: FIRST_SESSION_ID },
+          { provider: "codex", agentSessionId: SECOND_SESSION_ID },
         ],
       },
     ]);
@@ -114,7 +114,7 @@ test("ホームから複数 primary を操作し、suggested を promote でき�
     await primaryRows.nth(1).locator(".detach-primary-action").click();
     await expect(primaryRows).toHaveCount(1);
     expect((await readMetadata(context)).taskWorktrees[0].primarySessions).toEqual([
-      { provider: "codex", providerSessionId: FIRST_SESSION_ID },
+      { provider: "codex", agentSessionId: FIRST_SESSION_ID },
     ]);
 
     // inactive 行は resume して runtime タブを選ぶ。
@@ -146,10 +146,10 @@ test("ホームから複数 primary を操作し、suggested を promote でき�
     });
     await expect(sessionView.locator(".session-tab:not(.session-tab-home)")).toHaveCount(2);
     expect((await readMetadata(context)).taskWorktrees[0].primarySessions).toEqual([
-      { provider: "codex", providerSessionId: FIRST_SESSION_ID },
+      { provider: "codex", agentSessionId: FIRST_SESSION_ID },
       {
         provider: "codex",
-        providerSessionId: SUGGESTED_SESSION_ID,
+        agentSessionId: SUGGESTED_SESSION_ID,
         cwd: worktreePath,
       },
     ]);
@@ -182,8 +182,8 @@ test("複数 runtime をタブで切り替え、kill と exit 後はホームへ
       {
         worktreePath,
         primarySessions: [
-          { provider: "codex", providerSessionId: FIRST_SESSION_ID },
-          { provider: "codex", providerSessionId: SECOND_SESSION_ID },
+          { provider: "codex", agentSessionId: FIRST_SESSION_ID },
+          { provider: "codex", agentSessionId: SECOND_SESSION_ID },
         ],
       },
     ]);

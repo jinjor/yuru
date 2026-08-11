@@ -22,7 +22,7 @@ test("inactive primary を detach すると strong link だけが外れ session 
     await registerRepo(context, repoDir, [
       {
         worktreePath,
-        primarySessions: [{ provider: "claude", providerSessionId: "detach-session-1" }],
+        primarySessions: [{ provider: "claude", agentSessionId: "detach-session-1" }],
       },
     ]);
 
@@ -65,8 +65,8 @@ test("先頭 primary を detach すると次の primary が代表になる", asy
       {
         worktreePath,
         primarySessions: [
-          { provider: "claude", providerSessionId: "detach-session-1" },
-          { provider: "codex", providerSessionId: "detach-session-2" },
+          { provider: "claude", agentSessionId: "detach-session-1" },
+          { provider: "codex", agentSessionId: "detach-session-2" },
         ],
       },
     ]);
@@ -91,7 +91,7 @@ test("先頭 primary を detach すると次の primary が代表になる", asy
     await expect(sessionView.locator(".session-home-row", { hasText: "Codex" })).toBeVisible();
     const metadata = await readMetadata(context);
     expect(metadata.taskWorktrees[0].primarySessions).toEqual([
-      { provider: "codex", providerSessionId: "detach-session-2" },
+      { provider: "codex", agentSessionId: "detach-session-2" },
     ]);
   } finally {
     await closeYuru(app);

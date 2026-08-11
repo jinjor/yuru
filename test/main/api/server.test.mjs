@@ -133,7 +133,7 @@ test("createApiRequestHandler は session.create を service に渡す", async (
         data: {
           worktreePath,
           provider,
-          providerSessionId: provider === "codex" ? null : "provider-session-id",
+          agentSessionId: provider === "codex" ? null : "provider-session-id",
         },
       };
     },
@@ -154,7 +154,7 @@ test("createApiRequestHandler は session.create を service に渡す", async (
       data: {
         worktreePath: "/repo/.yuru/worktrees/child-task",
         provider: "kimi",
-        providerSessionId: "provider-session-id",
+        agentSessionId: "provider-session-id",
       },
     },
   );

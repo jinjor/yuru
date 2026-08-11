@@ -3,12 +3,7 @@ import fs from "fs";
 import path from "path";
 import readline from "readline";
 import { streamRipgrepLineMatches } from "../../ripgrep.js";
-import type {
-  PendingSession,
-  SessionPreview,
-  SessionProviderAdapter,
-  SessionSnapshot,
-} from "../agent.js";
+import type { PendingSession, SessionPreview, Agent, SessionSnapshot } from "../agent.js";
 import { listFilesRecursive, parseJsonLinesAs, readTextFileIfExists } from "../store-utils.js";
 import type { WorktreeSessionHint } from "../../sessions/detection.js";
 import { codexSessionDateDirFromId, getCodexHistoryPath, getCodexSessionsDir } from "./paths.js";
@@ -18,7 +13,7 @@ import { IncrementalSessionPreviewReader } from "../preview-reader.js";
 import { loadCodexPlanUsage } from "./plan-usage.js";
 
 interface CodexSessionMeta {
-  providerSessionId: string;
+  agentSessionId: string;
   project: string;
   timestamp: number;
   filePath: string;
@@ -79,7 +74,7 @@ function parseCodexSessionMetaEntry(entry: unknown): Omit<CodexSessionMeta, "fil
     0;
 
   return {
-    providerSessionId: maybeEntry.payload.id,
+    agentSessionId: maybeEntry.payload.id,
     project: maybeEntry.payload.cwd,
     timestamp,
   };
@@ -181,8 +176,8 @@ async function readCodexSessionMetas(): Promise<Map<string, CodexSessionMeta>> {
     filePaths.map(async (filePath) => {
       const meta = await readCodexSessionMeta(filePath);
       if (meta) {
-        metas.set(meta.providerSessionId, meta);
-        sessionFilePathsById.set(meta.providerSessionId, filePath);
+        metas.set(meta.agentSessionId, meta);
+        sessionFilePathsById.set(meta.agentSessionId, filePath);
       }
     }),
   );
@@ -194,8 +189,8 @@ async function listExistingSessionIds(): Promise<Set<string>> {
   return new Set((await readCodexSessionMetas()).keys());
 }
 
-async function hasStoredSession(providerSessionId: string): Promise<boolean> {
-  return (await findCodexSessionFile(providerSessionId)) !== null;
+async function hasStoredSession(agentSessionId: string): Promise<boolean> {
+  return (await findCodexSessionFile(agentSessionId)) !== null;
 }
 
 async function loadStoredSessions(): Promise<SessionSnapshot[]> {
@@ -214,10 +209,10 @@ async function loadStoredSessions(): Promise<SessionSnapshot[]> {
   return Promise.all(
     Array.from(metas.values()).map(async (meta) => {
       const preview = await readCodexSessionPreview(meta.filePath);
-      const historyTimestamp = historyTimestampsBySessionId.get(meta.providerSessionId) ?? 0;
+      const historyTimestamp = historyTimestampsBySessionId.get(meta.agentSessionId) ?? 0;
       return {
         provider: "codex",
-        providerSessionId: meta.providerSessionId,
+        agentSessionId: meta.agentSessionId,
         project: meta.project,
         lastMessage: preview?.lastMessage ?? "",
         timestamp: Math.max(meta.timestamp, preview?.timestamp ?? 0, historyTimestamp),
@@ -226,22 +221,22 @@ async function loadStoredSessions(): Promise<SessionSnapshot[]> {
   );
 }
 
-async function loadStoredSessionPreview(providerSessionId: string): Promise<SessionPreview | null> {
-  const sessionFilePath = await findCodexSessionFile(providerSessionId);
+async function loadStoredSessionPreview(agentSessionId: string): Promise<SessionPreview | null> {
+  const sessionFilePath = await findCodexSessionFile(agentSessionId);
   return sessionFilePath ? readCodexSessionPreview(sessionFilePath) : null;
 }
 
-async function findCodexSessionFile(providerSessionId: string): Promise<string | null> {
-  const cachedFilePath = sessionFilePathsById.get(providerSessionId);
+async function findCodexSessionFile(agentSessionId: string): Promise<string | null> {
+  const cachedFilePath = sessionFilePathsById.get(agentSessionId);
   if (cachedFilePath && fs.existsSync(cachedFilePath)) {
     return cachedFilePath;
   }
-  const sessionDateDir = codexSessionDateDirFromId(providerSessionId);
+  const sessionDateDir = codexSessionDateDirFromId(agentSessionId);
   if (!sessionDateDir || !fs.existsSync(sessionDateDir)) {
     return null;
   }
 
-  const sessionId = providerSessionId.toLowerCase();
+  const sessionId = agentSessionId.toLowerCase();
   const sessionFileName =
     fs.readdirSync(sessionDateDir).find((fileName) => fileName.endsWith(`-${sessionId}.jsonl`)) ??
     null;
@@ -249,7 +244,7 @@ async function findCodexSessionFile(providerSessionId: string): Promise<string |
     return null;
   }
   const filePath = path.join(sessionDateDir, sessionFileName);
-  sessionFilePathsById.set(providerSessionId, filePath);
+  sessionFilePathsById.set(agentSessionId, filePath);
   return filePath;
 }
 
@@ -287,7 +282,7 @@ async function loadWorktreeSessionHints(
       }
       hints.push(
         ...detectCodexWorktreeSessionLines(
-          { providerSessionId: meta.providerSessionId, cwd: meta.project },
+          { agentSessionId: meta.agentSessionId, cwd: meta.project },
           lines,
           worktreePaths,
         ).filter((hint) => worktreePathKeys.has(path.resolve(hint.worktreePath))),
@@ -339,11 +334,11 @@ async function findSessionForLaunch(
       (meta) =>
         meta.project === cwd &&
         meta.timestamp >= startedAt - 2000 &&
-        !existingSessionIds.has(meta.providerSessionId),
+        !existingSessionIds.has(meta.agentSessionId),
     )
     .sort((a, b) => b.timestamp - a.timestamp)[0];
 
-  return match?.providerSessionId ?? null;
+  return match?.agentSessionId ?? null;
 }
 
 async function waitForSessionId(pending: PendingSession): Promise<string> {
@@ -351,7 +346,7 @@ async function waitForSessionId(pending: PendingSession): Promise<string> {
     const launched = await findSessionForLaunch(
       pending.launchCwd,
       pending.startedAt,
-      pending.existingProviderSessionIds,
+      pending.existingAgentSessionIds,
     );
     if (launched) {
       return launched;
@@ -363,7 +358,7 @@ async function waitForSessionId(pending: PendingSession): Promise<string> {
   }
 }
 
-export const sessionProvider: SessionProviderAdapter = {
+export const agent: Agent = {
   definition: {
     id: "codex",
     label: "Codex",
@@ -381,7 +376,7 @@ export const sessionProvider: SessionProviderAdapter = {
     // resumed from a different directory, stops to ask which one to use.
     return {
       cwd: session.cwd,
-      args: ["resume", "--all", session.providerSessionId],
+      args: ["resume", "--all", session.agentSessionId],
       worktreePath: session.project,
     };
   },
@@ -399,7 +394,7 @@ export const sessionProvider: SessionProviderAdapter = {
       cwd: context.repoPath,
       args,
       worktreePath: context.worktreePath,
-      existingProviderSessionIds: await listExistingSessionIds(),
+      existingAgentSessionIds: await listExistingSessionIds(),
     };
   },
   waitForSessionId,

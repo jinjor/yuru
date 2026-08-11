@@ -19,7 +19,7 @@ export interface ClaudeSessionLine {
 }
 
 interface ClaudeWorktreeEvidence {
-  providerSessionId: string;
+  agentSessionId: string;
   worktreePath: string;
   evidenceRank: number;
   sequence: number;
@@ -118,13 +118,13 @@ export function detectClaudeWorktreeSessionLines(
   const entries = parseJsonLineEntries(lines);
 
   const addEvidence = (
-    providerSessionId: string,
+    agentSessionId: string,
     worktreePath: string,
     evidenceRank: number,
     sequence: number,
   ): void => {
-    const evidence = { providerSessionId, worktreePath, evidenceRank, sequence };
-    const key = `${providerSessionId}:${worktreePath}`;
+    const evidence = { agentSessionId, worktreePath, evidenceRank, sequence };
+    const key = `${agentSessionId}:${worktreePath}`;
     const existing = evidencesByKey.get(key);
     if (existing && compareClaudeWorktreeEvidence(evidence, existing) >= 0) {
       return;
@@ -162,7 +162,7 @@ export function detectClaudeWorktreeSessionLines(
       (evidence, worktreeRank) =>
         ({
           provider: "claude",
-          providerSessionId: evidence.providerSessionId,
+          agentSessionId: evidence.agentSessionId,
           worktreePath: evidence.worktreePath,
           worktreeRank,
         }) satisfies WorktreeSessionHint,
@@ -181,7 +181,7 @@ function compareClaudeWorktreeEvidence(
   if (recencyOrder !== 0) {
     return recencyOrder;
   }
-  const sessionOrder = a.providerSessionId.localeCompare(b.providerSessionId);
+  const sessionOrder = a.agentSessionId.localeCompare(b.agentSessionId);
   if (sessionOrder !== 0) {
     return sessionOrder;
   }

@@ -25,7 +25,7 @@ export interface TaskWorktreeMetadataSeed {
   worktreePath: string;
   primarySessions?: Array<{
     provider: SessionProvider;
-    providerSessionId: string;
+    agentSessionId: string;
   }>;
 }
 
@@ -39,7 +39,7 @@ export interface MetadataSeed {
     worktreePath: string;
     primarySessions: Array<{
       provider: SessionProvider;
-      providerSessionId: string;
+      agentSessionId: string;
     }>;
   }>;
 }

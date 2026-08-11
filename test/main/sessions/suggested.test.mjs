@@ -37,9 +37,9 @@ const {
   loadStoredSessionPreviews,
   loadSuggestedWorktreeSessions,
 } = await import("../../../src/main/sessions/suggested.ts");
-const { sessionProvider: codexProvider } = await import("../../../src/main/agents/codex/index.ts");
-const { sessionProvider: claudeProvider } = await import("../../../src/main/agents/claude/index.ts");
-const { sessionProvider: kimiProvider } = await import("../../../src/main/agents/kimi/index.ts");
+const { agent: codexAgent } = await import("../../../src/main/agents/codex/index.ts");
+const { agent: claudeAgent } = await import("../../../src/main/agents/claude/index.ts");
+const { agent: kimiAgent } = await import("../../../src/main/agents/kimi/index.ts");
 const { toSessionKey } = await import("../../../src/shared/session.ts");
 
 function jsonl(...entries) {
@@ -201,15 +201,15 @@ test("loadStoredSessionPreview は指定 session の preview だけを返す", a
 
 test("Codex は Action Required の terminal title を識別する", () => {
   assert.equal(
-    codexProvider.detectUserActionRequired?.("[ ! ] Action Required | codex-permission-dot"),
+    codexAgent.detectUserActionRequired?.("[ ! ] Action Required | codex-permission-dot"),
     true,
   );
   assert.equal(
-    codexProvider.detectUserActionRequired?.("[ . ] Action Required | codex-permission-dot"),
+    codexAgent.detectUserActionRequired?.("[ . ] Action Required | codex-permission-dot"),
     true,
   );
-  assert.equal(codexProvider.detectUserActionRequired?.("codex-permission-dot"), false);
-  assert.equal(codexProvider.detectUserActionRequired?.("⠹ codex-permission-dot"), false);
+  assert.equal(codexAgent.detectUserActionRequired?.("codex-permission-dot"), false);
+  assert.equal(codexAgent.detectUserActionRequired?.("⠹ codex-permission-dot"), false);
 });
 
 test("loadStoredSessionPreview は Claude/Codex session への追記を反映する", async () => {
@@ -249,8 +249,8 @@ test("loadStoredSessionPreview は Claude/Codex session への追記を反映す
 });
 
 test("Claude stored session の存在判定は session file の存在を見る", async () => {
-  assert.equal(await claudeProvider.hasStoredSession("claude-1"), true);
-  assert.equal(await claudeProvider.hasStoredSession(missingClaudeSessionId), false);
+  assert.equal(await claudeAgent.hasStoredSession("claude-1"), true);
+  assert.equal(await claudeAgent.hasStoredSession(missingClaudeSessionId), false);
 });
 
 test("provider resume launch は session の記録場所 (target.cwd) で起動する", async () => {
@@ -258,9 +258,9 @@ test("provider resume launch は session の記録場所 (target.cwd) で起動�
   const worktreePath = path.join(repoRoot, ".yuru", "worktrees", "task-a");
 
   assert.deepEqual(
-    await claudeProvider.createResumeLaunch({
+    await claudeAgent.createResumeLaunch({
       provider: "claude",
-      providerSessionId: "claude-resume",
+      agentSessionId: "claude-resume",
       cwd: worktreePath,
       project: worktreePath,
     }),
@@ -271,9 +271,9 @@ test("provider resume launch は session の記録場所 (target.cwd) で起動�
     },
   );
   assert.deepEqual(
-    await codexProvider.createResumeLaunch({
+    await codexAgent.createResumeLaunch({
       provider: "codex",
-      providerSessionId: "codex-resume",
+      agentSessionId: "codex-resume",
       cwd: worktreePath,
       project: worktreePath,
     }),
@@ -284,9 +284,9 @@ test("provider resume launch は session の記録場所 (target.cwd) で起動�
     },
   );
   assert.deepEqual(
-    await kimiProvider.createResumeLaunch({
+    await kimiAgent.createResumeLaunch({
       provider: "kimi",
-      providerSessionId: "session_kimi-resume",
+      agentSessionId: "session_kimi-resume",
       cwd: repoRoot,
       project: repoRoot,
     }),
@@ -314,28 +314,28 @@ test("provider worktree launch は repo root で起動して hidden context を�
     "When mentioning a file, use a path relative to its Git worktree when the intended worktree is unambiguous from context. Use an absolute path when the worktree is ambiguous or the file is outside any worktree. " +
     `The repository root ${repoPath} is only the parent repository that Yuru used to launch this provider session; do not treat it as the task workspace unless the user explicitly asks you to.`;
 
-  assert.deepEqual(await claudeProvider.createWorktreeLaunch(context), {
+  assert.deepEqual(await claudeAgent.createWorktreeLaunch(context), {
     cwd: repoPath,
     args: ["--plugin-dir", path.join(tempDir, ".yuru", "plugin"), "--append-system-prompt", prompt],
     worktreePath,
   });
 
-  const codexLaunch = await codexProvider.createWorktreeLaunch(context);
+  const codexLaunch = await codexAgent.createWorktreeLaunch(context);
   assert.equal(codexLaunch.cwd, repoPath);
   assert.deepEqual(codexLaunch.args, [
     "-c",
     `developer_instructions=${JSON.stringify(prompt)}`,
   ]);
   assert.equal(codexLaunch.worktreePath, worktreePath);
-  assert.ok(codexLaunch.existingProviderSessionIds instanceof Set);
+  assert.ok(codexLaunch.existingAgentSessionIds instanceof Set);
 
-  const kimiLaunch = await kimiProvider.createWorktreeLaunch(context);
+  const kimiLaunch = await kimiAgent.createWorktreeLaunch(context);
   assert.equal(kimiLaunch.cwd, repoPath);
   assert.deepEqual(kimiLaunch.args, []);
   assert.equal(kimiLaunch.worktreePath, worktreePath);
   assert.equal(kimiLaunch.initialInput, prompt);
-  assert.ok(kimiLaunch.existingProviderSessionIds instanceof Set);
-  assert.ok(kimiLaunch.existingProviderSessionIds.has(kimiSessionId));
+  assert.ok(kimiLaunch.existingAgentSessionIds instanceof Set);
+  assert.ok(kimiLaunch.existingAgentSessionIds.has(kimiSessionId));
 });
 
 test("provider worktree launch は initial prompt を最初の依頼として渡す", async () => {
@@ -358,7 +358,7 @@ test("provider worktree launch は initial prompt を最初の依頼として渡
     "When mentioning a file, use a path relative to its Git worktree when the intended worktree is unambiguous from context. Use an absolute path when the worktree is ambiguous or the file is outside any worktree. " +
     `The repository root ${repoPath} is only the parent repository that Yuru used to launch this provider session; do not treat it as the task workspace unless the user explicitly asks you to.`;
 
-  assert.deepEqual(await claudeProvider.createWorktreeLaunch(context), {
+  assert.deepEqual(await claudeAgent.createWorktreeLaunch(context), {
     cwd: repoPath,
     args: [
       "--plugin-dir",
@@ -373,7 +373,7 @@ test("provider worktree launch は initial prompt を最初の依頼として渡
     worktreePath,
   });
 
-  const codexLaunch = await codexProvider.createWorktreeLaunch(context);
+  const codexLaunch = await codexAgent.createWorktreeLaunch(context);
   assert.deepEqual(codexLaunch.args, [
     "--model",
     "selected-model",
@@ -383,7 +383,7 @@ test("provider worktree launch は initial prompt を最初の依頼として渡
     initialPrompt,
   ]);
 
-  const kimiLaunch = await kimiProvider.createWorktreeLaunch(context);
+  const kimiLaunch = await kimiAgent.createWorktreeLaunch(context);
   assert.deepEqual(kimiLaunch.args, ["--model", "selected-model"]);
   assert.equal(kimiLaunch.initialInput, worktreePrompt);
   assert.equal(kimiLaunch.initialPrompt, `User request:\n\n${initialPrompt}`);
@@ -400,7 +400,7 @@ test("provider worktree launch は制御入力に見える prompt もユーザ�
   };
 
   for (const initialPrompt of ["--help", "--dangerously-skip-permissions", "doctor"]) {
-    const launch = await claudeProvider.createWorktreeLaunch({ ...baseContext, initialPrompt });
+    const launch = await claudeAgent.createWorktreeLaunch({ ...baseContext, initialPrompt });
     assert.deepEqual(launch.args.slice(-2), ["--", ` ${initialPrompt}`]);
   }
 
@@ -409,12 +409,12 @@ test("provider worktree launch は制御入力に見える prompt もユーザ�
     "help",
     "logout",
   ]) {
-    const launch = await codexProvider.createWorktreeLaunch({ ...baseContext, initialPrompt });
+    const launch = await codexAgent.createWorktreeLaunch({ ...baseContext, initialPrompt });
     assert.deepEqual(launch.args.slice(-2), ["--", initialPrompt]);
   }
 
   for (const initialPrompt of ["!printf harmless", "/auto", "/yolo", "/permission"]) {
-    const launch = await kimiProvider.createWorktreeLaunch({ ...baseContext, initialPrompt });
+    const launch = await kimiAgent.createWorktreeLaunch({ ...baseContext, initialPrompt });
     assert.equal(launch.initialPrompt, `User request:\n\n${initialPrompt}`);
   }
 });
@@ -431,7 +431,7 @@ test("Kimi worktree launch は prompt の端末制御文字を起動前に拒否
 
   for (const controlCharacter of ["\r", "\u001b", "\u0003", "\u007f", "\u0085"]) {
     await assert.rejects(
-      kimiProvider.createWorktreeLaunch({
+      kimiAgent.createWorktreeLaunch({
         ...baseContext,
         initialPrompt: `before${controlCharacter}after`,
       }),
@@ -512,13 +512,13 @@ test("loadSuggestedWorktreeSessions は suggested session を worktree ごとに
   const suggestions = await loadSuggestedWorktreeSessions([worktreeB, worktreeA]);
 
   assert.deepEqual(suggestions.get(worktreeA), [
-    { provider: "claude", providerSessionId: "claude-a", cwd: worktreeA, timestamp: 0 },
-    { provider: "claude", providerSessionId: "claude-b", cwd: worktreeA, timestamp: 0 },
-    { provider: "codex", providerSessionId: "codex-a", cwd: path.join(worktreeA, "src"), timestamp: 0 },
+    { provider: "claude", agentSessionId: "claude-a", cwd: worktreeA, timestamp: 0 },
+    { provider: "claude", agentSessionId: "claude-b", cwd: worktreeA, timestamp: 0 },
+    { provider: "codex", agentSessionId: "codex-a", cwd: path.join(worktreeA, "src"), timestamp: 0 },
   ]);
   assert.deepEqual(suggestions.get(worktreeB), [
-    { provider: "claude", providerSessionId: "claude-a", cwd: worktreeB, timestamp: 0 },
-    { provider: "codex", providerSessionId: "codex-b", cwd: path.join(tempDir, "repo"), timestamp: 0 },
+    { provider: "claude", agentSessionId: "claude-a", cwd: worktreeB, timestamp: 0 },
+    { provider: "codex", agentSessionId: "codex-b", cwd: path.join(tempDir, "repo"), timestamp: 0 },
   ]);
 });
 
@@ -552,7 +552,7 @@ test("loadSuggestedWorktreeSessions は 10MB を超える検索結果でも sess
   assert.deepEqual(suggestions.get(worktreePath), [
     {
       provider: "codex",
-      providerSessionId: "codex-large-output",
+      agentSessionId: "codex-large-output",
       cwd: path.join(tempDir, "large-output-repo"),
       timestamp: 0,
     },
@@ -657,16 +657,16 @@ test("loadSuggestedWorktreeSessions は同じ worktreeRank なら session id で
   const suggestions = await loadSuggestedWorktreeSessions([worktreePath]);
 
   assert.deepEqual(suggestions.get(worktreePath), [
-    { provider: "codex", providerSessionId: "codex-meta", cwd: worktreePath, timestamp: 0 },
+    { provider: "codex", agentSessionId: "codex-meta", cwd: worktreePath, timestamp: 0 },
     {
       provider: "codex",
-      providerSessionId: "codex-patch",
+      agentSessionId: "codex-patch",
       cwd: path.join(tempDir, "repo"),
       timestamp: 0,
     },
     {
       provider: "codex",
-      providerSessionId: "codex-workdir",
+      agentSessionId: "codex-workdir",
       cwd: path.join(tempDir, "repo"),
       timestamp: 0,
     },
@@ -767,12 +767,12 @@ test("loadSuggestedWorktreeSessions は session 内で対象 worktree の順位�
   const suggestions = await loadSuggestedWorktreeSessions([targetWorktree, sideWorktree]);
 
   assert.deepEqual(
-    suggestions.get(targetWorktree)?.map((session) => session.providerSessionId),
+    suggestions.get(targetWorktree)?.map((session) => session.agentSessionId),
     ["codex-target", "codex-shared"],
   );
   assert.deepEqual(suggestions.get(targetWorktree)?.[0], {
     provider: "codex",
-    providerSessionId: "codex-target",
+    agentSessionId: "codex-target",
     cwd: repoPath,
     timestamp: Date.parse("2026-05-10T00:00:02.000Z"),
   });

@@ -8,7 +8,7 @@ import {
 } from "../../sessions/detection.js";
 
 export interface KimiStoredSessionRef {
-  providerSessionId: string;
+  agentSessionId: string;
   sessionDir: string;
   workDir: string;
 }
@@ -45,7 +45,7 @@ export function detectKimiWorkDirHint(
   }
   return {
     provider: "kimi",
-    providerSessionId: ref.providerSessionId,
+    agentSessionId: ref.agentSessionId,
     worktreePath: worktreePaths[normalizedWorktreePaths.indexOf(matched)],
     worktreeRank: KIMI_EVIDENCE_RANK.workDir,
   };
@@ -72,7 +72,7 @@ export function detectKimiMentionHints(
   }
   return Array.from(mentioned, (worktreePath) => ({
     provider: "kimi",
-    providerSessionId: ref.providerSessionId,
+    agentSessionId: ref.agentSessionId,
     worktreePath,
     worktreeRank: KIMI_EVIDENCE_RANK.mention,
   }));

@@ -2,12 +2,7 @@ import { setTimeout } from "node:timers/promises";
 import fs from "fs";
 import path from "path";
 import { streamRipgrepLineMatches } from "../../ripgrep.js";
-import type {
-  PendingSession,
-  SessionPreview,
-  SessionProviderAdapter,
-  SessionSnapshot,
-} from "../agent.js";
+import type { PendingSession, SessionPreview, Agent, SessionSnapshot } from "../agent.js";
 import { parseJsonLinesAs, readTextFileIfExists } from "../store-utils.js";
 import type { WorktreeSessionHint } from "../../sessions/detection.js";
 import {
@@ -64,7 +59,7 @@ function parseKimiSessionIndexEntry(entry: unknown): KimiStoredSessionRef | null
     return null;
   }
   return {
-    providerSessionId: maybeEntry.sessionId,
+    agentSessionId: maybeEntry.sessionId,
     sessionDir: maybeEntry.sessionDir,
     workDir: maybeEntry.workDir,
   };
@@ -103,18 +98,18 @@ async function readKimiSessionIndex(): Promise<KimiStoredSessionRef[]> {
   }
   const entries = parseJsonLinesAs(content, parseKimiSessionIndexEntry);
   for (const entry of entries) {
-    sessionRefsById.set(entry.providerSessionId, entry);
+    sessionRefsById.set(entry.agentSessionId, entry);
   }
   return entries;
 }
 
-async function findKimiSessionRef(providerSessionId: string): Promise<KimiStoredSessionRef | null> {
-  const cached = sessionRefsById.get(providerSessionId);
+async function findKimiSessionRef(agentSessionId: string): Promise<KimiStoredSessionRef | null> {
+  const cached = sessionRefsById.get(agentSessionId);
   if (cached && fs.existsSync(cached.sessionDir)) {
     return cached;
   }
   const entry = (await readKimiSessionIndex()).find(
-    (candidate) => candidate.providerSessionId === providerSessionId,
+    (candidate) => candidate.agentSessionId === agentSessionId,
   );
   return entry && fs.existsSync(entry.sessionDir) ? entry : null;
 }
@@ -139,7 +134,7 @@ function toSessionPreview(state: KimiSessionState): SessionPreview {
 }
 
 async function listExistingSessionIds(): Promise<Set<string>> {
-  return new Set((await readKimiSessionIndex()).map((entry) => entry.providerSessionId));
+  return new Set((await readKimiSessionIndex()).map((entry) => entry.agentSessionId));
 }
 
 async function loadStoredSessions(): Promise<SessionSnapshot[]> {
@@ -149,7 +144,7 @@ async function loadStoredSessions(): Promise<SessionSnapshot[]> {
       const state = await readKimiSessionState(entry.sessionDir);
       return {
         provider: "kimi",
-        providerSessionId: entry.providerSessionId,
+        agentSessionId: entry.agentSessionId,
         project: entry.workDir,
         lastMessage: state ? toSessionPreview(state).lastMessage : "",
         timestamp: state ? toSessionPreview(state).timestamp : 0,
@@ -158,8 +153,8 @@ async function loadStoredSessions(): Promise<SessionSnapshot[]> {
   );
 }
 
-async function loadStoredSessionPreview(providerSessionId: string): Promise<SessionPreview | null> {
-  const entry = await findKimiSessionRef(providerSessionId);
+async function loadStoredSessionPreview(agentSessionId: string): Promise<SessionPreview | null> {
+  const entry = await findKimiSessionRef(agentSessionId);
   if (!entry) {
     return null;
   }
@@ -167,8 +162,8 @@ async function loadStoredSessionPreview(providerSessionId: string): Promise<Sess
   return state ? toSessionPreview(state) : null;
 }
 
-async function hasStoredSession(providerSessionId: string): Promise<boolean> {
-  return (await findKimiSessionRef(providerSessionId)) !== null;
+async function hasStoredSession(agentSessionId: string): Promise<boolean> {
+  return (await findKimiSessionRef(agentSessionId)) !== null;
 }
 
 async function loadWorktreeSessionHints(
@@ -236,11 +231,11 @@ async function waitForSessionId(pending: PendingSession): Promise<string> {
     const entries = await readKimiSessionIndex();
     const match = entries.find(
       (entry) =>
-        !pending.existingProviderSessionIds.has(entry.providerSessionId) &&
+        !pending.existingAgentSessionIds.has(entry.agentSessionId) &&
         normalizeRealPath(entry.workDir) === launchWorkDir,
     );
     if (match) {
-      return match.providerSessionId;
+      return match.agentSessionId;
     }
     if (pending.exited) {
       throw new Error("Kimi exited before creating a session");
@@ -251,10 +246,10 @@ async function waitForSessionId(pending: PendingSession): Promise<string> {
 }
 
 async function hasRecordedInitialInput(
-  providerSessionId: string,
+  agentSessionId: string,
   initialInput: string,
 ): Promise<boolean> {
-  const entry = await findKimiSessionRef(providerSessionId);
+  const entry = await findKimiSessionRef(agentSessionId);
   if (!entry) {
     return false;
   }
@@ -271,7 +266,7 @@ async function hasRecordedInitialInput(
   );
 }
 
-export const sessionProvider: SessionProviderAdapter = {
+export const agent: Agent = {
   definition: {
     id: "kimi",
     label: "Kimi",
@@ -288,7 +283,7 @@ export const sessionProvider: SessionProviderAdapter = {
     // recorded workDir, so resume exactly where the session was recorded.
     return {
       cwd: session.cwd,
-      args: ["--session", session.providerSessionId],
+      args: ["--session", session.agentSessionId],
       worktreePath: session.project,
     };
   },
@@ -302,7 +297,7 @@ export const sessionProvider: SessionProviderAdapter = {
       initialInput: await loadWorktreeContextPrompt(context),
       initialPrompt:
         context.initialPrompt === undefined ? undefined : toKimiUserMessage(context.initialPrompt),
-      existingProviderSessionIds: await listExistingSessionIds(),
+      existingAgentSessionIds: await listExistingSessionIds(),
     };
   },
   waitForSessionId,

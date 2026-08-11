@@ -199,13 +199,13 @@ export interface ElectronAPI {
   reportRendererError: (message: string, detail?: string) => void;
   resumePrimarySession: (
     worktreeId: string,
-    providerSessionKey: string,
+    agentSessionKey: string,
   ) => Promise<Result<WorktreeSessionSelection>>;
   resumeSuggestedSession: (
     worktreeId: string,
-    providerSessionKey: string,
+    agentSessionKey: string,
   ) => Promise<Result<WorktreeSessionSelection>>;
-  detachPrimarySession: (worktreeId: string, providerSessionKey: string) => Promise<Result<void>>;
+  detachPrimarySession: (worktreeId: string, agentSessionKey: string) => Promise<Result<void>>;
   createSessionForWorktree: (
     worktreeId: string,
     provider: SessionProvider,

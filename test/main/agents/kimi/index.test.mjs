@@ -11,7 +11,7 @@ process.env.HOME = tempDir;
 const kimiDir = path.join(tempDir, ".kimi-code");
 process.env.KIMI_CODE_HOME = kimiDir;
 
-const { sessionProvider: kimiProvider } = await import("../../../../src/main/agents/kimi/index.ts");
+const { agent: kimiAgent } = await import("../../../../src/main/agents/kimi/index.ts");
 const { loadSuggestedWorktreeSessions } = await import("../../../../src/main/sessions/suggested.ts");
 
 test.after(() => {
@@ -49,10 +49,10 @@ function writeKimiSession({ sessionId, workDir, state, wireMessages }) {
 // このテストは fixture を書く他のテストより先に実行される必要がある
 // (kimi store が存在しない状態を検証するため)。
 test("kimi store が無くても空を返し他 provider の一覧を壊さない", async () => {
-  assert.deepEqual(await kimiProvider.loadStoredSessions(), []);
-  assert.equal(await kimiProvider.loadStoredSessionPreview("missing"), null);
-  assert.equal(await kimiProvider.hasStoredSession("missing"), false);
-  assert.deepEqual(await kimiProvider.loadWorktreeSessionHints(["/nowhere"]), []);
+  assert.deepEqual(await kimiAgent.loadStoredSessions(), []);
+  assert.equal(await kimiAgent.loadStoredSessionPreview("missing"), null);
+  assert.equal(await kimiAgent.hasStoredSession("missing"), false);
+  assert.deepEqual(await kimiAgent.loadWorktreeSessionHints(["/nowhere"]), []);
 
   const suggestions = await loadSuggestedWorktreeSessions(["/nowhere"]);
   assert.equal(suggestions.size, 0);
@@ -79,7 +79,7 @@ test("workDir が一致する session をその worktree の suggested として
   assert.deepEqual(suggestions.get(worktreePath), [
     {
       provider: "kimi",
-      providerSessionId: "session_workdir",
+      agentSessionId: "session_workdir",
       cwd: worktreePath,
       timestamp: Date.parse("2026-05-24T00:00:01.000Z"),
     },
@@ -119,7 +119,7 @@ test("Yuru 起動セッション (workDir = repo root) は wire.jsonl の言及�
   const expected = [
     {
       provider: "kimi",
-      providerSessionId: "session_injected",
+      agentSessionId: "session_injected",
       cwd: repoPath,
       timestamp: Date.parse("2026-05-24T00:00:03.000Z"),
     },
@@ -132,15 +132,15 @@ test("Yuru 起動セッション (workDir = repo root) は wire.jsonl の言及�
 });
 
 test("hasStoredSession は index の entry と sessionDir の存在を見る", async () => {
-  assert.equal(await kimiProvider.hasStoredSession("session_workdir"), true);
-  assert.equal(await kimiProvider.hasStoredSession("unknown"), false);
+  assert.equal(await kimiAgent.hasStoredSession("session_workdir"), true);
+  assert.equal(await kimiAgent.hasStoredSession("unknown"), false);
 });
 
 test("hasRecordedInitialInput は wire.jsonl に注入文が記録されたかを返す", async () => {
   const recordedPrompt = `Use ${path.join(tempDir, "repo2", ".yuru", "worktrees", "task-b")} as the working directory for this task.`;
-  assert.equal(await kimiProvider.hasRecordedInitialInput("session_injected", recordedPrompt), true);
-  assert.equal(await kimiProvider.hasRecordedInitialInput("session_injected", "not in the log"), false);
-  assert.equal(await kimiProvider.hasRecordedInitialInput("unknown", recordedPrompt), false);
+  assert.equal(await kimiAgent.hasRecordedInitialInput("session_injected", recordedPrompt), true);
+  assert.equal(await kimiAgent.hasRecordedInitialInput("session_injected", "not in the log"), false);
+  assert.equal(await kimiAgent.hasRecordedInitialInput("unknown", recordedPrompt), false);
 });
 
 test("hasRecordedInitialInput は JSON escape された注入文にも一致する", async () => {
@@ -155,6 +155,6 @@ test("hasRecordedInitialInput は JSON escape された注入文にも一致す�
     ],
   });
 
-  assert.equal(await kimiProvider.hasRecordedInitialInput("session_escaped", 'say "hi"\nnow'), true);
-  assert.equal(await kimiProvider.hasRecordedInitialInput("session_escaped", 'say "hi"\nnow\n'), true);
+  assert.equal(await kimiAgent.hasRecordedInitialInput("session_escaped", 'say "hi"\nnow'), true);
+  assert.equal(await kimiAgent.hasRecordedInitialInput("session_escaped", 'say "hi"\nnow\n'), true);
 });

@@ -5,7 +5,7 @@ export type AgentActivityState = "working" | "waiting";
 
 export interface SuggestedWorktreeSession {
   provider: SessionProvider;
-  providerSessionId: string;
+  agentSessionId: string;
   // Directory the session was created in (where the provider stores it). Carried
   // so promoting the session can record where to resume it.
   cwd: string;
@@ -46,6 +46,6 @@ export type ProviderPlanUsage = { provider: SessionProvider } & (
   | { state: "failed" }
 );
 
-export function toSessionKey(provider: SessionProvider, providerSessionId: string): string {
-  return `${provider}:${providerSessionId}`;
+export function toSessionKey(provider: SessionProvider, agentSessionId: string): string {
+  return `${provider}:${agentSessionId}`;
 }

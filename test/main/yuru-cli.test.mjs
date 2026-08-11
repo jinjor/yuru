@@ -304,7 +304,7 @@ test("yuru session create は worktree、provider、model、prompt を渡して�
         data: {
           worktreePath: "/repo/.yuru/worktrees/child-task",
           provider: "claude",
-          providerSessionId: "claude-session-id",
+          agentSessionId: "claude-session-id",
         },
       };
     },

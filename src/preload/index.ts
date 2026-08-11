@@ -17,12 +17,12 @@ const electronAPI: ElectronAPI = {
   clearErrors: () => ipcRenderer.invoke("errors:clear"),
   reportRendererError: (message: string, detail?: string) =>
     ipcRenderer.send("errors:reportRenderer", message, detail),
-  resumePrimarySession: (worktreeId: string, providerSessionKey: string) =>
-    ipcRenderer.invoke("worktreeSession:resumePrimary", worktreeId, providerSessionKey),
-  resumeSuggestedSession: (worktreeId: string, providerSessionKey: string) =>
-    ipcRenderer.invoke("worktreeSession:resumeSuggested", worktreeId, providerSessionKey),
-  detachPrimarySession: (worktreeId: string, providerSessionKey: string) =>
-    ipcRenderer.invoke("worktreeSession:detachPrimary", worktreeId, providerSessionKey),
+  resumePrimarySession: (worktreeId: string, agentSessionKey: string) =>
+    ipcRenderer.invoke("worktreeSession:resumePrimary", worktreeId, agentSessionKey),
+  resumeSuggestedSession: (worktreeId: string, agentSessionKey: string) =>
+    ipcRenderer.invoke("worktreeSession:resumeSuggested", worktreeId, agentSessionKey),
+  detachPrimarySession: (worktreeId: string, agentSessionKey: string) =>
+    ipcRenderer.invoke("worktreeSession:detachPrimary", worktreeId, agentSessionKey),
   createSessionForWorktree: (worktreeId: string, provider: SessionProvider) =>
     ipcRenderer.invoke("worktreeSession:create", worktreeId, provider),
   openWorktreeTerminal: (worktreeId: string) =>

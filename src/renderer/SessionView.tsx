@@ -170,16 +170,13 @@ export const SessionView = memo(function SessionView({
   );
 
   const detachPrimarySession = useCallback(
-    async (providerSessionKey: string): Promise<void> => {
+    async (agentSessionKey: string): Promise<void> => {
       if (isStartingRef.current) {
         return;
       }
       isStartingRef.current = true;
       try {
-        const result = await window.electronAPI.detachPrimarySession(
-          worktreeId,
-          providerSessionKey,
-        );
+        const result = await window.electronAPI.detachPrimarySession(worktreeId, agentSessionKey);
         if (!result.ok) {
           return;
         }
@@ -382,17 +379,17 @@ export const SessionView = memo(function SessionView({
               providers={providers}
               worktree={worktree}
               onSelectPrimarySession={setSelectedTerminalRuntimeId}
-              onResumePrimarySession={(providerSessionKey) => {
+              onResumePrimarySession={(agentSessionKey) => {
                 void startTerminalRuntime(() =>
-                  window.electronAPI.resumePrimarySession(worktreeId, providerSessionKey),
+                  window.electronAPI.resumePrimarySession(worktreeId, agentSessionKey),
                 );
               }}
-              onDetachPrimarySession={(providerSessionKey) => {
-                void detachPrimarySession(providerSessionKey);
+              onDetachPrimarySession={(agentSessionKey) => {
+                void detachPrimarySession(agentSessionKey);
               }}
-              onResumeSuggestedSession={(providerSessionKey) => {
+              onResumeSuggestedSession={(agentSessionKey) => {
                 void startTerminalRuntime(() =>
-                  window.electronAPI.resumeSuggestedSession(worktreeId, providerSessionKey),
+                  window.electronAPI.resumeSuggestedSession(worktreeId, agentSessionKey),
                 );
               }}
               onCreateSessionForWorktree={(provider) => {

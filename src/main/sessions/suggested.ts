@@ -1,5 +1,5 @@
 import path from "path";
-import { sessionProviders } from "../agents/registry.js";
+import { agents } from "../agents/registry.js";
 import type { WorktreeSessionHint } from "./detection.js";
 import {
   toSessionKey,
@@ -9,7 +9,7 @@ import {
 
 interface WorktreeSessionScore {
   provider: SessionProvider;
-  providerSessionId: string;
+  agentSessionId: string;
   worktreePath: string;
   worktreeRank: number;
   cwd: string;
@@ -18,28 +18,23 @@ interface WorktreeSessionScore {
 
 async function loadStoredSessionSnapshots() {
   return (
-    await Promise.all(
-      Object.values(sessionProviders).map((provider) => provider.loadStoredSessions()),
-    )
+    await Promise.all(Object.values(agents).map((agent) => agent.loadStoredSessions()))
   ).flat();
 }
 
 export async function loadStoredSessionPreviews(): Promise<Map<string, string>> {
   const previews = new Map<string, string>();
   for (const snapshot of await loadStoredSessionSnapshots()) {
-    previews.set(toSessionKey(snapshot.provider, snapshot.providerSessionId), snapshot.lastMessage);
+    previews.set(toSessionKey(snapshot.provider, snapshot.agentSessionId), snapshot.lastMessage);
   }
   return previews;
 }
 
 export async function loadStoredSessionPreview(
   provider: SessionProvider,
-  providerSessionId: string,
+  agentSessionId: string,
 ): Promise<string | null> {
-  return (
-    (await sessionProviders[provider].loadStoredSessionPreview(providerSessionId))?.lastMessage ??
-    null
-  );
+  return (await agents[provider].loadStoredSessionPreview(agentSessionId))?.lastMessage ?? null;
 }
 
 export async function loadSuggestedWorktreeSessions(
@@ -51,15 +46,13 @@ export async function loadSuggestedWorktreeSessions(
   const suggestionsByWorktreePath = new Map<string, SuggestedWorktreeSession[]>();
   const snapshotsBySessionKey = new Map(
     (await loadStoredSessionSnapshots()).map((snapshot) => [
-      toSessionKey(snapshot.provider, snapshot.providerSessionId),
+      toSessionKey(snapshot.provider, snapshot.agentSessionId),
       { timestamp: snapshot.timestamp, cwd: snapshot.project },
     ]),
   );
   const hints = (
     await Promise.all(
-      Object.values(sessionProviders).map((provider) =>
-        provider.loadWorktreeSessionHints(worktreePaths),
-      ),
+      Object.values(agents).map((agent) => agent.loadWorktreeSessionHints(worktreePaths)),
     )
   )
     .flat()
@@ -72,7 +65,7 @@ export async function loadSuggestedWorktreeSessions(
     const suggestions = suggestionsByWorktreePath.get(score.worktreePath) ?? [];
     suggestions.push({
       provider: score.provider,
-      providerSessionId: score.providerSessionId,
+      agentSessionId: score.agentSessionId,
       cwd: score.cwd,
       timestamp: score.timestamp,
     });
@@ -89,12 +82,12 @@ function rankWorktreeSessionScores(
   const scoresByKey = new Map<string, WorktreeSessionScore>();
 
   for (const hint of hints) {
-    const sessionKey = toSessionKey(hint.provider, hint.providerSessionId);
+    const sessionKey = toSessionKey(hint.provider, hint.agentSessionId);
     const scoreKey = `${sessionKey}:${hint.worktreePath}`;
     const snapshot = snapshotsBySessionKey.get(sessionKey);
     const nextScore: WorktreeSessionScore = {
       provider: hint.provider,
-      providerSessionId: hint.providerSessionId,
+      agentSessionId: hint.agentSessionId,
       worktreePath: hint.worktreePath,
       worktreeRank: hint.worktreeRank,
       // Sessions without a snapshot have no resumable store entry; fall back to
@@ -124,5 +117,5 @@ function compareWorktreeSessionScores(a: WorktreeSessionScore, b: WorktreeSessio
   if (providerOrder !== 0) {
     return providerOrder;
   }
-  return a.providerSessionId.localeCompare(b.providerSessionId);
+  return a.agentSessionId.localeCompare(b.agentSessionId);
 }

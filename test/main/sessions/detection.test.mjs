@@ -78,7 +78,7 @@ test("detectClaudeWorktreeSession は cwd が既知 worktree 配下なら hint �
 
   assert.deepEqual(hint, {
     provider: "claude",
-    providerSessionId: "claude-session",
+    agentSessionId: "claude-session",
     worktreePath: "/repo/.claude/worktrees/task-a",
     worktreeRank: 0,
   });
@@ -106,7 +106,7 @@ test("detectClaudeWorktreeSession は tool_use の file_path を弱い hint と�
 
   assert.deepEqual(hint, {
     provider: "claude",
-    providerSessionId: "claude-session",
+    agentSessionId: "claude-session",
     worktreePath: "/repo/.claude/worktrees/task-a",
     worktreeRank: 0,
   });
@@ -126,7 +126,7 @@ test("detectCodexWorktreeSession は session_meta.cwd を primary hint として
 
   assert.deepEqual(hint, {
     provider: "codex",
-    providerSessionId: "codex-session",
+    agentSessionId: "codex-session",
     worktreePath: "/repo/.yuru/worktrees/task-a",
     worktreeRank: 0,
   });
@@ -161,7 +161,7 @@ test("detectCodexWorktreeSession は exec_command_end.cwd を fallback hint と�
 
   assert.deepEqual(hint, {
     provider: "codex",
-    providerSessionId: "codex-session",
+    agentSessionId: "codex-session",
     worktreePath: "/repo/.yuru/worktrees/task-a",
     worktreeRank: 0,
   });
@@ -195,7 +195,7 @@ test("detectCodexWorktreeSessions は 0.130 の function_call.arguments.workdir 
   assert.deepEqual(hints, [
     {
       provider: "codex",
-      providerSessionId: "codex-session",
+      agentSessionId: "codex-session",
       worktreePath: "/repo/.yuru/worktrees/task-a",
       worktreeRank: 0,
     },
@@ -230,7 +230,7 @@ test("detectCodexWorktreeSessions は patch_apply_end.changes を読む", () => 
   assert.deepEqual(hints, [
     {
       provider: "codex",
-      providerSessionId: "codex-session",
+      agentSessionId: "codex-session",
       worktreePath: "/repo/.yuru/worktrees/task-a",
       worktreeRank: 0,
     },
@@ -273,7 +273,7 @@ test("detectCodexWorktreeSessions は 0.147 の event_msg item_completed Command
   assert.deepEqual(hints, [
     {
       provider: "codex",
-      providerSessionId: "codex-session",
+      agentSessionId: "codex-session",
       worktreePath: "/repo/.yuru/worktrees/task-a",
       worktreeRank: 0,
     },
@@ -338,7 +338,7 @@ test("detectCodexWorktreeSessions は 0.147 の event_msg item_completed FileCha
   assert.deepEqual(hints, [
     {
       provider: "codex",
-      providerSessionId: "codex-session",
+      agentSessionId: "codex-session",
       worktreePath: "/repo/.yuru/worktrees/task-a",
       worktreeRank: 0,
     },
@@ -442,14 +442,14 @@ test("detectCodexWorktreeSessions は既知 worktree の絶対 path 文字列だ
 
 test("detectKimiWorkDirHint は workDir が一致する worktree を rank 0 で返す", () => {
   const ref = {
-    providerSessionId: "session_1",
+    agentSessionId: "session_1",
     sessionDir: "/store/session_1",
     workDir: "/repo/.yuru/worktrees/task-a",
   };
 
   assert.deepEqual(detectKimiWorkDirHint(ref, ["/repo", "/repo/.yuru/worktrees/task-a"]), {
     provider: "kimi",
-    providerSessionId: "session_1",
+    agentSessionId: "session_1",
     worktreePath: "/repo/.yuru/worktrees/task-a",
     worktreeRank: 0,
   });
@@ -457,7 +457,7 @@ test("detectKimiWorkDirHint は workDir が一致する worktree を rank 0 で�
 
 test("detectKimiWorkDirHint は worktree のサブディレクトリもその worktree に帰属させる", () => {
   const ref = {
-    providerSessionId: "session_1",
+    agentSessionId: "session_1",
     sessionDir: "/store/session_1",
     workDir: "/repo/.yuru/worktrees/task-a/src",
   };
@@ -470,7 +470,7 @@ test("detectKimiWorkDirHint は worktree のサブディレクトリもその wo
 
 test("detectKimiWorkDirHint はどの worktree にも属さなければ null を返す", () => {
   const ref = {
-    providerSessionId: "session_1",
+    agentSessionId: "session_1",
     sessionDir: "/store/session_1",
     workDir: "/elsewhere",
   };
@@ -480,7 +480,7 @@ test("detectKimiWorkDirHint はどの worktree にも属さなければ null を
 
 test("detectKimiMentionHints は注入プロンプトの言及から worktree を rank 1 で返す", () => {
   const ref = {
-    providerSessionId: "session_2",
+    agentSessionId: "session_2",
     sessionDir: "/store/session_2",
     workDir: "/repo",
   };
@@ -491,7 +491,7 @@ test("detectKimiMentionHints は注入プロンプトの言及から worktree �
   assert.deepEqual(detectKimiMentionHints(ref, [promptLine], ["/repo/.yuru/worktrees/task-a"]), [
     {
       provider: "kimi",
-      providerSessionId: "session_2",
+      agentSessionId: "session_2",
       worktreePath: "/repo/.yuru/worktrees/task-a",
       worktreeRank: 1,
     },
@@ -501,7 +501,7 @@ test("detectKimiMentionHints は注入プロンプトの言及から worktree �
 
 test("detectKimiMentionHints は注入マーカーのない行の path 言及を hint にしない", () => {
   const ref = {
-    providerSessionId: "session_2",
+    agentSessionId: "session_2",
     sessionDir: "/store/session_2",
     workDir: "/repo",
   };

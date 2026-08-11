@@ -193,7 +193,7 @@ test("provider store から primary と suggested Claude session の概要を表
     await registerRepo(context, repoDir, [
       {
         worktreePath: primaryPath,
-        primarySessions: [{ provider: "claude", providerSessionId: primarySessionId }],
+        primarySessions: [{ provider: "claude", agentSessionId: primarySessionId }],
       },
     ]);
 
@@ -260,8 +260,8 @@ test("provider store から消えた primary session は通知して detach さ�
       {
         worktreePath,
         primarySessions: [
-          { provider: "claude", providerSessionId: "missing-claude-session" },
-          { provider: "codex", providerSessionId: "missing-codex-session" },
+          { provider: "claude", agentSessionId: "missing-claude-session" },
+          { provider: "codex", agentSessionId: "missing-codex-session" },
         ],
       },
     ]);

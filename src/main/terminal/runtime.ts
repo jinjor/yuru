@@ -8,7 +8,7 @@ export interface TerminalRuntimeInfo {
   worktreePath: string;
   startedAt: number;
   provider?: SessionProvider;
-  providerSessionId?: string | null;
+  agentSessionId?: string | null;
 }
 
 export interface TerminalStartupCommand {

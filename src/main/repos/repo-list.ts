@@ -162,24 +162,21 @@ function toWorktreeListItem(
   const worktreeId = toWorktreeId(repoId, worktreePath);
   const primarySessions = metadataEntry?.primarySessions ?? [];
   const primarySessionItems = primarySessions.map((primarySession): PrimarySessionListItem => {
-    const providerSessionKey = toSessionKey(
-      primarySession.provider,
-      primarySession.providerSessionId,
-    );
-    const activeTerminalRuntimeId = terminalRuntimeIdsBySessionKey?.get(providerSessionKey) ?? null;
+    const agentSessionKey = toSessionKey(primarySession.provider, primarySession.agentSessionId);
+    const activeTerminalRuntimeId = terminalRuntimeIdsBySessionKey?.get(agentSessionKey) ?? null;
     return {
       provider: primarySession.provider,
-      providerSessionKey,
+      agentSessionKey,
       activeTerminalRuntimeId,
       state: activeTerminalRuntimeId ? "active" : "inactive",
       activityState: activeTerminalRuntimeId
         ? (agentActivityStatesByTerminalRuntimeId?.get(activeTerminalRuntimeId) ?? "waiting")
         : "waiting",
-      preview: primarySessionPreviewsByKey?.get(providerSessionKey) ?? "",
+      preview: primarySessionPreviewsByKey?.get(agentSessionKey) ?? "",
     };
   });
   const primarySessionKeys = new Set(
-    primarySessions.map((session) => toSessionKey(session.provider, session.providerSessionId)),
+    primarySessions.map((session) => toSessionKey(session.provider, session.agentSessionId)),
   );
   const activeTerminalRuntime =
     primarySessions.length === 0
@@ -199,7 +196,7 @@ function toWorktreeListItem(
   if (activeTerminalRuntime) {
     primarySessionItems.push({
       provider: activeTerminalRuntime.provider,
-      providerSessionKey: null,
+      agentSessionKey: null,
       activeTerminalRuntimeId: activeTerminalRuntime.terminalRuntimeId,
       state: "active",
       activityState: activeTerminalActivityState,
@@ -241,20 +238,20 @@ function toSuggestedSessionListItems(
     | undefined,
 ): SuggestedSessionListItem[] {
   return suggestedSessions.flatMap((session) => {
-    const providerSessionKey = toSessionKey(session.provider, session.providerSessionId);
-    if (excludedSessionKeys.has(providerSessionKey)) {
+    const agentSessionKey = toSessionKey(session.provider, session.agentSessionId);
+    if (excludedSessionKeys.has(agentSessionKey)) {
       return [];
     }
-    const activeTerminalRuntimeId = terminalRuntimeIdsBySessionKey?.get(providerSessionKey) ?? null;
+    const activeTerminalRuntimeId = terminalRuntimeIdsBySessionKey?.get(agentSessionKey) ?? null;
     const item: SuggestedSessionListItem = {
       provider: session.provider,
-      providerSessionKey,
+      agentSessionKey,
       activeTerminalRuntimeId,
       state: activeTerminalRuntimeId ? "active" : "inactive",
       activityState: activeTerminalRuntimeId
         ? (agentActivityStatesByTerminalRuntimeId?.get(activeTerminalRuntimeId) ?? "waiting")
         : "waiting",
-      preview: primarySessionPreviewsByKey?.get(providerSessionKey) ?? "",
+      preview: primarySessionPreviewsByKey?.get(agentSessionKey) ?? "",
       timestamp: session.timestamp ?? 0,
     };
     return [item];

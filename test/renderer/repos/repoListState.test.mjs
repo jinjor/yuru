@@ -10,7 +10,7 @@ import {
 function primarySession(runtimeId, preview = "before") {
   return {
     provider: "codex",
-    providerSessionKey: `codex:${runtimeId}`,
+    agentSessionKey: `codex:${runtimeId}`,
     activeTerminalRuntimeId: runtimeId,
     state: "active",
     activityState: "waiting",

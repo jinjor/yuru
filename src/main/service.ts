@@ -52,7 +52,7 @@ import {
   resolveRepoFile as resolveRepoFilePath,
   writeFile as writeRepoFile,
 } from "./files/files.js";
-import { getSessionProvider } from "./agents/registry.js";
+import { getAgent } from "./agents/registry.js";
 import {
   CODE_SEARCH_RESULT_LIMIT,
   createEmptyCodeSearchResult,
@@ -62,7 +62,7 @@ import {
 import {
   type LaunchRequest,
   type PendingSession,
-  type SessionProviderAdapter,
+  type Agent,
   type WorktreeContext,
 } from "./agents/agent.js";
 import type {
@@ -123,7 +123,7 @@ const ANSI_ESCAPE_PATTERN = new RegExp(`${ESCAPE_CHARACTER}\\[[0-9;]*[A-Za-z]`, 
 
 interface StartedSession {
   terminalRuntimeId: string;
-  providerSessionId: string | null;
+  agentSessionId: string | null;
 }
 
 function createTerminalRuntimeId(kind: TerminalRuntimeKind): string {
@@ -132,7 +132,7 @@ function createTerminalRuntimeId(kind: TerminalRuntimeKind): string {
 
 interface WorktreeSessionResumeTarget {
   provider: SessionProvider;
-  providerSessionId: string;
+  agentSessionId: string;
   cwd: string;
   project: string;
 }
@@ -362,26 +362,23 @@ export class YuruService {
 
   async resumePrimarySession(
     worktreeId: string,
-    providerSessionKey: string,
+    agentSessionKey: string,
   ): Promise<Result<WorktreeSessionSelection>> {
-    return this.resumePrimaryWorktreeSession(worktreeId, providerSessionKey);
+    return this.resumePrimaryWorktreeSession(worktreeId, agentSessionKey);
   }
 
   async resumeSuggestedSession(
     worktreeId: string,
-    providerSessionKey: string,
+    agentSessionKey: string,
   ): Promise<Result<WorktreeSessionSelection>> {
-    return this.resumeSuggestedWorktreeSession(worktreeId, providerSessionKey);
+    return this.resumeSuggestedWorktreeSession(worktreeId, agentSessionKey);
   }
 
   // primary session の strong link だけを外す。worktree・Git の変更・provider store の
   // session 履歴には触れない。active な terminal runtime を持つ間は外させない
   // (UI は inactive の時だけ detach を出すが、一覧が古い場合はここで拒否して error center に出す)。
-  async detachPrimarySession(
-    worktreeId: string,
-    providerSessionKey: string,
-  ): Promise<Result<void>> {
-    const target = await this.findPrimarySessionResumeTarget(worktreeId, providerSessionKey);
+  async detachPrimarySession(worktreeId: string, agentSessionKey: string): Promise<Result<void>> {
+    const target = await this.findPrimarySessionResumeTarget(worktreeId, agentSessionKey);
     if (!target) {
       return this.failAndReport<void>({
         code: "unknown",
@@ -389,8 +386,7 @@ export class YuruService {
       });
     }
 
-    const activeTerminalRuntimeId =
-      this.getTerminalRuntimeIdsBySessionKey().get(providerSessionKey);
+    const activeTerminalRuntimeId = this.getTerminalRuntimeIdsBySessionKey().get(agentSessionKey);
     if (activeTerminalRuntimeId && this.ptyProcesses.has(activeTerminalRuntimeId)) {
       return this.failAndReport<void>({
         code: "unknown",
@@ -400,7 +396,7 @@ export class YuruService {
 
     detachPrimarySessionByPath(target.project, {
       provider: target.provider,
-      providerSessionId: target.providerSessionId,
+      agentSessionId: target.agentSessionId,
     });
     return ok(undefined);
   }
@@ -419,13 +415,13 @@ export class YuruService {
       });
     }
 
-    const providerAdapter = getSessionProvider(provider);
+    const agent = getAgent(provider);
     let pending: PendingSession | null = null;
     try {
       upsertTaskWorktree(worktree.repoId, worktree.worktreePath);
       pending = this.launchPendingSession(
-        providerAdapter,
-        await providerAdapter.createWorktreeLaunch(
+        agent,
+        await agent.createWorktreeLaunch(
           this.createContextForExistingWorktree(worktree, initialPrompt, model),
         ),
         "Failed to create worktree session",
@@ -433,15 +429,12 @@ export class YuruService {
           ? undefined
           : worktree.worktreePath,
       );
-      const { terminalRuntimeId, providerSessionId } = await this.startSession(
-        providerAdapter,
-        pending,
-      );
+      const { terminalRuntimeId, agentSessionId } = await this.startSession(agent, pending);
       pending.startupSettled = true;
-      if (providerSessionId) {
+      if (agentSessionId) {
         attachPrimarySessionByPath(worktree.worktreePath, {
           provider,
-          providerSessionId,
+          agentSessionId,
           cwd: pending.launchCwd,
         });
       }
@@ -450,7 +443,7 @@ export class YuruService {
       if (pending && !pending.exited) {
         pending.proc.kill();
       }
-      const appError = toAppError(error, { command: providerAdapter.command });
+      const appError = toAppError(error, { command: agent.command });
       return pending?.startupFailureReported
         ? fail<WorktreeSessionSelection>(appError)
         : this.failAndReport<WorktreeSessionSelection>(appError);
@@ -466,7 +459,7 @@ export class YuruService {
     Result<{
       worktreePath: string;
       provider: SessionProvider;
-      providerSessionId: string | null;
+      agentSessionId: string | null;
     }>
   > {
     let repo;
@@ -492,8 +485,8 @@ export class YuruService {
     if (!result.ok) {
       return result;
     }
-    const providerSessionId =
-      this.terminalRuntimeMap.get(result.data.terminalRuntimeId)?.providerSessionId ?? null;
+    const agentSessionId =
+      this.terminalRuntimeMap.get(result.data.terminalRuntimeId)?.agentSessionId ?? null;
     // API callers do not receive the renderer selection result used by the in-app
     // session start flow. Push a repo refresh so the new runtime appears on its
     // worktree card immediately, including while a lazy provider session ID is unresolved.
@@ -501,7 +494,7 @@ export class YuruService {
     return ok({
       worktreePath: resolvedWorktreePath,
       provider,
-      providerSessionId,
+      agentSessionId,
     });
   }
 
@@ -1053,8 +1046,8 @@ export class YuruService {
   private getTerminalRuntimeIdsBySessionKey(): Map<string, string> {
     const idsByKey = new Map<string, string>();
     for (const [terminalRuntimeId, info] of this.terminalRuntimeMap) {
-      if (info.provider && info.providerSessionId) {
-        idsByKey.set(toSessionKey(info.provider, info.providerSessionId), terminalRuntimeId);
+      if (info.provider && info.agentSessionId) {
+        idsByKey.set(toSessionKey(info.provider, info.agentSessionId), terminalRuntimeId);
       }
     }
     return idsByKey;
@@ -1111,7 +1104,7 @@ export class YuruService {
   }
 
   private launchPendingSession(
-    providerAdapter: SessionProviderAdapter,
+    agent: Agent,
     request: LaunchRequest,
     launchLabel: string,
     worktreePath?: string,
@@ -1121,13 +1114,13 @@ export class YuruService {
         cwd: request.cwd,
         env: createTerminalEnv(process.env, {
           ...this.terminalEnv,
-          provider: providerAdapter.definition.id,
+          provider: agent.definition.id,
           worktreePath,
         }),
         launchLabel,
-        runtimeKind: providerAdapter.definition.id,
+        runtimeKind: agent.definition.id,
         startupCommand: {
-          command: providerAdapter.command,
+          command: agent.command,
           args: request.args,
         },
         worktreePath: request.worktreePath,
@@ -1138,9 +1131,9 @@ export class YuruService {
     );
 
     return Object.assign(pendingTerminal, {
-      provider: providerAdapter.definition.id,
-      providerSessionId: null,
-      existingProviderSessionIds: request.existingProviderSessionIds ?? new Set<string>(),
+      provider: agent.definition.id,
+      agentSessionId: null,
+      existingAgentSessionIds: request.existingAgentSessionIds ?? new Set<string>(),
       initialInput: request.initialInput ?? null,
       initialPrompt: request.initialPrompt ?? null,
     });
@@ -1238,14 +1231,14 @@ export class YuruService {
     return pending;
   }
 
-  private registerTerminalRuntime(pending: PendingSession, providerSessionId: string | null): void {
-    pending.providerSessionId = providerSessionId;
+  private registerTerminalRuntime(pending: PendingSession, agentSessionId: string | null): void {
+    pending.agentSessionId = agentSessionId;
     this.pendingProcesses.delete(pending.proc);
     this.ptyProcesses.set(pending.terminalRuntimeId, pending.proc);
     this.ptyScreens.set(pending.terminalRuntimeId, pending.screen);
     this.terminalRuntimeMap.set(pending.terminalRuntimeId, {
       provider: pending.provider,
-      providerSessionId,
+      agentSessionId,
       worktreePath: pending.worktreePath,
       startedAt: pending.startedAt,
     });
@@ -1293,15 +1286,15 @@ export class YuruService {
     return null;
   }
 
-  private updateTerminalRuntimeProviderSessionId(
+  private updateTerminalRuntimeAgentSessionId(
     terminalRuntimeId: string,
-    providerSessionId: string,
+    agentSessionId: string,
   ): void {
     const runtime = this.terminalRuntimeMap.get(terminalRuntimeId);
     if (runtime) {
       this.terminalRuntimeMap.set(terminalRuntimeId, {
         ...runtime,
-        providerSessionId,
+        agentSessionId,
       });
     }
   }
@@ -1320,25 +1313,25 @@ export class YuruService {
   }
 
   private async resolveLazySessionId(
-    providerAdapter: SessionProviderAdapter,
+    agent: Agent,
     pending: PendingSession,
     terminalRuntimeId: string,
   ): Promise<void> {
     try {
-      const providerSessionId = await providerAdapter.waitForSessionId(pending);
+      const agentSessionId = await agent.waitForSessionId(pending);
       if (pending.exited) {
         return;
       }
-      pending.providerSessionId = providerSessionId;
+      pending.agentSessionId = agentSessionId;
       pending.startupSettled = true;
-      this.updateTerminalRuntimeProviderSessionId(terminalRuntimeId, providerSessionId);
-      this.deliverInitialMessages(providerAdapter, pending);
+      this.updateTerminalRuntimeAgentSessionId(terminalRuntimeId, agentSessionId);
+      this.deliverInitialMessages(agent, pending);
       if (!this.terminalRuntimeMap.has(terminalRuntimeId)) {
         return;
       }
       attachPrimarySessionByPath(pending.worktreePath, {
         provider: pending.provider,
-        providerSessionId,
+        agentSessionId,
         cwd: pending.launchCwd,
       });
       await this.events.refreshWorktreeWatcher();
@@ -1379,7 +1372,7 @@ export class YuruService {
       return "waiting";
     }
     const userActionRequiredDetected =
-      getSessionProvider(runtime.provider).detectUserActionRequired?.(
+      getAgent(runtime.provider).detectUserActionRequired?.(
         this.ptyScreens.get(terminalRuntimeId)?.getTitle() ?? "",
       ) ?? false;
     if (userActionRequiredDetected) {
@@ -1431,7 +1424,7 @@ export class YuruService {
         void this.checkSessionPreview(
           terminalRuntimeId,
           runtime.provider,
-          runtime.providerSessionId ?? null,
+          runtime.agentSessionId ?? null,
           state,
         );
       }
@@ -1458,15 +1451,15 @@ export class YuruService {
   private async checkSessionPreview(
     terminalRuntimeId: string,
     provider: SessionProvider,
-    providerSessionId: string | null,
+    agentSessionId: string | null,
     state: SessionMonitorState,
   ): Promise<void> {
-    if (!providerSessionId || state.checkingPreview) {
+    if (!agentSessionId || state.checkingPreview) {
       return;
     }
     state.checkingPreview = true;
     try {
-      const preview = (await loadStoredSessionPreview(provider, providerSessionId)) ?? "";
+      const preview = (await loadStoredSessionPreview(provider, agentSessionId)) ?? "";
       if (preview === state.preview) {
         return;
       }
@@ -1490,7 +1483,7 @@ export class YuruService {
 
   private async findPrimarySessionResumeTarget(
     worktreeId: string,
-    providerSessionKey: string,
+    agentSessionKey: string,
   ): Promise<WorktreeSessionResumeTarget | null> {
     const worktree = await this.findGitWorktree(worktreeId);
     if (!worktree) {
@@ -1506,7 +1499,7 @@ export class YuruService {
     }
 
     const primarySession = taskWorktree.primarySessions.find(
-      (session) => toSessionKey(session.provider, session.providerSessionId) === providerSessionKey,
+      (session) => toSessionKey(session.provider, session.agentSessionId) === agentSessionKey,
     );
     if (!primarySession) {
       return null;
@@ -1514,7 +1507,7 @@ export class YuruService {
 
     return {
       provider: primarySession.provider,
-      providerSessionId: primarySession.providerSessionId,
+      agentSessionId: primarySession.agentSessionId,
       // Entries written before cwd was recorded predate promote support and were
       // all created at the repo root, so fall back to it.
       cwd: primarySession.cwd ?? worktree.repoPath,
@@ -1524,13 +1517,12 @@ export class YuruService {
 
   private async findSuggestedSession(
     worktreePath: string,
-    providerSessionKey: string,
+    agentSessionKey: string,
   ): Promise<SuggestedWorktreeSession | null> {
     const suggestedSessions = await loadSuggestedWorktreeSessions([worktreePath]);
     return (
       (suggestedSessions.get(worktreePath) ?? []).find(
-        (session) =>
-          toSessionKey(session.provider, session.providerSessionId) === providerSessionKey,
+        (session) => toSessionKey(session.provider, session.agentSessionId) === agentSessionKey,
       ) ?? null
     );
   }
@@ -1613,7 +1605,7 @@ export class YuruService {
     upsertTaskWorktree(worktree.repoId, worktree.worktreePath);
     attachPrimarySessionByPath(worktree.worktreePath, {
       provider: session.provider,
-      providerSessionId: session.providerSessionId,
+      agentSessionId: session.agentSessionId,
       cwd: session.cwd,
     });
   }
@@ -1622,39 +1614,37 @@ export class YuruService {
     target: WorktreeSessionResumeTarget,
     options: { detachMissingPrimary: boolean },
   ): Promise<Result<string>> {
-    const providerAdapter = getSessionProvider(target.provider);
+    const agent = getAgent(target.provider);
     let pending: PendingSession | null = null;
     try {
-      if (!(await providerAdapter.hasStoredSession(target.providerSessionId))) {
+      if (!(await agent.hasStoredSession(target.agentSessionId))) {
         if (options.detachMissingPrimary) {
           detachPrimarySessionByPath(target.project, {
             provider: target.provider,
-            providerSessionId: target.providerSessionId,
+            agentSessionId: target.agentSessionId,
           });
           this.events.repoListChanged();
         }
         return this.failAndReport<string>({
           code: "command_failed",
           message: "This session no longer exists.",
-          detail: `${target.provider} session ${target.providerSessionId} was not found in saved conversations.`,
+          detail: `${target.provider} session ${target.agentSessionId} was not found in saved conversations.`,
         });
       }
 
       pending = this.launchPendingSession(
-        providerAdapter,
-        await providerAdapter.createResumeLaunch(target),
+        agent,
+        await agent.createResumeLaunch(target),
         "Failed to resume session",
         target.project,
       );
-      this.registerTerminalRuntime(pending, target.providerSessionId);
+      this.registerTerminalRuntime(pending, target.agentSessionId);
       return ok(pending.terminalRuntimeId);
     } catch (error) {
       if (pending && !pending.exited) {
         pending.proc.kill();
       }
-      const appError = isAppError(error)
-        ? error
-        : toAppError(error, { command: providerAdapter.command });
+      const appError = isAppError(error) ? error : toAppError(error, { command: agent.command });
       return pending?.startupFailureReported
         ? fail<string>(appError)
         : this.failAndReport<string>(appError);
@@ -1663,9 +1653,9 @@ export class YuruService {
 
   private async resumePrimaryWorktreeSession(
     worktreeId: string,
-    providerSessionKey: string,
+    agentSessionKey: string,
   ): Promise<Result<WorktreeSessionSelection>> {
-    const target = await this.findPrimarySessionResumeTarget(worktreeId, providerSessionKey);
+    const target = await this.findPrimarySessionResumeTarget(worktreeId, agentSessionKey);
     if (!target) {
       return this.failAndReport<WorktreeSessionSelection>({
         code: "unknown",
@@ -1673,8 +1663,7 @@ export class YuruService {
       });
     }
 
-    const activeTerminalRuntimeId =
-      this.getTerminalRuntimeIdsBySessionKey().get(providerSessionKey);
+    const activeTerminalRuntimeId = this.getTerminalRuntimeIdsBySessionKey().get(agentSessionKey);
     if (activeTerminalRuntimeId && this.ptyProcesses.has(activeTerminalRuntimeId)) {
       return ok({ worktreeId, terminalRuntimeId: activeTerminalRuntimeId });
     }
@@ -1688,7 +1677,7 @@ export class YuruService {
 
   private async resumeSuggestedWorktreeSession(
     worktreeId: string,
-    providerSessionKey: string,
+    agentSessionKey: string,
   ): Promise<Result<WorktreeSessionSelection>> {
     const worktree = await this.findGitWorktree(worktreeId);
     if (!worktree) {
@@ -1700,7 +1689,7 @@ export class YuruService {
 
     const suggestedSession = await this.findSuggestedSession(
       worktree.worktreePath,
-      providerSessionKey,
+      agentSessionKey,
     );
     if (!suggestedSession) {
       return this.failAndReport<WorktreeSessionSelection>({
@@ -1710,25 +1699,22 @@ export class YuruService {
     }
 
     this.promotePrimarySession(worktree, suggestedSession);
-    return this.resumePrimaryWorktreeSession(worktreeId, providerSessionKey);
+    return this.resumePrimaryWorktreeSession(worktreeId, agentSessionKey);
   }
 
-  private deliverInitialMessages(
-    providerAdapter: SessionProviderAdapter,
-    pending: PendingSession,
-  ): void {
+  private deliverInitialMessages(agent: Agent, pending: PendingSession): void {
     void (async () => {
       if (pending.initialInput !== null) {
-        await this.deliverInitialMessage(providerAdapter, pending, pending.initialInput, "context");
+        await this.deliverInitialMessage(agent, pending, pending.initialInput, "context");
       }
       if (pending.initialPrompt !== null) {
-        await this.deliverInitialMessage(providerAdapter, pending, pending.initialPrompt, "prompt");
+        await this.deliverInitialMessage(agent, pending, pending.initialPrompt, "prompt");
       }
     })();
   }
 
   private async deliverInitialMessage(
-    providerAdapter: SessionProviderAdapter,
+    agent: Agent,
     pending: PendingSession,
     initialInput: string,
     kind: "context" | "prompt",
@@ -1736,11 +1722,11 @@ export class YuruService {
     if (pending.exited) {
       return;
     }
-    const providerSessionId = pending.providerSessionId;
-    const hasRecordedInitialInput = providerAdapter.hasRecordedInitialInput;
+    const agentSessionId = pending.agentSessionId;
+    const hasRecordedInitialInput = agent.hasRecordedInitialInput;
     const verify =
-      hasRecordedInitialInput && providerSessionId
-        ? () => hasRecordedInitialInput(providerSessionId, initialInput)
+      hasRecordedInitialInput && agentSessionId
+        ? () => hasRecordedInitialInput(agentSessionId, initialInput)
         : undefined;
     // node-pty throws when writing to an exited process; guard each write.
     const writer = {
@@ -1759,14 +1745,14 @@ export class YuruService {
       console.warn("[Yuru] initial input was not recorded by the provider", {
         terminalRuntimeId: pending.terminalRuntimeId,
         provider: pending.provider,
-        providerSessionId,
+        agentSessionId,
       });
       recordAppWarning({
         code: "unknown",
         message:
           kind === "context"
-            ? `The worktree instructions may not have been delivered to the ${providerAdapter.definition.label} session.`
-            : `The initial prompt may not have been delivered to the ${providerAdapter.definition.label} session.`,
+            ? `The worktree instructions may not have been delivered to the ${agent.definition.label} session.`
+            : `The initial prompt may not have been delivered to the ${agent.definition.label} session.`,
         detail:
           kind === "context"
             ? "The session started in the repository root without its task worktree context. " +
@@ -1782,27 +1768,24 @@ export class YuruService {
     }
   }
 
-  private async startSession(
-    providerAdapter: SessionProviderAdapter,
-    pending: PendingSession,
-  ): Promise<StartedSession> {
+  private async startSession(agent: Agent, pending: PendingSession): Promise<StartedSession> {
     const terminalRuntimeId = pending.terminalRuntimeId;
 
-    if (providerAdapter.resolvesSessionIdLazily) {
+    if (agent.resolvesSessionIdLazily) {
       this.registerTerminalRuntime(pending, null);
-      void this.resolveLazySessionId(providerAdapter, pending, terminalRuntimeId);
+      void this.resolveLazySessionId(agent, pending, terminalRuntimeId);
       return {
         terminalRuntimeId,
-        providerSessionId: null,
+        agentSessionId: null,
       };
     }
 
-    const providerSessionId = await providerAdapter.waitForSessionId(pending);
-    this.registerTerminalRuntime(pending, providerSessionId);
-    this.deliverInitialMessages(providerAdapter, pending);
+    const agentSessionId = await agent.waitForSessionId(pending);
+    this.registerTerminalRuntime(pending, agentSessionId);
+    this.deliverInitialMessages(agent, pending);
     return {
       terminalRuntimeId,
-      providerSessionId,
+      agentSessionId,
     };
   }
 }

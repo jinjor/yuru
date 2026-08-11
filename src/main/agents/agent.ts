@@ -6,7 +6,7 @@ import type { WorktreeSessionHint } from "../sessions/detection.js";
 
 export interface SessionSnapshot {
   provider: SessionProvider;
-  providerSessionId: string;
+  agentSessionId: string;
   project: string;
   lastMessage: string;
   timestamp: number;
@@ -19,13 +19,13 @@ export interface SessionPreview {
 
 export interface AgentTerminalRuntimeInfo extends TerminalRuntimeInfo {
   provider: SessionProvider;
-  providerSessionId: string | null;
+  agentSessionId: string | null;
 }
 
 export interface PendingSession extends PendingTerminal {
   provider: SessionProvider;
-  providerSessionId: string | null;
-  existingProviderSessionIds: ReadonlySet<string>;
+  agentSessionId: string | null;
+  existingAgentSessionIds: ReadonlySet<string>;
   initialInput: string | null;
   initialPrompt: string | null;
 }
@@ -34,7 +34,7 @@ export interface LaunchRequest {
   cwd: string;
   args: string[];
   worktreePath: string;
-  existingProviderSessionIds?: ReadonlySet<string>;
+  existingAgentSessionIds?: ReadonlySet<string>;
   // Message typed into the PTY as the first user prompt once the session is
   // up. Used by providers without a launch-flag injection mechanism.
   initialInput?: string;
@@ -54,7 +54,7 @@ export interface WorktreeContext {
 
 export interface ResumeSessionTarget {
   provider: SessionProvider;
-  providerSessionId: string;
+  agentSessionId: string;
   // Directory to launch the resume in (where the provider stored the session).
   cwd: string;
   project: string;
@@ -72,14 +72,14 @@ export type PlanUsage =
   | { state: "logged-out" }
   | { state: "no-plan-limits" };
 
-export interface SessionProviderAdapter {
+export interface Agent {
   definition: AgentDefinition;
   command: string;
   resolvesSessionIdLazily: boolean;
   loadStoredSessions(): Promise<SessionSnapshot[]>;
-  loadStoredSessionPreview(providerSessionId: string): Promise<SessionPreview | null>;
+  loadStoredSessionPreview(agentSessionId: string): Promise<SessionPreview | null>;
   loadWorktreeSessionHints(worktreePaths: readonly string[]): Promise<WorktreeSessionHint[]>;
-  hasStoredSession(providerSessionId: string): Promise<boolean>;
+  hasStoredSession(agentSessionId: string): Promise<boolean>;
   // command はログインシェルで解決した CLI の絶対パスと PATH。Yuru は認証情報を
   // 自分では扱わず、CLI に自分のログインを使わせる。
   loadPlanUsage(command: ResolvedProviderCommand): Promise<PlanUsage>;
@@ -93,5 +93,5 @@ export interface SessionProviderAdapter {
   // Whether the provider recorded the injected initialInput into the session
   // store. Only providers that launch with initialInput implement this; the
   // runtime uses it to verify the injection did not get lost.
-  hasRecordedInitialInput?(providerSessionId: string, initialInput: string): Promise<boolean>;
+  hasRecordedInitialInput?(agentSessionId: string, initialInput: string): Promise<boolean>;
 }
