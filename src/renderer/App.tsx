@@ -12,20 +12,20 @@ import { AlertTriangle } from "lucide-react";
 import type { AppError, AppErrorNotice } from "../shared/ipc";
 import type { RepoListItem } from "../shared/metadata";
 import type { ProviderPlanUsage } from "../shared/session";
-import { AppErrorToast } from "./components/AppErrorToast";
-import { BranchNameInput, type CreateWorktreeMode } from "./components/BranchNameInput";
-import { ErrorLogModal } from "./components/ErrorLogModal";
-import { ProviderPlanUsageRows } from "./components/ProviderPlanUsageRows";
-import { RepoList } from "./components/RepoList";
-import { SessionView } from "./components/SessionView";
-import { WorktreeRemovalDialog } from "./components/WorktreeRemovalDialog";
+import { AppErrorToast } from "./errors/AppErrorToast";
+import { CreateWorktreeModal, type CreateWorktreeMode } from "./repos/CreateWorktreeModal";
+import { ErrorLogModal } from "./errors/ErrorLogModal";
+import { ProviderPlanUsageRows } from "./planUsage/ProviderPlanUsageRows";
+import { RepoList } from "./repos/RepoList";
+import { SessionView } from "./SessionView";
+import { WorktreeRemovalDialog } from "./repos/WorktreeRemovalDialog";
 import { clamp, runPointerDrag } from "./utils/layout";
 import {
   applyPullRequestUpdates,
   applySessionUpdate,
   collectKeepAliveWorktrees,
   findWorktree,
-} from "./utils/repoList";
+} from "./repos/repoListState";
 
 export function App() {
   const appRef = useRef<HTMLDivElement>(null);
@@ -285,7 +285,7 @@ export function App() {
       ))}
       {!selectedWorktreeId && <SessionPlaceholder />}
       {worktreeTarget && (
-        <BranchNameInput
+        <CreateWorktreeModal
           onSubmit={handleCreateWorktree}
           onChange={() => setWorktreeError(null)}
           onCancel={() => {

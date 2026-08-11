@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
-import { AppErrorBoundary } from "./components/AppErrorBoundary";
+import { AppErrorBoundary } from "./errors/AppErrorBoundary";
 import "./style.css";
 
 // 描画エラー (ErrorBoundary 行き) 以外の uncaught error / unhandled rejection は
