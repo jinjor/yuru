@@ -32,7 +32,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | B12 | bug | Sessions / Worktree Context | Claude の resume で worktree の作業指示が引き継がれない | `--append-system-prompt` の指示が保存されないため、resume すると Claude が repo root で作業してしまう。詳細: docs/backlog-details/B12-resume-worktree-context.md |
 | B15 | bug | Terminal | ターミナルにフォーカスできないことがある | キーボード入力を始められないことがある |
 | P25 | polish | Home | ホーム画面のスタイルを改善する | 最初に目に入る画面の見た目を整えたい |
-| P28 | polish | Codebase | 汎用部品（renderer/ui 以下）を増やす | renderer のコンポーネント 37 個のうちドメインを持たないのは Modal だけで、汎用部品の層が実質無い |
 
 ## Next
 
