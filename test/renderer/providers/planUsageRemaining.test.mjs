@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { formatRemaining } from "../../../src/renderer/planUsage/planUsageRemaining.ts";
+import { formatRemaining } from "../../../src/renderer/providers/planUsageRemaining.ts";
 
 test("残り時間は上位 2 単位までにする", () => {
   assert.equal(formatRemaining((6 * 24 + 5) * 3600_000 + 28 * 60_000), "6d5h");

@@ -1,7 +1,7 @@
 import { AlertTriangle, CircleAlert, X } from "lucide-react";
 import { useEffect } from "react";
 import type { AppErrorNotice } from "../../shared/ipc";
-import { Modal } from "../shared/Modal";
+import { Modal } from "../ui/Modal";
 
 interface ErrorLogModalProps {
   notices: AppErrorNotice[];

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { gitHubBadgeLabel } from "../../../src/renderer/shared/githubBadgeLabel.ts";
+import { gitHubBadgeLabel } from "../../../src/renderer/pull-requests/githubBadgeLabel.ts";
 
 function pullRequest(state, isApproved) {
   return {

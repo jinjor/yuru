@@ -1,7 +1,7 @@
 import type { PlanUsageWindow } from "../../../shared/session.js";
 import type { PlanUsage } from "../agent.js";
-import { readJsonLines, runPlanUsageCommand, withPlanUsageProcess } from "../../plan-usage/io.js";
-import type { ResolvedProviderCommand } from "../../plan-usage/command.js";
+import { readJsonLines, runPlanUsageCommand, withPlanUsageProcess } from "../plan-usage-io.js";
+import type { ResolvedProviderCommand } from "../command.js";
 
 const REQUEST_ID = "yuru-plan-usage";
 const TIMEOUT_MS = 10_000;

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildChangeSections } from "../../../src/renderer/explorer/changes.ts";
+import { buildChangeSections } from "../../../src/renderer/changes/changes.ts";
 
 test("buildChangeSections は空のセクションを省く", () => {
   assert.deepEqual(

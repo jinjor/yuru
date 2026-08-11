@@ -1,10 +1,10 @@
 import { type MouseEvent as ReactMouseEvent, type RefObject, useCallback, useState } from "react";
-import { clamp, runPointerDrag } from "./utils/layout";
+import { clamp, runPointerDrag } from "../utils/layout";
 
 interface UsePaneLayoutOptions {
   appRef: RefObject<HTMLDivElement | null>;
   sidebarWidth: number;
-  sessionViewColumnRef: RefObject<HTMLDivElement | null>;
+  worktreeViewColumnRef: RefObject<HTMLDivElement | null>;
 }
 
 interface PaneLayout {
@@ -17,7 +17,7 @@ interface PaneLayout {
 export function usePaneLayout({
   appRef,
   sidebarWidth,
-  sessionViewColumnRef,
+  worktreeViewColumnRef,
 }: UsePaneLayoutOptions): PaneLayout {
   const [changesPanelWidth, setChangesPanelWidth] = useState(375);
   const [previewRatio, setPreviewRatio] = useState(0.6);
@@ -33,8 +33,8 @@ export function usePaneLayout({
       }
 
       runPointerDrag("col-resize", (moveEvent) => {
-        const reservedSessionViewWidth = 520;
-        const maxWidth = Math.max(220, appWidth - sidebarWidth - reservedSessionViewWidth);
+        const reservedWorktreeViewWidth = 520;
+        const maxWidth = Math.max(220, appWidth - sidebarWidth - reservedWorktreeViewWidth);
         setChangesPanelWidth(clamp(startWidth - (moveEvent.clientX - startX), 220, maxWidth));
       });
     },
@@ -44,22 +44,22 @@ export function usePaneLayout({
   const handlePreviewResizeStart = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>): void => {
       event.preventDefault();
-      const sessionViewHeight = sessionViewColumnRef.current?.clientHeight ?? 0;
-      if (sessionViewHeight === 0) {
+      const worktreeViewHeight = worktreeViewColumnRef.current?.clientHeight ?? 0;
+      if (worktreeViewHeight === 0) {
         return;
       }
 
       const startY = event.clientY;
-      const startPreviewHeight = sessionViewHeight * previewRatio;
+      const startPreviewHeight = worktreeViewHeight * previewRatio;
 
       runPointerDrag("row-resize", (moveEvent) => {
-        const minPreviewRatio = Math.min(0.75, 180 / sessionViewHeight);
-        const maxPreviewRatio = Math.max(minPreviewRatio, 1 - 140 / sessionViewHeight);
-        const nextRatio = (startPreviewHeight + moveEvent.clientY - startY) / sessionViewHeight;
+        const minPreviewRatio = Math.min(0.75, 180 / worktreeViewHeight);
+        const maxPreviewRatio = Math.max(minPreviewRatio, 1 - 140 / worktreeViewHeight);
+        const nextRatio = (startPreviewHeight + moveEvent.clientY - startY) / worktreeViewHeight;
         setPreviewRatio(clamp(nextRatio, minPreviewRatio, maxPreviewRatio));
       });
     },
-    [previewRatio, sessionViewColumnRef],
+    [previewRatio, worktreeViewColumnRef],
   );
 
   return {

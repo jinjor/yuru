@@ -1,11 +1,11 @@
 import fs from "fs";
 import path from "path";
-import { WORKTREE_CONTEXT_PROMPT_MARKER } from "../../sessions/context-prompt.js";
+import { WORKTREE_CONTEXT_PROMPT_MARKER } from "../worktree-context-prompt.js";
 import {
   resolveContainingWorktreePath,
   resolveMentionedWorktreePaths,
   type WorktreeSessionHint,
-} from "../../sessions/detection.js";
+} from "../session-detection.js";
 
 export interface KimiStoredSessionRef {
   agentSessionId: string;

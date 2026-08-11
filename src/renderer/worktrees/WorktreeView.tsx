@@ -13,21 +13,21 @@ import type {
   GitReviewState,
   Result,
   WorktreeSessionSelection,
-} from "../shared/ipc";
-import type { WorktreeListItem } from "../shared/metadata";
-import type { SessionProvider, TerminalRuntimeId } from "../shared/session";
-import { DiffPreviewPanel } from "./preview/DiffPreviewPanel";
-import { ExplorerPanel, type ExplorerTab } from "./explorer/ExplorerPanel";
-import { FileSearch } from "./explorer/FileSearch";
-import { TerminalBar } from "./terminal/TerminalBar";
-import { TerminalPanel } from "./terminal/TerminalPanel";
-import { TerminalSessionStart } from "./terminal/TerminalSessionStart";
+} from "../../shared/ipc";
+import type { WorktreeListItem } from "../../shared/metadata";
+import type { SessionProvider, TerminalRuntimeId } from "../../shared/session";
+import { DiffPreviewPanel } from "../preview/DiffPreviewPanel";
+import { ExplorerPanel, type ExplorerTab } from "../explorer/ExplorerPanel";
+import { FileSearch } from "../files/FileSearch";
+import { TerminalBar } from "../terminal/TerminalBar";
+import { TerminalPanel } from "../terminal/TerminalPanel";
+import { TerminalHome } from "../terminal/TerminalHome";
 import { usePaneLayout } from "./usePaneLayout";
-import type { PreviewSelection } from "./previewSelection";
-import { startPollingLoop } from "./utils/polling";
-import { resultDataOrNull } from "./utils/result";
+import type { PreviewSelection } from "../previewSelection";
+import { startPollingLoop } from "../utils/polling";
+import { resultDataOrNull } from "../utils/result";
 
-interface SessionViewProps {
+interface WorktreeViewProps {
   appRef: RefObject<HTMLDivElement | null>;
   onError: (error: AppError) => void;
   onOpenExternal: (url: string) => void;
@@ -68,7 +68,7 @@ function isPathChangedInScope(
   return Boolean(entry.indexStatus || entry.worktreeStatus);
 }
 
-export const SessionView = memo(function SessionView({
+export const WorktreeView = memo(function WorktreeView({
   appRef,
   onError,
   onOpenExternal,
@@ -77,14 +77,14 @@ export const SessionView = memo(function SessionView({
   worktree,
   worktreeId,
   onSessionsChanged,
-}: SessionViewProps) {
+}: WorktreeViewProps) {
   // memo の実効性を E2E で固定するための、計測専用の意図的な render 副作用。
   // hidden 中は effect が動かないため、Step 3 の複数 instance 計測でも effect では代替できない。
-  window.__yuruSessionViewRenderCounts ??= {};
-  window.__yuruSessionViewRenderCounts[worktreeId] =
-    (window.__yuruSessionViewRenderCounts[worktreeId] ?? 0) + 1;
+  window.__yuruWorktreeViewRenderCounts ??= {};
+  window.__yuruWorktreeViewRenderCounts[worktreeId] =
+    (window.__yuruWorktreeViewRenderCounts[worktreeId] ?? 0) + 1;
 
-  const sessionViewColumnRef = useRef<HTMLDivElement>(null);
+  const worktreeViewColumnRef = useRef<HTMLDivElement>(null);
   // この worktree で明示的に選んだ terminal runtime。null はホームを表す。
   const [selectedTerminalRuntimeId, setSelectedTerminalRuntimeId] =
     useState<TerminalRuntimeId | null>(null);
@@ -105,7 +105,7 @@ export const SessionView = memo(function SessionView({
   const paneLayout = usePaneLayout({
     appRef,
     sidebarWidth,
-    sessionViewColumnRef,
+    worktreeViewColumnRef,
   });
   const currentBranch = worktree?.branch ?? null;
   const currentGitHub = worktree?.githubPullRequest ?? null;
@@ -316,8 +316,8 @@ export const SessionView = memo(function SessionView({
   return (
     <>
       <div
-        ref={sessionViewColumnRef}
-        className={`session-view-column ${previewSelection ? "has-preview" : ""}`}
+        ref={worktreeViewColumnRef}
+        className={`worktree-view-column ${previewSelection ? "has-preview" : ""}`}
         style={
           previewSelection
             ? ({ "--preview-size": `${paneLayout.previewRatio * 100}%` } as CSSProperties)
@@ -344,7 +344,7 @@ export const SessionView = memo(function SessionView({
         )}
         {previewSelection && (
           <div
-            className="pane-resize-handle horizontal session-view-split-handle"
+            className="pane-resize-handle horizontal worktree-view-split-handle"
             onMouseDown={paneLayout.handlePreviewResizeStart}
             aria-hidden="true"
           />
@@ -375,7 +375,7 @@ export const SessionView = memo(function SessionView({
               terminalRuntimeId={displayedTerminalRuntimeId}
             />
           ) : (
-            <TerminalSessionStart
+            <TerminalHome
               providers={providers}
               worktree={worktree}
               onSelectPrimarySession={setSelectedTerminalRuntimeId}

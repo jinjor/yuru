@@ -3,7 +3,7 @@ import { useState } from "react";
 import type { GitFileStatus, GitReviewState } from "../../shared/ipc";
 import type { PreviewSelection } from "../previewSelection";
 import { statusColor, statusLabel } from "./gitStatus";
-import { LineStatLabel } from "../shared/LineStatLabel";
+import { LineStatLabel } from "./LineStatLabel";
 import { buildChangeSections, type ChangeSection } from "./changes";
 
 interface ChangesPaneProps {

@@ -1,9 +1,9 @@
 import { House, X } from "lucide-react";
 import type { PrimarySessionListItem } from "../../shared/metadata";
 import type { TerminalRuntimeId } from "../../shared/session";
-import { SessionProviderDot } from "../shared/SessionProviderDot";
+import { SessionProviderDot } from "../providers/SessionProviderDot";
 
-export interface SessionTabsProps {
+export interface TerminalTabsProps {
   activeTerminalRuntimeIds: readonly TerminalRuntimeId[];
   primarySessions: readonly PrimarySessionListItem[];
   selectedTerminalRuntimeId: TerminalRuntimeId | null;
@@ -11,13 +11,13 @@ export interface SessionTabsProps {
   onKillTerminalRuntime: (terminalRuntimeId: TerminalRuntimeId) => void;
 }
 
-export function SessionTabs({
+export function TerminalTabs({
   activeTerminalRuntimeIds,
   primarySessions,
   selectedTerminalRuntimeId,
   onSelectTerminalRuntime,
   onKillTerminalRuntime,
-}: SessionTabsProps) {
+}: TerminalTabsProps) {
   return (
     <div className="session-tabs" role="tablist" aria-label="Terminal sessions">
       <button

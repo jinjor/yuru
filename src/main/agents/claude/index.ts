@@ -4,7 +4,7 @@ import path from "path";
 import { streamRipgrepLineMatches } from "../../ripgrep.js";
 import type { PendingSession, SessionPreview, Agent, SessionSnapshot } from "../agent.js";
 import { parseJsonLinesAs, readTextFileIfExists } from "../store-utils.js";
-import { type WorktreeSessionHint } from "../../sessions/detection.js";
+import { type WorktreeSessionHint } from "../session-detection.js";
 import { detectClaudeWorktreeSessionLines } from "./session-detection.js";
 import {
   claudeHistoryPath,
@@ -12,7 +12,7 @@ import {
   claudeSessionFilePath,
   pidFilePath,
 } from "./paths.js";
-import { loadWorktreeContextPrompt } from "../../sessions/context-prompt.js";
+import { loadWorktreeContextPrompt } from "../worktree-context-prompt.js";
 import { IncrementalSessionPreviewReader } from "../preview-reader.js";
 import { getYuruClaudePluginDir } from "../../api/skill-materializer.js";
 import { loadClaudePlanUsage } from "./plan-usage.js";

@@ -380,12 +380,12 @@ export async function seedClaudeStoredSession(
 
 export async function openMainTerminal(window: Page): Promise<void> {
   await worktreeCard(window, "terminal").click();
-  await expect(visibleSessionView(window).locator(".xterm")).toBeVisible({ timeout: 10_000 });
+  await expect(visibleWorktreeView(window).locator(".xterm")).toBeVisible({ timeout: 10_000 });
 }
 
 // ヘッダはファイル名とディレクトリを分けて出すので、両者をまとめて検証する。
 export async function expectPreviewPath(window: Page, fullPath: string): Promise<void> {
-  const sessionView = visibleSessionView(window);
+  const sessionView = visibleWorktreeView(window);
   const lastSlash = fullPath.lastIndexOf("/");
   const name = lastSlash < 0 ? fullPath : fullPath.slice(lastSlash + 1);
   await expect(sessionView.locator(".preview-filename")).toHaveText(name);
@@ -394,11 +394,11 @@ export async function expectPreviewPath(window: Page, fullPath: string): Promise
   }
 }
 
-// Activity で hidden な SessionView の DOM も残るため、右ペインを触る E2E は
+// Activity で hidden な WorktreeView の DOM も残るため、右ペインを触る E2E は
 // 表示中の各トップレベル要素に scope して strict mode の複数 match を避ける。
-export function visibleSessionView(window: Page): Locator {
+export function visibleWorktreeView(window: Page): Locator {
   return window
-    .locator(".app > .session-view-column, .app > .changes-panel, .app > .file-search")
+    .locator(".app > .worktree-view-column, .app > .changes-panel, .app > .file-search")
     .filter({ visible: true });
 }
 

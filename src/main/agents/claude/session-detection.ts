@@ -1,7 +1,4 @@
-import {
-  resolveContainingWorktreePath,
-  type WorktreeSessionHint,
-} from "../../sessions/detection.js";
+import { resolveContainingWorktreePath, type WorktreeSessionHint } from "../session-detection.js";
 
 interface ClaudeCwdEntry {
   sessionId: string;

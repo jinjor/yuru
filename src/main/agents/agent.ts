@@ -1,8 +1,8 @@
 import type { PlanUsageWindow, SessionProvider } from "../../shared/session.js";
 import type { AgentDefinition } from "../../shared/agent.js";
 import type { PendingTerminal, TerminalRuntimeInfo } from "../terminal/runtime.js";
-import type { ResolvedProviderCommand } from "../plan-usage/command.js";
-import type { WorktreeSessionHint } from "../sessions/detection.js";
+import type { ResolvedProviderCommand } from "./command.js";
+import type { WorktreeSessionHint } from "./session-detection.js";
 
 export interface SessionSnapshot {
   provider: SessionProvider;

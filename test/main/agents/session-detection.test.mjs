@@ -13,7 +13,7 @@ import {
 import {
   resolveContainingWorktreePath,
   resolveMentionedWorktreePaths,
-} from "../../../src/main/sessions/detection.ts";
+} from "../../../src/main/agents/session-detection.ts";
 
 function jsonl(...entries) {
   return `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`;

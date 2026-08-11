@@ -20,7 +20,7 @@ import {
   seedCodexHome,
   trustClaudeProject,
   trustCodexProject,
-  visibleSessionView,
+  visibleWorktreeView,
   worktreeCard,
   type E2eContext,
 } from "./helpers";
@@ -80,7 +80,7 @@ const providers: ProviderE2e[] = [
     conversationCount: (home) => codexConversationCount(home),
     hasAssistantReply: (home) => codexHasAssistantReply(home),
     async waitForReady(window) {
-      await expect(visibleSessionView(window).locator(".xterm")).toContainText("OpenAI Codex", {
+      await expect(visibleWorktreeView(window).locator(".xterm")).toContainText("OpenAI Codex", {
         timeout: 20_000,
       });
       await window.waitForTimeout(1000);
@@ -115,7 +115,7 @@ async function createSessionWithTurn(
   await window.locator(".repo-row-new-btn").click();
   await window.locator(".worktree-name-input").fill(provider.branchName);
   await window.locator(".worktree-create-btn").click();
-  const sessionView = visibleSessionView(window);
+  const sessionView = visibleWorktreeView(window);
   await sessionView.locator(".new-session-action", { hasText: provider.label }).click();
   await expect(sessionView.locator(".xterm")).toBeVisible({ timeout: 30_000 });
 
@@ -201,7 +201,7 @@ for (const provider of providers) {
         // card クリックは worktree の選択だけ。inactive primary の復元は
         // Terminal の session start surface からの明示操作になる。
         await card.click();
-        const sessionView = visibleSessionView(window);
+        const sessionView = visibleWorktreeView(window);
         await expect(sessionView.locator(".terminal-session-start")).toBeVisible();
         await sessionView.locator(".resume-primary-action").click();
 
@@ -229,7 +229,7 @@ for (const provider of providers) {
         app = launched.app;
         const window = launched.window;
         await createSessionWithTurn(provider, context, window, repoDir, "REUSE_OK");
-        const sessionView = visibleSessionView(window);
+        const sessionView = visibleWorktreeView(window);
         await expect(sessionView.locator(".xterm")).toContainText("REUSE_OK", {
           timeout: 30_000,
         });
@@ -291,7 +291,7 @@ for (const provider of providers) {
         const card = worktreeCard(window, "feat-external");
         await expect(card).toContainText("1 existing session");
         await card.click();
-        const sessionView = visibleSessionView(window);
+        const sessionView = visibleWorktreeView(window);
         await sessionView.locator(".suggested-session-action").first().click();
 
         // Promoting resumes the session in the worktree where it was created and

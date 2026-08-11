@@ -9,8 +9,8 @@ import {
 } from "react";
 import type { PrimarySessionListItem, RepoListItem, WorktreeListItem } from "../../shared/metadata";
 import { worktreeLabelText } from "./worktreeLabel";
-import { GitHubBadge } from "../shared/GitHubBadge";
-import { SessionProviderDot } from "../shared/SessionProviderDot";
+import { GitHubBadge } from "../pull-requests/GitHubBadge";
+import { SessionProviderDot } from "../providers/SessionProviderDot";
 
 interface RepoListProps {
   repos: RepoListItem[];

@@ -10,7 +10,7 @@ import {
   launchWindow,
   openMainTerminal,
   registerRepo,
-  visibleSessionView,
+  visibleWorktreeView,
   writeFiles,
 } from "./helpers";
 
@@ -329,7 +329,7 @@ test("Files タブには選択中 worktree のファイルだけが出る", asyn
     const window = launched.window;
     await openMainTerminal(window);
 
-    const sessionView = visibleSessionView(window);
+    const sessionView = visibleWorktreeView(window);
     await sessionView.locator(".panel-tab", { hasText: "Files" }).click();
     await sessionView.locator(".file-tree-row", { hasText: "main-dir" }).click();
     await expect(

@@ -14,7 +14,7 @@ import {
   readMetadata,
   registerRepo,
   seedClaudeStoredSession,
-  visibleSessionView,
+  visibleWorktreeView,
   worktreeCard,
   writeMetadata,
 } from "./helpers";
@@ -209,7 +209,7 @@ test("provider store から primary と suggested Claude session の概要を表
     const suggestedCard = worktreeCard(window, "1 existing session");
     await expect(suggestedCard).toContainText("suggested-row");
     await suggestedCard.click();
-    await expect(visibleSessionView(window).locator(".suggested-session-action")).toContainText(
+    await expect(visibleWorktreeView(window).locator(".suggested-session-action")).toContainText(
       "Suggested preview from store",
     );
   } finally {
@@ -243,7 +243,7 @@ test("suggested session が複数ある worktree は件数を表示する", asyn
     const card = worktreeCard(window, "2 existing sessions");
     await expect(card).toContainText("many-suggestions");
     await card.click();
-    await expect(visibleSessionView(window).locator(".suggested-session-action")).toHaveCount(2);
+    await expect(visibleWorktreeView(window).locator(".suggested-session-action")).toHaveCount(2);
   } finally {
     await closeYuru(app);
     await context.cleanup();
@@ -274,7 +274,7 @@ test("provider store から消えた primary session は通知して detach さ�
     await expect(card.locator('[aria-label="Claude primary session inactive"]')).toBeVisible();
     // 選択では resume しないため、detach は Terminal からの明示 resume で起こる。
     await card.click();
-    const sessionView = visibleSessionView(window);
+    const sessionView = visibleWorktreeView(window);
     await sessionView
       .locator(".session-home-row", { hasText: "Claude" })
       .locator(".resume-primary-action")

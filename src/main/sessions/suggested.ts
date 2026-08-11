@@ -1,6 +1,6 @@
 import path from "path";
 import { agents } from "../agents/registry.js";
-import type { WorktreeSessionHint } from "./detection.js";
+import type { WorktreeSessionHint } from "../agents/session-detection.js";
 import {
   toSessionKey,
   type SessionProvider,

@@ -11,8 +11,8 @@ import { toAppError } from "./errors/app-error.js";
 import { fetchGitHubPullRequests } from "./github/github.js";
 import { listWorktrees } from "./git/worktree.js";
 import { PullRequestMonitor } from "./github/pull-request-monitor.js";
-import { ProviderUsageMonitor } from "./plan-usage/monitor.js";
-import { resolveCommandPaths } from "./plan-usage/command.js";
+import { ProviderUsageMonitor } from "./agents/plan-usage-monitor.js";
+import { resolveCommandPaths } from "./agents/command.js";
 import { getAgent, agents } from "./agents/registry.js";
 import type {
   AppErrorNotice,

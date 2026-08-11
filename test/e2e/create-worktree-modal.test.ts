@@ -11,7 +11,7 @@ import {
   launchWindow,
   readMetadata,
   registerRepo,
-  visibleSessionView,
+  visibleWorktreeView,
   worktreeCard,
   writeFiles,
 } from "./helpers";
@@ -86,7 +86,7 @@ test("provider を選ばず worktree を作成でき、Terminal に session の�
     await expect(worktreeCard(window, "feature/f43-create")).toHaveClass(/selected/);
 
     // session はまだ始まっていない: PTY はなく、Terminal に Claude / Codex の選択肢が出る。
-    const sessionView = visibleSessionView(window);
+    const sessionView = visibleWorktreeView(window);
     await expect(sessionView.locator(".terminal-session-start")).toBeVisible();
     await expect(sessionView.locator(".new-session-action", { hasText: "Claude" })).toBeVisible();
     await expect(sessionView.locator(".new-session-action", { hasText: "Codex" })).toBeVisible();

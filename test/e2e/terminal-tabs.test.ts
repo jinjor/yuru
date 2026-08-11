@@ -11,7 +11,7 @@ import {
   launchWindow,
   readMetadata,
   registerRepo,
-  visibleSessionView,
+  visibleWorktreeView,
   worktreeCard,
 } from "./helpers";
 
@@ -38,7 +38,7 @@ test("ホームは空の session セクションを表示しない", async () =>
     const launched = await launchWindow(context);
     app = launched.app;
     const window = launched.window;
-    const sessionView = visibleSessionView(window);
+    const sessionView = visibleWorktreeView(window);
 
     await worktreeCard(window, "empty-session-home").click();
     await expect(sessionView.locator(".action-surface-label")).toHaveText(["New session"]);
@@ -94,7 +94,7 @@ test("ホームから複数 primary を操作し、suggested を promote でき�
     });
     app = launched.app;
     const window = launched.window;
-    const sessionView = visibleSessionView(window);
+    const sessionView = visibleWorktreeView(window);
     await worktreeCard(window, "session-home").click();
 
     const primaryRows = sessionView.locator(".session-home-row");
@@ -193,7 +193,7 @@ test("複数 runtime をタブで切り替え、kill と exit 後はホームへ
     const launched = await launchWindow(context, { env: { PATH: testPath } });
     app = launched.app;
     const window = launched.window;
-    const sessionView = visibleSessionView(window);
+    const sessionView = visibleWorktreeView(window);
     await worktreeCard(window, "session-tabs").click();
 
     const homeTab = sessionView.locator(".session-tab-home");

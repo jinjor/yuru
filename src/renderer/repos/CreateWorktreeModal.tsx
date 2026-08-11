@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { generateDefaultBranch } from "./defaultBranch";
-import { Modal } from "../shared/Modal";
+import { Modal } from "../ui/Modal";
 
 // worktree の作成方法。new-branch は HEAD から新しい branch を切り、
 // from-origin は origin の同名 branch を取り込む (F42)。

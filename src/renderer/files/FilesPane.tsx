@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { FileTreeNode, GitFileStatus, GitPathState } from "../../shared/ipc";
 import type { PreviewSelection } from "../previewSelection";
-import { buildIgnoredPathSet, buildTreeStatusMap, treeStatusClass } from "./gitStatus";
+import { buildIgnoredPathSet, buildTreeStatusMap, treeStatusClass } from "../changes/gitStatus";
 import { resultDataOrNull } from "../utils/result";
 import {
   applyDirectoryListing,

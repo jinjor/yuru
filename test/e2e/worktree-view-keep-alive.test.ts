@@ -14,7 +14,7 @@ import {
   openMainTerminal,
   registerRepo,
   seedCodexHome,
-  visibleSessionView,
+  visibleWorktreeView,
   worktreeCard,
 } from "./helpers";
 
@@ -40,7 +40,7 @@ test("worktree の表示状態は session の有無に関わらず保持され�
     const launched = await launchWindow(context);
     app = launched.app;
     const window = launched.window;
-    const sessionView = visibleSessionView(window);
+    const sessionView = visibleWorktreeView(window);
 
     await worktreeCard(window, "keep-alive-active").click();
     await sessionView.locator(".new-session-action", { hasText: "Codex" }).click();
@@ -174,7 +174,7 @@ test("同一 worktree 内で Files ⇄ Changes ⇄ Search を往復しても展�
     app = launched.app;
     const window = launched.window;
     await openMainTerminal(window);
-    const sessionView = visibleSessionView(window);
+    const sessionView = visibleWorktreeView(window);
 
     // Files: src を展開する
     await sessionView.locator(".panel-tab", { hasText: "Files" }).click();
@@ -230,10 +230,10 @@ test("訪問済み worktree で外部 API から開始した session をタブ�
     const launched = await launchWindow(context);
     app = launched.app;
     const window = launched.window;
-    const sessionView = visibleSessionView(window);
+    const sessionView = visibleWorktreeView(window);
     const card = worktreeCard(window, "keep-alive-external");
 
-    // session がない状態で一度訪問し、SessionView の shell を keep-alive 対象にする。
+    // session がない状態で一度訪問し、WorktreeView の shell を keep-alive 対象にする。
     await card.click();
     await expect(sessionView.locator(".terminal-session-start")).toBeVisible();
     await openMainTerminal(window);
@@ -272,7 +272,7 @@ test("訪問済み worktree で外部 API から開始した session をタブ�
       timeout: 15_000,
     });
 
-    // 外部開始ではこの SessionView の startTerminalRuntime を通らないため、現在タブは
+    // 外部開始ではこの WorktreeView の startTerminalRuntime を通らないため、現在タブは
     // ホームのまま変えない。runtime は props からタブに追加され、そこから選択できる。
     await card.click();
     await expect(sessionView.locator(".terminal-session-start")).toBeVisible();
@@ -311,13 +311,13 @@ async function readKeepAliveIds(window: Page): Promise<{
 
 function resetRenderCounts(window: Page, worktreeIds: string[]): Promise<void> {
   return window.evaluate((ids) => {
-    window.__yuruSessionViewRenderCounts ??= {};
+    window.__yuruWorktreeViewRenderCounts ??= {};
     for (const id of ids) {
-      window.__yuruSessionViewRenderCounts[id] = 0;
+      window.__yuruWorktreeViewRenderCounts[id] = 0;
     }
   }, worktreeIds);
 }
 
 function readRenderCount(window: Page, worktreeId: string): Promise<number> {
-  return window.evaluate((id) => window.__yuruSessionViewRenderCounts?.[id] ?? 0, worktreeId);
+  return window.evaluate((id) => window.__yuruWorktreeViewRenderCounts?.[id] ?? 0, worktreeId);
 }

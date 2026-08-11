@@ -1,9 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { parseJsonLinesAs } from "../store-utils.js";
-import {
-  resolveContainingWorktreePath,
-  type WorktreeSessionHint,
-} from "../../sessions/detection.js";
+import { resolveContainingWorktreePath, type WorktreeSessionHint } from "../session-detection.js";
 
 export interface CodexSessionMetaCwd {
   agentSessionId: string;

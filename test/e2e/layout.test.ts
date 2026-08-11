@@ -23,7 +23,7 @@ test("初期表示ではターミナルの幅を保ったまま右ペインが�
 
     await expect(window.locator(".changes-panel")).toBeVisible();
     expect(await elementWidth(window.locator(".changes-panel"))).toBe(375);
-    expect(await elementWidth(window.locator(".session-view-column"))).toBe(758);
+    expect(await elementWidth(window.locator(".worktree-view-column"))).toBe(758);
   } finally {
     await closeYuru(app);
     await context.cleanup();
@@ -99,7 +99,12 @@ test("Changes パネルのリサイズで幅が変わる", async () => {
 
     const changesPanel = window.locator(".changes-panel");
     const before = await elementWidth(changesPanel);
-    await dragHandle(window, window.locator(".session-view-column + .pane-resize-handle.vertical"), -80, 0);
+    await dragHandle(
+      window,
+      window.locator(".worktree-view-column + .pane-resize-handle.vertical"),
+      -80,
+      0,
+    );
     const after = await elementWidth(changesPanel);
 
     expect(after).toBeGreaterThan(before);
@@ -130,7 +135,7 @@ test("プレビュー分割のリサイズで preview の高さが変わる", as
     await expect(window.locator(".preview-panel")).toBeVisible();
     const previewPanel = window.locator(".preview-panel");
     const before = await elementHeight(previewPanel);
-    await dragHandle(window, window.locator(".session-view-split-handle"), 0, 80);
+    await dragHandle(window, window.locator(".worktree-view-split-handle"), 0, 80);
     const after = await elementHeight(previewPanel);
 
     expect(after).toBeGreaterThan(before);
@@ -161,7 +166,7 @@ test("HTML プレビューの上までドラッグしても分割を動かせ、
 
     const previewPanel = window.locator(".preview-panel");
     const before = await elementHeight(previewPanel);
-    const box = await window.locator(".session-view-split-handle").boundingBox();
+    const box = await window.locator(".worktree-view-split-handle").boundingBox();
     expect(box).not.toBeNull();
     const startX = box!.x + box!.width / 2;
     const startY = box!.y + box!.height / 2;

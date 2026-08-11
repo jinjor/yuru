@@ -1,7 +1,7 @@
 import type { PlanUsageWindow } from "../../../shared/session.js";
 import type { PlanUsage } from "../agent.js";
-import { withPlanUsageProcess } from "../../plan-usage/io.js";
-import type { ResolvedProviderCommand } from "../../plan-usage/command.js";
+import { withPlanUsageProcess } from "../plan-usage-io.js";
+import type { ResolvedProviderCommand } from "../command.js";
 
 const TIMEOUT_MS = 15_000;
 // 起動時に標準出力へ出る URL。--port 0 を渡すと実際に割り当てられたポートがここに出る。

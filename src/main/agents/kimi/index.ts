@@ -4,11 +4,11 @@ import path from "path";
 import { streamRipgrepLineMatches } from "../../ripgrep.js";
 import type { PendingSession, SessionPreview, Agent, SessionSnapshot } from "../agent.js";
 import { parseJsonLinesAs, readTextFileIfExists } from "../store-utils.js";
-import type { WorktreeSessionHint } from "../../sessions/detection.js";
+import type { WorktreeSessionHint } from "../session-detection.js";
 import {
   loadWorktreeContextPrompt,
   WORKTREE_CONTEXT_PROMPT_MARKER,
-} from "../../sessions/context-prompt.js";
+} from "../worktree-context-prompt.js";
 import { assertValidTerminalInput } from "../../terminal/initial-input.js";
 import {
   kimiSessionIndexPath,

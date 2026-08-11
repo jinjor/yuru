@@ -55,7 +55,7 @@ export interface WorktreeListItem {
   suggestedSessions: SuggestedSessionListItem[];
   // この worktree を cwd とする、今生きている全 terminal runtime (provider の有無を問わない)。
   // renderer 側で「表示中の runtime がまだ生きているか」を props から判定するために使う
-  // (SessionView の displayedTerminalRuntimeId 導出)。
+  // (WorktreeView の displayedTerminalRuntimeId 導出)。
   activeTerminalRuntimeIds: string[];
 }
 

@@ -24,7 +24,7 @@ export function findWorktree(
 // keep-alive の単位は worktree (shell) であって session ではない。preview 選択・
 // ExplorerPanel のタブ・Files の展開・検索語はすべて worktree に紐づく情報で session の
 // 有無に依存しないため、「一度訪れた worktree」は app 起動中ずっと生かす。
-// 表示中 runtime の生死は SessionView 側で props (activeTerminalRuntimeIds) から
+// 表示中 runtime の生死は WorktreeView 側で props (activeTerminalRuntimeIds) から
 // 別途判定するので、ここでは session の active/inactive を条件にしない。
 export function collectKeepAliveWorktrees(
   repos: RepoListItem[],

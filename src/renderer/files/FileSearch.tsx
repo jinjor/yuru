@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { resultDataOrNull } from "../utils/result";
-import { Modal } from "../shared/Modal";
+import { Modal } from "../ui/Modal";
 
 interface FileSearchProps {
   onClose: () => void;

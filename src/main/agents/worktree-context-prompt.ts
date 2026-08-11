@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import type { WorktreeContext } from "../agents/agent.js";
+import type { WorktreeContext } from "./agent.js";
 import { getYuruHome } from "../yuru-home.js";
 
 const DEFAULT_WORKTREE_CONTEXT_PROMPT = [

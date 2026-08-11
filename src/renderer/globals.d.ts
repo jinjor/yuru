@@ -3,7 +3,7 @@ import type { ElectronAPI } from "../shared/ipc";
 declare global {
   interface Window {
     electronAPI: ElectronAPI;
-    __yuruSessionViewRenderCounts?: Record<string, number>;
+    __yuruWorktreeViewRenderCounts?: Record<string, number>;
   }
 }
 

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { WorktreeProcessInfo } from "../../shared/ipc";
 import type { WorktreeListItem } from "../../shared/metadata";
 import { worktreeLabelText } from "./worktreeLabel";
-import { Modal } from "../shared/Modal";
+import { Modal } from "../ui/Modal";
 
 interface WorktreeRemovalDialogProps {
   worktree: WorktreeListItem;

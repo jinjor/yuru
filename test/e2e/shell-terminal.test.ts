@@ -7,7 +7,7 @@ import {
   launchWindow,
   openMainTerminal,
   registerRepo,
-  visibleSessionView,
+  visibleWorktreeView,
   writeMetadata,
 } from "./helpers";
 
@@ -22,7 +22,7 @@ test("main worktree の standalone terminal を開いて入力と exit を扱え
     const window = launched.window;
 
     await openMainTerminal(window);
-    const sessionView = visibleSessionView(window);
+    const sessionView = visibleWorktreeView(window);
     await expect(sessionView.locator(".terminal-bar-branch")).toContainText("main");
 
     await sessionView.locator(".xterm").click();
@@ -66,7 +66,7 @@ test("worktree 選択を切り替えると対応する terminal runtime に切�
     const window = launched.window;
 
     await mainTerminalCardForRepo(window, firstRepo).click();
-    const sessionView = visibleSessionView(window);
+    const sessionView = visibleWorktreeView(window);
     await expect(sessionView.locator(".xterm")).toBeVisible({ timeout: 10_000 });
     await sessionView.locator(".xterm").click();
     await window.keyboard.type("printf 'FIRST_RUNTIME\\n'");

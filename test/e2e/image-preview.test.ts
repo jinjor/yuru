@@ -11,7 +11,7 @@ import {
   launchWindow,
   openMainTerminal,
   registerRepo,
-  visibleSessionView,
+  visibleWorktreeView,
 } from "./helpers";
 
 test("変更した画像は前後を同じ倍率で並べてプレビューする", async () => {
@@ -34,7 +34,7 @@ test("変更した画像は前後を同じ倍率で並べてプレビューす�
     await expectPreviewPath(window, "logo.png");
 
     // 両側が寸法とファイルサイズ付きで並ぶ
-    const sessionView = visibleSessionView(window);
+    const sessionView = visibleWorktreeView(window);
     await expect(sessionView.locator(".image-side", { hasText: "Before" })).toContainText(
       "40 × 20",
     );
@@ -72,7 +72,7 @@ test("開いている間に画像が書き換わったら表示も追従する",
     await openMainTerminal(window);
 
     await window.locator(".change-item", { hasText: "live.png" }).click();
-    const sessionView = visibleSessionView(window);
+    const sessionView = visibleWorktreeView(window);
     await expect(sessionView.locator(".image-side", { hasText: "After" })).toContainText("60 × 20");
 
     // 表示中に別の内容へ書き換える。Reviewed は押した時点の内容を記録するので、
@@ -101,7 +101,7 @@ test("追加された画像と worktree の画像は 1 枚で表示する", asyn
     app = launched.app;
     const window = launched.window;
     await openMainTerminal(window);
-    const sessionView = visibleSessionView(window);
+    const sessionView = visibleWorktreeView(window);
 
     // 未追跡ファイル = 追加なので、比較する元がない
     await window.locator(".change-item", { hasText: "shot.png" }).click();

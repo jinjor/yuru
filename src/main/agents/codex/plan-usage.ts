@@ -1,8 +1,8 @@
 import type { Readable, Writable } from "stream";
 import type { PlanUsageWindow } from "../../../shared/session.js";
 import type { PlanUsage } from "../agent.js";
-import { readJsonLines, withPlanUsageProcess } from "../../plan-usage/io.js";
-import type { ResolvedProviderCommand } from "../../plan-usage/command.js";
+import { readJsonLines, withPlanUsageProcess } from "../plan-usage-io.js";
+import type { ResolvedProviderCommand } from "../command.js";
 
 const TIMEOUT_MS = 10_000;
 const FIVE_HOUR_WINDOW_MINS = 300;

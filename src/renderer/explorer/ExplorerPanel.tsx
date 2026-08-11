@@ -7,10 +7,10 @@ import {
   buildConflictedFiles,
   buildStagedFiles,
   buildUnstagedFiles,
-} from "./gitStatus";
-import { ChangesPane } from "./ChangesPane";
-import { FilesPane } from "./FilesPane";
-import { SearchPane } from "./SearchPane";
+} from "../changes/gitStatus";
+import { ChangesPane } from "../changes/ChangesPane";
+import { FilesPane } from "../files/FilesPane";
+import { SearchPane } from "../search/SearchPane";
 
 export type ExplorerTab = "changes" | "files" | "search";
 

@@ -5,10 +5,10 @@ import type {
   WorktreeListItem,
 } from "../../shared/metadata";
 import type { SessionProvider, TerminalRuntimeId } from "../../shared/session";
-import { providerLabel } from "../shared/providerLabel";
-import { SessionProviderDot } from "../shared/SessionProviderDot";
+import { providerLabel } from "../providers/providerLabel";
+import { SessionProviderDot } from "../providers/SessionProviderDot";
 
-interface TerminalSessionStartProps {
+interface TerminalHomeProps {
   providers: SessionProvider[];
   worktree: WorktreeListItem | null;
   onSelectPrimarySession: (terminalRuntimeId: TerminalRuntimeId) => void;
@@ -20,7 +20,7 @@ interface TerminalSessionStartProps {
 }
 
 // Terminal のホーム。primary / suggested の選択と新規 session の開始導線を常にまとめて出す。
-export function TerminalSessionStart({
+export function TerminalHome({
   providers,
   worktree,
   onSelectPrimarySession,
@@ -29,7 +29,7 @@ export function TerminalSessionStart({
   onResumeSuggestedSession,
   onCreateSessionForWorktree,
   onOpenWorktreeTerminal,
-}: TerminalSessionStartProps) {
+}: TerminalHomeProps) {
   return (
     <div className="terminal-session-start">
       {worktree && (

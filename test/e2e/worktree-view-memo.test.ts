@@ -6,11 +6,11 @@ import {
   createGitWorktree,
   launchWindow,
   registerRepo,
-  visibleSessionView,
+  visibleWorktreeView,
   worktreeCard,
 } from "./helpers";
 
-test("App の無関係な state 更新では SessionView を再描画しない", async () => {
+test("App の無関係な state 更新では WorktreeView を再描画しない", async () => {
   const context = await createE2eContext();
   let app: ElectronApplication | null = null;
   try {
@@ -22,7 +22,7 @@ test("App の無関係な state 更新では SessionView を再描画しない",
     const window = launched.window;
 
     await worktreeCard(window, "memo-task").click();
-    const sessionView = visibleSessionView(window);
+    const sessionView = visibleWorktreeView(window);
     await expect(sessionView.locator(".terminal-session-start")).toBeVisible();
     // providers の非同期取得が props に反映された後を基準にする。
     await expect(sessionView.locator(".new-session-action").first()).toBeVisible();
@@ -37,10 +37,10 @@ test("App の無関係な state 更新では SessionView を再描画しない",
       return worktree.worktreeId;
     });
 
-    const before = await sessionViewRenderCount(window, worktreeId);
+    const before = await worktreeViewRenderCount(window, worktreeId);
     await window.locator(".sidebar-errors-row").click();
     await expect(window.locator(".error-log")).toBeVisible();
-    const after = await sessionViewRenderCount(window, worktreeId);
+    const after = await worktreeViewRenderCount(window, worktreeId);
 
     expect(after).toBe(before);
   } finally {
@@ -49,14 +49,14 @@ test("App の無関係な state 更新では SessionView を再描画しない",
   }
 });
 
-function sessionViewRenderCount(window: Page, worktreeId: string): Promise<number> {
+function worktreeViewRenderCount(window: Page, worktreeId: string): Promise<number> {
   return window.evaluate(
     (id) =>
       (
         globalThis as typeof globalThis & {
-          __yuruSessionViewRenderCounts?: Record<string, number>;
+          __yuruWorktreeViewRenderCounts?: Record<string, number>;
         }
-      ).__yuruSessionViewRenderCounts?.[id] ?? 0,
+      ).__yuruWorktreeViewRenderCounts?.[id] ?? 0,
     worktreeId,
   );
 }

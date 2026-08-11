@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { PlanUsageWindow, ProviderPlanUsage } from "../../shared/session";
-import { providerLabel } from "../shared/providerLabel";
+import { providerLabel } from "./providerLabel";
 import { formatRemaining } from "./planUsageRemaining";
 
 // リセットまでの残り時間は分単位で出すので、これくらいの間隔で見直せば足りる。

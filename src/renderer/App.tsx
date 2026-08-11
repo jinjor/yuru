@@ -15,9 +15,9 @@ import type { ProviderPlanUsage } from "../shared/session";
 import { AppErrorToast } from "./errors/AppErrorToast";
 import { CreateWorktreeModal, type CreateWorktreeMode } from "./repos/CreateWorktreeModal";
 import { ErrorLogModal } from "./errors/ErrorLogModal";
-import { ProviderPlanUsageRows } from "./planUsage/ProviderPlanUsageRows";
+import { ProviderPlanUsageRows } from "./providers/ProviderPlanUsageRows";
 import { RepoList } from "./repos/RepoList";
-import { SessionView } from "./SessionView";
+import { WorktreeView } from "./worktrees/WorktreeView";
 import { WorktreeRemovalDialog } from "./repos/WorktreeRemovalDialog";
 import { clamp, runPointerDrag } from "./utils/layout";
 import {
@@ -99,7 +99,7 @@ export function App() {
     const disposeRepoListChanged = window.electronAPI.onRepoListChanged(() => {
       void refreshRepos();
     });
-    // 表示中 runtime の切り替えは SessionView が自分の購読で行う。ここでは左ペインの
+    // 表示中 runtime の切り替えは WorktreeView が自分の購読で行う。ここでは左ペインの
     // dot / preview を更新するために一覧を取り直すだけ。
     const disposeTerminalRuntimeExited = window.electronAPI.onTerminalRuntimeExited(() => {
       void refreshRepos();
@@ -151,8 +151,8 @@ export function App() {
       }
 
       runPointerDrag("col-resize", (moveEvent) => {
-        const reservedSessionViewWidth = selectedWorktreeId ? 520 : 640;
-        const maxWidth = Math.max(220, appWidth - reservedSessionViewWidth);
+        const reservedWorktreeViewWidth = selectedWorktreeId ? 520 : 640;
+        const maxWidth = Math.max(220, appWidth - reservedWorktreeViewWidth);
         setSidebarWidth(clamp(startWidth + moveEvent.clientX - startX, 220, maxWidth));
       });
     },
@@ -271,7 +271,7 @@ export function App() {
           key={worktree.worktreeId}
           mode={worktree.worktreeId === selectedWorktreeId ? "visible" : "hidden"}
         >
-          <SessionView
+          <WorktreeView
             appRef={appRef}
             onOpenExternal={openExternal}
             providers={availableProviders}

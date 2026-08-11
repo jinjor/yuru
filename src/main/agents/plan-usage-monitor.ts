@@ -1,5 +1,5 @@
 import type { ProviderPlanUsage, SessionProvider } from "../../shared/session.js";
-import type { PlanUsage } from "../agents/agent.js";
+import type { PlanUsage } from "./agent.js";
 import { recordAppWarning } from "../errors/center.js";
 import { toAppError } from "../errors/app-error.js";
 import type { ResolvedProviderCommand } from "./command.js";

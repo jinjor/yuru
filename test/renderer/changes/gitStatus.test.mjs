@@ -7,7 +7,7 @@ import {
   buildStagedFiles,
   buildTreeStatusMap,
   buildUnstagedFiles,
-} from "../../../src/renderer/explorer/gitStatus.ts";
+} from "../../../src/renderer/changes/gitStatus.ts";
 
 test("buildStagedFiles と buildUnstagedFiles は staged/unstaged を分けて行数を引き継ぐ", () => {
   const pathStates = [

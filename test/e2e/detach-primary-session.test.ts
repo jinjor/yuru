@@ -7,7 +7,7 @@ import {
   launchWindow,
   readMetadata,
   registerRepo,
-  visibleSessionView,
+  visibleWorktreeView,
   worktreeCard,
 } from "./helpers";
 
@@ -35,7 +35,7 @@ test("inactive primary を detach すると strong link だけが外れ session 
 
     // inactive primary の surface には Resume と Detach が並ぶ。
     await card.click();
-    const sessionView = visibleSessionView(window);
+    const sessionView = visibleWorktreeView(window);
     await expect(sessionView.locator(".resume-primary-action")).toBeVisible();
     await sessionView.locator(".detach-primary-action").click();
 
@@ -81,7 +81,7 @@ test("先頭 primary を detach すると次の primary が代表になる", asy
     await expect(card.locator('[aria-label="Codex primary session inactive"]')).toHaveCount(0);
 
     await card.click();
-    const sessionView = visibleSessionView(window);
+    const sessionView = visibleWorktreeView(window);
     const claudeRow = sessionView.locator(".session-home-row", { hasText: "Claude" });
     await expect(claudeRow).toBeVisible();
     await claudeRow.locator(".detach-primary-action").click();

@@ -225,8 +225,8 @@ preview と provider/activity のドットを表示する。session id がまだ
 standalone terminal は `Terminal` と表示する。× は terminal runtime だけを kill し、provider
 session の履歴と primary link は残す。
 
-右側の `Terminal`, `Files`, `Changes`, preview は選択中の task worktree に連動する。
-App が持つ選択状態は `worktreeId` だけである (P20)。右ペイン (SessionView) は選択が
+右側の `Terminal`, `Files`, `Changes`, preview は選択中の worktree に連動する。
+App が持つ選択状態は `worktreeId` だけである (P20)。右ペイン (WorktreeView) は選択が
 変わっても作り直さない。keep-alive の対象は「各 repo の main worktree (常時) ∪
 一度でも選択した worktree ∪ 選択中」で、対象外の instance だけが React `<Activity>`
 の hidden から実際に破棄される (worktree が repos 一覧から消えた時など)。表示状態は
@@ -241,7 +241,7 @@ visible に戻ると effect は再実行され、大半の state (git status、d
 ディレクトリ一覧など) はこれで最新化される。新しい state を足す時はこの前提を踏まえる:
 
 - イベント購読でしか同期しない state は、hidden 中の聞き逃しに個別の対応が要る。
-  「その worktree でいま選んでいる terminal runtime」は SessionView の local state で
+  「その worktree でいま選んでいる terminal runtime」は WorktreeView の local state で
   保持するが、exit イベントを hidden 中に聞き逃し得るため、表示直前に props
   (`activeTerminalRuntimeIds`、その worktree で今生きている runtime の一覧) と突き合わせる。
   選択先が死んでいればホームを表示する

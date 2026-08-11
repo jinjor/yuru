@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resolveCommandPaths } from "../../../src/main/plan-usage/command.ts";
+import { resolveCommandPaths } from "../../../src/main/agents/command.ts";
 
 // ログインシェルの代わりに、渡されたスクリプトをそのまま実行する sh を使う。
 // -i -l を付けても sh は素直に -c のスクリプトを実行する。

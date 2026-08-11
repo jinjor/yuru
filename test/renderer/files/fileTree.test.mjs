@@ -8,7 +8,7 @@ import {
   buildWatchTargets,
   normalizeExpandedDirectories,
   removeDirectorySubtrees,
-} from "../../../src/renderer/explorer/fileTree.ts";
+} from "../../../src/renderer/files/fileTree.ts";
 
 function file(path) {
   return {
