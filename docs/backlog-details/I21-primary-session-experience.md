@@ -317,7 +317,7 @@ shell は session の有無に関わらず keep-alive されるので、worktree
   fake provider はない。hidden SessionView の DOM が残るので右ペイン操作は
   `visibleSessionView` で scope する。
 
-## Step 1: metadata の複数 primary 化 (main + shared)
+## Step 1: metadata の複数 primary 化 (main + shared)（完了）
 
 UI は変えない (renderer は先頭要素だけ見る暫定対応)。後方互換で単独 merge 可能。
 
@@ -341,7 +341,7 @@ UI は変えない (renderer は先頭要素だけ見る暫定対応)。後方�
 - 完了条件: 既存 e2e 全通過 (挙動不変)。attach が上書きでなく追加になること、
   一意制約、migrate をカバーする `test/main/` の単体テスト追加。
 
-## Step 2: タブ列 (renderer 主体 + kill IPC)
+## Step 2: タブ列 (renderer 主体 + kill IPC)（完了）
 
 - `SessionTabs` コンポーネントを新設し、`TerminalBar` の `<h2>Terminal</h2>` を
   タブ列に置き換える (ブランチ名・PR バッジは右に残す)。見た目はモック通り:
@@ -366,7 +366,7 @@ UI は変えない (renderer は先頭要素だけ見る暫定対応)。後方�
 - 完了条件: タブの表示・切替・× で kill・runtime exit でホームに戻ることの e2e
   (helpers.ts の metadata seed / push 注入 / CLI からの session create を組み合わせる)。
 
-## Step 3: ホーム発展 (renderer)
+## Step 3: ホーム発展 (renderer)（完了）
 
 - `TerminalSessionStart` をホームに発展させ、primary の有無による分岐を廃止:
   Sessions (全 primary) / Suggested / New session を常時表示する
@@ -377,7 +377,7 @@ UI は変えない (renderer は先頭要素だけ見る暫定対応)。後方�
 - 完了条件: 複数 primary の一覧表示・active 行のタブ選択・inactive 行の resume・
   detach・suggested の promote の e2e。
 
-## Step 4: 失敗時の挙動 (renderer)
+## Step 4: 失敗時の挙動 (renderer)（完了）
 
 - トーストコンポーネントを新設 (App レベル、画面右下、数秒で自動 dismiss + × で
   手動 dismiss)。`startTerminalRuntime` が `!result.ok` を握りつぶしている現行をやめ、
