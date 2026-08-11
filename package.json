@@ -4,12 +4,13 @@
   "description": "Vibe Coding editor for Claude Code and Codex CLI",
   "main": "dist/main/index.js",
   "scripts": {
-    "build": "tsc && vite build",
+    "build": "npm run typecheck:renderer && tsc && vite build",
     "package:local": "node ./scripts/package-local-app.mjs",
     "run": "electron .",
     "app:restart": "./scripts/restart-app-macos.sh",
     "test": "node --test --experimental-strip-types --import ./scripts/register-test-loader.mjs 'test/**/*.test.mjs'",
     "test:e2e": "playwright test",
+    "typecheck:renderer": "tsc --noEmit -p src/renderer/tsconfig.json",
     "lint": "oxlint --react-plugin --deny-warnings src/",
     "format": "oxfmt src/",
     "format:check": "oxfmt --check src/"

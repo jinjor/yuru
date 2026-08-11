@@ -31,6 +31,7 @@ interface FilesCache {
 }
 
 interface DirectoryLoad {
+  token: object;
   promise: Promise<void>;
   reloadRequested: boolean;
 }
@@ -110,7 +111,7 @@ export function FilesPane({
         return activeLoad.promise;
       }
 
-      let directoryLoad: DirectoryLoad;
+      const loadToken = {};
       const request = (async () => {
         const prevCache = filesCacheRef.current;
         commitFilesCache({
@@ -118,7 +119,7 @@ export function FilesPane({
           loadingDirectories: new Set(prevCache.loadingDirectories).add(relativePath),
         });
         const result = await window.electronAPI.listFiles(worktreeId, relativePath);
-        if (directoryLoadsRef.current.get(relativePath) !== directoryLoad) {
+        if (directoryLoadsRef.current.get(relativePath)?.token !== loadToken) {
           return;
         }
 
@@ -129,7 +130,8 @@ export function FilesPane({
 
         applyTreeUpdate(relativePath, nextNodes);
       })().finally(async () => {
-        if (directoryLoadsRef.current.get(relativePath) !== directoryLoad) {
+        const directoryLoad = directoryLoadsRef.current.get(relativePath);
+        if (directoryLoad?.token !== loadToken) {
           return;
         }
         directoryLoadsRef.current.delete(relativePath);
@@ -145,7 +147,7 @@ export function FilesPane({
         }
       });
 
-      directoryLoad = { promise: request, reloadRequested: false };
+      const directoryLoad = { token: loadToken, promise: request, reloadRequested: false };
       directoryLoadsRef.current.set(relativePath, directoryLoad);
       return request;
     },

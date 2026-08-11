@@ -1,4 +1,5 @@
 import MarkdownIt from "markdown-it";
+import type StateBlock from "markdown-it/lib/rules_block/state_block.mjs";
 import { parse, stringify } from "yaml";
 
 const frontmatterTokenType = "frontmatter";
@@ -20,7 +21,7 @@ export function extendMarkdownItWithFrontmatter(md: MarkdownIt): void {
 }
 
 function parseFrontmatter(
-  state: MarkdownIt.StateBlock,
+  state: StateBlock,
   startLine: number,
   endLine: number,
   silent: boolean,
@@ -54,7 +55,7 @@ function parseFrontmatter(
   return true;
 }
 
-function lineAt(state: MarkdownIt.StateBlock, line: number): string {
+function lineAt(state: StateBlock, line: number): string {
   return state.src.slice(state.bMarks[line], state.eMarks[line]).trimEnd();
 }
 
@@ -67,7 +68,7 @@ function renderFrontmatter(content: string, attrs: string): string {
     return `<section${attrs}><div class="md-frontmatter-error" role="alert"><strong>Failed to parse frontmatter</strong><pre>${escapeHtml(message)}</pre></div></section>\n`;
   }
 
-  const entries =
+  const entries: [string, unknown][] =
     parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
       ? Object.entries(parsed as Record<string, unknown>)
       : [["", parsed]];
