@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode, Ref } from "react";
 import { ChevronDown, ChevronUp, X } from "lucide-react";
 import type { ThemedToken } from "shiki";
-import type { SourceLine } from "./SourceViewer";
+
+interface SearchableSourceLine {
+  tokens: ThemedToken[];
+}
 
 interface FindMatch {
   lineIndex: number;
@@ -17,7 +20,7 @@ interface SourceFind {
   renderTokens: (tokens: ThemedToken[], lineIndex: number) => ReactNode;
 }
 
-export function useSourceFind(lines: SourceLine[]): SourceFind {
+export function useSourceFind(lines: readonly SearchableSourceLine[]): SourceFind {
   const findInputRef = useRef<HTMLInputElement>(null);
   const [isFindOpen, setIsFindOpen] = useState(false);
   const [findQuery, setFindQuery] = useState("");
@@ -155,7 +158,7 @@ export function useSourceFind(lines: SourceLine[]): SourceFind {
   return { findBar, renderTokens };
 }
 
-function computeFindMatches(lines: SourceLine[], query: string): FindMatch[] {
+function computeFindMatches(lines: readonly SearchableSourceLine[], query: string): FindMatch[] {
   if (query.length === 0) {
     return [];
   }
