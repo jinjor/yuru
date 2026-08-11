@@ -8,7 +8,7 @@ export interface RepoMetadata {
 export interface PrimarySessionMetadata {
   provider: SessionProvider;
   agentSessionId: string;
-  // Directory to resume the session in (where the provider stored it). Optional
+  // Directory to resume the session in (where the agent stored it). Optional
   // for backward compatibility with metadata written before this was recorded;
   // such entries predate promote support and were all created at the repo root.
   cwd?: string;
@@ -53,7 +53,7 @@ export interface WorktreeListItem {
   githubPullRequest?: GitHubPullRequest | null;
   primarySessions: PrimarySessionListItem[];
   suggestedSessions: SuggestedSessionListItem[];
-  // この worktree を cwd とする、今生きている全 terminal runtime (provider の有無を問わない)。
+  // この worktree を cwd とする、今生きている全 terminal runtime (agent が紐づいているかを問わない)。
   // renderer 側で「表示中の runtime がまだ生きているか」を props から判定するために使う
   // (WorktreeView の displayedTerminalRuntimeId 導出)。
   activeTerminalRuntimeIds: string[];

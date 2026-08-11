@@ -24,7 +24,7 @@ export function createInteractiveShellLaunchCommand(
   };
 }
 
-// `exec` replaces the shell so the provider owns the terminal directly. A shell
+// `exec` replaces the shell so the agent owns the terminal directly. A shell
 // started with -c exits on its own when exec fails, carrying the failure's exit
 // code out to the caller.
 function buildShellExecCommand(command: string, args: readonly string[]): string {

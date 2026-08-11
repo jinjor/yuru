@@ -2,26 +2,26 @@ import type { ProviderPlanUsage, SessionProvider } from "../../shared/session.js
 import type { PlanUsage } from "./agent.js";
 import { recordAppWarning } from "../errors/center.js";
 import { toAppError } from "../errors/app-error.js";
-import type { ResolvedProviderCommand } from "./command.js";
+import type { ResolvedAgentCommand } from "./command.js";
 
 // ウィンドウがフォーカスされている間だけ動くプラン利用状況のポーリング。
 // 1 tick で「ログインシェルに 3 provider のパスを解決させる → 見つかった provider を
 // 並列に取得する」を行う。5 時間枠は実作業で数分のうちに数 % 動くので 60 秒間隔。
 const TICK_INTERVAL_MS = 60_000;
 
-export interface ProviderUsageMonitorDeps {
+export interface PlanUsageMonitorDeps {
   listProviders(): { provider: SessionProvider; command: string }[];
-  resolveCommandPaths(commands: readonly string[]): Promise<Map<string, ResolvedProviderCommand>>;
-  loadPlanUsage(provider: SessionProvider, command: ResolvedProviderCommand): Promise<PlanUsage>;
+  resolveCommandPaths(commands: readonly string[]): Promise<Map<string, ResolvedAgentCommand>>;
+  loadPlanUsage(provider: SessionProvider, command: ResolvedAgentCommand): Promise<PlanUsage>;
   planUsageChanged(usages: ProviderPlanUsage[]): void;
 }
 
-export class ProviderUsageMonitor {
-  private readonly deps: ProviderUsageMonitorDeps;
+export class PlanUsageMonitor {
+  private readonly deps: PlanUsageMonitorDeps;
   private timer: ReturnType<typeof setInterval> | null = null;
   private ticking = false;
 
-  constructor(deps: ProviderUsageMonitorDeps) {
+  constructor(deps: PlanUsageMonitorDeps) {
     this.deps = deps;
   }
 
@@ -55,7 +55,7 @@ export class ProviderUsageMonitor {
     this.ticking = true;
     try {
       const providers = this.deps.listProviders();
-      let commands: Map<string, ResolvedProviderCommand>;
+      let commands: Map<string, ResolvedAgentCommand>;
       try {
         commands = await this.deps.resolveCommandPaths(
           providers.map((provider) => provider.command),
@@ -82,7 +82,7 @@ export class ProviderUsageMonitor {
   private async loadOne(entry: {
     provider: SessionProvider;
     command: string;
-    resolved: ResolvedProviderCommand;
+    resolved: ResolvedAgentCommand;
   }): Promise<ProviderPlanUsage> {
     const provider = entry.provider;
     try {

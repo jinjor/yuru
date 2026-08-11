@@ -1,7 +1,7 @@
 import type { PlanUsageWindow } from "../../../shared/session.js";
 import type { PlanUsage } from "../agent.js";
 import { withPlanUsageProcess } from "../plan-usage-io.js";
-import type { ResolvedProviderCommand } from "../command.js";
+import type { ResolvedAgentCommand } from "../command.js";
 
 const TIMEOUT_MS = 15_000;
 // 起動時に標準出力へ出る URL。--port 0 を渡すと実際に割り当てられたポートがここに出る。
@@ -12,7 +12,7 @@ const FIVE_HOUR_LABEL_PATTERN = /^(\d+)h limit$/;
 // kimi はプランの利用状況を返す口をローカルサーバ側に持っている (`kimi web` が立てる
 // REST の /oauth/usage)。その先は kimi 自身が OAuth トークンを付けて upstream を引く。
 // モデルは動かず、セッションも作られない。
-export async function loadKimiPlanUsage(command: ResolvedProviderCommand): Promise<PlanUsage> {
+export async function loadKimiPlanUsage(command: ResolvedAgentCommand): Promise<PlanUsage> {
   return withPlanUsageProcess(
     command,
     ["web", "--no-open", "--port", "0", "--log-level", "error"],

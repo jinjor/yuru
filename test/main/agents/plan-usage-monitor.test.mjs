@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { clearErrorNotices, listErrorNotices } from "../../../src/main/errors/center.ts";
-import { ProviderUsageMonitor } from "../../../src/main/agents/plan-usage-monitor.ts";
+import { PlanUsageMonitor } from "../../../src/main/agents/plan-usage-monitor.ts";
 
 function flush() {
   return new Promise((resolve) => setImmediate(resolve));
@@ -16,7 +16,7 @@ const allProviders = [
 
 function createMonitor(overrides = {}) {
   const pushed = [];
-  const monitor = new ProviderUsageMonitor({
+  const monitor = new PlanUsageMonitor({
     listProviders: () => allProviders,
     resolveCommandPaths: async (commands) =>
       new Map(

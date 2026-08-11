@@ -2,7 +2,7 @@ import type { Readable, Writable } from "stream";
 import type { PlanUsageWindow } from "../../../shared/session.js";
 import type { PlanUsage } from "../agent.js";
 import { readJsonLines, withPlanUsageProcess } from "../plan-usage-io.js";
-import type { ResolvedProviderCommand } from "../command.js";
+import type { ResolvedAgentCommand } from "../command.js";
 
 const TIMEOUT_MS = 10_000;
 const FIVE_HOUR_WINDOW_MINS = 300;
@@ -11,7 +11,7 @@ const WEEKLY_WINDOW_MINS = 10080;
 // Codex は app-server (stdio の JSON-RPC) にプランの利用状況を聞く口を持っている。
 // スレッドを作らないのでモデルは動かず、rollout ファイルも session_index も増えない。
 // app-server は Codex 側で experimental 扱い。
-export async function loadCodexPlanUsage(command: ResolvedProviderCommand): Promise<PlanUsage> {
+export async function loadCodexPlanUsage(command: ResolvedAgentCommand): Promise<PlanUsage> {
   return withPlanUsageProcess(command, ["app-server"], TIMEOUT_MS, async (child) => {
     const connection = new AppServerConnection(child.stdin, child.stdout);
     await connection.request("initialize", {

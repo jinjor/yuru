@@ -14,7 +14,7 @@ export interface InitialInputWriter {
 }
 
 export interface DeliverInitialInputOptions {
-  // Confirms the provider recorded the message into its session store.
+  // Confirms the agent recorded the message into its session store.
   // Delivery resolves true without verification when omitted.
   verify?: () => Promise<boolean>;
   enterDelayMs?: number;

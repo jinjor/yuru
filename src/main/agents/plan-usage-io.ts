@@ -1,20 +1,20 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
 import os from "os";
 import type { Readable } from "stream";
-import type { ResolvedProviderCommand } from "./command.js";
+import type { ResolvedAgentCommand } from "./command.js";
 
-// プラン利用状況の取得は、provider の CLI を対話的に動かして 1 つ応答を受け取る形に
+// プラン利用状況の取得は、agent の CLI を対話的に動かして 1 つ応答を受け取る形に
 // なる (標準入力に要求を書く、サーバとして起動して HTTP で聞く)。どの provider でも
 // 「応答が来るか時間切れになるまで待ち、どちらでも必ず後片付けする」が要るので、
 // 起動と後片付けはここに集約する。特に kimi はサーバとして起動するため、
 // kill し損ねると常駐し続ける。
 export async function withPlanUsageProcess<T>(
-  command: ResolvedProviderCommand,
+  command: ResolvedAgentCommand,
   args: readonly string[],
   timeoutMs: number,
   run: (child: ChildProcessWithoutNullStreams) => Promise<T>,
 ): Promise<T> {
-  const child = spawnProviderCommand(command, args);
+  const child = spawnAgentCommand(command, args);
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
@@ -45,11 +45,11 @@ export async function withPlanUsageProcess<T>(
 // 出力を最後まで受け取って終わる CLI 向け。共通の exec() ではなくこちらを使うのは、
 // 応答しないまま居座られると取得全体 (と次の tick) が止まってしまうため。
 export async function runPlanUsageCommand(
-  command: ResolvedProviderCommand,
+  command: ResolvedAgentCommand,
   args: readonly string[],
   timeoutMs: number,
 ): Promise<string> {
-  const child = spawnProviderCommand(command, args);
+  const child = spawnAgentCommand(command, args);
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await new Promise<string>((resolve, reject) => {
@@ -87,12 +87,12 @@ export async function runPlanUsageCommand(
   }
 }
 
-function spawnProviderCommand(
-  command: ResolvedProviderCommand,
+function spawnAgentCommand(
+  command: ResolvedAgentCommand,
   args: readonly string[],
 ): ChildProcessWithoutNullStreams {
   return spawn(command.path, [...args], {
-    // provider の CLI は cwd を見て挙動を変える (Claude の CLAUDE.md 探索、kimi の
+    // agent の CLI は cwd を見て挙動を変える (Claude の CLAUDE.md 探索、kimi の
     // workspace 判定)。利用状況はアカウント全体の話で worktree とは無関係なので、
     // どの worktree にも紐づかない一時ディレクトリで起動する。
     cwd: os.tmpdir(),

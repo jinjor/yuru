@@ -11,7 +11,7 @@ import { toAppError } from "./errors/app-error.js";
 import { fetchGitHubPullRequests } from "./github/github.js";
 import { listWorktrees } from "./git/worktree.js";
 import { PullRequestMonitor } from "./github/pull-request-monitor.js";
-import { ProviderUsageMonitor } from "./agents/plan-usage-monitor.js";
+import { PlanUsageMonitor } from "./agents/plan-usage-monitor.js";
 import { resolveCommandPaths } from "./agents/command.js";
 import { getAgent, agents } from "./agents/registry.js";
 import type {
@@ -91,7 +91,7 @@ const pullRequestMonitor = new PullRequestMonitor({
 
 // プランの利用状況のポーリング。PR と同じくフォーカス中だけ動く。この結果が
 // 「どの provider を出すか」も決めるので、起動直後にも 1 回走らせる。
-const providerUsageMonitor = new ProviderUsageMonitor({
+const planUsageMonitor = new PlanUsageMonitor({
   listProviders: () =>
     Object.values(agents).map((agent) => ({
       provider: agent.definition.id,
@@ -322,7 +322,7 @@ async function stopApplicationServices(): Promise<void> {
   }
   servicesStopped = true;
   pullRequestMonitor.stop();
-  providerUsageMonitor.stop();
+  planUsageMonitor.stop();
   worktreeWatcher?.stop();
   try {
     await apiServer?.stop();
@@ -592,20 +592,20 @@ app.whenReady().then(async () => {
 
   app.on("browser-window-focus", () => {
     pullRequestMonitor.start();
-    providerUsageMonitor.start();
+    planUsageMonitor.start();
   });
   app.on("browser-window-blur", () => {
     pullRequestMonitor.stop();
-    providerUsageMonitor.stop();
+    planUsageMonitor.stop();
   });
   // 起動時にすでにフォーカスされていると focus イベントが来ないことがあるため。
   if (mainWindow?.isFocused()) {
     pullRequestMonitor.start();
-    providerUsageMonitor.start();
+    planUsageMonitor.start();
   } else {
     // 非フォーカスで起動した場合、blur イベントは来ないので start() すると
     // 定期取得が止まらなくなる。provider の一覧は必要なので 1 回だけ取る。
-    void providerUsageMonitor.refreshOnce();
+    void planUsageMonitor.refreshOnce();
   }
 });
 

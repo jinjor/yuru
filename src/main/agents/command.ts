@@ -6,7 +6,7 @@ const RESOLVE_TIMEOUT_MS = 10_000;
 // シェルが起動できずに何も出力しなかった場合を、出力の空さだけでは区別できないため。
 const SENTINEL = "yuru-resolved";
 
-export interface ResolvedProviderCommand {
+export interface ResolvedAgentCommand {
   // ログインシェルで解決した CLI の絶対パス。
   path: string;
   // ログインシェルの PATH。実行ファイルが絶対パスでも、shebang のインタプリタは
@@ -15,23 +15,23 @@ export interface ResolvedProviderCommand {
   pathEnv: string;
 }
 
-// Yuru は provider をユーザーのログインシェル経由で起動する (shell-launch.ts) ため、
+// Yuru は agent をユーザーのログインシェル経由で起動する (shell-launch.ts) ため、
 // その CLI がどこにあるかはログインシェルの PATH で決まる。Electron 自身の PATH で
 // 探すと答えが違う (Finder から起動した Electron の PATH は最小限で、実際の CLI は
 // ~/.local/bin や nvm 配下や Homebrew 配下にある)。
 //
-// ログインシェルの起動は 1 回 0.5 秒ほどかかるので、provider ごとに聞かず
+// ログインシェルの起動は 1 回 0.5 秒ほどかかるので、agent ごとに聞かず
 // 1 プロセスでまとめて解決する。見つかった command だけが結果に入るので、
 // 「入っていない provider をどこにも出さない」の判定もこれで行う。
 export async function resolveCommandPaths(
   commands: readonly string[],
   baseEnv: Record<string, string | undefined> = process.env,
-): Promise<Map<string, ResolvedProviderCommand>> {
+): Promise<Map<string, ResolvedAgentCommand>> {
   const lines = (await runLoginShell(buildResolveScript(commands), baseEnv))
     .split("\n")
     .map((line) => line.trimEnd());
   if (!lines.includes(SENTINEL)) {
-    throw new Error("login shell exited before resolving provider commands");
+    throw new Error("login shell exited before resolving agent commands");
   }
 
   const pathEnv = lines
@@ -41,7 +41,7 @@ export async function resolveCommandPaths(
     throw new Error("login shell did not report PATH");
   }
 
-  const resolved = new Map<string, ResolvedProviderCommand>();
+  const resolved = new Map<string, ResolvedAgentCommand>();
   for (const line of lines) {
     const [kind, name, value] = line.split("\t");
     // command -v は alias や shell 関数にも当たり、その場合はパスではなく定義を返す。

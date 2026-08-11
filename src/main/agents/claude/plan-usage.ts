@@ -1,7 +1,7 @@
 import type { PlanUsageWindow } from "../../../shared/session.js";
 import type { PlanUsage } from "../agent.js";
 import { readJsonLines, runPlanUsageCommand, withPlanUsageProcess } from "../plan-usage-io.js";
-import type { ResolvedProviderCommand } from "../command.js";
+import type { ResolvedAgentCommand } from "../command.js";
 
 const REQUEST_ID = "yuru-plan-usage";
 const TIMEOUT_MS = 10_000;
@@ -14,7 +14,7 @@ const TIMEOUT_MS = 10_000;
 // get_usage は Claude Code 側で experimental (応答の形が変わりうる) と明記されている。
 // 知っている形でなければ例外にして「取れなかった」に倒す。未ログインと取り違えて
 // 黙って表示すると、ユーザーは再ログインしても直らない原因不明の状態に置かれる。
-export async function loadClaudePlanUsage(command: ResolvedProviderCommand): Promise<PlanUsage> {
+export async function loadClaudePlanUsage(command: ResolvedAgentCommand): Promise<PlanUsage> {
   const usage = await requestUsage(command);
   if (!isRecord(usage) || typeof usage.rate_limits_available !== "boolean") {
     throw new Error("claude get_usage did not report rate_limits_available");
@@ -36,7 +36,7 @@ export async function loadClaudePlanUsage(command: ResolvedProviderCommand): Pro
   };
 }
 
-async function requestUsage(command: ResolvedProviderCommand): Promise<unknown> {
+async function requestUsage(command: ResolvedAgentCommand): Promise<unknown> {
   return withPlanUsageProcess(
     command,
     [
@@ -80,7 +80,7 @@ async function requestUsage(command: ResolvedProviderCommand): Promise<unknown> 
   );
 }
 
-async function isLoggedIn(command: ResolvedProviderCommand): Promise<boolean> {
+async function isLoggedIn(command: ResolvedAgentCommand): Promise<boolean> {
   const status: unknown = JSON.parse(
     await runPlanUsageCommand(command, ["auth", "status", "--json"], TIMEOUT_MS),
   );

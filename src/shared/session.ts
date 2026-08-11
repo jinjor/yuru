@@ -6,7 +6,7 @@ export type AgentActivityState = "working" | "waiting";
 export interface SuggestedWorktreeSession {
   provider: SessionProvider;
   agentSessionId: string;
-  // Directory the session was created in (where the provider stores it). Carried
+  // Directory the session was created in (where the agent stores it). Carried
   // so promoting the session can record where to resume it.
   cwd: string;
   timestamp: number;

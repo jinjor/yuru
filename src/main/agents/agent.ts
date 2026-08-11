@@ -1,7 +1,7 @@
 import type { PlanUsageWindow, SessionProvider } from "../../shared/session.js";
 import type { AgentDefinition } from "../../shared/agent.js";
 import type { PendingTerminal, TerminalRuntimeInfo } from "../terminal/runtime.js";
-import type { ResolvedProviderCommand } from "./command.js";
+import type { ResolvedAgentCommand } from "./command.js";
 import type { WorktreeSessionHint } from "./session-detection.js";
 
 export interface SessionSnapshot {
@@ -55,7 +55,7 @@ export interface WorktreeContext {
 export interface ResumeSessionTarget {
   provider: SessionProvider;
   agentSessionId: string;
-  // Directory to launch the resume in (where the provider stored the session).
+  // Directory to launch the resume in (where the agent stored the session).
   cwd: string;
   project: string;
 }
@@ -82,15 +82,15 @@ export interface Agent {
   hasStoredSession(agentSessionId: string): Promise<boolean>;
   // command はログインシェルで解決した CLI の絶対パスと PATH。Yuru は認証情報を
   // 自分では扱わず、CLI に自分のログインを使わせる。
-  loadPlanUsage(command: ResolvedProviderCommand): Promise<PlanUsage>;
+  loadPlanUsage(command: ResolvedAgentCommand): Promise<PlanUsage>;
   createResumeLaunch(session: ResumeSessionTarget): Promise<LaunchRequest>;
   createWorktreeLaunch(context: WorktreeContext): Promise<LaunchRequest>;
   waitForSessionId(pending: PendingSession): Promise<string>;
-  // Provider TUIs can keep repainting while requiring user action. This only
-  // detects a provider-specific signal; false does not determine the overall
+  // Agent TUIs can keep repainting while requiring user action. This only
+  // detects an agent-specific signal; false does not determine the overall
   // activity state.
   detectUserActionRequired?(terminalTitle: string): boolean;
-  // Whether the provider recorded the injected initialInput into the session
+  // Whether the agent recorded the injected initialInput into the session
   // store. Only providers that launch with initialInput implement this; the
   // runtime uses it to verify the injection did not get lost.
   hasRecordedInitialInput?(agentSessionId: string, initialInput: string): Promise<boolean>;
