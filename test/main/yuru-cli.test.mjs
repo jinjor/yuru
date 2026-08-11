@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { startApiServer } from "../../src/main/api-server.ts";
+import { startApiServer } from "../../src/main/api/server.ts";
 
 const cliPath = path.resolve("scripts/yuru-cli/index.mjs");
 

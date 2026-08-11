@@ -11,42 +11,39 @@ import {
   loadTaskWorktrees,
   removeTaskWorktreeByPath,
   upsertTaskWorktree,
-} from "./metadata.js";
-import { removeFileReviews } from "./file-reviews.js";
+} from "./repos/metadata.js";
+import { removeFileReviews } from "./review/store.js";
 import {
   getReviewState as loadReviewState,
   setFileReviewed as saveFileReviewed,
-} from "./review-state.js";
-import { loadRepoList } from "./repo-list.js";
+} from "./review/review-state.js";
+import { loadRepoList } from "./repos/repo-list.js";
 import {
   loadStoredSessionPreview,
   loadStoredSessionPreviews,
   loadSuggestedWorktreeSessions,
-} from "./sessions.js";
+} from "./sessions/suggested.js";
 import { isPathWithin, toWorktreeId } from "./worktree-identity.js";
+import { getFileDocument, getGitDiffDocument as loadGitDiffDocument } from "./git/diff.js";
+import { getCurrentBranch, getHeadSha, isSupportedGitRepo } from "./git/repo.js";
+import { getGitPathStates as loadGitPathStates } from "./git/status.js";
 import {
   branchExists,
   createWorktree,
   createWorktreeFromOriginBranch,
   fetchOriginBranch,
-  getCurrentBranch,
-  getFileDocument,
-  getGitDiffDocument as loadGitDiffDocument,
-  getGitPathStates as loadGitPathStates,
-  getHeadSha,
-  isSupportedGitRepo,
   isWorktreeDirty,
   listWorktrees,
   removeWorktree as removeGitWorktree,
   removeWorktreeForce as removeGitWorktreeForce,
   unlockWorktree as unlockGitWorktree,
-} from "./git.js";
+} from "./git/worktree.js";
 import {
   getImageDiffDocument as loadImageDiffDocument,
   getImageFileDocument,
-} from "./image-diff.js";
-import { hasLiveProcessInWorktree, listLiveProcessesInWorktree } from "./worktree-process-check.js";
-import { getLastKnownGitHubPullRequest } from "./github.js";
+} from "./preview/image-diff.js";
+import { hasLiveProcessInWorktree, listLiveProcessesInWorktree } from "./repos/process-check.js";
+import { getLastKnownGitHubPullRequest } from "./github/github.js";
 import {
   listAllFiles as listAllRepoFiles,
   listFiles as listRepoFiles,
@@ -54,27 +51,27 @@ import {
   resolveHtmlPreviewEntry as resolveHtmlPreviewEntryPath,
   resolveRepoFile as resolveRepoFilePath,
   writeFile as writeRepoFile,
-} from "./files.js";
-import { getSessionProvider } from "./agent-registry.js";
+} from "./files/files.js";
+import { getSessionProvider } from "./agents/registry.js";
 import {
   CODE_SEARCH_RESULT_LIMIT,
   createEmptyCodeSearchResult,
   isCodeSearchCancelledError,
   searchCode as runCodeSearch,
-} from "./code-search.js";
+} from "./files/code-search.js";
 import {
   type LaunchRequest,
   type PendingSession,
   type SessionProviderAdapter,
   type WorktreeContext,
-} from "./agent.js";
+} from "./agents/agent.js";
 import type {
   PendingTerminal,
   TerminalLaunchRequest,
   TerminalRuntimeKind,
   TerminalRuntimeInfo,
-} from "./terminal-runtime.js";
-import { FileTreeWatcher } from "./file-tree-watcher.js";
+} from "./terminal/runtime.js";
+import { FileTreeWatcher } from "./files/tree-watcher.js";
 import {
   type AppError,
   type AppErrorNotice,
@@ -92,19 +89,19 @@ import {
   type SuggestedWorktreeSession,
   toSessionKey,
 } from "../shared/session.js";
-import { isFileNotFoundError, toAppError } from "./errors.js";
+import { isFileNotFoundError, toAppError } from "./errors/app-error.js";
 import {
   clearErrorNotices,
   dismissErrorNotice,
   listErrorNotices,
   recordAppError,
   recordAppWarning,
-} from "./error-center.js";
-import { createTerminalEnv, type TerminalEnvOptions } from "./terminal-env.js";
-import { deliverInitialInput } from "./initial-input.js";
-import { TerminalScreen } from "./terminal-screen.js";
-import { createInteractiveShellLaunchCommand } from "./shell-launch.js";
-import { findRepoByWorktreePath } from "./worktree-repository.js";
+} from "./errors/center.js";
+import { createTerminalEnv, type TerminalEnvOptions } from "./terminal/env.js";
+import { deliverInitialInput } from "./terminal/initial-input.js";
+import { TerminalScreen } from "./terminal/screen.js";
+import { createInteractiveShellLaunchCommand } from "./terminal/shell-launch.js";
+import { findRepoByWorktreePath } from "./repos/find-repo.js";
 
 const STARTUP_OUTPUT_LIMIT = 4000;
 const OUTPUT_ACTIVE_GRACE_MS = 1500;

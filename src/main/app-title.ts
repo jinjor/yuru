@@ -1,5 +1,5 @@
 import path from "path";
-import { getCurrentBranch, getRepoRootForProject } from "./git.js";
+import { getCurrentBranch, getRepoRootForProject } from "./git/repo.js";
 
 export const APP_NAME = "Yuru";
 

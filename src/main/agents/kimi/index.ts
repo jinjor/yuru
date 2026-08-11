@@ -7,14 +7,14 @@ import type {
   SessionPreview,
   SessionProviderAdapter,
   SessionSnapshot,
-} from "../../agent.js";
-import { parseJsonLinesAs, readTextFileIfExists } from "../../agent-store-utils.js";
-import type { WorktreeSessionHint } from "../../worktree-session-detection.js";
+} from "../agent.js";
+import { parseJsonLinesAs, readTextFileIfExists } from "../store-utils.js";
+import type { WorktreeSessionHint } from "../../sessions/detection.js";
 import {
   loadWorktreeContextPrompt,
   WORKTREE_CONTEXT_PROMPT_MARKER,
-} from "../../worktree-context-prompt.js";
-import { assertValidTerminalInput } from "../../initial-input.js";
+} from "../../sessions/context-prompt.js";
+import { assertValidTerminalInput } from "../../terminal/initial-input.js";
 import {
   kimiSessionIndexPath,
   kimiSessionStatePath,
@@ -27,7 +27,7 @@ import {
   detectKimiWorkDirHint,
   normalizeRealPath,
   type KimiStoredSessionRef,
-} from "./worktree-session-detection.js";
+} from "./session-detection.js";
 
 interface KimiSessionState {
   title: string;

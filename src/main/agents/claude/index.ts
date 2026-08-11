@@ -7,19 +7,19 @@ import type {
   SessionPreview,
   SessionProviderAdapter,
   SessionSnapshot,
-} from "../../agent.js";
-import { parseJsonLinesAs, readTextFileIfExists } from "../../agent-store-utils.js";
-import { type WorktreeSessionHint } from "../../worktree-session-detection.js";
-import { detectClaudeWorktreeSessionLines } from "./worktree-session-detection.js";
+} from "../agent.js";
+import { parseJsonLinesAs, readTextFileIfExists } from "../store-utils.js";
+import { type WorktreeSessionHint } from "../../sessions/detection.js";
+import { detectClaudeWorktreeSessionLines } from "./session-detection.js";
 import {
   claudeHistoryPath,
   claudeProjectsPath,
   claudeSessionFilePath,
   pidFilePath,
 } from "./paths.js";
-import { loadWorktreeContextPrompt } from "../../worktree-context-prompt.js";
-import { IncrementalSessionPreviewReader } from "../../session-preview-reader.js";
-import { getYuruClaudePluginDir } from "../../skill-materializer.js";
+import { loadWorktreeContextPrompt } from "../../sessions/context-prompt.js";
+import { IncrementalSessionPreviewReader } from "../preview-reader.js";
+import { getYuruClaudePluginDir } from "../../api/skill-materializer.js";
 import { loadClaudePlanUsage } from "./plan-usage.js";
 
 interface ClaudeHistoryEntry {

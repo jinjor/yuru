@@ -1,19 +1,19 @@
 import { app, BrowserWindow, Menu, ipcMain, protocol, session } from "electron";
 import type { IpcMainInvokeEvent, MenuItemConstructorOptions } from "electron";
 import path from "path";
-import { loadRepos } from "./metadata.js";
-import { cleanupStaleTaskWorktrees } from "./task-worktree-maintenance.js";
-import { WorktreeWatcher } from "./worktree-watcher.js";
+import { loadRepos } from "./repos/metadata.js";
+import { cleanupStaleTaskWorktrees } from "./repos/maintenance.js";
+import { WorktreeWatcher } from "./repos/watcher.js";
 import { YuruService } from "./service.js";
 import { APP_NAME, getWindowTitleForAppPath } from "./app-title.js";
-import { recordAppError, recordAppWarning, setErrorNoticesListener } from "./error-center.js";
-import { toAppError } from "./errors.js";
-import { fetchGitHubPullRequests } from "./github.js";
-import { listWorktrees } from "./git.js";
-import { PullRequestMonitor } from "./pull-request-monitor.js";
-import { ProviderUsageMonitor } from "./provider-usage-monitor.js";
-import { resolveCommandPaths } from "./provider-command.js";
-import { getSessionProvider, sessionProviders } from "./agent-registry.js";
+import { recordAppError, recordAppWarning, setErrorNoticesListener } from "./errors/center.js";
+import { toAppError } from "./errors/app-error.js";
+import { fetchGitHubPullRequests } from "./github/github.js";
+import { listWorktrees } from "./git/worktree.js";
+import { PullRequestMonitor } from "./github/pull-request-monitor.js";
+import { ProviderUsageMonitor } from "./plan-usage/monitor.js";
+import { resolveCommandPaths } from "./plan-usage/command.js";
+import { getSessionProvider, sessionProviders } from "./agents/registry.js";
 import type {
   AppErrorNotice,
   GitDiffScope,
@@ -22,14 +22,18 @@ import type {
   WorktreeProcessRef,
 } from "../shared/ipc.js";
 import type { ProviderPlanUsage, SessionProvider } from "../shared/session.js";
-import { HTML_PREVIEW_CSP, HTML_PREVIEW_SCHEME, HtmlPreviewGrants } from "./html-preview.js";
+import {
+  HTML_PREVIEW_CSP,
+  HTML_PREVIEW_SCHEME,
+  HtmlPreviewGrants,
+} from "./preview/html-preview.js";
 import {
   createApiRequestHandler,
   getApiSocketPath,
   startApiServer,
   type ApiServer,
-} from "./api-server.js";
-import { materializeYuruSkill } from "./skill-materializer.js";
+} from "./api/server.js";
+import { materializeYuruSkill } from "./api/skill-materializer.js";
 
 let mainWindow: BrowserWindow | null = null;
 let worktreeWatcher: WorktreeWatcher | null = null;

@@ -8,17 +8,13 @@ import type {
   SessionPreview,
   SessionProviderAdapter,
   SessionSnapshot,
-} from "../../agent.js";
-import {
-  listFilesRecursive,
-  parseJsonLinesAs,
-  readTextFileIfExists,
-} from "../../agent-store-utils.js";
-import type { WorktreeSessionHint } from "../../worktree-session-detection.js";
+} from "../agent.js";
+import { listFilesRecursive, parseJsonLinesAs, readTextFileIfExists } from "../store-utils.js";
+import type { WorktreeSessionHint } from "../../sessions/detection.js";
 import { codexSessionDateDirFromId, getCodexHistoryPath, getCodexSessionsDir } from "./paths.js";
-import { loadWorktreeContextPrompt } from "../../worktree-context-prompt.js";
-import { detectCodexWorktreeSessionLines } from "./worktree-session-detection.js";
-import { IncrementalSessionPreviewReader } from "../../session-preview-reader.js";
+import { loadWorktreeContextPrompt } from "../../sessions/context-prompt.js";
+import { detectCodexWorktreeSessionLines } from "./session-detection.js";
+import { IncrementalSessionPreviewReader } from "../preview-reader.js";
 import { loadCodexPlanUsage } from "./plan-usage.js";
 
 interface CodexSessionMeta {
