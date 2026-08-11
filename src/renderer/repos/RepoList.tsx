@@ -1,4 +1,4 @@
-import { GitBranch, LoaderCircle, MoreVertical, Trash2 } from "lucide-react";
+import { GitBranch, LoaderCircle, MoreVertical, Plus, Trash2 } from "lucide-react";
 import {
   useEffect,
   useRef,
@@ -11,6 +11,8 @@ import type { PrimarySessionListItem, RepoListItem, WorktreeListItem } from "../
 import { worktreeLabelText } from "./worktreeLabel";
 import { GitHubBadge } from "../pull-requests/GitHubBadge";
 import { SessionProviderDot } from "../providers/SessionProviderDot";
+import { EmptyState } from "../ui/EmptyState";
+import { IconButton } from "../ui/IconButton";
 
 interface RepoListProps {
   repos: RepoListItem[];
@@ -51,7 +53,7 @@ export function RepoList({
   }, [openMenuWorktreeId]);
 
   if (repos.length === 0) {
-    return <div className="repo-list-empty">No repositories</div>;
+    return <EmptyState>No repositories</EmptyState>;
   }
 
   return (
@@ -63,13 +65,13 @@ export function RepoList({
               <span className="repo-name">{repo.repoPath.split("/").pop() || repo.repoPath}</span>
               <span className="repo-path">{repo.repoPath}</span>
             </div>
-            <button
+            <IconButton
               className="repo-row-new-btn"
+              label="New worktree"
               onClick={() => onCreateWorktree(repo.repoPath)}
-              title="New worktree"
             >
-              +
-            </button>
+              <Plus size={15} strokeWidth={2} aria-hidden="true" />
+            </IconButton>
           </div>
           <div className="repo-task-worktrees">
             {[repo.mainWorktree, ...repo.taskWorktrees].map((worktree) => (
@@ -163,18 +165,16 @@ function WorktreeCard({
       onKeyDown={handleCardKeyDown}
     >
       {showOverflowMenu && (
-        <button
-          type="button"
+        <IconButton
           className="task-worktree-overflow"
-          title="More actions"
-          aria-label="More actions"
+          label="More actions"
           onClick={(event) => {
             event.stopPropagation();
             onToggleMenu();
           }}
         >
           <MoreVertical size={15} strokeWidth={2} aria-hidden="true" />
-        </button>
+        </IconButton>
       )}
       {isMenuOpen && (
         <WorktreeCardMenu

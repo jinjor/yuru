@@ -11,6 +11,7 @@ import {
 import { ChangesPane } from "../changes/ChangesPane";
 import { FilesPane } from "../files/FilesPane";
 import { SearchPane } from "../search/SearchPane";
+import { Tab } from "../ui/Tab";
 
 export type ExplorerTab = "changes" | "files" | "search";
 
@@ -49,27 +50,18 @@ export function ExplorerPanel({
     <aside ref={panelRef} className="changes-panel" style={{ width, minWidth: width }}>
       <div ref={headerRef} className="panel-header panel-header-stack">
         <div className="panel-tabs">
-          <button
-            className={`panel-tab ${activeTab === "changes" ? "active" : ""}`}
-            onClick={() => onTabChange("changes")}
-          >
+          <Tab selected={activeTab === "changes"} onSelect={() => onTabChange("changes")}>
             Changes
             <span className="panel-tab-count" aria-label={`${changedFiles.length} changed files`}>
               {changedFiles.length}
             </span>
-          </button>
-          <button
-            className={`panel-tab ${activeTab === "files" ? "active" : ""}`}
-            onClick={() => onTabChange("files")}
-          >
+          </Tab>
+          <Tab selected={activeTab === "files"} onSelect={() => onTabChange("files")}>
             Files
-          </button>
-          <button
-            className={`panel-tab ${activeTab === "search" ? "active" : ""}`}
-            onClick={() => onTabChange("search")}
-          >
+          </Tab>
+          <Tab selected={activeTab === "search"} onSelect={() => onTabChange("search")}>
             Search
-          </button>
+          </Tab>
         </div>
       </div>
       <Activity mode={activeTab === "changes" ? "visible" : "hidden"}>

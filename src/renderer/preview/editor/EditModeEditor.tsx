@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { resultDataOrNull } from "../../utils/result";
 import CodeEditor from "./CodeEditor";
+import { EmptyState } from "../../ui/EmptyState";
 
 interface EditModeEditorProps {
   worktreeId: string;
@@ -49,19 +50,11 @@ export default function EditModeEditor({ worktreeId, path }: EditModeEditorProps
   }, [worktreeId, path]);
 
   if (state.status === "loading") {
-    return (
-      <div className="code-panel-empty">
-        <p>Loading…</p>
-      </div>
-    );
+    return <EmptyState>Loading…</EmptyState>;
   }
 
   if (state.status === "missing") {
-    return (
-      <div className="code-panel-empty">
-        <p>This file no longer exists in the worktree.</p>
-      </div>
-    );
+    return <EmptyState>This file no longer exists in the worktree.</EmptyState>;
   }
 
   return (

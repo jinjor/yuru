@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { resultDataOrNull } from "../utils/result";
 import { Modal } from "../ui/Modal";
+import { TextInput } from "../ui/TextInput";
 
 interface FileSearchProps {
   onClose: () => void;
@@ -92,21 +93,15 @@ export function FileSearch({ onClose, onSelectFile, worktreeId }: FileSearchProp
       }
       return;
     }
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onClose();
-      return;
-    }
   };
 
   return (
     <Modal onClose={onClose} topOffset={100}>
       <div className="file-search">
         <div className="file-search-input-wrap">
-          <input
+          <TextInput
             autoFocus
-            className="file-search-input"
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={setQuery}
             onKeyDown={handleKeyDown}
             placeholder="Search files by name"
             value={query}

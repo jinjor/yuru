@@ -124,7 +124,7 @@ test("ホームから複数 primary を操作し、suggested を promote でき�
     });
     await expect(
       sessionView.locator(".session-tab", { hasText: "First primary session" }),
-    ).toHaveClass(/active/);
+    ).toHaveClass(/selected/);
 
     // active 行は resume せず、生きている runtime のタブを選ぶ。
     await sessionView.locator(".session-tab-home").click();
@@ -197,7 +197,7 @@ test("複数 runtime をタブで切り替え、kill と exit 後はホームへ
     await worktreeCard(window, "session-tabs").click();
 
     const homeTab = sessionView.locator(".session-tab-home");
-    await expect(homeTab).toHaveClass(/active/);
+    await expect(homeTab).toHaveClass(/selected/);
     await expect(sessionView.locator(".terminal-session-start")).toBeVisible();
     await expect(sessionView.locator(".session-tab:not(.session-tab-home)")).toHaveCount(0);
 
@@ -207,7 +207,7 @@ test("複数 runtime をタブで切り替え、kill と exit 後はホームへ
       .locator(".resume-primary-action")
       .click();
     const firstTab = sessionView.locator(".session-tab", { hasText: "Parent session" });
-    await expect(firstTab).toHaveClass(/active/);
+    await expect(firstTab).toHaveClass(/selected/);
     await expect(firstTab.locator('[aria-label^="Codex primary session active"]')).toBeVisible();
     await expect(sessionView.locator(".xterm")).toContainText(FIRST_SESSION_ID, {
       timeout: 10_000,
@@ -279,13 +279,13 @@ test("複数 runtime をタブで切り替え、kill と exit 後はホームへ
 
     const runtimeTabs = sessionView.locator(".session-tab:not(.session-tab-home)");
     await expect(runtimeTabs).toHaveCount(2);
-    await expect(updatedFirstTab).toHaveClass(/active/);
+    await expect(updatedFirstTab).toHaveClass(/selected/);
     await expect(sessionView.locator(".xterm")).toContainText(FIRST_SESSION_ID);
     await expect(sessionView.locator(".xterm")).not.toContainText("SECOND_RUNTIME");
 
     const secondTab = runtimeTabs.filter({ hasText: "Terminal" });
     await secondTab.click();
-    await expect(secondTab).toHaveClass(/active/);
+    await expect(secondTab).toHaveClass(/selected/);
     await expect(sessionView.locator(".xterm")).toContainText("SECOND_RUNTIME", {
       timeout: 10_000,
     });
@@ -296,13 +296,13 @@ test("複数 runtime をタブで切り替え、kill と exit 後はホームへ
     // 裏の runtime を閉じても表示中タブは変わらない。
     await secondTab.locator(".session-tab-close").click();
     await expect(runtimeTabs).toHaveCount(1, { timeout: 10_000 });
-    await expect(updatedFirstTab).toHaveClass(/active/);
+    await expect(updatedFirstTab).toHaveClass(/selected/);
     await expect(sessionView.locator(".xterm")).toContainText(FIRST_SESSION_ID);
 
     // 表示中 runtime を閉じるとタブが消え、provider session を残したままホームへ戻る。
     await updatedFirstTab.locator(".session-tab-close").click();
     await expect(runtimeTabs).toHaveCount(0, { timeout: 10_000 });
-    await expect(homeTab).toHaveClass(/active/);
+    await expect(homeTab).toHaveClass(/selected/);
     await expect(sessionView.locator(".terminal-session-start")).toBeVisible();
     await expect(sessionView.locator(".xterm")).toHaveCount(0);
     await expect(

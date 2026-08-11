@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { GitDiffScope, ImageDiffDocument, ImageDiffSide } from "../../shared/ipc";
 import { startPollingLoop } from "../utils/polling";
 import { resultDataOrNull } from "../utils/result";
+import { EmptyState } from "../ui/EmptyState";
 
 interface ImagePreviewProps {
   path: string;
@@ -88,9 +89,9 @@ export default function ImagePreview({ path, scope, worktreeId, poll }: ImagePre
 
   if (state.status !== "ready") {
     return (
-      <div className="code-panel-empty">
-        <p>{state.status === "loading" ? "Loading image…" : "Image preview is not available"}</p>
-      </div>
+      <EmptyState>
+        {state.status === "loading" ? "Loading image…" : "Image preview is not available"}
+      </EmptyState>
     );
   }
 
@@ -100,11 +101,7 @@ export default function ImagePreview({ path, scope, worktreeId, poll }: ImagePre
   if (original === null || current === null || original.image.dataUrl === current.image.dataUrl) {
     const layer = current ?? original;
     if (layer === null) {
-      return (
-        <div className="code-panel-empty">
-          <p>Image preview is not available</p>
-        </div>
-      );
+      return <EmptyState>Image preview is not available</EmptyState>;
     }
     return (
       <div className="image-preview">

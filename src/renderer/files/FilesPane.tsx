@@ -14,6 +14,8 @@ import {
   ROOT_DIRECTORY_PATH,
   type VisibleTreeRow,
 } from "./fileTree";
+import { Button } from "../ui/Button";
+import { EmptyState } from "../ui/EmptyState";
 
 interface FilesPaneProps {
   changedFiles: readonly GitFileStatus[];
@@ -249,8 +251,7 @@ export function FilesPane({
       <div className="panel-subactions">
         <span className="panel-subactions-label">Files</span>
         <div className="panel-header-actions">
-          <button
-            className="panel-header-action"
+          <Button
             onClick={() => {
               void revealChangedDirectories();
             }}
@@ -258,22 +259,21 @@ export function FilesPane({
             title="Expand only the directories that contain changed files"
           >
             Changed dirs
-          </button>
-          <button
-            className="panel-header-action"
+          </Button>
+          <Button
             onClick={collapseAllDirectories}
             disabled={treeData.length === 0}
             title="Collapse all directories"
           >
             Collapse all
-          </button>
+          </Button>
         </div>
       </div>
       <div className="file-tree" style={{ height }}>
         {loadingDirectories.has(ROOT_DIRECTORY_PATH) && treeData.length === 0 ? (
-          <div className="empty-changes">Loading files...</div>
+          <EmptyState>Loading files...</EmptyState>
         ) : treeData.length === 0 ? (
-          <div className="empty-changes">No files</div>
+          <EmptyState>No files</EmptyState>
         ) : (
           visibleRows.map((row) => (
             <FileTreeRow

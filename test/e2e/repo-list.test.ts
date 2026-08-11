@@ -27,8 +27,8 @@ test("repo 未登録なら空状態とセッション未選択メッセージが
     app = launched.app;
     const window = launched.window;
 
-    await expect(window.locator(".repo-list-empty")).toHaveText("No repositories");
-    await expect(window.locator(".terminal-empty-state")).toContainText("Select a worktree");
+    await expect(window.locator(".sidebar-section .empty-state")).toHaveText("No repositories");
+    await expect(window.locator(".terminal-container .empty-state")).toContainText("Select a worktree");
   } finally {
     await closeYuru(app);
     await context.cleanup();
@@ -294,7 +294,7 @@ test("provider store から消えた primary session は通知して detach さ�
       "1",
     );
 
-    await toast.locator(".app-error-toast-dismiss").click();
+    await toast.locator(".icon-button").click();
     await expect(toast).toHaveCount(0);
 
     await sessionView

@@ -2,6 +2,8 @@ import { House, X } from "lucide-react";
 import type { PrimarySessionListItem } from "../../shared/metadata";
 import type { TerminalRuntimeId } from "../../shared/session";
 import { SessionProviderDot } from "../providers/SessionProviderDot";
+import { IconButton } from "../ui/IconButton";
+import { Tab } from "../ui/Tab";
 
 export interface TerminalTabsProps {
   activeTerminalRuntimeIds: readonly TerminalRuntimeId[];
@@ -19,18 +21,15 @@ export function TerminalTabs({
   onKillTerminalRuntime,
 }: TerminalTabsProps) {
   return (
-    <div className="session-tabs" role="tablist" aria-label="Terminal sessions">
-      <button
-        type="button"
-        className={`session-tab session-tab-home ${selectedTerminalRuntimeId === null ? "active" : ""}`}
-        role="tab"
-        aria-label="Home"
-        aria-selected={selectedTerminalRuntimeId === null}
-        title="Home"
-        onClick={() => onSelectTerminalRuntime(null)}
+    <div className="session-tabs">
+      <Tab
+        className="session-tab session-tab-home"
+        label="Home"
+        selected={selectedTerminalRuntimeId === null}
+        onSelect={() => onSelectTerminalRuntime(null)}
       >
         <House size={14} strokeWidth={2} aria-hidden="true" />
-      </button>
+      </Tab>
       {activeTerminalRuntimeIds.map((terminalRuntimeId) => {
         const session = primarySessions.find(
           (candidate) => candidate.activeTerminalRuntimeId === terminalRuntimeId,
@@ -38,24 +37,23 @@ export function TerminalTabs({
         const label = session?.preview || (session ? "(no messages)" : "Terminal");
         const selected = selectedTerminalRuntimeId === terminalRuntimeId;
         return (
-          <div
+          <Tab
             key={terminalRuntimeId}
-            className={`session-tab ${selected ? "active" : ""}`}
-            role="tab"
-            tabIndex={0}
-            aria-selected={selected}
-            title={label}
-            onClick={() => onSelectTerminalRuntime(terminalRuntimeId)}
-            onKeyDown={(event) => {
-              if (event.target !== event.currentTarget) {
-                return;
-              }
-              if (event.key !== "Enter" && event.key !== " ") {
-                return;
-              }
-              event.preventDefault();
-              onSelectTerminalRuntime(terminalRuntimeId);
-            }}
+            className="session-tab"
+            label={label}
+            selected={selected}
+            onSelect={() => onSelectTerminalRuntime(terminalRuntimeId)}
+            trailing={
+              <IconButton
+                className="session-tab-close"
+                label={`Kill runtime: ${label}`}
+                title="Kill runtime"
+                size="sm"
+                onClick={() => onKillTerminalRuntime(terminalRuntimeId)}
+              >
+                <X size={12} strokeWidth={2} aria-hidden="true" />
+              </IconButton>
+            }
           >
             {session && (
               <SessionProviderDot
@@ -66,19 +64,7 @@ export function TerminalTabs({
               />
             )}
             <span className="session-tab-label">{label}</span>
-            <button
-              type="button"
-              className="session-tab-close"
-              title="Kill runtime"
-              aria-label={`Kill runtime: ${label}`}
-              onClick={(event) => {
-                event.stopPropagation();
-                onKillTerminalRuntime(terminalRuntimeId);
-              }}
-            >
-              <X size={12} strokeWidth={2} aria-hidden="true" />
-            </button>
-          </div>
+          </Tab>
         );
       })}
     </div>

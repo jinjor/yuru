@@ -1,5 +1,6 @@
 import { AlertTriangle } from "lucide-react";
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Button } from "../ui/Button";
 
 interface AppErrorBoundaryProps {
   children: ReactNode;
@@ -39,9 +40,9 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
             The screen failed to render. This error is saved in the error log.
           </p>
           <pre className="crash-error">{this.state.error.stack ?? this.state.error.message}</pre>
-          <button type="button" className="crash-reload-btn" onClick={() => location.reload()}>
+          <Button variant="primary" onClick={() => location.reload()}>
             Reload
-          </button>
+          </Button>
         </div>
       </div>
     );

@@ -33,7 +33,7 @@ test("編集モードで編集するとディスクへ自動保存され、ガ�
     const window = launched.window;
     await openMainTerminal(window);
 
-    await window.locator(".panel-tab", { hasText: "Files" }).click();
+    await window.locator(".panel-tabs .tab", { hasText: "Files" }).click();
     await window.locator(".file-tree-row", { hasText: "src" }).click();
     await window.locator(".file-tree-row", { hasText: "app.ts" }).click();
     await expectPreviewPath(window, "src/app.ts");
@@ -109,11 +109,11 @@ test("バイナリファイルは編集アイコンが無効になる", async ()
     const window = launched.window;
     await openMainTerminal(window);
 
-    await window.locator(".panel-tab", { hasText: "Files" }).click();
+    await window.locator(".panel-tabs .tab", { hasText: "Files" }).click();
     await window.locator(".file-tree-row", { hasText: "logo.bin" }).click();
     await expectPreviewPath(window, "logo.bin");
 
-    await expect(window.locator(".code-panel-empty")).toContainText(
+    await expect(window.locator(".preview-body .empty-state")).toContainText(
       "Binary preview is not available",
     );
     await expect(editButton(window)).toBeDisabled();
@@ -141,7 +141,7 @@ test("削除済みファイルは編集に入れず、保存でも復活しな�
     await expectPreviewPath(window, "gone.txt");
 
     await editButton(window).click();
-    await expect(window.locator(".code-panel-empty")).toContainText("no longer exists");
+    await expect(window.locator(".preview-body .empty-state")).toContainText("no longer exists");
 
     // 削除済みファイルを保存で復活させていない
     expect(existsSync(path.join(repoDir, "gone.txt"))).toBe(false);

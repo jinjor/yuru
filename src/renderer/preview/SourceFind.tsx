@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode, Ref } from "react";
 import { ChevronDown, ChevronUp, X } from "lucide-react";
 import type { ThemedToken } from "shiki";
+import { IconButton } from "../ui/IconButton";
 
 interface SearchableSourceLine {
   tokens: ThemedToken[];
@@ -120,35 +121,32 @@ export function useSourceFind(lines: readonly SearchableSourceLine[]): SourceFin
           ? ""
           : `${findMatches.length === 0 ? 0 : activeMatchIndex + 1}/${findMatches.length}`}
       </span>
-      <button
-        type="button"
-        className="source-find-button"
+      <IconButton
+        size="sm"
         onClick={() => goToMatch(-1)}
         disabled={findMatches.length === 0}
-        aria-label="Previous match"
+        label="Previous match"
         title="Previous match (Shift+Enter)"
       >
         <ChevronUp size={14} strokeWidth={2.4} />
-      </button>
-      <button
-        type="button"
-        className="source-find-button"
+      </IconButton>
+      <IconButton
+        size="sm"
         onClick={() => goToMatch(1)}
         disabled={findMatches.length === 0}
-        aria-label="Next match"
+        label="Next match"
         title="Next match (Enter)"
       >
         <ChevronDown size={14} strokeWidth={2.4} />
-      </button>
-      <button
-        type="button"
-        className="source-find-button"
+      </IconButton>
+      <IconButton
+        size="sm"
         onClick={() => setIsFindOpen(false)}
-        aria-label="Close find"
+        label="Close find"
         title="Close find (Escape)"
       >
         <X size={14} strokeWidth={2.4} />
-      </button>
+      </IconButton>
     </div>
   ) : null;
 

@@ -58,6 +58,192 @@ body,
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+/* Shared controls (src/renderer/ui) */
+
+.button {
+  height: 30px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.button:focus-visible {
+  outline: 2px solid rgba(123, 193, 255, 0.42);
+  outline-offset: 1px;
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.button.primary {
+  background: #2878b5;
+  color: #fff;
+}
+
+.button.primary:hover:not(:disabled) {
+  background: #3390d0;
+}
+
+.button.neutral {
+  background: transparent;
+  border-color: var(--border-strong);
+  color: var(--text-muted);
+}
+
+.button.neutral:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.button.danger {
+  background: rgba(240, 143, 134, 0.16);
+  border-color: rgba(240, 143, 134, 0.55);
+  color: #ffd2cc;
+}
+
+.button.danger:hover:not(:disabled) {
+  background: rgba(240, 143, 134, 0.26);
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-subtle);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.icon-button.md {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+}
+
+.icon-button.sm {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+}
+
+.icon-button:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--bg-hover);
+  border-color: var(--border);
+}
+
+.icon-button:focus-visible {
+  outline: 2px solid rgba(123, 193, 255, 0.42);
+  outline-offset: 1px;
+}
+
+.icon-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tab {
+  height: var(--tab-pill-height);
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+
+.tab-select {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: inherit;
+  cursor: pointer;
+  outline: none;
+}
+
+.tab:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tab.selected {
+  color: var(--text);
+  background: rgba(123, 193, 255, 0.14);
+  border-color: rgba(123, 193, 255, 0.3);
+}
+
+.tab:has(.tab-select:focus-visible) {
+  outline: 2px solid rgba(123, 193, 255, 0.42);
+  outline-offset: 1px;
+}
+
+.text-input {
+  width: 100%;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg-app);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  outline: none;
+}
+
+.text-input:focus {
+  border-color: var(--accent);
+}
+
+.text-input:disabled {
+  opacity: 0.5;
+}
+
+.empty-state {
+  flex: 1;
+  min-height: 88px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-subtle);
+}
+
 .app {
   display: flex;
   height: 100%;
@@ -322,29 +508,12 @@ body,
 }
 
 .repo-row-new-btn {
-  background: transparent;
-  border: 1px solid var(--border-strong);
+  border-color: var(--border-strong);
   color: var(--text);
-  font-size: 14px;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  flex-shrink: 0;
 }
 
 .repo-row-new-btn:hover:not(:disabled) {
-  background: var(--bg-hover);
   border-color: var(--accent);
-}
-
-.repo-row-new-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 
 .repo-name {
@@ -680,12 +849,6 @@ body,
   color: var(--text-subtle);
 }
 
-.repo-list-empty {
-  padding: 8px 16px;
-  font-size: 12px;
-  color: var(--text-subtle);
-}
-
 .sidebar-header,
 .panel-header {
   padding: 12px 16px;
@@ -912,43 +1075,14 @@ button.github-badge {
 }
 
 .session-tab {
-  height: var(--tab-pill-height);
   max-width: 180px;
-  min-width: 0;
-  padding: 0 10px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-muted);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  font-size: 12px;
-  line-height: 1;
-  cursor: pointer;
-  transition:
-    background 120ms ease,
-    color 120ms ease;
-}
-
-.session-tab:hover {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.session-tab.active {
-  color: var(--text);
-  background: rgba(123, 193, 255, 0.14);
-  border-color: rgba(123, 193, 255, 0.3);
-}
-
-.session-tab:focus-visible {
-  outline: 2px solid rgba(123, 193, 255, 0.42);
-  outline-offset: 1px;
 }
 
 .session-tab-home {
   flex-shrink: 0;
+}
+
+.session-tab-home .tab-select {
   padding: 0 8px;
 }
 
@@ -960,23 +1094,7 @@ button.github-badge {
 }
 
 .session-tab-close {
-  flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-  margin-right: -3px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-subtle);
-  background: transparent;
-  border: 0;
-  border-radius: 999px;
-  cursor: pointer;
-}
-
-.session-tab-close:hover {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.08);
+  margin-right: 7px;
 }
 
 .terminal-bar-meta {
@@ -1007,23 +1125,6 @@ button.github-badge {
 
 .terminal {
   height: 100%;
-}
-
-.empty-state,
-.code-panel-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  color: var(--text-subtle);
-  font-size: 14px;
-}
-
-.terminal-empty-state {
-  position: absolute;
-  inset: 4px;
-  background: var(--bg-app);
 }
 
 /* Changes Panel */
@@ -1093,12 +1194,6 @@ button.github-badge {
   color: var(--text-subtle);
   font-size: 12px;
   line-height: 1.7;
-}
-
-.empty-changes {
-  padding: 16px;
-  font-size: 12px;
-  color: var(--text-subtle);
 }
 
 .change-item {
@@ -1182,35 +1277,6 @@ button.github-badge {
   gap: 6px;
 }
 
-.panel-tab {
-  height: var(--tab-pill-height);
-  padding: 0 10px;
-  font-size: 12px;
-  line-height: 1;
-  color: var(--text-muted);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  transition:
-    background 120ms ease,
-    color 120ms ease;
-}
-
-.panel-tab:hover {
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text);
-}
-
-.panel-tab.active {
-  color: var(--text);
-  background: rgba(123, 193, 255, 0.14);
-  border-color: rgba(123, 193, 255, 0.3);
-}
-
 .panel-tab-count {
   min-width: 18px;
   height: var(--tab-pill-badge-height);
@@ -1225,7 +1291,7 @@ button.github-badge {
   background: rgba(255, 255, 255, 0.08);
 }
 
-.panel-tab.active .panel-tab-count {
+.panel-tabs .tab.selected .panel-tab-count {
   background: rgba(123, 193, 255, 0.22);
 }
 
@@ -1254,32 +1320,6 @@ button.github-badge {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-subtle);
-}
-
-.panel-header-action {
-  background: transparent;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  color: var(--text-muted);
-  font-size: 11px;
-  line-height: 1;
-  padding: 7px 9px;
-  cursor: pointer;
-  transition:
-    background 120ms ease,
-    border-color 120ms ease,
-    color 120ms ease;
-}
-
-.panel-header-action:hover:not(:disabled) {
-  background: var(--bg-hover);
-  border-color: var(--accent);
-  color: var(--text);
-}
-
-.panel-header-action:disabled {
-  opacity: 0.45;
-  cursor: default;
 }
 
 /* File tree */
@@ -1360,22 +1400,6 @@ button.github-badge {
 
 .code-search-input-wrap {
   padding: 10px 12px 8px;
-}
-
-.code-search-input {
-  width: 100%;
-  height: 34px;
-  padding: 0 10px;
-  border-radius: 7px;
-  border: 1px solid var(--border-strong);
-  background: var(--bg-app);
-  color: var(--text);
-  font-size: 13px;
-  outline: none;
-}
-
-.code-search-input:focus {
-  border-color: var(--accent);
 }
 
 .code-search-status {
@@ -1622,30 +1646,6 @@ button.github-badge {
   color: var(--success);
   background: rgba(122, 215, 161, 0.12);
   border-color: rgba(122, 215, 161, 0.5);
-}
-
-.preview-close-btn {
-  width: 24px;
-  height: 24px;
-  border-radius: 7px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  color: var(--text-subtle);
-  background: transparent;
-  border: 1px solid transparent;
-  cursor: pointer;
-  transition:
-    color 120ms ease,
-    background 120ms ease,
-    border-color 120ms ease;
-}
-
-.preview-close-btn:hover {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .preview-body {
@@ -2183,31 +2183,6 @@ button.github-badge {
   user-select: none;
 }
 
-.source-find-button {
-  width: 22px;
-  height: 22px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  color: var(--text-subtle);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.source-find-button:hover:not(:disabled) {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.08);
-}
-
-.source-find-button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
 .source-find-match {
   background: #4c3916;
   border-radius: 2px;
@@ -2299,41 +2274,6 @@ button.github-badge {
   padding: 12px 16px;
 }
 
-.worktree-name-input {
-  flex: 1;
-  padding: 7px 10px;
-  font-size: 13px;
-  color: var(--text);
-  background: var(--bg-app);
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  outline: none;
-}
-
-.worktree-name-input:focus {
-  border-color: var(--accent);
-}
-
-.worktree-create-btn {
-  padding: 7px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #fff;
-  background: #2878b5;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.worktree-create-btn:hover {
-  background: #3390d0;
-}
-
-.worktree-create-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
 .worktree-error {
   padding: 0 16px 12px;
   font-size: 11px;
@@ -2355,22 +2295,6 @@ button.github-badge {
 
 .file-search-input-wrap {
   padding: 12px 12px 0;
-}
-
-.file-search-input {
-  width: 100%;
-  height: 40px;
-  padding: 0 14px;
-  border-radius: 8px;
-  border: 1px solid var(--border-strong);
-  background: var(--bg-app);
-  color: var(--text);
-  font-size: 13px;
-  outline: none;
-}
-
-.file-search-input:focus {
-  border-color: var(--accent);
 }
 
 .file-search-results {
@@ -2428,16 +2352,7 @@ button.github-badge {
   position: absolute;
   top: 7px;
   right: 7px;
-  width: 24px;
-  height: 24px;
-  border-radius: 7px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-subtle);
   background: rgba(17, 21, 29, 0.6);
-  border: 1px solid transparent;
-  cursor: pointer;
   opacity: 0;
   pointer-events: none;
   transition: opacity 120ms ease;
@@ -2448,12 +2363,6 @@ button.github-badge {
 .task-worktree-card.action-open .task-worktree-overflow {
   opacity: 1;
   pointer-events: auto;
-}
-
-.task-worktree-overflow:hover {
-  color: var(--text);
-  background: var(--bg-hover);
-  border-color: var(--border);
 }
 
 .task-worktree-menu {
@@ -2682,40 +2591,6 @@ button.github-badge {
   background: rgba(255, 255, 255, 0.015);
 }
 
-.removal-btn {
-  padding: 7px 15px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid var(--border-strong);
-  background: transparent;
-  color: var(--text);
-}
-
-.removal-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.removal-btn.ghost {
-  color: var(--text-muted);
-}
-
-.removal-btn.ghost:hover:not(:disabled) {
-  background: var(--bg-hover);
-}
-
-.removal-btn.danger {
-  border-color: rgba(240, 143, 134, 0.55);
-  background: rgba(240, 143, 134, 0.16);
-  color: #ffd2cc;
-}
-
-.removal-btn.danger:hover:not(:disabled) {
-  background: rgba(240, 143, 134, 0.26);
-}
-
 /* その場で失敗を伝える一時通知。詳細は error center にも残る。 */
 .app-error-toast {
   position: fixed;
@@ -2764,25 +2639,6 @@ button.github-badge {
   overflow-wrap: anywhere;
 }
 
-.app-error-toast-dismiss {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-subtle);
-  cursor: pointer;
-}
-
-.app-error-toast-dismiss:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text);
-}
-
 /* Error log modal */
 .error-log {
   background: var(--bg-panel);
@@ -2815,45 +2671,6 @@ button.github-badge {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.error-log-clear-btn {
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 12px;
-  padding: 3px 10px;
-  cursor: pointer;
-}
-
-.error-log-clear-btn:hover {
-  background: var(--bg-hover);
-}
-
-.error-log-close-btn {
-  width: 22px;
-  height: 22px;
-  border: none;
-  background: transparent;
-  color: var(--text-subtle);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  border-radius: 6px;
-}
-
-.error-log-close-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text);
-}
-
-.error-log-empty {
-  padding: 44px 16px;
-  text-align: center;
-  font-size: 13px;
-  color: var(--text-subtle);
 }
 
 .error-log-list {
@@ -2943,27 +2760,11 @@ button.github-badge {
 }
 
 .error-log-dismiss-btn {
-  width: 20px;
-  height: 20px;
-  border: none;
-  background: transparent;
-  color: var(--text-subtle);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  border-radius: 5px;
-  flex-shrink: 0;
   opacity: 0;
 }
 
 .error-log-row:hover .error-log-dismiss-btn {
   opacity: 1;
-}
-
-.error-log-dismiss-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text);
 }
 
 /* 描画エラー時に ErrorBoundary が白画面の代わりに出す画面 */
@@ -3016,20 +2817,4 @@ button.github-badge {
   max-height: 40vh;
   overflow-y: auto;
   user-select: text;
-}
-
-.crash-reload-btn {
-  margin-top: 8px;
-  padding: 6px 22px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-  background: #27344d;
-  border: 1px solid var(--accent);
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.crash-reload-btn:hover {
-  background: #30405d;
 }

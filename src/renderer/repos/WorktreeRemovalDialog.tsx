@@ -1,8 +1,9 @@
 import { AlertTriangle, GitBranch, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { WorktreeProcessInfo } from "../../shared/ipc";
 import type { WorktreeListItem } from "../../shared/metadata";
 import { worktreeLabelText } from "./worktreeLabel";
+import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
 
 interface WorktreeRemovalDialogProps {
@@ -24,18 +25,6 @@ export function WorktreeRemovalDialog({
   const [mode, setMode] = useState<"confirm" | "force">("confirm");
   const [blockingProcesses, setBlockingProcesses] = useState<WorktreeProcessInfo[] | null>(null);
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !busy) {
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [busy, onClose]);
 
   const prepareRemoval = async (
     force: boolean,
@@ -153,32 +142,26 @@ export function WorktreeRemovalDialog({
         <div className="removal-foot">
           {blockingProcesses ? (
             <>
-              <button type="button" className="removal-btn ghost" onClick={onClose} disabled={busy}>
+              <Button onClick={onClose} disabled={busy}>
                 Cancel
-              </button>
-              <button
-                type="button"
-                className="removal-btn danger"
+              </Button>
+              <Button
+                variant="danger"
                 onClick={() => void prepareRemoval(isForce, blockingProcesses)}
                 disabled={busy}
               >
                 {blockingProcesses.length === 1 ? "Stop" : "Stop all"}
                 {isForce ? " and force remove" : " and remove"}
-              </button>
+              </Button>
             </>
           ) : (
             <>
-              <button type="button" className="removal-btn ghost" onClick={onClose} disabled={busy}>
+              <Button onClick={onClose} disabled={busy}>
                 Cancel
-              </button>
-              <button
-                type="button"
-                className="removal-btn danger"
-                onClick={() => void prepareRemoval(isForce)}
-                disabled={busy}
-              >
+              </Button>
+              <Button variant="danger" onClick={() => void prepareRemoval(isForce)} disabled={busy}>
                 {isForce ? "Force remove" : hasOpenPullRequest ? "Remove anyway" : "Remove"}
-              </button>
+              </Button>
             </>
           )}
         </div>

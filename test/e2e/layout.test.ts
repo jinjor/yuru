@@ -159,7 +159,7 @@ test("HTML プレビューの上までドラッグしても分割を動かせ、
     const window = launched.window;
     await openMainTerminal(window);
 
-    await window.locator(".panel-tab", { hasText: "Files" }).click();
+    await window.locator(".panel-tabs .tab", { hasText: "Files" }).click();
     await window.locator(".file-tree-row", { hasText: "mock" }).click();
     await window.locator(".file-tree-row", { hasText: "index.html" }).click();
     await expect(window.locator(".html-preview-frame")).toBeVisible();

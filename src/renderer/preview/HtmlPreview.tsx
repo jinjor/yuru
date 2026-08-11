@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { HtmlPreviewGrant } from "../../shared/ipc";
+import { EmptyState } from "../ui/EmptyState";
 
 interface HtmlPreviewProps {
   content: string;
@@ -46,9 +47,9 @@ export default function HtmlPreview({ content, path, worktreeId }: HtmlPreviewPr
 
   if (state.status !== "ready") {
     return (
-      <div className="code-panel-empty">
-        <p>{state.status === "loading" ? "Loading preview…" : "Preview is not available"}</p>
-      </div>
+      <EmptyState>
+        {state.status === "loading" ? "Loading preview…" : "Preview is not available"}
+      </EmptyState>
     );
   }
 

@@ -88,8 +88,8 @@ for (const provider of providers) {
 
 async function startWorktreeSession(window: Page, provider: ProviderActivityE2e): Promise<void> {
   await window.locator(".repo-row-new-btn").click();
-  await window.locator(".worktree-name-input").fill(provider.branchName);
-  await window.locator(".worktree-create-btn").click();
+  await window.locator(".worktree-input-row .text-input").fill(provider.branchName);
+  await window.locator(".worktree-input-row .button").click();
   // worktree 作成後、Terminal の session start surface から provider を選ぶ。
   const sessionView = visibleWorktreeView(window);
   await sessionView.locator(".new-session-action", { hasText: provider.label }).click();

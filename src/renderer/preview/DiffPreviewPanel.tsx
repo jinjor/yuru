@@ -9,6 +9,7 @@ import { tokenizeCode, type TokenizedLine } from "./highlight";
 import { PreviewHeader } from "./PreviewHeader";
 import { startPollingLoop } from "../utils/polling";
 import { resultDataOrNull } from "../utils/result";
+import { EmptyState } from "../ui/EmptyState";
 
 const EditModeEditor = lazy(() => import("./editor/EditModeEditor"));
 const HtmlPreview = lazy(() => import("./HtmlPreview"));
@@ -234,27 +235,13 @@ export function DiffPreviewPanel({
       />
       <div className="preview-body">
         {diffDocument === null ? (
-          <div className="code-panel-empty">
-            <p>{isLoadingDiff ? "Loading..." : "Preview is not available"}</p>
-          </div>
+          <EmptyState>{isLoadingDiff ? "Loading..." : "Preview is not available"}</EmptyState>
         ) : isEditing ? (
-          <Suspense
-            fallback={
-              <div className="code-panel-empty">
-                <p>Loading editor…</p>
-              </div>
-            }
-          >
+          <Suspense fallback={<EmptyState>Loading editor…</EmptyState>}>
             <EditModeEditor key={path} worktreeId={worktreeId} path={path} />
           </Suspense>
         ) : mode === "preview" && displayPreviewKind !== null ? (
-          <Suspense
-            fallback={
-              <div className="code-panel-empty">
-                <p>Loading preview…</p>
-              </div>
-            }
-          >
+          <Suspense fallback={<EmptyState>Loading preview…</EmptyState>}>
             {displayPreviewKind === "html" ? (
               <HtmlPreview
                 content={currentContent ?? ""}
@@ -278,9 +265,7 @@ export function DiffPreviewPanel({
             )}
           </Suspense>
         ) : isBinary ? (
-          <div className="code-panel-empty">
-            <p>Binary preview is not available</p>
-          </div>
+          <EmptyState>Binary preview is not available</EmptyState>
         ) : (
           <SourceViewer
             lines={lines}

@@ -6,6 +6,7 @@ import type {
   CodeSearchRange,
 } from "../../shared/ipc";
 import type { PreviewSelection } from "../previewSelection";
+import { TextInput } from "../ui/TextInput";
 
 interface SearchPaneProps {
   focusRequest: number;
@@ -207,11 +208,10 @@ export function SearchPane({
   return (
     <div className="code-search-pane">
       <div className="code-search-input-wrap">
-        <input
+        <TextInput
           ref={inputRef}
           autoFocus
-          className="code-search-input"
-          onChange={(event) => handleQueryChange(event.target.value)}
+          onChange={handleQueryChange}
           onKeyDown={handleKeyDown}
           placeholder="Search code"
           value={query}

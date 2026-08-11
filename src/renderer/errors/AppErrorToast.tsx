@@ -1,6 +1,7 @@
 import { CircleAlert, X } from "lucide-react";
 import { useEffect } from "react";
 import type { AppError } from "../../shared/ipc";
+import { IconButton } from "../ui/IconButton";
 
 const AUTO_DISMISS_MS = 5000;
 
@@ -22,14 +23,9 @@ export function AppErrorToast({ error, onDismiss }: AppErrorToastProps) {
         <span className="app-error-toast-message">{error.message}</span>
         {error.detail && <span className="app-error-toast-detail">{error.detail}</span>}
       </span>
-      <button
-        type="button"
-        className="app-error-toast-dismiss"
-        onClick={onDismiss}
-        aria-label="Dismiss notification"
-      >
+      <IconButton label="Dismiss notification" onClick={onDismiss} size="sm">
         <X size={14} strokeWidth={2} aria-hidden="true" />
-      </button>
+      </IconButton>
     </div>
   );
 }

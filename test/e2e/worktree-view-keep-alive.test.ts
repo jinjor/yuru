@@ -54,7 +54,7 @@ test("worktree の表示状態は session の有無に関わらず保持され�
       ),
     ).toBeVisible({ timeout: 15_000 });
 
-    await sessionView.locator(".panel-tab", { hasText: "Files" }).click();
+    await sessionView.locator(".panel-tabs .tab", { hasText: "Files" }).click();
     await sessionView.locator(".file-tree-row", { hasText: "src" }).click();
     await sessionView.locator(".file-tree-row", { hasText: "kept.ts" }).click();
     await expectPreviewPath(window, "src/kept.ts");
@@ -62,8 +62,8 @@ test("worktree の表示状態は session の有無に関わらず保持され�
     await worktreeCard(window, "keep-alive-idle").click();
     await expect(sessionView.locator(".terminal-session-start")).toBeVisible();
     // ExplorerPanel の Changes/Files/Search は常に同時に mount されているため、
-    // FilesPane の "No files" 空状態と .empty-changes クラスが衝突する。ChangesPane 側に絞る。
-    await expect(sessionView.locator(".changes-list .empty-changes")).toBeVisible();
+    // FilesPane の "No files" 空状態と .empty-state クラスが衝突する。ChangesPane 側に絞る。
+    await expect(sessionView.locator(".changes-list .empty-state")).toBeVisible();
     // mount 直後の git state 取得が render count に混ざらないよう完了を待つ。
     await window.waitForTimeout(500);
 
@@ -96,11 +96,11 @@ test("worktree の表示状態は session の有無に関わらず保持され�
 
     // preview・Files tab・展開済み directory は同じ instance の local state のまま残る。
     await expectPreviewPath(window, "src/kept.ts");
-    await expect(sessionView.locator(".panel-tab.active", { hasText: "Files" })).toBeVisible();
+    await expect(sessionView.locator(".panel-tabs .tab.selected", { hasText: "Files" })).toBeVisible();
     await expect(sessionView.locator(".file-tree-name", { hasText: "kept.ts" })).toBeVisible();
 
     // 復帰時に polling effect が即時再実行され、hidden 中の変更へ 1 周期以内に追いつく。
-    await sessionView.locator(".panel-tab", { hasText: "Changes" }).click();
+    await sessionView.locator(".panel-tabs .tab", { hasText: "Changes" }).click();
     const changedFile = sessionView.locator(".change-item", { hasText: "kept.ts" });
     await expect(changedFile).toBeVisible({ timeout: 4_000 });
     await changedFile.click();
@@ -111,13 +111,13 @@ test("worktree の表示状態は session の有無に関わらず保持され�
     // session の無い worktree でも、切り替えて戻ると Files の展開・preview が残る
     // (keep-alive の単位は worktree であって session ではない)。
     await worktreeCard(window, "keep-alive-idle").click();
-    await sessionView.locator(".panel-tab", { hasText: "Files" }).click();
+    await sessionView.locator(".panel-tabs .tab", { hasText: "Files" }).click();
     await sessionView.locator(".file-tree-row", { hasText: "src" }).click();
     await sessionView.locator(".file-tree-row", { hasText: "kept.ts" }).click();
     await expectPreviewPath(window, "src/kept.ts");
     await worktreeCard(window, "keep-alive-active").click();
     await worktreeCard(window, "keep-alive-idle").click();
-    await expect(sessionView.locator(".panel-tab.active", { hasText: "Files" })).toBeVisible();
+    await expect(sessionView.locator(".panel-tabs .tab.selected", { hasText: "Files" })).toBeVisible();
     await expectPreviewPath(window, "src/kept.ts");
 
     // session が hidden 中に終了しても、worktree は訪問済みとして生き続けるので instance は
@@ -136,13 +136,13 @@ test("worktree の表示状態は session の有無に関わらず保持され�
     await expect(sessionView.locator(".terminal-session-start")).toBeVisible();
     await expect(sessionView.locator(".new-session-action", { hasText: "Codex" })).toBeVisible();
     await expect(sessionView.locator(".xterm")).toHaveCount(0);
-    await expect(sessionView.locator(".panel-tab.active", { hasText: "Changes" })).toBeVisible();
+    await expect(sessionView.locator(".panel-tabs .tab.selected", { hasText: "Changes" })).toBeVisible();
     await expect(sessionView.locator(".source-line.diff-added")).toContainText(
       "changed while hidden",
     );
 
     // 削除直前の表示状態を作り、同じ path/name で作り直しても前の instance を引き継がないことを確認する。
-    await sessionView.locator(".panel-tab", { hasText: "Files" }).click();
+    await sessionView.locator(".panel-tabs .tab", { hasText: "Files" }).click();
     await sessionView.locator(".file-tree-row", { hasText: "README.md" }).click();
     await expectPreviewPath(window, "README.md");
 
@@ -153,7 +153,7 @@ test("worktree の表示状態は session の有無に関わらず保持され�
     await expect(worktreeCard(window, "keep-alive-active")).toBeVisible();
     await worktreeCard(window, "keep-alive-active").click();
 
-    await expect(sessionView.locator(".panel-tab.active", { hasText: "Changes" })).toBeVisible();
+    await expect(sessionView.locator(".panel-tabs .tab.selected", { hasText: "Changes" })).toBeVisible();
     await expect(sessionView.locator(".preview-panel")).toHaveCount(0);
   } finally {
     await closeYuru(app);
@@ -177,25 +177,25 @@ test("同一 worktree 内で Files ⇄ Changes ⇄ Search を往復しても展�
     const sessionView = visibleWorktreeView(window);
 
     // Files: src を展開する
-    await sessionView.locator(".panel-tab", { hasText: "Files" }).click();
+    await sessionView.locator(".panel-tabs .tab", { hasText: "Files" }).click();
     await sessionView.locator(".file-tree-row", { hasText: "src" }).click();
     await expect(sessionView.locator(".file-tree-name", { hasText: "needle.ts" })).toBeVisible();
 
     // Changes を経由して Search を開き、検索語を入力する
-    await sessionView.locator(".panel-tab", { hasText: "Changes" }).click();
-    await sessionView.locator(".panel-tab", { hasText: "Search" }).click();
-    await sessionView.locator(".code-search-input").fill("YURU_TAB_KEEPALIVE_NEEDLE");
+    await sessionView.locator(".panel-tabs .tab", { hasText: "Changes" }).click();
+    await sessionView.locator(".panel-tabs .tab", { hasText: "Search" }).click();
+    await sessionView.locator(".code-search-input-wrap .text-input").fill("YURU_TAB_KEEPALIVE_NEEDLE");
     await expect(sessionView.locator(".code-search-status")).toContainText("1 matches", {
       timeout: 10_000,
     });
 
     // Files に戻ると展開状態が残っている (unmount されていない)
-    await sessionView.locator(".panel-tab", { hasText: "Files" }).click();
+    await sessionView.locator(".panel-tabs .tab", { hasText: "Files" }).click();
     await expect(sessionView.locator(".file-tree-name", { hasText: "needle.ts" })).toBeVisible();
 
     // Search に戻ると検索語・結果が残っている (再検索し直しにならない)
-    await sessionView.locator(".panel-tab", { hasText: "Search" }).click();
-    await expect(sessionView.locator(".code-search-input")).toHaveValue(
+    await sessionView.locator(".panel-tabs .tab", { hasText: "Search" }).click();
+    await expect(sessionView.locator(".code-search-input-wrap .text-input")).toHaveValue(
       "YURU_TAB_KEEPALIVE_NEEDLE",
     );
     await expect(sessionView.locator(".code-search-status")).toContainText("1 matches");
@@ -207,8 +207,8 @@ test("同一 worktree 内で Files ⇄ Changes ⇄ Search を往復しても展�
       path.join(repoDir, "src/needle.ts"),
       "export const YURU_TAB_KEEPALIVE_NEEDLE = true;\nexport const YURU_TAB_KEEPALIVE_NEEDLE_2 = true;\n",
     );
-    await sessionView.locator(".panel-tab", { hasText: "Files" }).click();
-    await sessionView.locator(".panel-tab", { hasText: "Search" }).click();
+    await sessionView.locator(".panel-tabs .tab", { hasText: "Files" }).click();
+    await sessionView.locator(".panel-tabs .tab", { hasText: "Search" }).click();
     await expect(sessionView.locator(".code-search-status")).toContainText("1 matches");
     await expect(sessionView.locator(".code-search-match-row")).toHaveCount(1);
   } finally {

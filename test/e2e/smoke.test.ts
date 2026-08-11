@@ -18,7 +18,7 @@ test("e2e 実行中は BrowserWindow が hidden のままになる", async () =>
   const app = await launchYuru(context);
   try {
     const window = await app.firstWindow();
-    await expect(window.locator(".repo-list-empty")).toBeVisible();
+    await expect(window.locator(".sidebar-section .empty-state")).toBeVisible();
     const browserWindowState = await app.evaluate(async ({ BrowserWindow }) => {
       const browserWindow = BrowserWindow.getAllWindows()[0];
       return {

@@ -24,8 +24,8 @@ test("Cmd+P でファイル検索パレットを開き選択したファイル�
     await openMainTerminal(window);
 
     await window.keyboard.press("Meta+P");
-    await expect(window.locator(".file-search-input")).toBeVisible();
-    await window.locator(".file-search-input").fill("app");
+    await expect(window.locator(".file-search .text-input")).toBeVisible();
+    await window.locator(".file-search .text-input").fill("app");
     await expect(window.locator(".file-search-row", { hasText: "app.ts" })).toBeVisible();
 
     await window.locator(".file-search-row", { hasText: "app.ts" }).click();
@@ -57,9 +57,9 @@ test("Cmd+Shift+F で code search を開き結果をプレビューする", asyn
     await openMainTerminal(window);
 
     await window.keyboard.press("Meta+Shift+F");
-    await expect(window.locator(".panel-tab.active", { hasText: "Search" })).toBeVisible();
-    await expect(window.locator(".code-search-input")).toBeFocused();
-    await window.locator(".code-search-input").fill("YURU_NEEDLE");
+    await expect(window.locator(".panel-tabs .tab.selected", { hasText: "Search" })).toBeVisible();
+    await expect(window.locator(".code-search-input-wrap .text-input")).toBeFocused();
+    await window.locator(".code-search-input-wrap .text-input").fill("YURU_NEEDLE");
 
     await expect(window.locator(".code-search-status")).toContainText("1 matches", {
       timeout: 10_000,
@@ -89,7 +89,7 @@ test("ファイル検索パレットは Enter で先頭候補を開ける", asyn
     await openMainTerminal(window);
 
     await window.keyboard.press("Meta+P");
-    await window.locator(".file-search-input").fill("target");
+    await window.locator(".file-search .text-input").fill("target");
     await expect(window.locator(".file-search-row.selected", { hasText: "target-note.md" })).toBeVisible();
     await window.keyboard.press("Enter");
 
@@ -116,7 +116,7 @@ test("code search は複数結果から別の一致行を開ける", async () =>
     await openMainTerminal(window);
 
     await window.keyboard.press("Meta+Shift+F");
-    await window.locator(".code-search-input").fill("YURU_MULTI_MATCH");
+    await window.locator(".code-search-input-wrap .text-input").fill("YURU_MULTI_MATCH");
     await expect(window.locator(".code-search-status")).toContainText("2 matches", {
       timeout: 10_000,
     });
@@ -148,7 +148,7 @@ test("code search は空クエリと no results を表示する", async () => {
 
     await window.keyboard.press("Meta+Shift+F");
     await expect(window.locator(".code-search-status")).toHaveText("No query");
-    await window.locator(".code-search-input").fill("YURU_NO_SUCH_MATCH");
+    await window.locator(".code-search-input-wrap .text-input").fill("YURU_NO_SUCH_MATCH");
 
     await expect(window.locator(".code-search-status")).toHaveText("No results", {
       timeout: 10_000,
@@ -179,7 +179,7 @@ test("code search は入力を続けた時に直前の大量の結果を残さ�
     await openMainTerminal(window);
 
     await window.keyboard.press("Meta+Shift+F");
-    const input = window.locator(".code-search-input");
+    const input = window.locator(".code-search-input-wrap .text-input");
     await input.fill("a");
     await expect(window.locator(".code-search-status")).toHaveText("Showing first 500 matches", {
       timeout: 10_000,

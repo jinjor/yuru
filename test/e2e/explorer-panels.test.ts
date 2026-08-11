@@ -28,7 +28,7 @@ test("Files タブで追跡ファイルを表示しクリックしたファイ�
     const window = launched.window;
     await openMainTerminal(window);
 
-    await window.locator(".panel-tab", { hasText: "Files" }).click();
+    await window.locator(".panel-tabs .tab", { hasText: "Files" }).click();
     await expect(window.locator(".file-tree-name", { hasText: "README.md" })).toBeVisible();
     await expect(window.locator(".file-tree-name", { hasText: "src" })).toBeVisible();
 
@@ -77,7 +77,7 @@ test("Files / Search から開いた合算 diff でも Reviewed を切り替え�
     const window = launched.window;
     await openMainTerminal(window);
 
-    await window.locator(".panel-tab", { hasText: "Files" }).click();
+    await window.locator(".panel-tabs .tab", { hasText: "Files" }).click();
     await window.locator(".file-tree-row", { hasText: "stable.ts" }).click();
     await expectPreviewPath(window, "stable.ts");
     await expect(window.locator(".reviewed-toggle")).toHaveCount(0);
@@ -91,7 +91,7 @@ test("Files / Search から開いた合算 diff でも Reviewed を切り替え�
     await expect(reviewedToggle).toHaveAttribute("aria-pressed", "true");
 
     await window.keyboard.press("Meta+Shift+F");
-    await window.locator(".code-search-input").fill("scopeToggleNeedle");
+    await window.locator(".code-search-input-wrap .text-input").fill("scopeToggleNeedle");
     await expect(window.locator(".code-search-status")).toContainText("1 matches", {
       timeout: 10_000,
     });
@@ -122,7 +122,7 @@ test("Changes タブで変更ファイルと未追跡ファイルを表示し di
     const window = launched.window;
     await openMainTerminal(window);
 
-    await expect(window.locator(".panel-tab.active", { hasText: "Changes" })).toBeVisible();
+    await expect(window.locator(".panel-tabs .tab.selected", { hasText: "Changes" })).toBeVisible();
     await expect(window.locator(".change-item", { hasText: "README.md" })).toBeVisible({
       timeout: 10_000,
     });
@@ -290,7 +290,7 @@ status.textContent =
     const window = launched.window;
     await openMainTerminal(window);
 
-    await window.locator(".panel-tab", { hasText: "Files" }).click();
+    await window.locator(".panel-tabs .tab", { hasText: "Files" }).click();
     await window.locator(".file-tree-row", { hasText: "mock" }).click();
     await window.locator(".file-tree-row", { hasText: "index.html" }).click();
 
@@ -330,7 +330,7 @@ test("Files タブには選択中 worktree のファイルだけが出る", asyn
     await openMainTerminal(window);
 
     const sessionView = visibleWorktreeView(window);
-    await sessionView.locator(".panel-tab", { hasText: "Files" }).click();
+    await sessionView.locator(".panel-tabs .tab", { hasText: "Files" }).click();
     await sessionView.locator(".file-tree-row", { hasText: "main-dir" }).click();
     await expect(
       sessionView.locator(".file-tree-name", { hasText: "main-only.txt" }),
@@ -338,7 +338,7 @@ test("Files タブには選択中 worktree のファイルだけが出る", asyn
     await expect(sessionView.locator(".file-tree-name", { hasText: "task-dir" })).toHaveCount(0);
 
     await window.locator(".task-worktree-card", { hasText: "task-files-only" }).click();
-    await sessionView.locator(".panel-tab", { hasText: "Files" }).click();
+    await sessionView.locator(".panel-tabs .tab", { hasText: "Files" }).click();
     await expect(sessionView.locator(".file-tree-name", { hasText: "task-dir" })).toBeVisible();
     await expect(sessionView.locator(".file-tree-name", { hasText: "main-only.txt" })).toHaveCount(
       0,
@@ -349,7 +349,7 @@ test("Files タブには選択中 worktree のファイルだけが出る", asyn
     ).toBeVisible();
 
     await window.locator(".task-worktree-card", { hasText: "main" }).click();
-    await sessionView.locator(".panel-tab", { hasText: "Files" }).click();
+    await sessionView.locator(".panel-tabs .tab", { hasText: "Files" }).click();
     await expect(sessionView.locator(".file-tree-name", { hasText: "main-dir" })).toBeVisible();
     // main worktree は keep-alive されるので、切り替え前の展開状態も残る。
     await expect(
@@ -379,13 +379,13 @@ test("Changed dirs で変更ファイルのディレクトリだけを展開し 
     const window = launched.window;
     await openMainTerminal(window);
 
-    await window.locator(".panel-tab", { hasText: "Files" }).click();
-    await window.locator(".panel-header-action", { hasText: "Changed dirs" }).click();
+    await window.locator(".panel-tabs .tab", { hasText: "Files" }).click();
+    await window.locator(".panel-header-actions .button", { hasText: "Changed dirs" }).click();
     await expect(window.locator(".file-tree-name", { hasText: "src" })).toBeVisible();
     await expect(window.locator(".file-tree-name", { hasText: "nested" })).toBeVisible();
     await expect(window.locator(".file-tree-name", { hasText: "app.ts" })).toBeVisible();
 
-    await window.locator(".panel-header-action", { hasText: "Collapse all" }).click();
+    await window.locator(".panel-header-actions .button", { hasText: "Collapse all" }).click();
     await expect(window.locator(".file-tree-name", { hasText: "app.ts" })).toHaveCount(0);
   } finally {
     await closeYuru(app);
@@ -467,10 +467,10 @@ test("Changes タブは変更が無いと No changes を表示する", async () 
     await openMainTerminal(window);
 
     // Step 4 で Changes/Files/Search が常に同時に mount されるようになったため、
-    // FilesPane の "No files" 空状態と .empty-changes クラスが衝突する。ChangesPane 側
+    // FilesPane の "No files" 空状態と .empty-state クラスが衝突する。ChangesPane 側
     // (.changes-list 配下) に絞って一致させる。
-    await expect(window.locator(".changes-list .empty-changes")).toHaveText("No changes");
-    await expect(window.locator(".panel-tab.active", { hasText: "Changes" })).toContainText("0");
+    await expect(window.locator(".changes-list .empty-state")).toHaveText("No changes");
+    await expect(window.locator(".panel-tabs .tab.selected", { hasText: "Changes" })).toContainText("0");
   } finally {
     await closeYuru(app);
     await context.cleanup();

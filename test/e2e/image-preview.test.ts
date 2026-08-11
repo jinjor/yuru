@@ -112,7 +112,7 @@ test("追加された画像と worktree の画像は 1 枚で表示する", asyn
     // Files から開いた変更なしの画像も 1 枚のまま
     git(["add", "shot.png"], repoDir);
     git(["commit", "-m", "add shot"], repoDir);
-    await sessionView.locator(".panel-tab", { hasText: "Files" }).click();
+    await sessionView.locator(".panel-tabs .tab", { hasText: "Files" }).click();
     await sessionView.locator(".file-tree-row", { hasText: "shot.png" }).click();
     await expect(sessionView.locator(".image-side-label")).toBeHidden();
     await expect(sessionView.locator(".image-side-meta")).toContainText("30 × 30");

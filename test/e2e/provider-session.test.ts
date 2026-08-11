@@ -113,8 +113,8 @@ async function createSessionWithTurn(
   marker: string,
 ): Promise<void> {
   await window.locator(".repo-row-new-btn").click();
-  await window.locator(".worktree-name-input").fill(provider.branchName);
-  await window.locator(".worktree-create-btn").click();
+  await window.locator(".worktree-input-row .text-input").fill(provider.branchName);
+  await window.locator(".worktree-input-row .button").click();
   const sessionView = visibleWorktreeView(window);
   await sessionView.locator(".new-session-action", { hasText: provider.label }).click();
   await expect(sessionView.locator(".xterm")).toBeVisible({ timeout: 30_000 });

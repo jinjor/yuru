@@ -5,6 +5,7 @@ import type { PreviewSelection } from "../previewSelection";
 import { statusColor, statusLabel } from "./gitStatus";
 import { LineStatLabel } from "./LineStatLabel";
 import { buildChangeSections, type ChangeSection } from "./changes";
+import { EmptyState } from "../ui/EmptyState";
 
 interface ChangesPaneProps {
   conflictedFiles: readonly GitFileStatus[];
@@ -50,7 +51,7 @@ export function ChangesPane({
   if (sections.length === 0 && !showsNoBase) {
     return (
       <div className="changes-list">
-        <div className="empty-changes">No changes</div>
+        <EmptyState>No changes</EmptyState>
       </div>
     );
   }

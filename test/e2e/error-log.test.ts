@@ -16,7 +16,7 @@ test("エラーログ: 導線から一覧を開け、報告されたエラーが
 
     // 0 件でも常設の導線から開けて、空表示になる
     await window.locator(".sidebar-errors-row").click();
-    await expect(window.locator(".error-log-empty")).toHaveText("No errors");
+    await expect(window.locator(".error-log .empty-state")).toHaveText("No errors");
     await window.keyboard.press("Escape");
     await expect(window.locator(".error-log")).toHaveCount(0);
 
@@ -37,8 +37,8 @@ test("エラーログ: 導線から一覧を開け、報告されたエラーが
     await expect(window.locator(".error-log-detail")).toHaveText("detail text");
 
     // Clear all で一覧もバッジも空になる
-    await window.locator(".error-log-clear-btn").click();
-    await expect(window.locator(".error-log-empty")).toBeVisible();
+    await window.locator(".error-log-header .button").click();
+    await expect(window.locator(".error-log .empty-state")).toBeVisible();
     await expect(window.locator(".sidebar-errors-row .error-count-badge")).toHaveCount(0);
   } finally {
     await closeYuru(app);

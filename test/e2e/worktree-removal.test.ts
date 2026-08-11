@@ -100,7 +100,7 @@ test("clean な worktree を削除すると一覧・metadata・review record・g
     await expect(worktreeCard(window, "feature/remove-me")).toBeVisible();
     await openRemovalDialog(window, "feature/remove-me");
 
-    await window.locator(".removal-btn.danger").click();
+    await window.locator(".removal-foot .button.danger").click();
 
     await expect(window.locator(".removal-dialog")).toHaveCount(0);
     await expect(worktreeCard(window, "feature/remove-me")).toHaveCount(0);
@@ -136,7 +136,7 @@ test("worktree1 の実削除中に開いた worktree2 のモーダルは完了�
     const window = launched.window;
 
     await openRemovalDialog(window, "feature/remove-one");
-    await window.locator(".removal-btn.danger").click();
+    await window.locator(".removal-foot .button.danger").click();
 
     const removingCard = worktreeCard(window, "feature/remove-one");
     await expect(window.locator(".removal-dialog")).toHaveCount(0);
@@ -182,7 +182,7 @@ test("worktree を cwd にしたプロセスの詳細を確認して停止・削
     const window = launched.window;
 
     await openRemovalDialog(window, "feature/busy");
-    await window.locator(".removal-btn.danger").click();
+    await window.locator(".removal-foot .button.danger").click();
 
     // 事前確認が終わると、worktree を使っているプロセスと判断材料を改めて確認できる。
     await expect(window.locator(".removal-process-summary")).toContainText(
@@ -194,11 +194,11 @@ test("worktree を cwd にしたプロセスの詳細を確認して停止・削
     await expect(worktreeCard(window, "feature/busy")).toBeVisible();
     expect(worktreePaths(context, repoDir)).toContain(worktreePath);
 
-    await expect(window.locator(".removal-btn.danger")).toHaveText("Stop and remove");
-    await window.locator(".removal-btn.danger").click();
+    await expect(window.locator(".removal-foot .button.danger")).toHaveText("Stop and remove");
+    await window.locator(".removal-foot .button.danger").click();
 
     await expect(window.locator(".removal-dialog")).toBeVisible();
-    await expect(window.locator(".removal-btn.danger")).toBeDisabled();
+    await expect(window.locator(".removal-foot .button.danger")).toBeDisabled();
     await expect(worktreeCard(window, "feature/busy")).not.toHaveClass(/removing/);
 
     await expect(worktreeCard(window, "feature/busy")).toHaveCount(0);
@@ -231,12 +231,12 @@ test("SIGTERM 後も残るプロセスがあればモーダルを維持して再
     const window = launched.window;
 
     await openRemovalDialog(window, "feature/stubborn");
-    await window.locator(".removal-btn.danger").click();
+    await window.locator(".removal-foot .button.danger").click();
     await expect(window.locator(".removal-process-item")).toHaveCount(1);
 
-    await window.locator(".removal-btn.danger").click();
-    await expect(window.locator(".removal-btn.danger")).toBeDisabled();
-    await expect(window.locator(".removal-btn.danger")).toBeEnabled({ timeout: 5_000 });
+    await window.locator(".removal-foot .button.danger").click();
+    await expect(window.locator(".removal-foot .button.danger")).toBeDisabled();
+    await expect(window.locator(".removal-foot .button.danger")).toBeEnabled({ timeout: 5_000 });
 
     await expect(window.locator(".removal-dialog")).toBeVisible();
     await expect(window.locator(".removal-process-item")).toHaveCount(1);
@@ -268,15 +268,15 @@ test("複数の残存プロセスを一覧で確認してすべて停止・削�
     const window = launched.window;
 
     await openRemovalDialog(window, "feature/multiple-busy");
-    await window.locator(".removal-btn.danger").click();
+    await window.locator(".removal-foot .button.danger").click();
 
     await expect(window.locator(".removal-process-summary")).toContainText(
       "2 processes are still using this worktree",
     );
     await expect(window.locator(".removal-process-item")).toHaveCount(2);
-    await expect(window.locator(".removal-btn.danger")).toHaveText("Stop all and remove");
+    await expect(window.locator(".removal-foot .button.danger")).toHaveText("Stop all and remove");
 
-    await window.locator(".removal-btn.danger").click();
+    await window.locator(".removal-foot .button.danger").click();
 
     await expect(worktreeCard(window, "feature/multiple-busy")).toHaveCount(0);
     expect(worktreePaths(context, repoDir)).not.toContain(worktreePath);
@@ -314,7 +314,7 @@ test("残留ロックのある worktree は unlock を挟んで削除できる",
     const window = launched.window;
 
     await openRemovalDialog(window, "feature/stale-lock");
-    await window.locator(".removal-btn.danger").click();
+    await window.locator(".removal-foot .button.danger").click();
 
     await expect(worktreeCard(window, "feature/stale-lock")).toHaveCount(0);
     expect(worktreePaths(context, repoDir)).not.toContain(worktreePath);
@@ -343,11 +343,11 @@ test("dirty な worktree は事前確認で force 確認へ切り替わり削除
     await openRemovalDialog(window, "feature/dirty");
 
     // Remove → 実削除前の dirty 確認で、force 確認ダイアログに差し替わる
-    await window.locator(".removal-btn.danger").click();
+    await window.locator(".removal-foot .button.danger").click();
     await expect(window.locator(".removal-dialog-head")).toContainText("Force remove worktree");
     await expect(window.locator(".removal-note.force")).toBeVisible();
 
-    await window.locator(".removal-btn.danger").click();
+    await window.locator(".removal-foot .button.danger").click();
 
     await expect(worktreeCard(window, "feature/dirty")).toHaveCount(0);
     expect(worktreePaths(context, repoDir)).not.toContain(worktreePath);
@@ -374,7 +374,7 @@ test("実削除中に dirty になったら warning を記録してカードを�
     const window = launched.window;
 
     await openRemovalDialog(window, "feature/became-dirty");
-    await window.locator(".removal-btn.danger").click();
+    await window.locator(".removal-foot .button.danger").click();
     const card = worktreeCard(window, "feature/became-dirty");
     await expect(card).toHaveClass(/removing/);
 
@@ -396,9 +396,9 @@ test("実削除中に dirty になったら warning を記録してカードを�
 
     // 再試行すると事前確認で dirty を検出し、明示的な force 操作で削除できる。
     await openRemovalDialog(window, "feature/became-dirty");
-    await window.locator(".removal-btn.danger").click();
+    await window.locator(".removal-foot .button.danger").click();
     await expect(window.locator(".removal-dialog-head")).toContainText("Force remove worktree");
-    await window.locator(".removal-btn.danger").click();
+    await window.locator(".removal-foot .button.danger").click();
     await expect(card).toHaveCount(0);
   } finally {
     await closeYuru(app);
@@ -421,7 +421,7 @@ test("予期しない実削除エラーを記録してカードを再操作可�
     const window = launched.window;
 
     await openRemovalDialog(window, "feature/remove-failure");
-    await window.locator(".removal-btn.danger").click();
+    await window.locator(".removal-foot .button.danger").click();
     const card = worktreeCard(window, "feature/remove-failure");
     await expect(card).toHaveClass(/removing/);
 
@@ -438,7 +438,7 @@ test("予期しない実削除エラーを記録してカードを再操作可�
     await window.keyboard.press("Escape");
 
     await openRemovalDialog(window, "feature/remove-failure");
-    await window.locator(".removal-btn.danger").click();
+    await window.locator(".removal-foot .button.danger").click();
     await expect(card).toHaveCount(0);
   } finally {
     await closeYuru(app);

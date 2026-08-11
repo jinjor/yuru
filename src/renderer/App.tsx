@@ -19,6 +19,7 @@ import { ProviderPlanUsageRows } from "./providers/ProviderPlanUsageRows";
 import { RepoList } from "./repos/RepoList";
 import { WorktreeView } from "./worktrees/WorktreeView";
 import { WorktreeRemovalDialog } from "./repos/WorktreeRemovalDialog";
+import { EmptyState } from "./ui/EmptyState";
 import { clamp, runPointerDrag } from "./utils/layout";
 import {
   applyPullRequestUpdates,
@@ -315,9 +316,7 @@ export function App() {
 function SessionPlaceholder() {
   return (
     <main className="terminal-container">
-      <div className="empty-state terminal-empty-state">
-        <p>Select a worktree</p>
-      </div>
+      <EmptyState>Select a worktree</EmptyState>
     </main>
   );
 }

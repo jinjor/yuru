@@ -1,6 +1,8 @@
 import { AlertTriangle, CircleAlert, X } from "lucide-react";
-import { useEffect } from "react";
 import type { AppErrorNotice } from "../../shared/ipc";
+import { Button } from "../ui/Button";
+import { EmptyState } from "../ui/EmptyState";
+import { IconButton } from "../ui/IconButton";
 import { Modal } from "../ui/Modal";
 
 interface ErrorLogModalProps {
@@ -17,18 +19,6 @@ function formatNoticeTime(timestamp: number): string {
 }
 
 export function ErrorLogModal({ notices, onClose }: ErrorLogModalProps) {
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [onClose]);
-
   const errorCount = notices.filter((notice) => notice.severity === "error").length;
   const warningCount = notices.length - errorCount;
 
@@ -41,26 +31,15 @@ export function ErrorLogModal({ notices, onClose }: ErrorLogModalProps) {
           {warningCount > 0 && <span className="error-count-badge warning">{warningCount}</span>}
           <div className="error-log-header-actions">
             {notices.length > 0 && (
-              <button
-                type="button"
-                className="error-log-clear-btn"
-                onClick={() => void window.electronAPI.clearErrors()}
-              >
-                Clear all
-              </button>
+              <Button onClick={() => void window.electronAPI.clearErrors()}>Clear all</Button>
             )}
-            <button
-              type="button"
-              className="error-log-close-btn"
-              onClick={onClose}
-              aria-label="Close"
-            >
+            <IconButton label="Close" onClick={onClose}>
               <X size={14} strokeWidth={2} />
-            </button>
+            </IconButton>
           </div>
         </div>
         {notices.length === 0 ? (
-          <div className="error-log-empty">No errors</div>
+          <EmptyState>No errors</EmptyState>
         ) : (
           <div className="error-log-list">
             {notices.map((notice) => (
@@ -79,14 +58,14 @@ export function ErrorLogModal({ notices, onClose }: ErrorLogModalProps) {
                   <span className="error-log-message">{notice.message}</span>
                   {notice.detail && <span className="error-log-detail">{notice.detail}</span>}
                 </span>
-                <button
-                  type="button"
+                <IconButton
                   className="error-log-dismiss-btn"
+                  label="Dismiss"
                   onClick={() => void window.electronAPI.dismissError(notice.id)}
-                  aria-label="Dismiss"
+                  size="sm"
                 >
                   <X size={12} strokeWidth={2} />
-                </button>
+                </IconButton>
               </div>
             ))}
           </div>

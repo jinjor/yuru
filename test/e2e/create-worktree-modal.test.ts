@@ -29,7 +29,7 @@ test("＋ボタンで Create Worktree モーダルが開き Escape と外側ク�
     await window.locator(".repo-row-new-btn").click();
     await expect(window.locator(".repo-picker-header")).toHaveText("Create Worktree");
 
-    const input = window.locator(".worktree-name-input");
+    const input = window.locator(".worktree-input-row .text-input");
     await expect(input).toHaveValue(/^work-\d{4}-\d{6}$/);
     await expect(input).toBeFocused();
     expect(
@@ -46,10 +46,10 @@ test("＋ボタンで Create Worktree モーダルが開き Escape と外側ク�
     await expect(window.locator(".worktree-error")).toContainText(
       "Letters, digits, dots, underscores, slashes, dashes only",
     );
-    await expect(window.locator(".worktree-create-btn")).toBeDisabled();
+    await expect(window.locator(".worktree-input-row .button")).toBeDisabled();
 
     await input.fill("feature/");
-    await expect(window.locator(".worktree-create-btn")).toBeDisabled();
+    await expect(window.locator(".worktree-input-row .button")).toBeDisabled();
 
     await input.press("Escape");
     await expect(window.locator(".repo-picker")).toBeHidden();
@@ -77,8 +77,8 @@ test("provider を選ばず worktree を作成でき、Terminal に session の�
     const window = launched.window;
 
     await window.locator(".repo-row-new-btn").click();
-    await window.locator(".worktree-name-input").fill("feature/f43-create");
-    await window.locator(".worktree-create-btn").click();
+    await window.locator(".worktree-input-row .text-input").fill("feature/f43-create");
+    await window.locator(".worktree-input-row .button").click();
 
     await expect(window.locator(".repo-picker")).toBeHidden();
     // branch 名の `/` は worktree 名では `-` になり、provider によらず .yuru/worktrees に掘られる。
@@ -118,8 +118,8 @@ test("既存 branch 名で作成するとエラーを出してモーダルを維
     const window = launched.window;
 
     await window.locator(".repo-row-new-btn").click();
-    await window.locator(".worktree-name-input").fill("already-there");
-    await window.locator(".worktree-create-btn").click();
+    await window.locator(".worktree-input-row .text-input").fill("already-there");
+    await window.locator(".worktree-input-row .button").click();
 
     await expect(window.locator(".repo-picker")).toBeVisible();
     await expect(window.locator(".worktree-error")).toContainText(
@@ -146,9 +146,9 @@ test("空の branch 名では Create が無効になる", async () => {
     const window = launched.window;
 
     await window.locator(".repo-row-new-btn").click();
-    await window.locator(".worktree-name-input").fill("   ");
+    await window.locator(".worktree-input-row .text-input").fill("   ");
 
-    await expect(window.locator(".worktree-create-btn")).toBeDisabled();
+    await expect(window.locator(".worktree-input-row .button")).toBeDisabled();
     await expect(window.locator(".worktree-error")).toHaveCount(0);
   } finally {
     await closeYuru(app);
@@ -177,10 +177,10 @@ test("From origin モードで remote branch から worktree を作成する", a
 
     await window.locator(".repo-row-new-btn").click();
     await window.locator(".worktree-mode-tab", { hasText: "From origin" }).click();
-    const input = window.locator(".worktree-name-input");
+    const input = window.locator(".worktree-input-row .text-input");
     await expect(input).toHaveValue("");
     await input.fill("feature/pr-head");
-    await window.locator(".worktree-create-btn").click();
+    await window.locator(".worktree-input-row .button").click();
 
     await expect(window.locator(".repo-picker")).toBeHidden();
     const worktreePath = path.join(repoDir, ".yuru", "worktrees", "feature-pr-head");
@@ -211,8 +211,8 @@ test("origin に無い branch を指定するとエラーを出してモーダ�
 
     await window.locator(".repo-row-new-btn").click();
     await window.locator(".worktree-mode-tab", { hasText: "From origin" }).click();
-    await window.locator(".worktree-name-input").fill("no-such-branch");
-    await window.locator(".worktree-create-btn").click();
+    await window.locator(".worktree-input-row .text-input").fill("no-such-branch");
+    await window.locator(".worktree-input-row .button").click();
 
     await expect(window.locator(".repo-picker")).toBeVisible();
     await expect(window.locator(".worktree-error")).toContainText("no-such-branch");
@@ -236,8 +236,8 @@ test("worktree directory が既にあるとエラーを出して作成しない"
     const window = launched.window;
 
     await window.locator(".repo-row-new-btn").click();
-    await window.locator(".worktree-name-input").fill("directory-exists");
-    await window.locator(".worktree-create-btn").click();
+    await window.locator(".worktree-input-row .text-input").fill("directory-exists");
+    await window.locator(".worktree-input-row .button").click();
 
     await expect(window.locator(".repo-picker")).toBeVisible();
     await expect(window.locator(".worktree-error")).toContainText(

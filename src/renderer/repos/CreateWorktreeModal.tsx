@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { generateDefaultBranch } from "./defaultBranch";
+import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
+import { TextInput } from "../ui/TextInput";
 
 // worktree の作成方法。new-branch は HEAD から新しい branch を切り、
 // from-origin は origin の同名 branch を取り込む (F42)。
@@ -76,34 +78,29 @@ export function CreateWorktreeModal({
           </button>
         </div>
         <div className="worktree-input-row">
-          <input
+          <TextInput
             ref={inputRef}
-            type="text"
-            className="worktree-name-input"
             value={name}
             placeholder={mode === "from-origin" ? "branch name on origin" : undefined}
             disabled={creating}
-            onChange={(event) => {
-              const value = event.target.value;
+            onChange={(value) => {
               setNames((prev) => ({ ...prev, [mode]: value }));
               onChange();
             }}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 void handleSubmit();
-              } else if (event.key === "Escape") {
-                onCancel();
               }
             }}
             autoFocus
           />
-          <button
-            className="worktree-create-btn"
+          <Button
+            variant="primary"
             onClick={() => void handleSubmit()}
             disabled={!isValid || creating}
           >
             {creating ? "Creating…" : "Create"}
-          </button>
+          </Button>
         </div>
         {mode === "from-origin" && (
           <div className="worktree-mode-hint">
