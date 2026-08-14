@@ -81,8 +81,10 @@ async function requestUsage(command: ResolvedAgentCommand): Promise<unknown> {
 }
 
 async function isLoggedIn(command: ResolvedAgentCommand): Promise<boolean> {
+  // Claude Code は未ログイン時も判定可能な JSON を stdout に返すが、終了コードは 1 にする。
+  // それ以外の非 0 終了は実行失敗として扱う。
   const status: unknown = JSON.parse(
-    await runPlanUsageCommand(command, ["auth", "status", "--json"], TIMEOUT_MS),
+    await runPlanUsageCommand(command, ["auth", "status", "--json"], TIMEOUT_MS, [0, 1]),
   );
   if (!isRecord(status) || typeof status.loggedIn !== "boolean") {
     throw new Error("claude auth status did not report loggedIn");

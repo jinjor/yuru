@@ -100,6 +100,7 @@ import {
 } from "./errors/center.js";
 import { createTerminalEnv, type TerminalEnvOptions } from "./terminal/env.js";
 import { deliverInitialInput } from "./terminal/initial-input.js";
+import { isCursorPositionQuery, isCursorPositionReport } from "./terminal/cursor-position.js";
 import { TerminalScreen } from "./terminal/screen.js";
 import { createInteractiveShellLaunchCommand } from "./terminal/shell-launch.js";
 import { findRepoByWorktreePath } from "./repos/find-repo.js";
@@ -1009,7 +1010,11 @@ export class YuruService {
     const proc = this.ptyProcesses.get(terminalRuntimeId);
     if (proc) {
       proc.write(data);
-      this.markTerminalRuntimeInput(terminalRuntimeId);
+      // xterm の onData はキー入力だけでなく、TUI からの問い合わせに対する端末応答も
+      // 流す。後者まで入力扱いすると、その直後の agent 出力を再描画として除外してしまう。
+      if (!isCursorPositionReport(data)) {
+        this.markTerminalRuntimeInput(terminalRuntimeId);
+      }
     }
   }
 
@@ -1168,7 +1173,10 @@ export class YuruService {
       if (!this.ptyProcesses.has(pending.terminalRuntimeId)) {
         return;
       }
-      if (!this.isTerminalRuntimeReacting(pending.terminalRuntimeId)) {
+      if (
+        !isCursorPositionQuery(data) &&
+        !this.isTerminalRuntimeReacting(pending.terminalRuntimeId)
+      ) {
         this.terminalRuntimeLastOutputAt.set(pending.terminalRuntimeId, Date.now());
       }
       const attachment = this.ptyAttachments.get(pending.terminalRuntimeId);

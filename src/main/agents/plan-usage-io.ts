@@ -48,6 +48,7 @@ export async function runPlanUsageCommand(
   command: ResolvedAgentCommand,
   args: readonly string[],
   timeoutMs: number,
+  acceptedExitCodes: readonly number[] = [0],
 ): Promise<string> {
   const child = spawnAgentCommand(command, args);
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -63,7 +64,7 @@ export async function runPlanUsageCommand(
       });
       child.on("error", reject);
       child.on("close", (code, signal) => {
-        if (code === 0) {
+        if (code !== null && acceptedExitCodes.includes(code)) {
           resolve(Buffer.concat(stdout).toString("utf-8"));
           return;
         }
