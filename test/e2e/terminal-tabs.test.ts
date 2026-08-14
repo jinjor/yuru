@@ -3,6 +3,7 @@ import { execFile } from "node:child_process";
 import { appendFile, chmod, mkdir, readdir, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   closeYuru,
   createCommittedRepo,
@@ -19,6 +20,7 @@ const execFileAsync = promisify(execFile);
 const FIRST_SESSION_ID = "019e5862-8776-7723-8de9-3460e9600119";
 const SECOND_SESSION_ID = "019e5862-8776-7723-8de9-3460e9600120";
 const SUGGESTED_SESSION_ID = "019e5862-8776-7723-8de9-3460e9600121";
+const LAZY_SESSION_ID = "019e5862-8776-7723-8de9-3460e9600122";
 
 test("ホームは空の session セクションを表示しない", async () => {
   const context = await createE2eContext();
@@ -153,6 +155,313 @@ test("ホームから複数 primary を操作し、suggested を promote でき�
         cwd: worktreePath,
       },
     ]);
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+test("同じ inactive session を同時に resume しても runtime は 1 件だけ起動する", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context);
+    const worktreePath = await createGitWorktree(context, repoDir, "single-session-runtime");
+    await seedCodexStoredSession(
+      context.tmpHome,
+      repoDir,
+      FIRST_SESSION_ID,
+      "Concurrent resume target",
+    );
+    await registerRepo(context, repoDir, [
+      {
+        worktreePath,
+        primarySessions: [{ provider: "codex", agentSessionId: FIRST_SESSION_ID, cwd: repoDir }],
+      },
+    ]);
+    const fakeBin = await createFakeCodexBin(context.tmpHome);
+    const launched = await launchWindow(context, {
+      env: { PATH: `${fakeBin}:${process.env.PATH ?? ""}` },
+    });
+    app = launched.app;
+    const window = launched.window;
+    await expect(worktreeCard(window, "single-session-runtime")).toBeVisible();
+    const worktreeId = await window.evaluate(async () => {
+      const worktree = (await window.electronAPI.getRepos())[0]?.taskWorktrees.find(
+        (entry) => entry.name === "single-session-runtime",
+      );
+      if (!worktree) {
+        throw new Error("The task worktree was not listed");
+      }
+      return worktree.worktreeId;
+    });
+
+    const results = await window.evaluate(
+      ({ targetWorktreeId, agentSessionKey }) =>
+        Promise.all([
+          window.electronAPI.resumePrimarySession(targetWorktreeId, agentSessionKey),
+          window.electronAPI.resumePrimarySession(targetWorktreeId, agentSessionKey),
+        ]),
+      { targetWorktreeId: worktreeId, agentSessionKey: `codex:${FIRST_SESSION_ID}` },
+    );
+    const succeeded = results.filter((result) => result.ok);
+    const rejected = results.filter((result) => !result.ok);
+    expect(succeeded.length).toBeGreaterThan(0);
+    expect(new Set(succeeded.map((result) => result.data.terminalRuntimeId)).size).toBe(1);
+    for (const result of rejected) {
+      expect(result.error).toEqual({
+        code: "command_failed",
+        message: "This session is already starting.",
+      });
+    }
+    const started = succeeded[0];
+    if (!started?.ok) {
+      throw new Error("No concurrent resume request succeeded");
+    }
+
+    const worktree = await window.evaluate(async (targetWorktreeId) => {
+      const repos = await window.electronAPI.getRepos();
+      return repos[0]?.taskWorktrees.find((entry) => entry.worktreeId === targetWorktreeId);
+    }, worktreeId);
+    expect(worktree?.activeTerminalRuntimeIds).toEqual([started.data.terminalRuntimeId]);
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+test("Codex の session ID 確定中も runtime タブは worktree から消えない", async () => {
+  test.setTimeout(30_000);
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context);
+    const worktreePath = await createGitWorktree(context, repoDir, "lazy-session-route");
+    await registerRepo(context, repoDir, [{ worktreePath }]);
+    const fakeBin = await createFakeCodexBin(context.tmpHome, {
+      agentSessionId: LAZY_SESSION_ID,
+      cwd: repoDir,
+    });
+    const launched = await launchWindow(context, {
+      env: { PATH: `${fakeBin}:${process.env.PATH ?? ""}` },
+    });
+    app = launched.app;
+    const window = launched.window;
+    await expect(worktreeCard(window, "lazy-session-route")).toBeVisible();
+    const worktreeId = await window.evaluate(async () => {
+      const worktree = (await window.electronAPI.getRepos())[0]?.taskWorktrees.find(
+        (entry) => entry.name === "lazy-session-route",
+      );
+      if (!worktree) {
+        throw new Error("The task worktree was not listed");
+      }
+      return worktree.worktreeId;
+    });
+    const started = await window.evaluate(
+      (targetWorktreeId) => window.electronAPI.createSessionForWorktree(targetWorktreeId, "codex"),
+      worktreeId,
+    );
+    expect(started.ok).toBe(true);
+    if (!started.ok) {
+      throw new Error("Codex session failed to start");
+    }
+
+    const transition = await window.evaluate(
+      async ({ targetWorktreeId, resolvedSessionKey }) => {
+        const snapshots: Array<{
+          activeTerminalRuntimeIds: string[];
+          primarySessionKeys: Array<string | null>;
+        }> = [];
+        const deadline = Date.now() + 5_000;
+        while (Date.now() < deadline) {
+          const worktree = (await window.electronAPI.getRepos())[0]?.taskWorktrees.find(
+            (entry) => entry.worktreeId === targetWorktreeId,
+          );
+          if (!worktree) {
+            throw new Error("The task worktree disappeared during session ID resolution");
+          }
+          snapshots.push({
+            activeTerminalRuntimeIds: worktree.activeTerminalRuntimeIds,
+            primarySessionKeys: worktree.primarySessions.map((session) => session.agentSessionKey),
+          });
+          if (
+            worktree.primarySessions.some(
+              (session) => session.agentSessionKey === resolvedSessionKey,
+            )
+          ) {
+            return { resolved: true, snapshots };
+          }
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        return { resolved: false, snapshots };
+      },
+      {
+        targetWorktreeId: worktreeId,
+        resolvedSessionKey: `codex:${LAZY_SESSION_ID}`,
+      },
+    );
+
+    expect(transition.resolved).toBe(true);
+    expect(transition.snapshots[0]?.primarySessionKeys).toEqual([null]);
+    expect(transition.snapshots.at(-1)?.primarySessionKeys).toEqual([`codex:${LAZY_SESSION_ID}`]);
+    for (const snapshot of transition.snapshots) {
+      expect(snapshot.activeTerminalRuntimeIds).toContain(started.data.terminalRuntimeId);
+    }
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+test("active suggested を promote すると既存 runtime のタブが移動先 worktree に移る", async () => {
+  test.setTimeout(90_000);
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context);
+    const worktreeAPath = await createGitWorktree(context, repoDir, "session-route-a");
+    const worktreeBPath = await createGitWorktree(context, repoDir, "session-route-b");
+    const sessionFile = await seedCodexStoredSession(
+      context.tmpHome,
+      repoDir,
+      FIRST_SESSION_ID,
+      "Active session moving between worktrees",
+    );
+    const commandEvidence = (worktreePath: string) =>
+      JSON.stringify({
+        type: "event_msg",
+        payload: {
+          type: "item_completed",
+          item: {
+            type: "CommandExecution",
+            cwd: pathToFileURL(worktreePath).href,
+          },
+        },
+      });
+    await appendFile(
+      sessionFile,
+      `${commandEvidence(worktreeAPath)}\n${commandEvidence(worktreeBPath)}\n`,
+    );
+    await registerRepo(context, repoDir, [
+      {
+        worktreePath: worktreeAPath,
+        // Yuru が起動する provider session の PTY は repo root で動き、session log の
+        // command evidence が実際の作業先 A / B を示す。
+        primarySessions: [{ provider: "codex", agentSessionId: FIRST_SESSION_ID, cwd: repoDir }],
+      },
+      { worktreePath: worktreeBPath },
+    ]);
+    const fakeBin = await createFakeCodexBin(context.tmpHome);
+    const launched = await launchWindow(context, {
+      env: { PATH: `${fakeBin}:${process.env.PATH ?? ""}` },
+    });
+    app = launched.app;
+    const window = launched.window;
+    const sessionView = visibleWorktreeView(window);
+
+    await worktreeCard(window, "session-route-a").click();
+    await sessionView
+      .locator(".session-home-row", { hasText: "Active session moving between worktrees" })
+      .locator(".resume-primary-action")
+      .click();
+    await expect(sessionView.locator(".xterm")).toContainText(FIRST_SESSION_ID, {
+      timeout: 10_000,
+    });
+    const runtimeId = await window.evaluate(async () => {
+      const repo = (await window.electronAPI.getRepos())[0];
+      const worktree = repo?.taskWorktrees.find((entry) => entry.name === "session-route-a");
+      const activeRuntimeId = worktree?.primarySessions[0]?.activeTerminalRuntimeId;
+      if (!activeRuntimeId) {
+        throw new Error("The primary session runtime was not active");
+      }
+      return activeRuntimeId;
+    });
+
+    await worktreeCard(window, "session-route-b").click();
+    await expect(sessionView.locator(".session-tab:not(.session-tab-home)")).toHaveCount(0);
+    const suggestedRow = sessionView.locator(".suggested-session-action", {
+      hasText: "Active session moving between worktrees",
+    });
+    await expect(suggestedRow).toContainText("active");
+
+    await suggestedRow.click();
+    await expect(sessionView.locator(".xterm")).toContainText(FIRST_SESSION_ID);
+    await expect(
+      sessionView.locator(".session-tab", {
+        hasText: "Active session moving between worktrees",
+      }),
+    ).toHaveClass(/selected/);
+
+    const reposAfterPromote = await window.evaluate(() => window.electronAPI.getRepos());
+    const taskWorktrees = reposAfterPromote[0]?.taskWorktrees ?? [];
+    const worktreeA = taskWorktrees.find((entry) => entry.name === "session-route-a");
+    const worktreeB = taskWorktrees.find((entry) => entry.name === "session-route-b");
+    expect(worktreeA?.activeTerminalRuntimeIds).not.toContain(runtimeId);
+    expect(worktreeA?.primarySessions).toHaveLength(0);
+    expect(worktreeB?.activeTerminalRuntimeIds).toEqual([runtimeId]);
+    expect(worktreeB?.primarySessions[0]?.activeTerminalRuntimeId).toBe(runtimeId);
+
+    await worktreeCard(window, "session-route-a").click();
+    await expect(sessionView.locator(".session-tab:not(.session-tab-home)")).toHaveCount(0);
+    await expect(sessionView.locator(".session-home-row")).toHaveCount(0);
+
+    expect((await readMetadata(context)).taskWorktrees).toEqual([
+      {
+        repoId: expect.any(String),
+        worktreePath: worktreeAPath,
+        primarySessions: [],
+      },
+      {
+        repoId: expect.any(String),
+        worktreePath: worktreeBPath,
+        primarySessions: [
+          {
+            provider: "codex",
+            agentSessionId: FIRST_SESSION_ID,
+            cwd: repoDir,
+          },
+        ],
+      },
+    ]);
+
+    await window.evaluate(() => {
+      const trackedWindow = window as Window & { __yuruExitedRuntimeIds?: string[] };
+      trackedWindow.__yuruExitedRuntimeIds = [];
+      window.electronAPI.onTerminalRuntimeExited((terminalRuntimeId) => {
+        trackedWindow.__yuruExitedRuntimeIds?.push(terminalRuntimeId);
+      });
+    });
+
+    const worktreeACard = worktreeCard(window, "session-route-a");
+    await worktreeACard.hover();
+    await worktreeACard.locator(".task-worktree-overflow").click();
+    await worktreeACard.locator(".task-worktree-menu-item").click();
+    await window.locator(".removal-foot .button.danger").click();
+    await expect(worktreeACard).toHaveCount(0);
+    expect(
+      await window.evaluate(
+        () =>
+          (window as Window & { __yuruExitedRuntimeIds?: string[] }).__yuruExitedRuntimeIds ?? [],
+      ),
+    ).not.toContain(runtimeId);
+
+    await worktreeCard(window, "session-route-b").click();
+    await expect(sessionView.locator(".xterm")).toContainText(FIRST_SESSION_ID);
+
+    const worktreeBCard = worktreeCard(window, "session-route-b");
+    await worktreeBCard.hover();
+    await worktreeBCard.locator(".task-worktree-overflow").click();
+    await worktreeBCard.locator(".task-worktree-menu-item").click();
+    await window.locator(".removal-foot .button.danger").click();
+    await expect(worktreeBCard).toHaveCount(0);
+    await expect
+      .poll(() =>
+        window.evaluate(
+          () =>
+            (window as Window & { __yuruExitedRuntimeIds?: string[] }).__yuruExitedRuntimeIds ?? [],
+        ),
+      )
+      .toContain(runtimeId);
   } finally {
     await closeYuru(app);
     await context.cleanup();
@@ -314,14 +623,31 @@ test("複数 runtime をタブで切り替え、kill と exit 後はホームへ
   }
 });
 
-async function createFakeCodexBin(home: string): Promise<string> {
+async function createFakeCodexBin(
+  home: string,
+  resolvedSession?: { agentSessionId: string; cwd: string },
+): Promise<string> {
   const binDir = path.join(home, "fake-bin");
   const executablePath = path.join(binDir, "codex");
   await mkdir(binDir, { recursive: true });
+  const resolvedSessionLines: string[] = [];
+  if (resolvedSession) {
+    const sessionFile = codexStoredSessionFile(home, resolvedSession.agentSessionId);
+    await mkdir(path.dirname(sessionFile), { recursive: true });
+    const sessionPayload = JSON.stringify({
+      id: resolvedSession.agentSessionId,
+      cwd: resolvedSession.cwd,
+    });
+    resolvedSessionLines.push(
+      'const fs = require("node:fs");',
+      `setTimeout(() => fs.writeFileSync(${JSON.stringify(sessionFile)}, JSON.stringify({ type: "session_meta", timestamp: new Date().toISOString(), payload: ${sessionPayload} }) + "\\n"), 250);`,
+    );
+  }
   await writeFile(
     executablePath,
     [
       "#!/usr/bin/env node",
+      ...resolvedSessionLines,
       'process.stdout.write(`FAKE_CODEX ${process.argv.slice(2).join(" ")}\\n`);',
       "setInterval(() => {}, 1000);",
       "",
@@ -337,20 +663,8 @@ async function seedCodexStoredSession(
   sessionId: string,
   preview: string,
 ): Promise<string> {
+  const sessionFile = codexStoredSessionFile(home, sessionId);
   const timestamp = Number.parseInt(sessionId.replace(/-/g, "").slice(0, 12), 16);
-  const date = new Date(timestamp);
-  const year = String(date.getFullYear());
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const sessionFile = path.join(
-    home,
-    ".codex",
-    "sessions",
-    year,
-    month,
-    day,
-    `rollout-${sessionId}.jsonl`,
-  );
   await mkdir(path.dirname(sessionFile), { recursive: true });
   await writeFile(
     sessionFile,
@@ -373,6 +687,15 @@ async function seedCodexStoredSession(
     ].join("\n"),
   );
   return sessionFile;
+}
+
+function codexStoredSessionFile(home: string, sessionId: string): string {
+  const timestamp = Number.parseInt(sessionId.replace(/-/g, "").slice(0, 12), 16);
+  const date = new Date(timestamp);
+  const year = String(date.getFullYear());
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return path.join(home, ".codex", "sessions", year, month, day, `rollout-${sessionId}.jsonl`);
 }
 
 async function findApiSocket(yuruHome: string): Promise<string> {

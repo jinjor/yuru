@@ -53,9 +53,9 @@ export interface WorktreeListItem {
   githubPullRequest?: GitHubPullRequest | null;
   primarySessions: PrimarySessionListItem[];
   suggestedSessions: SuggestedSessionListItem[];
-  // この worktree を cwd とする、今生きている全 terminal runtime (agent が紐づいているかを問わない)。
-  // renderer 側で「表示中の runtime がまだ生きているか」を props から判定するために使う
-  // (WorktreeView の displayedTerminalRuntimeId 導出)。
+  // この task worktree に現在結びつく全 terminal runtime。provider session は primary link、
+  // ID 未確定 runtime と standalone terminal は launch target から導出する。renderer 側で
+  // 「表示中の runtime がまだ生きているか」を判定するために使う。
   activeTerminalRuntimeIds: string[];
 }
 

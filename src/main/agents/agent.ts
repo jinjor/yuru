@@ -1,6 +1,6 @@
 import type { PlanUsageWindow, SessionProvider } from "../../shared/session.js";
 import type { AgentDefinition } from "../../shared/agent.js";
-import type { PendingTerminal, TerminalRuntimeInfo } from "../terminal/runtime.js";
+import type { PendingTerminal } from "../terminal/runtime.js";
 import type { ResolvedAgentCommand } from "./command.js";
 import type { WorktreeSessionHint } from "./session-detection.js";
 
@@ -15,11 +15,6 @@ export interface SessionSnapshot {
 export interface SessionPreview {
   lastMessage: string;
   timestamp: number;
-}
-
-export interface AgentTerminalRuntimeInfo extends TerminalRuntimeInfo {
-  provider: SessionProvider;
-  agentSessionId: string | null;
 }
 
 export interface PendingSession extends PendingTerminal {

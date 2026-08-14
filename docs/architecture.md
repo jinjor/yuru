@@ -1,6 +1,6 @@
 # Architecture Notes
 
-Last updated: 2026-08-11
+Last updated: 2026-08-13
 
 この文書は現在の Yuru のアーキテクチャをまとめる。
 実装の細部、型定義、処理手順の正確な姿はコードを正とする。
@@ -30,6 +30,8 @@ Yuru の中では、Claude Code / Codex CLI / Kimi CLI そのものを `agent` �
 - `terminal runtime`
   - Yuru が現在起動している PTY process
   - active / inactive 表示は terminal runtime の有無から導出する
+  - provider session ID が判明した runtime は、その session の primary worktree に結びつく
+  - provider session ID が未確定の runtime と standalone terminal は、起動対象 worktree に結びつく
   - terminal runtime 自体は永続化しない
 
 ## Source of truth
@@ -111,11 +113,14 @@ task worktree は Git の管理ディレクトリの作成日時が古い順に�
 
 - metadata の `primarySessions` が有効なら、それらを task worktree の primary として扱う
 - agent store の hint から worktree 配下の session を推測できる場合は suggested session として表示する
-- active terminal runtime があれば active として表示する
+- primary / suggested session に対応する terminal runtime があれば active として表示する
 - metadata にない Git worktree も、primary なしの task worktree として表示する
 
 provider の path hint は candidate 推測にだけ使う。
 task worktree と primary session の strong link は、作成・昇格・解除 (detach) の明示操作でだけ変わる。
+provider runtime のタブ表示先はこの strong link から導出する。session ID がまだ分からない期間は
+runtime の起動対象 worktree に暫定表示し、ID 解決と primary attach 後に strong link へ切り替える。
+standalone terminal は session を持たないため、起動対象 worktree に表示する。
 
 worktree の外部 rename は自動追跡しない。
 古い path の strong link は起動時 maintenance で削除され、新しい path は primary なしの Git worktree として再発見される。
@@ -176,6 +181,7 @@ worktree context prompt は `~/.yuru/worktree-context-prompt.txt` で差し替�
 - resume primary session
   - primary session がすでに active terminal runtime を持つ場合は、その terminal runtime を選択する
   - inactive の場合は agent store の session を確認してから resume する
+  - 同じ agent session の resume / promote が並行した場合は 1 件の起動処理を共有し、live runtime を 1 件だけ作る
   - agent store から消えている primary は detach する
 - promote suggested session
   - suggested session を primary に昇格し、resume / select する
@@ -187,8 +193,12 @@ worktree context prompt は `~/.yuru/worktree-context-prompt.txt` で差し替�
 - remove worktree
   - 確認ダイアログ内の準備と、その後のバックグラウンド削除を分ける
   - 準備の最初に dirty を確認し、dirty ならセッションを止める前に force remove の明示確認へ切り替える
-  - 削除が承認されたら、Yuru が起動した session / terminal を停止する
+  - 削除が承認されたら、その worktree の primary session に対応する provider runtime、
+    ID 未確定中にその worktree 向けに起動した provider runtime、standalone terminal を停止する。
+    primary session に対応する provider runtime は、その PTY の実際の cwd にかかわらず停止対象になる
   - その後も worktree を cwd にした生きたプロセスがないか OS に問い合わせる (lsof)。残っていれば command と PID を一覧表示する
+  - 別 worktree の primary session に対応する runtime でも、削除対象 worktree を実際の cwd として
+    使用中なら lsof の一覧に含め、停止の明示確認なしには worktree を削除しない
   - プロセス停止の明示確認後は、表示時になかったプロセスを止めないよう再照合して全件へ SIGTERM を送り、終了を確認する。終了していなければ最新の一覧を同じダイアログに表示し、削除へ進まない
   - 追加確認が不要になった時点でダイアログを閉じ、カードを操作不能な `Removing…` 表示にして `git worktree remove` (`force` 承認済みなら `--force`) を実行する
   - 実削除の直前にも新しい session / process がないか再確認する
@@ -224,6 +234,8 @@ runtime タブは `activeTerminalRuntimeIds` の順に並び、対応する prim
 preview と provider/activity のドットを表示する。session id がまだ解決していない runtime と
 standalone terminal は `Terminal` と表示する。× は terminal runtime だけを kill し、provider
 session の履歴と primary link は残す。
+active な suggested session を primary に昇格すると、既存 runtime のタブは同じ PTY と
+scrollback を保ったまま新しい primary worktree へ移る。
 
 右側の `Terminal`, `Files`, `Changes`, preview は選択中の worktree に連動する。
 App が持つ選択状態は `worktreeId` だけである (P20)。右ペイン (WorktreeView) は選択が

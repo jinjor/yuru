@@ -7,6 +7,7 @@ import {
   attachPrimarySessionByPath,
   detachPrimarySessionByPath,
   findRepoByPath,
+  loadMetadata,
   loadRepos,
   loadTaskWorktrees,
   removeTaskWorktreeByPath,
@@ -102,6 +103,12 @@ import { deliverInitialInput } from "./terminal/initial-input.js";
 import { TerminalScreen } from "./terminal/screen.js";
 import { createInteractiveShellLaunchCommand } from "./terminal/shell-launch.js";
 import { findRepoByWorktreePath } from "./repos/find-repo.js";
+import {
+  indexPrimaryWorktreePathsBySessionKey,
+  indexTerminalRuntimeIdsByTaskWorktreePath,
+  isUnresolvedProviderRuntime,
+  resolveTerminalRuntimeTaskWorktreePath,
+} from "./terminal/runtime-routing.js";
 
 const STARTUP_OUTPUT_LIMIT = 4000;
 const OUTPUT_ACTIVE_GRACE_MS = 1500;
@@ -120,11 +127,6 @@ const WORKTREE_PROCESS_TERMINATION_GRACE_MS = 2000;
 const WORKTREE_PROCESS_POLL_INTERVAL_MS = 100;
 const ESCAPE_CHARACTER = String.fromCharCode(0x1b);
 const ANSI_ESCAPE_PATTERN = new RegExp(`${ESCAPE_CHARACTER}\\[[0-9;]*[A-Za-z]`, "g");
-
-interface StartedSession {
-  terminalRuntimeId: string;
-  agentSessionId: string | null;
-}
 
 function createTerminalRuntimeId(kind: TerminalRuntimeKind): string {
   return `${kind}:runtime:${randomUUID()}`;
@@ -291,6 +293,7 @@ export class YuruService {
   private sessionMonitorTimer: ReturnType<typeof setInterval> | null = null;
   private readonly pendingProcesses = new Set<pty.IPty>();
   private readonly terminalRuntimeMap = new Map<string, TerminalRuntimeInfo>();
+  private readonly activatingSessionKeys = new Set<string>();
   private readonly activeCodeSearches = new Map<string, AbortController>();
   private readonly fileTreeWatcher: FileTreeWatcher;
 
@@ -306,15 +309,23 @@ export class YuruService {
   async getRepos() {
     const previewsByKey = await loadStoredSessionPreviews();
     const agentActivityStates = this.loadAgentActivityStatesByTerminalRuntimeId();
+    const metadata = loadMetadata();
+    const primaryWorktreePathsBySessionKey = indexPrimaryWorktreePathsBySessionKey(
+      metadata.taskWorktrees,
+    );
     return loadRepoList(
       this.getTerminalRuntimeIdsBySessionKey(),
       undefined,
       previewsByKey,
       loadSuggestedWorktreeSessions,
-      this.getTerminalRuntimesByWorktreePath(),
+      this.getUnresolvedTerminalRuntimesByLaunchWorktreePath(),
       getLastKnownGitHubPullRequest,
       agentActivityStates,
-      this.getAllTerminalRuntimeIdsByWorktreePath(),
+      indexTerminalRuntimeIdsByTaskWorktreePath(
+        this.terminalRuntimeMap,
+        primaryWorktreePathsBySessionKey,
+      ),
+      metadata,
     );
   }
 
@@ -429,15 +440,8 @@ export class YuruService {
           ? undefined
           : worktree.worktreePath,
       );
-      const { terminalRuntimeId, agentSessionId } = await this.startSession(agent, pending);
+      const terminalRuntimeId = await this.startSession(agent, pending);
       pending.startupSettled = true;
-      if (agentSessionId) {
-        attachPrimarySessionByPath(worktree.worktreePath, {
-          provider,
-          agentSessionId,
-          cwd: pending.launchCwd,
-        });
-      }
       return ok({ worktreeId, terminalRuntimeId });
     } catch (error) {
       if (pending && !pending.exited) {
@@ -1046,7 +1050,7 @@ export class YuruService {
   private getTerminalRuntimeIdsBySessionKey(): Map<string, string> {
     const idsByKey = new Map<string, string>();
     for (const [terminalRuntimeId, info] of this.terminalRuntimeMap) {
-      if (info.provider && info.agentSessionId) {
+      if (info.provider !== null && info.agentSessionId !== null) {
         idsByKey.set(toSessionKey(info.provider, info.agentSessionId), terminalRuntimeId);
       }
     }
@@ -1054,18 +1058,17 @@ export class YuruService {
   }
 
   // PullRequestMonitor がリポジトリごとのポーリング間隔を決めるのに使う。
-  // task worktree は必ず repo 配下に作られ、main worktree のセッションは
-  // worktreePath = repoPath なので、worktreePath の位置で repo への所属を判定できる。
+  // launch target worktree は必ず repo 配下にあるため、その位置で repo への所属を判定できる。
   hasAliveTerminalRuntimeInRepo(repoPath: string): boolean {
     for (const info of this.terminalRuntimeMap.values()) {
-      if (isPathWithin(repoPath, info.worktreePath)) {
+      if (isPathWithin(repoPath, info.launchWorktreePath)) {
         return true;
       }
     }
     return false;
   }
 
-  private getTerminalRuntimesByWorktreePath(): Map<
+  private getUnresolvedTerminalRuntimesByLaunchWorktreePath(): Map<
     string,
     { provider: SessionProvider; terminalRuntimeId: string }
   > {
@@ -1074,33 +1077,15 @@ export class YuruService {
       { provider: SessionProvider; terminalRuntimeId: string }
     >();
     for (const [terminalRuntimeId, info] of this.terminalRuntimeMap) {
-      if (!info.provider) {
+      if (!isUnresolvedProviderRuntime(info)) {
         continue;
       }
-      terminalRuntimesByWorktreePath.set(path.resolve(info.worktreePath), {
+      terminalRuntimesByWorktreePath.set(path.resolve(info.launchWorktreePath), {
         provider: info.provider,
         terminalRuntimeId,
       });
     }
     return terminalRuntimesByWorktreePath;
-  }
-
-  // renderer が「表示中の runtime がまだ生きているか」を props から判定するための一覧。
-  // provider なしの standalone terminal も含め、その worktree を cwd とする全 runtime を返す
-  // (上の getTerminalRuntimesByWorktreePath は card の primary 合成用で 1 worktree 1 件・
-  // provider ありのみのため、用途が違い流用できない)。
-  private getAllTerminalRuntimeIdsByWorktreePath(): Map<string, string[]> {
-    const runtimeIdsByWorktreePath = new Map<string, string[]>();
-    for (const [terminalRuntimeId, info] of this.terminalRuntimeMap) {
-      const worktreePathKey = path.resolve(info.worktreePath);
-      const runtimeIds = runtimeIdsByWorktreePath.get(worktreePathKey);
-      if (runtimeIds) {
-        runtimeIds.push(terminalRuntimeId);
-      } else {
-        runtimeIdsByWorktreePath.set(worktreePathKey, [terminalRuntimeId]);
-      }
-    }
-    return runtimeIdsByWorktreePath;
   }
 
   private launchPendingSession(
@@ -1239,7 +1224,7 @@ export class YuruService {
     this.terminalRuntimeMap.set(pending.terminalRuntimeId, {
       provider: pending.provider,
       agentSessionId,
-      worktreePath: pending.worktreePath,
+      launchWorktreePath: pending.worktreePath,
       startedAt: pending.startedAt,
     });
     this.ensureSessionMonitor();
@@ -1250,19 +1235,26 @@ export class YuruService {
     this.ptyProcesses.set(pending.terminalRuntimeId, pending.proc);
     this.ptyScreens.set(pending.terminalRuntimeId, pending.screen);
     this.terminalRuntimeMap.set(pending.terminalRuntimeId, {
-      worktreePath: pending.worktreePath,
+      provider: null,
+      agentSessionId: null,
+      launchWorktreePath: pending.worktreePath,
       startedAt: pending.startedAt,
     });
   }
 
-  // この worktree で Yuru が起動したセッション / standalone terminal を止める。kill すると pty の
-  // onExit が走り runtime の state も片付く。worktree 削除前に呼ぶことで、cwd を握る Yuru 製プロセスを
-  // 消してから生プロセスチェックにかけられる。
+  // この task worktree に現在結びつく provider runtime / standalone terminal を止める。
+  // kill すると pty の onExit が走り runtime の state も片付く。worktree 削除前に呼ぶことで、
+  // Yuru 製プロセスを消してから生プロセスチェックにかけられる。
   private async stopTerminalRuntimesForWorktree(worktreePath: string): Promise<void> {
     const worktreePathKey = path.resolve(worktreePath);
+    const primaryWorktreePathsBySessionKey =
+      indexPrimaryWorktreePathsBySessionKey(loadTaskWorktrees());
     const procs: pty.IPty[] = [];
     for (const [terminalRuntimeId, info] of this.terminalRuntimeMap) {
-      if (path.resolve(info.worktreePath) !== worktreePathKey) {
+      if (
+        resolveTerminalRuntimeTaskWorktreePath(info, primaryWorktreePathsBySessionKey) !==
+        worktreePathKey
+      ) {
         continue;
       }
       const proc = this.ptyProcesses.get(terminalRuntimeId);
@@ -1276,7 +1268,7 @@ export class YuruService {
   private findStandaloneTerminalRuntimeId(worktreePath: string): string | null {
     const worktreePathKey = path.resolve(worktreePath);
     for (const [terminalRuntimeId, info] of this.terminalRuntimeMap) {
-      if (info.provider || path.resolve(info.worktreePath) !== worktreePathKey) {
+      if (info.provider || path.resolve(info.launchWorktreePath) !== worktreePathKey) {
         continue;
       }
       if (this.ptyProcesses.has(terminalRuntimeId)) {
@@ -1291,7 +1283,7 @@ export class YuruService {
     agentSessionId: string,
   ): void {
     const runtime = this.terminalRuntimeMap.get(terminalRuntimeId);
-    if (runtime) {
+    if (runtime && runtime.provider !== null) {
       this.terminalRuntimeMap.set(terminalRuntimeId, {
         ...runtime,
         agentSessionId,
@@ -1324,16 +1316,19 @@ export class YuruService {
       }
       pending.agentSessionId = agentSessionId;
       pending.startupSettled = true;
-      this.updateTerminalRuntimeAgentSessionId(terminalRuntimeId, agentSessionId);
-      this.deliverInitialMessages(agent, pending);
       if (!this.terminalRuntimeMap.has(terminalRuntimeId)) {
         return;
       }
+      // primary を先に attach し、runtime の ID 更新まで await を挟まない。一覧取得からは、
+      // launch target 上の ID 未確定 runtime か、primary に結びついた既知 runtime の
+      // どちらかとしてだけ観測される。
       attachPrimarySessionByPath(pending.worktreePath, {
         provider: pending.provider,
         agentSessionId,
         cwd: pending.launchCwd,
       });
+      this.updateTerminalRuntimeAgentSessionId(terminalRuntimeId, agentSessionId);
+      this.deliverInitialMessages(agent, pending);
       await this.events.refreshWorktreeWatcher();
       this.events.repoListChanged();
     } catch {
@@ -1614,6 +1609,15 @@ export class YuruService {
     target: WorktreeSessionResumeTarget,
     options: { detachMissingPrimary: boolean },
   ): Promise<Result<string>> {
+    const agentSessionKey = toSessionKey(target.provider, target.agentSessionId);
+    if (this.activatingSessionKeys.has(agentSessionKey)) {
+      return fail({
+        code: "command_failed",
+        message: "This session is already starting.",
+      });
+    }
+
+    this.activatingSessionKeys.add(agentSessionKey);
     const agent = getAgent(target.provider);
     let pending: PendingSession | null = null;
     try {
@@ -1648,6 +1652,8 @@ export class YuruService {
       return pending?.startupFailureReported
         ? fail<string>(appError)
         : this.failAndReport<string>(appError);
+    } finally {
+      this.activatingSessionKeys.delete(agentSessionKey);
     }
   }
 
@@ -1768,24 +1774,24 @@ export class YuruService {
     }
   }
 
-  private async startSession(agent: Agent, pending: PendingSession): Promise<StartedSession> {
+  private async startSession(agent: Agent, pending: PendingSession): Promise<string> {
     const terminalRuntimeId = pending.terminalRuntimeId;
 
     if (agent.resolvesSessionIdLazily) {
       this.registerTerminalRuntime(pending, null);
       void this.resolveLazySessionId(agent, pending, terminalRuntimeId);
-      return {
-        terminalRuntimeId,
-        agentSessionId: null,
-      };
+      return terminalRuntimeId;
     }
 
     const agentSessionId = await agent.waitForSessionId(pending);
+    // runtime を既知 session として公開する前に primary を attach する。
+    attachPrimarySessionByPath(pending.worktreePath, {
+      provider: pending.provider,
+      agentSessionId,
+      cwd: pending.launchCwd,
+    });
     this.registerTerminalRuntime(pending, agentSessionId);
     this.deliverInitialMessages(agent, pending);
-    return {
-      terminalRuntimeId,
-      agentSessionId,
-    };
+    return terminalRuntimeId;
   }
 }

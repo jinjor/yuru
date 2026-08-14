@@ -4,12 +4,15 @@ import type { TerminalScreen } from "./screen.js";
 
 export type TerminalRuntimeKind = SessionProvider | "standalone";
 
-export interface TerminalRuntimeInfo {
-  worktreePath: string;
+interface TerminalRuntimeBase {
+  launchWorktreePath: string;
   startedAt: number;
-  provider?: SessionProvider;
-  agentSessionId?: string | null;
 }
+
+export type TerminalRuntimeInfo =
+  | (TerminalRuntimeBase & { provider: null; agentSessionId: null })
+  | (TerminalRuntimeBase & { provider: SessionProvider; agentSessionId: null })
+  | (TerminalRuntimeBase & { provider: SessionProvider; agentSessionId: string });
 
 export interface TerminalStartupCommand {
   command: string;

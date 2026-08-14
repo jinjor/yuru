@@ -6,6 +6,7 @@ import type {
   SuggestedSessionListItem,
   TaskWorktreeMetadata,
   WorktreeListItem,
+  YuruMetadata,
 } from "../../shared/metadata.js";
 import {
   toSessionKey,
@@ -43,7 +44,7 @@ interface WorktreeListSource {
   headCommittedAt?: number;
 }
 
-interface ActiveTerminalRuntimeWorktreeSession {
+interface UnresolvedTerminalRuntimeWorktreeSession {
   provider: SessionProvider;
   terminalRuntimeId: TerminalRuntimeId;
 }
@@ -60,12 +61,15 @@ export async function loadRepoList(
   listGitWorktrees: ListWorktrees = listWorktrees,
   primarySessionPreviewsByKey?: ReadonlyMap<string, string>,
   loadSuggestedSessions?: LoadSuggestedSessions,
-  activeTerminalRuntimesByWorktreePath?: ReadonlyMap<string, ActiveTerminalRuntimeWorktreeSession>,
+  unresolvedTerminalRuntimesByLaunchWorktreePath?: ReadonlyMap<
+    string,
+    UnresolvedTerminalRuntimeWorktreeSession
+  >,
   getGitHubPullRequest?: GetGitHubPullRequest,
   agentActivityStatesByTerminalRuntimeId?: ReadonlyMap<TerminalRuntimeId, AgentActivityState>,
-  allTerminalRuntimeIdsByWorktreePath?: ReadonlyMap<string, readonly string[]>,
+  terminalRuntimeIdsByTaskWorktreePath?: ReadonlyMap<string, readonly string[]>,
+  metadata: YuruMetadata = loadMetadata(),
 ): Promise<RepoListItem[]> {
-  const metadata = loadMetadata();
   const repoEntries = (
     await Promise.all(
       metadata.repos.map(async (repo) => {
@@ -97,14 +101,14 @@ export async function loadRepoList(
         gitWorktree,
         taskWorktreeMetadataByPath.get(toWorktreePathKey(gitWorktree.path)),
         terminalRuntimeIdsBySessionKey,
-        activeTerminalRuntimesByWorktreePath,
+        unresolvedTerminalRuntimesByLaunchWorktreePath,
         primarySessionPreviewsByKey,
         suggestedSessionsByWorktreePath?.get(gitWorktree.path) ?? [],
         gitWorktree.branch
           ? getGitHubPullRequest?.(repo.repoPath, gitWorktree.branch, gitWorktree.headSha)
           : undefined,
         agentActivityStatesByTerminalRuntimeId,
-        allTerminalRuntimeIdsByWorktreePath,
+        terminalRuntimeIdsByTaskWorktreePath,
       ),
     );
     return {
@@ -119,7 +123,7 @@ export async function loadRepoList(
         [],
         undefined,
         undefined,
-        allTerminalRuntimeIdsByWorktreePath,
+        terminalRuntimeIdsByTaskWorktreePath,
         true,
       ),
       taskWorktrees,
@@ -146,8 +150,8 @@ function toWorktreeListItem(
   gitWorktree: WorktreeListSource,
   metadataEntry: TaskWorktreeMetadata | undefined,
   terminalRuntimeIdsBySessionKey: ReadonlyMap<string, TerminalRuntimeId> | undefined,
-  activeTerminalRuntimesByWorktreePath:
-    | ReadonlyMap<string, ActiveTerminalRuntimeWorktreeSession>
+  unresolvedTerminalRuntimesByLaunchWorktreePath:
+    | ReadonlyMap<string, UnresolvedTerminalRuntimeWorktreeSession>
     | undefined,
   primarySessionPreviewsByKey: ReadonlyMap<string, string> | undefined,
   suggestedSessions: readonly SuggestedWorktreeSession[],
@@ -155,7 +159,7 @@ function toWorktreeListItem(
   agentActivityStatesByTerminalRuntimeId:
     | ReadonlyMap<TerminalRuntimeId, AgentActivityState>
     | undefined,
-  allTerminalRuntimeIdsByWorktreePath: ReadonlyMap<string, readonly string[]> | undefined,
+  terminalRuntimeIdsByTaskWorktreePath: ReadonlyMap<string, readonly string[]> | undefined,
   isMainWorktree = false,
 ): WorktreeListItem {
   const worktreePath = gitWorktree.path;
@@ -180,7 +184,8 @@ function toWorktreeListItem(
   );
   const activeTerminalRuntime =
     primarySessions.length === 0
-      ? (activeTerminalRuntimesByWorktreePath?.get(toWorktreePathKey(worktreePath)) ?? null)
+      ? (unresolvedTerminalRuntimesByLaunchWorktreePath?.get(toWorktreePathKey(worktreePath)) ??
+        null)
       : null;
   const activeTerminalActivityState = activeTerminalRuntime
     ? (agentActivityStatesByTerminalRuntimeId?.get(activeTerminalRuntime.terminalRuntimeId) ??
@@ -214,7 +219,7 @@ function toWorktreeListItem(
     primarySessions: primarySessionItems,
     suggestedSessions: suggestedSessionItems,
     activeTerminalRuntimeIds: [
-      ...(allTerminalRuntimeIdsByWorktreePath?.get(toWorktreePathKey(worktreePath)) ?? []),
+      ...(terminalRuntimeIdsByTaskWorktreePath?.get(toWorktreePathKey(worktreePath)) ?? []),
     ],
   };
 
