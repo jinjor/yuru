@@ -1,31 +1,64 @@
-import type { ProviderPlanUsage, SessionProvider } from "../../shared/session.js";
+import type { PlanUsageWindow, ProviderPlanUsage, SessionProvider } from "../../shared/session.js";
 
-// その provider の枠を使い切っているか。provider 自身が返す使用率が 100% に達した枠が
-// 1 つでもあれば、リセットまではその provider へのリクエストは通らない。
-function isExhausted(usage: ProviderPlanUsage): boolean {
+// provider がその枠を使い切ったと見なす使用率。
+const EXHAUSTED_PERCENT = 100;
+
+// リセット時刻を過ぎても provider がまだ使い切りを報告している時に、次に確かめるまでの間隔。
+// 過ぎた時刻へタイマーを張り直し続けて取得が止まらなくなるのを防ぐ。
+const RECHECK_INTERVAL_MS = 60_000;
+
+function planUsageWindows(usage: ProviderPlanUsage): PlanUsageWindow[] {
   if (usage.state !== "ok") {
-    return false;
+    return [];
   }
-  return [usage.fiveHour, usage.weekly].some(
-    (window) => window !== null && window.usedPercent >= 100,
+  return [usage.fiveHour, usage.weekly].flatMap((window) => (window === null ? [] : [window]));
+}
+
+// 使い切っている枠が最後にリセットされる時刻。1 つでも使い切っていればリクエストは
+// 通らないので、解消するのは全部リセットされた後になる。使い切っていなければ
+// undefined、使い切っているがリセット時刻を返さない枠がある場合は null を返す。
+function exhaustedUntil(usage: ProviderPlanUsage): number | null | undefined {
+  const exhausted = planUsageWindows(usage).filter(
+    (window) => window.usedPercent >= EXHAUSTED_PERCENT,
   );
+  if (exhausted.length === 0) {
+    return undefined;
+  }
+  const resetsAt = exhausted.map((window) => window.resetsAt);
+  if (resetsAt.includes(null)) {
+    return null;
+  }
+  return Math.max(...resetsAt.map((at) => at ?? 0));
+}
+
+export interface RateLimitRecoveryDeps {
+  // 利用状況を取り直す。結果は update() へ入ってくる。
+  refreshPlanUsage(): void;
+  resumeSessions(provider: SessionProvider): void;
 }
 
 // プラン利用状況の更新列から「枠を使い切った → 解消した」の変わり目を見つける。
 // 端末の出力からエラー文言を探す方法は取らない。provider が公式に返す使用率で
 // 同じことが分かり、Yuru 自身の再起動をまたいでも取り直せるため。
+//
+// 定期取得はウィンドウがフォーカスされている間しか動かないので、それだけに頼ると
+// 離席中に解消しても気付けない。使い切りを見つけた時点でリセット時刻が絶対時刻で
+// 分かっているので、その時刻に取り直しを予約してフォーカスと切り離す。
 export class RateLimitRecovery {
-  private readonly exhausted = new Set<SessionProvider>();
-  private readonly onRecovered: (provider: SessionProvider) => void;
+  private readonly deps: RateLimitRecoveryDeps;
+  // 使い切っている provider と、その解消時刻 (分からない場合は null)。
+  private readonly exhausted = new Map<SessionProvider, number | null>();
+  private timer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(onRecovered: (provider: SessionProvider) => void) {
-    this.onRecovered = onRecovered;
+  constructor(deps: RateLimitRecoveryDeps) {
+    this.deps = deps;
   }
 
   update(usages: readonly ProviderPlanUsage[]): void {
     for (const usage of usages) {
-      if (isExhausted(usage)) {
-        this.exhausted.add(usage.provider);
+      const until = exhaustedUntil(usage);
+      if (until !== undefined) {
+        this.exhausted.set(usage.provider, until);
         continue;
       }
       // 取得に失敗した回は「解消した」根拠にならないので、使い切った記録を残して
@@ -34,8 +67,38 @@ export class RateLimitRecovery {
         continue;
       }
       if (this.exhausted.delete(usage.provider)) {
-        this.onRecovered(usage.provider);
+        this.deps.resumeSessions(usage.provider);
       }
+    }
+    this.scheduleRecheck();
+  }
+
+  stop(): void {
+    this.clearTimer();
+  }
+
+  // 一番早く解消する provider の時刻に合わせて 1 本だけ張る。取り直した結果が
+  // update() に入って、まだ使い切っていれば次の時刻でまた張り直される。
+  private scheduleRecheck(): void {
+    this.clearTimer();
+    const resetsAt = [...this.exhausted.values()].flatMap((at) => (at === null ? [] : [at]));
+    if (resetsAt.length === 0) {
+      return;
+    }
+    const remaining = Math.min(...resetsAt) - Date.now();
+    this.timer = setTimeout(
+      () => {
+        this.timer = null;
+        this.deps.refreshPlanUsage();
+      },
+      remaining > 0 ? remaining : RECHECK_INTERVAL_MS,
+    );
+  }
+
+  private clearTimer(): void {
+    if (this.timer !== null) {
+      clearTimeout(this.timer);
+      this.timer = null;
     }
   }
 }

@@ -137,8 +137,13 @@ let latestPlanUsages: ProviderPlanUsage[] = [];
 
 // rate limit の解消を、プラン利用状況の更新のたびに見る。解消していれば
 // その provider のセッションを続きから動かす (F58)。
-const rateLimitRecovery = new RateLimitRecovery((provider) => {
-  void service.resumeAfterRateLimit(provider);
+const rateLimitRecovery = new RateLimitRecovery({
+  refreshPlanUsage: () => {
+    void planUsageMonitor.refreshOnce();
+  },
+  resumeSessions: (provider) => {
+    void service.resumeAfterRateLimit(provider);
+  },
 });
 
 function sendProviderPlanUsageChanged(usages: ProviderPlanUsage[]): void {
@@ -331,6 +336,7 @@ async function stopApplicationServices(): Promise<void> {
   servicesStopped = true;
   pullRequestMonitor.stop();
   planUsageMonitor.stop();
+  rateLimitRecovery.stop();
   worktreeWatcher?.stop();
   try {
     await apiServer?.stop();
