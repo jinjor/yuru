@@ -12,6 +12,7 @@ import { fetchGitHubPullRequests } from "./github/github.js";
 import { listWorktrees } from "./git/worktree.js";
 import { PullRequestMonitor } from "./github/pull-request-monitor.js";
 import { PlanUsageMonitor } from "./agents/plan-usage-monitor.js";
+import { RateLimitRecovery } from "./agents/rate-limit-recovery.js";
 import { resolveCommandPaths } from "./agents/command.js";
 import { getAgent, agents } from "./agents/registry.js";
 import type {
@@ -134,8 +135,15 @@ function sendPullRequestsChanged(updates: PullRequestUpdate[]): void {
 // セッションを開始できなくなるので、最後の結果を持っておいて初期表示に配る。
 let latestPlanUsages: ProviderPlanUsage[] = [];
 
+// rate limit の解消を、プラン利用状況の更新のたびに見る。解消していれば
+// その provider のセッションを続きから動かす (F58)。
+const rateLimitRecovery = new RateLimitRecovery((provider) => {
+  void service.resumeAfterRateLimit(provider);
+});
+
 function sendProviderPlanUsageChanged(usages: ProviderPlanUsage[]): void {
   latestPlanUsages = usages;
+  rateLimitRecovery.update(usages);
   sendToRenderer("providerPlanUsage:changed", usages);
 }
 

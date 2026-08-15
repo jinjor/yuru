@@ -112,6 +112,10 @@ import {
 } from "./terminal/runtime-routing.js";
 
 const STARTUP_OUTPUT_LIMIT = 4000;
+// rate limit で弾かれたリクエストの続きを促す入力。直前のリクエストは agent 側の
+// 履歴に残っているので、何をするかは伝え直さない。
+const RATE_LIMIT_RESUME_INPUT = "continue";
+
 const OUTPUT_ACTIVE_GRACE_MS = 1500;
 // Focus, resize, and keystrokes make the agent's TUI repaint. That repaint is
 // real PTY output but a reaction to us poking the terminal, not the agent
@@ -1016,6 +1020,35 @@ export class YuruService {
         this.markTerminalRuntimeInput(terminalRuntimeId);
       }
     }
+  }
+
+  // rate limit が解消した provider の agent セッションを、手動操作なしで続きから
+  // 動かす。止まっているのはリクエストが通らなかったセッションだけなので、対象は
+  // 「その provider で今 PTY が生きているセッション」全部でよい。
+  async resumeAfterRateLimit(provider: SessionProvider): Promise<void> {
+    const targets = [...this.terminalRuntimeMap]
+      .filter(([terminalRuntimeId, runtime]) => {
+        return runtime.provider === provider && this.ptyProcesses.has(terminalRuntimeId);
+      })
+      .map(([terminalRuntimeId]) => terminalRuntimeId);
+    await Promise.all(targets.map((id) => this.sendRateLimitResumeInput(id)));
+  }
+
+  private async sendRateLimitResumeInput(terminalRuntimeId: string): Promise<void> {
+    const proc = this.ptyProcesses.get(terminalRuntimeId);
+    if (!proc) {
+      return;
+    }
+    // 送った直後に PTY が死ぬこともあるので、書き込みのたびに生死を見る。
+    const writer = {
+      write: (data: string) => {
+        if (this.ptyProcesses.has(terminalRuntimeId)) {
+          proc.write(data);
+        }
+      },
+    };
+    this.markTerminalRuntimeInput(terminalRuntimeId);
+    await deliverInitialInput(writer, RATE_LIMIT_RESUME_INPUT);
   }
 
   ptyResize(terminalRuntimeId: string, cols: number, rows: number): void {
