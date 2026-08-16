@@ -34,6 +34,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F63 | feature | Files / Preview | Markdown プレビュー内で検索できるようにする | 長い Markdown から目的の箇所を素早く見つけたい |
 | F64 | feature | Files / Code | Dockerfile のシンタックスハイライト | Dockerfile を読みやすくしたい |
 | F65 | feature | Files / Code | `.proto` のシンタックスハイライト | `.proto` ファイルを読みやすくしたい |
+| B16 | bug | Changes / Diff | Committed の diff を正確にする | commit 済みの変更を正しい差分でレビューしたい |
 
 ## Next
 
