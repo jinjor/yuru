@@ -1059,7 +1059,10 @@ export class YuruService {
       }
     }
 
-    const stops: RateLimitStop[] = [];
+    // agent の記録を読んでいる間にも、チェック操作や解除タイマーで現在の停止記録は
+    // 変わりうる。読み始めた時の値を書き戻さず、確認結果だけを後で差分反映する。
+    const noLongerStopped = new Set(this.rateLimitStops.keys());
+    const newStops: RateLimitStop[] = [];
     await Promise.all(
       [...this.terminalRuntimeMap].map(async ([terminalRuntimeId, runtime]) => {
         if (runtime.provider === null || runtime.agentSessionId === null) {
@@ -1078,11 +1081,11 @@ export class YuruService {
           return;
         }
         if (previous !== undefined) {
-          // 一度記録した解除時刻と指定は、利用率が揺れても変更しない。
-          stops.push(previous);
+          // Map 上の現在値には触れず、チェック中に入った指定をそのまま残す。
+          noLongerStopped.delete(terminalRuntimeId);
           return;
         }
-        stops.push({
+        newStops.push({
           terminalRuntimeId,
           provider: runtime.provider,
           resetsAt: resetsAtByProvider.get(runtime.provider) ?? null,
@@ -1091,11 +1094,16 @@ export class YuruService {
       }),
     );
 
-    this.rateLimitStops.clear();
-    for (const stop of stops) {
-      this.rateLimitStops.set(stop.terminalRuntimeId, stop);
+    for (const terminalRuntimeId of noLongerStopped) {
+      this.rateLimitStops.delete(terminalRuntimeId);
     }
-    this.events.rateLimitStopsChanged(stops);
+    for (const stop of newStops) {
+      // 別の refresh が先に追加していた場合も、その現在値を上書きしない。
+      if (!this.rateLimitStops.has(stop.terminalRuntimeId)) {
+        this.rateLimitStops.set(stop.terminalRuntimeId, stop);
+      }
+    }
+    this.events.rateLimitStopsChanged([...this.rateLimitStops.values()]);
     this.scheduleRateLimitReset();
     await Promise.all(
       reset
