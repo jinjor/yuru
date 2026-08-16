@@ -1,6 +1,7 @@
-import { type MouseEvent, useMemo } from "react";
+import { type MouseEvent, useMemo, useRef } from "react";
 import MarkdownIt from "markdown-it";
 import { extendMarkdownItWithFrontmatter } from "./markdownFrontmatter";
+import { useMarkdownFind } from "./MarkdownFind";
 
 // html: false で生 HTML を埋め込ませない (エスケープする)。出力タグは markdown-it が生成する
 // 安全なものだけになるので、renderer に innerHTML で流し込んでよい。
@@ -120,10 +121,15 @@ export default function MarkdownPreview({
   changedLines,
   deletions,
 }: MarkdownPreviewProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  // 内容が同じ間は同じオブジェクトを渡す。React は渡されたオブジェクトが変わるたびに innerHTML を
+  // 入れ直すので、毎回作ると検索が作った Range (テキストノードを指す) が毎描画で壊れる。
   const renderedHtml = useMemo(
     () => ({ __html: renderMarkdown(content, changedLines, deletions) }),
     [content, changedLines, deletions],
   );
+  const findBar = useMarkdownFind(scrollRef, bodyRef, renderedHtml.__html);
 
   // リンクは BrowserWindow をその URL に遷移させてアプリを壊すので、既定の遷移を必ず止める。
   // http(s) だけ OS の既定ブラウザに渡す。相対リンクやアンカーは遷移を止めるだけにする。
@@ -144,8 +150,15 @@ export default function MarkdownPreview({
   };
 
   return (
-    <div className="markdown-preview" onClick={handleClick}>
-      <div className="markdown-preview-body" dangerouslySetInnerHTML={renderedHtml} />
+    <div className="markdown-preview-wrap">
+      {findBar}
+      <div ref={scrollRef} className="markdown-preview" onClick={handleClick}>
+        <div
+          ref={bodyRef}
+          className="markdown-preview-body"
+          dangerouslySetInnerHTML={renderedHtml}
+        />
+      </div>
     </div>
   );
 }

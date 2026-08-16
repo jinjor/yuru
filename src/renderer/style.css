@@ -1859,6 +1859,14 @@ button.github-badge {
 }
 
 /* Markdown preview */
+.markdown-preview-wrap {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  position: relative;
+}
+
 .markdown-preview {
   flex: 1;
   min-width: 0;
@@ -2143,7 +2151,7 @@ button.github-badge {
 }
 
 /* In-file find */
-.source-find-bar {
+.find-bar {
   position: absolute;
   top: 8px;
   right: 18px;
@@ -2158,7 +2166,7 @@ button.github-badge {
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
 }
 
-.source-find-input {
+.find-input {
   width: 160px;
   padding: 2px 6px;
   background: var(--viewer-bg);
@@ -2170,11 +2178,11 @@ button.github-badge {
   outline: none;
 }
 
-.source-find-input:focus {
+.find-input:focus {
   border-color: var(--border-strong);
 }
 
-.source-find-count {
+.find-count {
   min-width: 5ch;
   text-align: center;
   font-size: 11px;
@@ -2191,6 +2199,17 @@ button.github-badge {
 .source-find-match.active {
   background: #7d5a14;
   outline: 1px solid #ffd479;
+}
+
+/* Markdown プレビューのマッチ。DOM を書き換えずに塗るので ::highlight() で指定する
+   (背景・文字色など、Highlight で使えるプロパティしか効かない) */
+::highlight(markdown-find) {
+  background-color: #4c3916;
+}
+
+::highlight(markdown-find-active) {
+  background-color: #7d5a14;
+  color: #ffd479;
 }
 
 /* Text selection */

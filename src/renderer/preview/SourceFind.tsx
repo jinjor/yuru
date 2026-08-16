@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useState } from "react";
 import type { ReactNode, Ref } from "react";
-import { ChevronDown, ChevronUp, X } from "lucide-react";
 import type { ThemedToken } from "shiki";
-import { IconButton } from "../ui/IconButton";
+import { useFind } from "./Find";
 
 interface SearchableSourceLine {
   tokens: ThemedToken[];
@@ -22,22 +21,17 @@ interface SourceFind {
 }
 
 export function useSourceFind(lines: readonly SearchableSourceLine[]): SourceFind {
-  const findInputRef = useRef<HTMLInputElement>(null);
-  const [isFindOpen, setIsFindOpen] = useState(false);
-  const [findQuery, setFindQuery] = useState("");
-  const [findFocusRequest, setFindFocusRequest] = useState(0);
-  const [matchCursor, setMatchCursor] = useState(0);
+  const [matches, setMatches] = useState<FindMatch[]>([]);
+  const { query, activeIndex, findBar } = useFind(matches.length);
+  const activeMatch = matches[activeIndex] ?? null;
 
-  const findMatches = useMemo(
-    () => (isFindOpen ? computeFindMatches(lines, findQuery) : []),
-    [isFindOpen, lines, findQuery],
-  );
-  const activeMatchIndex = Math.min(matchCursor, Math.max(findMatches.length - 1, 0));
-  const activeMatch = findMatches[activeMatchIndex] ?? null;
+  useLayoutEffect(() => {
+    setMatches(computeFindMatches(lines, query));
+  }, [lines, query]);
 
   const matchesByLine = useMemo(() => {
     const byLine = new Map<number, FindMatch[]>();
-    for (const match of findMatches) {
+    for (const match of matches) {
       const lineMatches = byLine.get(match.lineIndex);
       if (lineMatches) {
         lineMatches.push(match);
@@ -46,109 +40,13 @@ export function useSourceFind(lines: readonly SearchableSourceLine[]): SourceFin
       }
     }
     return byLine;
-  }, [findMatches]);
+  }, [matches]);
 
   // Attached to the active match span. Stable identity, so it fires only when
   // the active highlight moves to a different element, scrolling it into view.
   const activeMatchRef = useCallback((element: HTMLSpanElement | null) => {
     element?.scrollIntoView({ block: "center" });
   }, []);
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent): void => {
-      const isFindShortcut =
-        (event.metaKey || event.ctrlKey) &&
-        !event.shiftKey &&
-        !event.altKey &&
-        event.key.toLowerCase() === "f";
-      if (!isFindShortcut) {
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      setIsFindOpen(true);
-      setFindFocusRequest((prev) => prev + 1);
-    };
-    window.addEventListener("keydown", handleKeyDown, true);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown, true);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (findFocusRequest === 0) {
-      return;
-    }
-    findInputRef.current?.focus();
-    findInputRef.current?.select();
-  }, [findFocusRequest]);
-
-  const goToMatch = (delta: number): void => {
-    if (findMatches.length === 0) {
-      return;
-    }
-    setMatchCursor((activeMatchIndex + delta + findMatches.length) % findMatches.length);
-  };
-
-  const handleFindKeyDown = (event: React.KeyboardEvent<HTMLInputElement>): void => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      goToMatch(event.shiftKey ? -1 : 1);
-      return;
-    }
-    if (event.key === "Escape") {
-      event.preventDefault();
-      setIsFindOpen(false);
-    }
-  };
-
-  const findBar = isFindOpen ? (
-    <div className="source-find-bar">
-      <input
-        ref={findInputRef}
-        autoFocus
-        className="source-find-input"
-        onChange={(event) => {
-          setFindQuery(event.target.value);
-          setMatchCursor(0);
-        }}
-        onKeyDown={handleFindKeyDown}
-        placeholder="Find"
-        value={findQuery}
-      />
-      <span className="source-find-count">
-        {findQuery.length === 0
-          ? ""
-          : `${findMatches.length === 0 ? 0 : activeMatchIndex + 1}/${findMatches.length}`}
-      </span>
-      <IconButton
-        size="sm"
-        onClick={() => goToMatch(-1)}
-        disabled={findMatches.length === 0}
-        label="Previous match"
-        title="Previous match (Shift+Enter)"
-      >
-        <ChevronUp size={14} strokeWidth={2.4} />
-      </IconButton>
-      <IconButton
-        size="sm"
-        onClick={() => goToMatch(1)}
-        disabled={findMatches.length === 0}
-        label="Next match"
-        title="Next match (Enter)"
-      >
-        <ChevronDown size={14} strokeWidth={2.4} />
-      </IconButton>
-      <IconButton
-        size="sm"
-        onClick={() => setIsFindOpen(false)}
-        label="Close find"
-        title="Close find (Escape)"
-      >
-        <X size={14} strokeWidth={2.4} />
-      </IconButton>
-    </div>
-  ) : null;
 
   const renderTokens = (tokens: ThemedToken[], lineIndex: number): ReactNode =>
     renderLineTokens(tokens, matchesByLine.get(lineIndex), activeMatch, activeMatchRef);
