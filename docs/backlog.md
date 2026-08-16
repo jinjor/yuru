@@ -60,7 +60,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | B13 | bug | Sessions / Providers | kimi のセッションを開いただけで作業が発生してトークンを消費する | 起動時の指示に agent が反応して初期調査を始めてしまうと思われる |
 | F57 | feature | Files / Preview | HTML プレビューを手動でリロードできるようにする | CSS/JS 単独の変更は entry の content が変わらないと iframe が再読み込みされず表示に反映されない。現状は表示モードの切り替えで再マウントさせるしかない |
 | F12 | feature | Diff | Split mode | 面積と複雑さが増える |
-| I8 | investigate | Dependencies | 依存更新の安全運用を決める | minimum release age や通知方針を整理したい |
 | F60 | feature | Sessions | セッションを並び替えられるようにする | よく使うセッションへ素早くアクセスしたい |
 | F61 | feature | Repos | リポジトリを並び替えられるようにする | よく使うリポジトリへ素早くアクセスしたい |
 | F66 | feature | Worktrees | worktree を並び替えられるようにする | よく使う worktree へ素早くアクセスしたい |
