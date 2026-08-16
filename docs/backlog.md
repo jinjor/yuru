@@ -31,7 +31,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | B12 | bug | Sessions / Worktree Context | Claude の resume で worktree の作業指示が引き継がれない | `--append-system-prompt` の指示が保存されないため、resume すると Claude が repo root で作業してしまう。詳細: docs/backlog-details/B12-resume-worktree-context.md |
 | B15 | bug | Terminal | ターミナルにフォーカスできないことがある | キーボード入力を始められないことがある |
 | P25 | polish | Home | ホーム画面のスタイルを改善する | 最初に目に入る画面の見た目を整えたい |
-| F63 | feature | Files / Preview | Markdown プレビュー内で検索できるようにする | 長い Markdown から目的の箇所を素早く見つけたい |
 | F64 | feature | Files / Code | Dockerfile のシンタックスハイライト | Dockerfile を読みやすくしたい |
 | F65 | feature | Files / Code | `.proto` のシンタックスハイライト | `.proto` ファイルを読みやすくしたい |
 | B16 | bug | Changes / Diff | Committed の diff を正確にする | commit 済みの変更を正しい差分でレビューしたい |
