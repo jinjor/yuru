@@ -1,0 +1,4 @@
+interface:
+  display_name: "依存を更新"
+  short_description: "npm の依存ライブラリを安全に更新する"
+  default_prompt: "$update-dependencies を使って、依存ライブラリを更新してください。"
