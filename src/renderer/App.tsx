@@ -11,7 +11,7 @@ import "@xterm/xterm/css/xterm.css";
 import { AlertTriangle } from "lucide-react";
 import type { AppError, AppErrorNotice } from "../shared/ipc";
 import type { RepoListItem } from "../shared/metadata";
-import type { ProviderPlanUsage } from "../shared/session";
+import type { ProviderPlanUsage, RateLimitStop } from "../shared/session";
 import { AppErrorToast } from "./errors/AppErrorToast";
 import { CreateWorktreeModal, type CreateWorktreeMode } from "./repos/CreateWorktreeModal";
 import { ErrorLogModal } from "./errors/ErrorLogModal";
@@ -36,6 +36,7 @@ export function App() {
   // main のポーリングが決めるプラン利用状況。ここに居る provider が
   // インストール済みの provider でもあるので、新規セッションの選択肢もこれで決まる。
   const [planUsages, setPlanUsages] = useState<ProviderPlanUsage[]>([]);
+  const [rateLimitStops, setRateLimitStops] = useState<RateLimitStop[]>([]);
   const [selectedWorktreeId, setSelectedWorktreeId] = useState<string | null>(null);
   // 一度選択した worktree の id。keep-alive の対象 (main ∪ 訪問済み ∪ 選択中) を決める。
   // 選択解除 (削除・作成中断など) では触らない — 一度訪れた worktree はそのまま残す。
@@ -121,12 +122,21 @@ export function App() {
         console.error("Failed to load provider plan usage.", error);
       });
     const disposePlanUsageChanged = window.electronAPI.onProviderPlanUsageChanged(setPlanUsages);
+    window.electronAPI
+      .getRateLimitStops()
+      .then(setRateLimitStops)
+      .catch((error) => {
+        console.error("Failed to load rate limit stops.", error);
+      });
+    const disposeRateLimitStopsChanged =
+      window.electronAPI.onRateLimitStopsChanged(setRateLimitStops);
     return () => {
       disposeRepoListChanged();
       disposeTerminalRuntimeExited();
       disposeSessionChanged();
       disposePullRequestsChanged();
       disposePlanUsageChanged();
+      disposeRateLimitStopsChanged();
     };
   }, [refreshRepos]);
 
@@ -276,6 +286,7 @@ export function App() {
             appRef={appRef}
             onOpenExternal={openExternal}
             providers={availableProviders}
+            rateLimitStops={rateLimitStops}
             sidebarWidth={sidebarWidth}
             worktree={worktree}
             worktreeId={worktree.worktreeId}

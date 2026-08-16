@@ -11,11 +11,12 @@ function window(usedPercent, resetsAt = null) {
   return { usedPercent, resetsAt };
 }
 
-function createRecovery() {
+function createRecovery({ waiting = true } = {}) {
   const resumed = [];
   const refreshed = [];
   const recovery = new RateLimitRecovery({
     refreshPlanUsage: () => refreshed.push(Date.now()),
+    hasWaitingSessions: () => waiting,
     resumeSessions: (provider) => resumed.push(provider),
   });
   return { resumed, refreshed, recovery };
@@ -167,6 +168,17 @@ test("stops rechecking once the provider recovers", async (t) => {
 
   recovery.update([ok("kimi", { weekly: window(100, Date.now() + 10_000) })]);
   recovery.update([ok("kimi", { weekly: window(0, null) })]);
+
+  t.mock.timers.tick(24 * 60 * 60_000);
+  assert.deepEqual(refreshed.length, 0);
+  recovery.stop();
+});
+
+test("does not schedule a recheck when no session is waiting for the reset", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const { refreshed, recovery } = createRecovery({ waiting: false });
+
+  recovery.update([ok("kimi", { weekly: window(100, Date.now() + 10_000) })]);
 
   t.mock.timers.tick(24 * 60 * 60_000);
   assert.deepEqual(refreshed.length, 0);

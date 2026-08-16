@@ -14,10 +14,10 @@ function planUsageWindows(usage: ProviderPlanUsage): PlanUsageWindow[] {
   return [usage.fiveHour, usage.weekly].flatMap((window) => (window === null ? [] : [window]));
 }
 
-// 使い切っている枠が最後にリセットされる時刻。1 つでも使い切っていればリクエストは
+// 使い切っている枠が最後にリセットされる時刻。帯の表示にも同じ値を使う。1 つでも使い切っていればリクエストは
 // 通らないので、解消するのは全部リセットされた後になる。使い切っていなければ
 // undefined、使い切っているがリセット時刻を返さない枠がある場合は null を返す。
-function exhaustedUntil(usage: ProviderPlanUsage): number | null | undefined {
+export function exhaustedUntil(usage: ProviderPlanUsage): number | null | undefined {
   const exhausted = planUsageWindows(usage).filter(
     (window) => window.usedPercent >= EXHAUSTED_PERCENT,
   );
@@ -34,6 +34,8 @@ function exhaustedUntil(usage: ProviderPlanUsage): number | null | undefined {
 export interface RateLimitRecoveryDeps {
   // 利用状況を取り直す。結果は update() へ入ってくる。
   refreshPlanUsage(): void;
+  // その provider に「解除されたら続きを実行する」と指定された session があるか。
+  hasWaitingSessions(provider: SessionProvider): boolean;
   resumeSessions(provider: SessionProvider): void;
 }
 
@@ -77,11 +79,14 @@ export class RateLimitRecovery {
     this.clearTimer();
   }
 
-  // 一番早く解消する provider の時刻に合わせて 1 本だけ張る。取り直した結果が
-  // update() に入って、まだ使い切っていれば次の時刻でまた張り直される。
+  // 続きの実行を待っている session が無ければ、解消を急いで知る理由が無いので
+  // 取り直しを予約しない。待っている provider の中で一番早く解消する時刻に 1 本だけ
+  // 張る。取り直した結果が update() に入って、まだ使い切っていれば張り直される。
   private scheduleRecheck(): void {
     this.clearTimer();
-    const resetsAt = [...this.exhausted.values()].flatMap((at) => (at === null ? [] : [at]));
+    const resetsAt = [...this.exhausted]
+      .filter(([provider]) => this.deps.hasWaitingSessions(provider))
+      .flatMap(([, at]) => (at === null ? [] : [at]));
     if (resetsAt.length === 0) {
       return;
     }

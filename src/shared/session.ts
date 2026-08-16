@@ -49,3 +49,14 @@ export type ProviderPlanUsage = { provider: SessionProvider } & (
 export function toSessionKey(provider: SessionProvider, agentSessionId: string): string {
   return `${provider}:${agentSessionId}`;
 }
+
+// rate limit で断られた所で止まっている session。解除されるまでの間だけ存在し、
+// 端末の上部にその表示と「解除されたら続きを実行する」指定を出す。
+export interface RateLimitStop {
+  terminalRuntimeId: TerminalRuntimeId;
+  provider: SessionProvider;
+  // 使い切っている枠が最後にリセットされる時刻 (epoch ms)。
+  // provider がリセット時刻を返さない場合だけ null。
+  resetsAt: number | null;
+  continueWhenReset: boolean;
+}

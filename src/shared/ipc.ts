@@ -5,6 +5,7 @@ import type {
   ProviderPlanUsage,
   TerminalRuntimeId,
   SessionProvider,
+  RateLimitStop,
 } from "./session.js";
 
 export interface AppError {
@@ -193,6 +194,11 @@ export interface ElectronAPI {
   getRepos: () => Promise<RepoListItem[]>;
   // 購読を始める前の分を取りこぼさないための初期値。以降は push で置き換える。
   getProviderPlanUsage: () => Promise<ProviderPlanUsage[]>;
+  getRateLimitStops: () => Promise<RateLimitStop[]>;
+  setContinueWhenRateLimitResets: (
+    terminalRuntimeId: TerminalRuntimeId,
+    continueWhenReset: boolean,
+  ) => Promise<void>;
   getErrors: () => Promise<AppErrorNotice[]>;
   dismissError: (id: string) => Promise<void>;
   clearErrors: () => Promise<void>;
@@ -270,6 +276,7 @@ export interface ElectronAPI {
   onPullRequestsChanged: (callback: (updates: PullRequestUpdate[]) => void) => () => void;
   // プランの利用状況。この配列に居る provider がインストール済みの provider でもある。
   onProviderPlanUsageChanged: (callback: (usages: ProviderPlanUsage[]) => void) => () => void;
+  onRateLimitStopsChanged: (callback: (stops: RateLimitStop[]) => void) => () => void;
   onFileTreeChanged: (callback: (worktreeId: string, relativePath: string) => void) => () => void;
   attachPty: (terminalRuntimeId: TerminalRuntimeId) => Promise<string>;
   readyPty: (terminalRuntimeId: TerminalRuntimeId) => Promise<void>;

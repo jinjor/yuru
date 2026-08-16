@@ -22,7 +22,7 @@ import type {
   SessionUpdate,
   WorktreeProcessRef,
 } from "../shared/ipc.js";
-import type { ProviderPlanUsage, SessionProvider } from "../shared/session.js";
+import type { ProviderPlanUsage, RateLimitStop, SessionProvider } from "../shared/session.js";
 import {
   HTML_PREVIEW_CSP,
   HTML_PREVIEW_SCHEME,
@@ -69,6 +69,7 @@ const service = new YuruService(
     terminalRuntimeExited: sendTerminalRuntimeExited,
     sessionChanged: sendSessionChanged,
     repoListChanged: sendRepoListChanged,
+    rateLimitStopsChanged: sendRateLimitStopsChanged,
     refreshWorktreeWatcher,
     addWorktreeWatcherRepo,
   },
@@ -134,6 +135,7 @@ function sendPullRequestsChanged(updates: PullRequestUpdate[]): void {
 // 再読み込みで購読し直すこともある。取りこぼすと provider の一覧ごと空になり
 // セッションを開始できなくなるので、最後の結果を持っておいて初期表示に配る。
 let latestPlanUsages: ProviderPlanUsage[] = [];
+let latestRateLimitStops: RateLimitStop[] = [];
 
 // rate limit の解消を、プラン利用状況の更新のたびに見る。解消していれば
 // その provider のセッションを続きから動かす (F58)。
@@ -141,14 +143,23 @@ const rateLimitRecovery = new RateLimitRecovery({
   refreshPlanUsage: () => {
     void planUsageMonitor.refreshOnce();
   },
+  hasWaitingSessions: (provider) => service.hasSessionsWaitingForRateLimitReset(provider),
   resumeSessions: (provider) => {
     void service.resumeAfterRateLimit(provider);
   },
 });
 
+function sendRateLimitStopsChanged(stops: RateLimitStop[]): void {
+  latestRateLimitStops = stops;
+  sendToRenderer("rateLimitStops:changed", stops);
+}
+
 function sendProviderPlanUsageChanged(usages: ProviderPlanUsage[]): void {
   latestPlanUsages = usages;
+  // 解消の判定を先に通す。ここで指定済みの session へ送るので、止まっている
+  // session の一覧を作り直すのはその後になる。
   rateLimitRecovery.update(usages);
+  void service.refreshRateLimitStops(usages);
   sendToRenderer("providerPlanUsage:changed", usages);
 }
 
@@ -381,6 +392,13 @@ function registerIpcHandlers(): void {
   });
 
   handleIpc("providerPlanUsage:list", () => latestPlanUsages);
+  handleIpc("rateLimitStops:list", () => latestRateLimitStops);
+  handleIpc(
+    "rateLimitStops:setContinue",
+    (_event, terminalRuntimeId: string, continueWhenReset: boolean) => {
+      service.setContinueWhenRateLimitResets(terminalRuntimeId, continueWhenReset);
+    },
+  );
   handleIpc("errors:list", () => service.getErrors());
 
   handleIpc("errors:dismiss", (_event, id: string) => {

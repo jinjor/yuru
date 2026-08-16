@@ -2,6 +2,7 @@ import { shell } from "electron";
 import { randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
+import { setTimeout as setTimeoutPromise } from "node:timers/promises";
 import * as pty from "node-pty";
 import {
   attachPrimarySessionByPath,
@@ -54,6 +55,7 @@ import {
   writeFile as writeRepoFile,
 } from "./files/files.js";
 import { getAgent } from "./agents/registry.js";
+import { exhaustedUntil } from "./agents/rate-limit-recovery.js";
 import {
   CODE_SEARCH_RESULT_LIMIT,
   createEmptyCodeSearchResult,
@@ -89,6 +91,8 @@ import {
   type SessionProvider,
   type SuggestedWorktreeSession,
   toSessionKey,
+  type RateLimitStop,
+  type ProviderPlanUsage,
 } from "../shared/session.js";
 import { isFileNotFoundError, toAppError } from "./errors/app-error.js";
 import {
@@ -112,9 +116,13 @@ import {
 } from "./terminal/runtime-routing.js";
 
 const STARTUP_OUTPUT_LIMIT = 4000;
-// rate limit で弾かれたリクエストの続きを促す入力。直前のリクエストは agent 側の
-// 履歴に残っているので、何をするかは伝え直さない。
+// rate limit で断られたリクエストの続きを促す入力。直前のリクエストは agent 側の
+// 記録に残っているので、何をするかは伝え直さない。
 const RATE_LIMIT_RESUME_INPUT = "continue";
+const ESCAPE = "\u001b";
+const CLEAR_LINE = "\u0015";
+// Esc で選択肢を閉じた後、TUI が入力欄を描き直すまでの待ち。実機で確かめた間隔。
+const RESUME_KEY_SETTLE_MS = 2_500;
 
 const OUTPUT_ACTIVE_GRACE_MS = 1500;
 // Focus, resize, and keystrokes make the agent's TUI repaint. That repaint is
@@ -153,6 +161,7 @@ export interface YuruServiceEvents {
   ptyData(terminalRuntimeId: string, data: string): void;
   terminalRuntimeExited(terminalRuntimeId: string): void;
   sessionChanged(terminalRuntimeId: string, update: SessionUpdate): void;
+  rateLimitStopsChanged(stops: RateLimitStop[]): void;
   repoListChanged(): void;
   refreshWorktreeWatcher(): Promise<void>;
   addWorktreeWatcherRepo(repoPath: string): void;
@@ -293,6 +302,8 @@ export class YuruService {
   private readonly ptyScreens = new Map<string, TerminalScreen>();
   private readonly ptyAttachments = new Map<string, { ready: boolean; pendingChunks: string[] }>();
   private readonly terminalRuntimeLastOutputAt = new Map<string, number>();
+  // rate limit で断られた所で止まっている runtime と、解除時に続きを実行する指定。
+  private readonly rateLimitStops = new Map<string, RateLimitStop>();
   private readonly terminalRuntimeLastInputAt = new Map<string, number>();
   private readonly sessionMonitorStates = new Map<string, SessionMonitorState>();
   private sessionMonitorTimer: ReturnType<typeof setInterval> | null = null;
@@ -1022,18 +1033,106 @@ export class YuruService {
     }
   }
 
-  // rate limit が解消した provider の agent セッションを、手動操作なしで続きから
-  // 動かす。止まっているのはリクエストが通らなかったセッションだけなので、対象は
-  // 「その provider で今 PTY が生きているセッション」全部でよい。
-  async resumeAfterRateLimit(provider: SessionProvider): Promise<void> {
-    const targets = [...this.terminalRuntimeMap]
-      .filter(([terminalRuntimeId, runtime]) => {
-        return runtime.provider === provider && this.ptyProcesses.has(terminalRuntimeId);
-      })
-      .map(([terminalRuntimeId]) => terminalRuntimeId);
-    await Promise.all(targets.map((id) => this.sendRateLimitResumeInput(id)));
+  // どの session が rate limit で止まっているかを取り直す。使い切っている provider が
+  // 無い間は agent の記録を一切読まない。
+  async refreshRateLimitStops(usages: readonly ProviderPlanUsage[]): Promise<void> {
+    const resetsAtByProvider = new Map<SessionProvider, number | null>();
+    for (const usage of usages) {
+      const until = exhaustedUntil(usage);
+      if (until !== undefined) {
+        resetsAtByProvider.set(usage.provider, until);
+      }
+    }
+    const candidates = [...this.terminalRuntimeMap].flatMap(([terminalRuntimeId, runtime]) => {
+      if (runtime.provider === null || runtime.agentSessionId === null) {
+        return [];
+      }
+      if (!resetsAtByProvider.has(runtime.provider) || !this.ptyProcesses.has(terminalRuntimeId)) {
+        return [];
+      }
+      return [
+        { terminalRuntimeId, provider: runtime.provider, agentSessionId: runtime.agentSessionId },
+      ];
+    });
+
+    const stops = new Map<string, RateLimitStop>();
+    await Promise.all(
+      candidates.map(async (candidate) => {
+        const agent = getAgent(candidate.provider);
+        if (!(await agent.isStoppedByRateLimit?.(candidate.agentSessionId))) {
+          return;
+        }
+        stops.set(candidate.terminalRuntimeId, {
+          terminalRuntimeId: candidate.terminalRuntimeId,
+          provider: candidate.provider,
+          resetsAt: resetsAtByProvider.get(candidate.provider) ?? null,
+          // 止まったままの間は指定を引き継ぐ。人が入れたチェックを消さない。
+          continueWhenReset:
+            this.rateLimitStops.get(candidate.terminalRuntimeId)?.continueWhenReset ?? false,
+        });
+      }),
+    );
+    this.replaceRateLimitStops(stops);
   }
 
+  setContinueWhenRateLimitResets(terminalRuntimeId: string, continueWhenReset: boolean): void {
+    const stop = this.rateLimitStops.get(terminalRuntimeId);
+    if (!stop || stop.continueWhenReset === continueWhenReset) {
+      return;
+    }
+    this.rateLimitStops.set(terminalRuntimeId, { ...stop, continueWhenReset });
+    this.events.rateLimitStopsChanged([...this.rateLimitStops.values()]);
+  }
+
+  hasSessionsWaitingForRateLimitReset(provider: SessionProvider): boolean {
+    return [...this.rateLimitStops.values()].some(
+      (stop) => stop.provider === provider && stop.continueWhenReset,
+    );
+  }
+
+  // rate limit が解消した provider の中で、続きを実行するよう指定された session を
+  // 動かす。指定は成否にかかわらずここで外す。同じ session へ何度も送らないため。
+  async resumeAfterRateLimit(provider: SessionProvider): Promise<void> {
+    const targets = [...this.rateLimitStops.values()].filter(
+      (stop) =>
+        stop.provider === provider &&
+        stop.continueWhenReset &&
+        this.ptyProcesses.has(stop.terminalRuntimeId),
+    );
+    if (targets.length === 0) {
+      return;
+    }
+    for (const stop of targets) {
+      this.rateLimitStops.delete(stop.terminalRuntimeId);
+    }
+    this.events.rateLimitStopsChanged([...this.rateLimitStops.values()]);
+    await Promise.all(targets.map((stop) => this.sendRateLimitResumeInput(stop.terminalRuntimeId)));
+  }
+
+  private replaceRateLimitStops(stops: Map<string, RateLimitStop>): void {
+    if (
+      stops.size === this.rateLimitStops.size &&
+      [...stops].every(([id, stop]) => {
+        const previous = this.rateLimitStops.get(id);
+        return (
+          previous !== undefined &&
+          previous.resetsAt === stop.resetsAt &&
+          previous.continueWhenReset === stop.continueWhenReset
+        );
+      })
+    ) {
+      return;
+    }
+    this.rateLimitStops.clear();
+    for (const [id, stop] of stops) {
+      this.rateLimitStops.set(id, stop);
+    }
+    this.events.rateLimitStopsChanged([...this.rateLimitStops.values()]);
+  }
+
+  // 選択肢が出ている可能性があるので、まず Esc で閉じてから送る。Esc はどの agent でも
+  // キャンセル側にしか倒れず、承認はしない。Esc は入力欄を消さないので、人が打ちかけて
+  // いた文字に続きが繋がらないよう Ctrl+U で消してから入力する。
   private async sendRateLimitResumeInput(terminalRuntimeId: string): Promise<void> {
     const proc = this.ptyProcesses.get(terminalRuntimeId);
     if (!proc) {
@@ -1048,6 +1147,10 @@ export class YuruService {
       },
     };
     this.markTerminalRuntimeInput(terminalRuntimeId);
+    writer.write(ESCAPE);
+    await setTimeoutPromise(RESUME_KEY_SETTLE_MS);
+    writer.write(CLEAR_LINE);
+    await setTimeoutPromise(RESUME_KEY_SETTLE_MS);
     await deliverInitialInput(writer, RATE_LIMIT_RESUME_INPUT);
   }
 
@@ -1336,12 +1439,17 @@ export class YuruService {
     this.terminalRuntimeLastOutputAt.delete(terminalRuntimeId);
     this.terminalRuntimeLastInputAt.delete(terminalRuntimeId);
     this.sessionMonitorStates.delete(terminalRuntimeId);
+    if (this.rateLimitStops.delete(terminalRuntimeId)) {
+      this.events.rateLimitStopsChanged([...this.rateLimitStops.values()]);
+    }
   }
 
   private clearTerminalRuntimeStates(): void {
     this.terminalRuntimeLastOutputAt.clear();
     this.terminalRuntimeLastInputAt.clear();
     this.sessionMonitorStates.clear();
+    this.rateLimitStops.clear();
+    this.events.rateLimitStopsChanged([]);
     this.stopSessionMonitor();
   }
 

@@ -7,11 +7,14 @@ import type {
   SessionUpdate,
   WorktreeProcessRef,
 } from "../shared/ipc.js";
-import type { ProviderPlanUsage, SessionProvider } from "../shared/session.js";
+import type { ProviderPlanUsage, RateLimitStop, SessionProvider } from "../shared/session.js";
 
 const electronAPI: ElectronAPI = {
   getRepos: () => ipcRenderer.invoke("metadata:listRepos"),
   getProviderPlanUsage: () => ipcRenderer.invoke("providerPlanUsage:list"),
+  getRateLimitStops: () => ipcRenderer.invoke("rateLimitStops:list"),
+  setContinueWhenRateLimitResets: (terminalRuntimeId, continueWhenReset) =>
+    ipcRenderer.invoke("rateLimitStops:setContinue", terminalRuntimeId, continueWhenReset),
   getErrors: () => ipcRenderer.invoke("errors:list"),
   dismissError: (id: string) => ipcRenderer.invoke("errors:dismiss", id),
   clearErrors: () => ipcRenderer.invoke("errors:clear"),
@@ -118,6 +121,13 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.on("providerPlanUsage:changed", listener);
     return () => {
       ipcRenderer.removeListener("providerPlanUsage:changed", listener);
+    };
+  },
+  onRateLimitStopsChanged: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, stops: RateLimitStop[]) => callback(stops);
+    ipcRenderer.on("rateLimitStops:changed", listener);
+    return () => {
+      ipcRenderer.removeListener("rateLimitStops:changed", listener);
     };
   },
   onFileTreeChanged: (callback) => {

@@ -15,12 +15,13 @@ import type {
   WorktreeSessionSelection,
 } from "../../shared/ipc";
 import type { WorktreeListItem } from "../../shared/metadata";
-import type { SessionProvider, TerminalRuntimeId } from "../../shared/session";
+import type { RateLimitStop, SessionProvider, TerminalRuntimeId } from "../../shared/session";
 import { DiffPreviewPanel } from "../preview/DiffPreviewPanel";
 import { ExplorerPanel, type ExplorerTab } from "../explorer/ExplorerPanel";
 import { FileSearch } from "../files/FileSearch";
 import { TerminalBar } from "../terminal/TerminalBar";
 import { TerminalPanel } from "../terminal/TerminalPanel";
+import { RateLimitStopBar } from "../terminal/RateLimitStopBar";
 import { TerminalHome } from "../terminal/TerminalHome";
 import { usePaneLayout } from "./usePaneLayout";
 import type { PreviewSelection } from "../previewSelection";
@@ -32,6 +33,7 @@ interface WorktreeViewProps {
   onError: (error: AppError) => void;
   onOpenExternal: (url: string) => void;
   providers: SessionProvider[];
+  rateLimitStops: RateLimitStop[];
   sidebarWidth: number;
   worktree: WorktreeListItem | null;
   worktreeId: string;
@@ -73,6 +75,7 @@ export const WorktreeView = memo(function WorktreeView({
   onError,
   onOpenExternal,
   providers,
+  rateLimitStops,
   sidebarWidth,
   worktree,
   worktreeId,
@@ -95,6 +98,9 @@ export const WorktreeView = memo(function WorktreeView({
     selectedTerminalRuntimeId && activeTerminalRuntimeIds.includes(selectedTerminalRuntimeId)
       ? selectedTerminalRuntimeId
       : null;
+  // 表示中の session が rate limit で止まっているときだけ帯を出す。
+  const displayedRateLimitStop =
+    rateLimitStops.find((stop) => stop.terminalRuntimeId === displayedTerminalRuntimeId) ?? null;
   const [previewSelection, setPreviewSelection] = useState<PreviewSelection | null>(null);
   const [gitPathStates, setGitPathStates] = useState<GitPathState[]>([]);
   const [reviewState, setReviewState] = useState<GitReviewState | null>(null);
@@ -362,6 +368,17 @@ export const WorktreeView = memo(function WorktreeView({
             onOpenExternal={onOpenExternal}
             onSelectTerminalRuntime={setSelectedTerminalRuntimeId}
           />
+          {displayedRateLimitStop && (
+            <RateLimitStopBar
+              stop={displayedRateLimitStop}
+              onContinueWhenResetChange={(continueWhenReset) => {
+                void window.electronAPI.setContinueWhenRateLimitResets(
+                  displayedRateLimitStop.terminalRuntimeId,
+                  continueWhenReset,
+                );
+              }}
+            />
+          )}
           {displayedTerminalRuntimeId ? (
             <TerminalPanel
               key={displayedTerminalRuntimeId}
