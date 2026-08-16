@@ -24,7 +24,7 @@
   },
   "allowScripts": {
     "fsevents@2.3.2 || 2.3.3": true,
-    "node-pty@1.2.0-beta.14": true
+    "node-pty@1.2.0-beta.15": true
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.3",
