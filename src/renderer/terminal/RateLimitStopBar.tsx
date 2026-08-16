@@ -24,14 +24,18 @@ export function RateLimitStopBar({ stop, onContinueWhenResetChange }: RateLimitS
         {providerLabel(stop.provider)} limit reached
         {stop.resetsAt !== null && ` · resets ${formatResetsAt(stop.resetsAt)}`}
       </span>
-      <label className="rate-limit-stop-bar-continue">
-        <input
-          type="checkbox"
-          checked={stop.continueWhenReset}
-          onChange={(event) => onContinueWhenResetChange(event.target.checked)}
-        />
-        Continue when the limit resets
-      </label>
+      {stop.resetsAt === null ? (
+        <span className="rate-limit-stop-bar-continue">Reset time unavailable</span>
+      ) : (
+        <label className="rate-limit-stop-bar-continue">
+          <input
+            type="checkbox"
+            checked={stop.continueWhenReset}
+            onChange={(event) => onContinueWhenResetChange(event.target.checked)}
+          />
+          Continue when the limit resets
+        </label>
+      )}
     </div>
   );
 }

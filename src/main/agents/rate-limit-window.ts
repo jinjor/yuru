@@ -3,10 +3,6 @@ import type { PlanUsageWindow, ProviderPlanUsage } from "../../shared/session.js
 // provider がその枠を使い切ったと見なす使用率。
 const EXHAUSTED_PERCENT = 100;
 
-// リセット時刻を過ぎても provider がまだ使い切りを報告している時に、次に確かめるまでの間隔。
-// 過ぎた時刻へタイマーを張り直し続けて取得が止まらなくなるのを防ぐ。
-const RECHECK_INTERVAL_MS = 60_000;
-
 function planUsageWindows(usage: ProviderPlanUsage): PlanUsageWindow[] {
   if (usage.state !== "ok") {
     return [];
@@ -31,16 +27,19 @@ export function exhaustedUntil(usage: ProviderPlanUsage): number | null | undefi
   return Math.max(...resetsAt.map((at) => at ?? 0));
 }
 
-// 続きの実行を待っている session の解除時刻から、次に利用状況を取り直すまでの待ち時間。
+// 利用率はリセット前にも下がることがあるため、解除は provider が返した時刻だけで判定する。
+// 時刻を返さない provider については、利用率から解除を推測しない。
+export function isRateLimitResetDue(resetsAt: number | null, now: number): boolean {
+  return resetsAt !== null && now >= resetsAt;
+}
+
+// 続きの実行を待っている session の解除時刻から、次に解除処理をするまでの待ち時間。
 // 待っている session が無い、またはリセット時刻が分からない場合は予約しない (null)。
-export function nextRecheckDelayMs(
-  resetsAt: readonly (number | null)[],
-  now: number,
-): number | null {
+export function nextResetDelayMs(resetsAt: readonly (number | null)[], now: number): number | null {
   const known = resetsAt.flatMap((at) => (at === null ? [] : [at]));
   if (known.length === 0) {
     return null;
   }
   const remaining = Math.min(...known) - now;
-  return remaining > 0 ? remaining : RECHECK_INTERVAL_MS;
+  return Math.max(0, remaining);
 }

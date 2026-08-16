@@ -55,7 +55,11 @@ import {
   writeFile as writeRepoFile,
 } from "./files/files.js";
 import { getAgent } from "./agents/registry.js";
-import { exhaustedUntil, nextRecheckDelayMs } from "./agents/rate-limit-window.js";
+import {
+  exhaustedUntil,
+  isRateLimitResetDue,
+  nextResetDelayMs,
+} from "./agents/rate-limit-window.js";
 import {
   CODE_SEARCH_RESULT_LIMIT,
   createEmptyCodeSearchResult,
@@ -162,7 +166,7 @@ export interface YuruServiceEvents {
   terminalRuntimeExited(terminalRuntimeId: string): void;
   sessionChanged(terminalRuntimeId: string, update: SessionUpdate): void;
   rateLimitStopsChanged(stops: RateLimitStop[]): void;
-  // 解除時刻に合わせて利用状況を取り直す。結果は refreshRateLimitStops へ戻ってくる。
+  // 解除時刻になった後、サイドバーに出す利用状況も取り直す。
   refreshPlanUsage(): void;
   repoListChanged(): void;
   refreshWorktreeWatcher(): Promise<void>;
@@ -306,7 +310,7 @@ export class YuruService {
   private readonly terminalRuntimeLastOutputAt = new Map<string, number>();
   // rate limit で断られた所で止まっている runtime と、解除時に続きを実行する指定。
   private readonly rateLimitStops = new Map<string, RateLimitStop>();
-  private rateLimitRecheckTimer: ReturnType<typeof setTimeout> | null = null;
+  private rateLimitResetTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly terminalRuntimeLastInputAt = new Map<string, number>();
   private readonly sessionMonitorStates = new Map<string, SessionMonitorState>();
   private sessionMonitorTimer: ReturnType<typeof setInterval> | null = null;
@@ -1036,46 +1040,35 @@ export class YuruService {
     }
   }
 
-  // どの session が rate limit で止まっているかを取り直し、解消していれば続きを実行する。
-  // 使い切っている provider が無い間は agent の記録を一切読まない。
+  // どの session が rate limit で止まっているかを取り直す。停止を一度見つけた後は、
+  // 利用率が下がっても解除とは見なさず、記録したリセット時刻まで待つ。
   async refreshRateLimitStops(usages: readonly ProviderPlanUsage[]): Promise<void> {
+    const now = Date.now();
+    const reset = this.takeRateLimitStopsPastReset(now);
+    const resetIds = new Set(reset.map((stop) => stop.terminalRuntimeId));
     const resetsAtByProvider = new Map<SessionProvider, number | null>();
-    // 使用率を読めた provider だけが解消の根拠になる。取得に失敗した場合も、
-    // ログインが切れてプランの枠自体が見えなくなった場合も、解消したとは言えない。
-    const unknownProviders = new Set<SessionProvider>();
     for (const usage of usages) {
       if (usage.state !== "ok") {
-        unknownProviders.add(usage.provider);
         continue;
       }
       const until = exhaustedUntil(usage);
-      if (until !== undefined) {
+      // 過ぎたリセット時刻と 100% の組み合わせは、provider 側の表示が遅れている状態。
+      // 古い停止を作り直さず、未来のリセットか時刻不明の停止だけを新規検出に使う。
+      if (until !== undefined && !isRateLimitResetDue(until, now)) {
         resetsAtByProvider.set(usage.provider, until);
       }
     }
 
-    // 解消した provider で続きを指定された session。指定は成否にかかわらずここで
-    // 外れる。同じ session へ何度も送らないため。
-    const resumed = [...this.rateLimitStops.values()].filter(
-      (stop) =>
-        stop.continueWhenReset &&
-        !resetsAtByProvider.has(stop.provider) &&
-        !unknownProviders.has(stop.provider),
-    );
-    for (const stop of resumed) {
-      this.rateLimitStops.delete(stop.terminalRuntimeId);
-    }
-
-    const stops = [...this.rateLimitStops.values()].filter((stop) =>
-      unknownProviders.has(stop.provider),
-    );
+    const stops: RateLimitStop[] = [];
     await Promise.all(
       [...this.terminalRuntimeMap].map(async ([terminalRuntimeId, runtime]) => {
         if (runtime.provider === null || runtime.agentSessionId === null) {
           return;
         }
+        const previous = this.rateLimitStops.get(terminalRuntimeId);
         if (
-          !resetsAtByProvider.has(runtime.provider) ||
+          resetIds.has(terminalRuntimeId) ||
+          (previous === undefined && !resetsAtByProvider.has(runtime.provider)) ||
           !this.ptyProcesses.has(terminalRuntimeId)
         ) {
           return;
@@ -1084,12 +1077,16 @@ export class YuruService {
         if (!(await agent.isStoppedByRateLimit?.(runtime.agentSessionId))) {
           return;
         }
+        if (previous !== undefined) {
+          // 一度記録した解除時刻と指定は、利用率が揺れても変更しない。
+          stops.push(previous);
+          return;
+        }
         stops.push({
           terminalRuntimeId,
           provider: runtime.provider,
           resetsAt: resetsAtByProvider.get(runtime.provider) ?? null,
-          // 止まったままの間は指定を引き継ぐ。人が入れたチェックを消さない。
-          continueWhenReset: this.rateLimitStops.get(terminalRuntimeId)?.continueWhenReset ?? false,
+          continueWhenReset: false,
         });
       }),
     );
@@ -1099,29 +1096,36 @@ export class YuruService {
       this.rateLimitStops.set(stop.terminalRuntimeId, stop);
     }
     this.events.rateLimitStopsChanged(stops);
-    this.scheduleRateLimitRecheck();
-    await Promise.all(resumed.map((stop) => this.sendRateLimitResumeInput(stop)));
+    this.scheduleRateLimitReset();
+    await Promise.all(
+      reset
+        .filter((stop) => stop.continueWhenReset)
+        .map((stop) => this.sendRateLimitResumeInput(stop)),
+    );
   }
 
   setContinueWhenRateLimitResets(terminalRuntimeId: string, continueWhenReset: boolean): void {
     const stop = this.rateLimitStops.get(terminalRuntimeId);
-    if (!stop || stop.continueWhenReset === continueWhenReset) {
+    if (
+      !stop ||
+      (continueWhenReset && stop.resetsAt === null) ||
+      stop.continueWhenReset === continueWhenReset
+    ) {
       return;
     }
     this.rateLimitStops.set(terminalRuntimeId, { ...stop, continueWhenReset });
     this.events.rateLimitStopsChanged([...this.rateLimitStops.values()]);
-    this.scheduleRateLimitRecheck();
+    this.scheduleRateLimitReset();
   }
 
-  // 利用状況の定期取得はウィンドウがフォーカスされている間しか動かないので、それだけに
-  // 頼ると離席中に解消しても気付けない。続きを待っている session がある時だけ、その
-  // 解除時刻に取り直しを予約してフォーカスと切り離す。
-  private scheduleRateLimitRecheck(): void {
-    if (this.rateLimitRecheckTimer !== null) {
-      clearTimeout(this.rateLimitRecheckTimer);
-      this.rateLimitRecheckTimer = null;
+  // 利用状況の取得とは別に、続きを待っている session の最初の解除時刻へタイマーを張る。
+  // provider からその時刻に利用率を取得できなくても、時刻だけで解除処理を進める。
+  private scheduleRateLimitReset(): void {
+    if (this.rateLimitResetTimer !== null) {
+      clearTimeout(this.rateLimitResetTimer);
+      this.rateLimitResetTimer = null;
     }
-    const delay = nextRecheckDelayMs(
+    const delay = nextResetDelayMs(
       [...this.rateLimitStops.values()]
         .filter((stop) => stop.continueWhenReset)
         .map((stop) => stop.resetsAt),
@@ -1130,10 +1134,38 @@ export class YuruService {
     if (delay === null) {
       return;
     }
-    this.rateLimitRecheckTimer = setTimeout(() => {
-      this.rateLimitRecheckTimer = null;
-      this.events.refreshPlanUsage();
+    this.rateLimitResetTimer = setTimeout(() => {
+      this.rateLimitResetTimer = null;
+      void this.handleRateLimitResetTime();
     }, delay);
+  }
+
+  private async handleRateLimitResetTime(): Promise<void> {
+    const reset = this.takeRateLimitStopsPastReset(Date.now());
+    if (reset.length === 0) {
+      this.scheduleRateLimitReset();
+      return;
+    }
+    this.events.rateLimitStopsChanged([...this.rateLimitStops.values()]);
+    this.scheduleRateLimitReset();
+    this.events.refreshPlanUsage();
+    await Promise.all(
+      reset
+        .filter((stop) => stop.continueWhenReset)
+        .map((stop) => this.sendRateLimitResumeInput(stop)),
+    );
+  }
+
+  // リセット時刻を過ぎた停止は、送信の成否にかかわらずここで外す。同じ session へ
+  // 何度も送らず、指定していなかった session の古い表示も残さないため。
+  private takeRateLimitStopsPastReset(now: number): RateLimitStop[] {
+    const reset = [...this.rateLimitStops.values()].filter((stop) =>
+      isRateLimitResetDue(stop.resetsAt, now),
+    );
+    for (const stop of reset) {
+      this.rateLimitStops.delete(stop.terminalRuntimeId);
+    }
+    return reset;
   }
 
   // 選択肢が出ている可能性があるので、まず Esc で閉じてから送る。Esc はどの agent でも
@@ -1464,7 +1496,7 @@ export class YuruService {
     this.sessionMonitorStates.clear();
     this.rateLimitStops.clear();
     this.events.rateLimitStopsChanged([]);
-    this.scheduleRateLimitRecheck();
+    this.scheduleRateLimitReset();
     this.stopSessionMonitor();
   }
 
