@@ -1,11 +1,10 @@
-import MarkdownIt from "markdown-it";
-import type StateBlock from "markdown-it/lib/rules_block/state_block.mjs";
+import type { MarkdownIt, StateBlock } from "markdown-it";
 import { parse, stringify } from "yaml";
 
 const frontmatterTokenType = "frontmatter";
 const marker = "---";
 
-interface FrontmatterMeta {
+interface FrontmatterMeta extends Record<string, unknown> {
   content: string;
 }
 
