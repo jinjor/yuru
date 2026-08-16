@@ -230,10 +230,11 @@ session lifecycle の操作は選択中 worktree の Terminal が担う。Termin
 - suggested session 行: primary へ昇格して resume する
 - main worktree: standalone terminal を開く操作
 
-runtime タブは `activeTerminalRuntimeIds` の順に並び、対応する primary session があれば
-preview と provider/activity のドットを表示する。session id がまだ解決していない runtime と
-standalone terminal は `Terminal` と表示する。× は terminal runtime だけを kill し、provider
-session の履歴と primary link は残す。
+runtime タブは保存された primary session の順に active なものを並べ、session id がまだ
+解決していない runtime と standalone terminal はその後ろに runtime の起動順で並べる。
+対応する primary session があれば preview と provider/activity のドットを表示し、対応が
+なければ `Terminal` と表示する。× は terminal runtime だけを kill し、provider session の
+履歴と primary link は残す。
 active な suggested session を primary に昇格すると、既存 runtime のタブは同じ PTY と
 scrollback を保ったまま新しい primary worktree へ移る。
 

@@ -468,6 +468,79 @@ test("active suggested を promote すると既存 runtime のタブが移動先
   }
 });
 
+test("session を再開してもタブはホームと同じ primary session 順を保つ", async () => {
+  test.setTimeout(60_000);
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context);
+    const worktreePath = await createGitWorktree(context, repoDir, "stable-session-tab-order");
+    await seedCodexStoredSession(context.tmpHome, repoDir, FIRST_SESSION_ID, "First session");
+    await seedCodexStoredSession(context.tmpHome, repoDir, SECOND_SESSION_ID, "Second session");
+    await registerRepo(context, repoDir, [
+      {
+        worktreePath,
+        primarySessions: [
+          { provider: "codex", agentSessionId: FIRST_SESSION_ID },
+          { provider: "codex", agentSessionId: SECOND_SESSION_ID },
+        ],
+      },
+    ]);
+    const fakeBin = await createFakeCodexBin(context.tmpHome);
+    const launched = await launchWindow(context, {
+      env: { PATH: `${fakeBin}:${process.env.PATH ?? ""}` },
+    });
+    app = launched.app;
+    const window = launched.window;
+    const sessionView = visibleWorktreeView(window);
+    await worktreeCard(window, "stable-session-tab-order").click();
+
+    const homeTab = sessionView.locator(".session-tab-home");
+    const primaryRows = sessionView.locator(".session-home-row");
+    await expect(primaryRows.locator(".action-surface-row-main")).toHaveText([
+      "First session",
+      "Second session",
+    ]);
+
+    await primaryRows.nth(0).locator(".resume-primary-action").click();
+    await expect(sessionView.locator(".xterm")).toContainText(FIRST_SESSION_ID, {
+      timeout: 10_000,
+    });
+    await homeTab.click();
+    await primaryRows.nth(1).locator(".resume-primary-action").click();
+    await expect(sessionView.locator(".xterm")).toContainText(SECOND_SESSION_ID, {
+      timeout: 10_000,
+    });
+
+    const runtimeTabs = sessionView.locator(".session-tab:not(.session-tab-home)");
+    await expect(runtimeTabs.locator(".session-tab-label")).toHaveText([
+      "First session",
+      "Second session",
+    ]);
+
+    await runtimeTabs.nth(0).locator(".session-tab-close").click();
+    await expect(runtimeTabs.locator(".session-tab-label")).toHaveText(["Second session"]);
+    await homeTab.click();
+    await primaryRows.nth(0).locator(".resume-primary-action").click();
+    await expect(sessionView.locator(".xterm")).toContainText(FIRST_SESSION_ID, {
+      timeout: 10_000,
+    });
+
+    await expect(runtimeTabs.locator(".session-tab-label")).toHaveText([
+      "First session",
+      "Second session",
+    ]);
+    await homeTab.click();
+    await expect(primaryRows.locator(".action-surface-row-main")).toHaveText([
+      "First session",
+      "Second session",
+    ]);
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
 test("複数 runtime をタブで切り替え、kill と exit 後はホームへ戻る", async () => {
   test.setTimeout(60_000);
   const context = await createE2eContext();

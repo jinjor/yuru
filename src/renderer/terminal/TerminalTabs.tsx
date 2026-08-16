@@ -20,6 +20,21 @@ export function TerminalTabs({
   onSelectTerminalRuntime,
   onKillTerminalRuntime,
 }: TerminalTabsProps) {
+  const activeTerminalRuntimeIdSet = new Set(activeTerminalRuntimeIds);
+  const primaryTerminalRuntimeIds = primarySessions.flatMap((session) => {
+    const terminalRuntimeId = session.activeTerminalRuntimeId;
+    return terminalRuntimeId && activeTerminalRuntimeIdSet.has(terminalRuntimeId)
+      ? [terminalRuntimeId]
+      : [];
+  });
+  const primaryTerminalRuntimeIdSet = new Set(primaryTerminalRuntimeIds);
+  const orderedTerminalRuntimeIds = [
+    ...primaryTerminalRuntimeIds,
+    ...activeTerminalRuntimeIds.filter(
+      (terminalRuntimeId) => !primaryTerminalRuntimeIdSet.has(terminalRuntimeId),
+    ),
+  ];
+
   return (
     <div className="session-tabs">
       <Tab
@@ -30,7 +45,7 @@ export function TerminalTabs({
       >
         <House size={14} strokeWidth={2} aria-hidden="true" />
       </Tab>
-      {activeTerminalRuntimeIds.map((terminalRuntimeId) => {
+      {orderedTerminalRuntimeIds.map((terminalRuntimeId) => {
         const session = primarySessions.find(
           (candidate) => candidate.activeTerminalRuntimeId === terminalRuntimeId,
         );
