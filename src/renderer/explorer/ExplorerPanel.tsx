@@ -1,5 +1,6 @@
-import { Activity } from "react";
+import { Activity, useCallback, useState } from "react";
 import type { GitPathState, GitReviewState } from "../../shared/ipc";
+import { useCommandShortcut } from "../utils/useCommandShortcut";
 import { useElementSize } from "../utils/useElementSize";
 import type { PreviewSelection } from "../previewSelection";
 import {
@@ -13,31 +14,37 @@ import { FilesPane } from "../files/FilesPane";
 import { SearchPane } from "../search/SearchPane";
 import { Tab } from "../ui/Tab";
 
-export type ExplorerTab = "changes" | "files" | "search";
+type ExplorerTab = "changes" | "files" | "search";
 
 interface ExplorerPanelProps {
-  activeTab: ExplorerTab;
   gitPathStates: readonly GitPathState[];
   onPreviewSelectionChange: (selection: PreviewSelection | null) => void;
-  onTabChange: (tab: ExplorerTab) => void;
   previewSelection: PreviewSelection | null;
   reviewState: GitReviewState | null;
-  searchFocusRequest: number;
   width: number;
   worktreeId: string;
 }
 
 export function ExplorerPanel({
-  activeTab,
   gitPathStates,
   onPreviewSelectionChange,
-  onTabChange,
   previewSelection,
   reviewState,
-  searchFocusRequest,
   width,
   worktreeId,
 }: ExplorerPanelProps) {
+  const [activeTab, setActiveTab] = useState<ExplorerTab>("changes");
+  // 検索入力へフォーカスを促す合図。hidden の間 SearchPane の effect は動かないため、
+  // ショートカットの受け口は常にマウントされているこちらに置く。
+  const [searchFocusRequest, setSearchFocusRequest] = useState(0);
+  const selectTab = useCallback((tab: ExplorerTab): void => {
+    setActiveTab(tab);
+    if (tab === "search") {
+      setSearchFocusRequest((prev) => prev + 1);
+    }
+  }, []);
+  const showSearch = useCallback(() => selectTab("search"), [selectTab]);
+  useCommandShortcut({ key: "f", shift: true }, showSearch);
   const [panelRef, panelSize] = useElementSize<HTMLDivElement>();
   const [headerRef, headerSize] = useElementSize<HTMLDivElement>();
   const contentHeight = Math.max(panelSize.height - headerSize.height, 0);
@@ -50,16 +57,16 @@ export function ExplorerPanel({
     <aside ref={panelRef} className="changes-panel" style={{ width, minWidth: width }}>
       <div ref={headerRef} className="panel-header panel-header-stack">
         <div className="panel-tabs">
-          <Tab selected={activeTab === "changes"} onSelect={() => onTabChange("changes")}>
+          <Tab selected={activeTab === "changes"} onSelect={() => selectTab("changes")}>
             Changes
             <span className="panel-tab-count" aria-label={`${changedFiles.length} changed files`}>
               {changedFiles.length}
             </span>
           </Tab>
-          <Tab selected={activeTab === "files"} onSelect={() => onTabChange("files")}>
+          <Tab selected={activeTab === "files"} onSelect={() => selectTab("files")}>
             Files
           </Tab>
-          <Tab selected={activeTab === "search"} onSelect={() => onTabChange("search")}>
+          <Tab selected={activeTab === "search"} onSelect={() => selectTab("search")}>
             Search
           </Tab>
         </div>

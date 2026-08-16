@@ -1,9 +1,42 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { resultDataOrNull } from "../utils/result";
+import { useCommandShortcut } from "../utils/useCommandShortcut";
 import { Modal } from "../ui/Modal";
 import { TextInput } from "../ui/TextInput";
 
 interface FileSearchProps {
+  onSelectFile: (path: string) => void;
+  // プレビューで開いているファイル。次に空入力でパレットを開いた時の候補として履歴に残す。
+  openedPath: string | null;
+  worktreeId: string;
+}
+
+// Cmd+P のパレット一式。開閉と履歴の記録まで自分で持つので、置くだけで使える。
+export function FileSearch({ onSelectFile, openedPath, worktreeId }: FileSearchProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  useCommandShortcut({ key: "p" }, () => setIsOpen((prev) => !prev));
+
+  // 開いた経路 (ファイルツリー、Changes、ターミナルのリンク、パレット) は問わない。
+  useEffect(() => {
+    if (!openedPath) {
+      return;
+    }
+    void window.electronAPI.recordRecentFile(worktreeId, openedPath);
+  }, [openedPath, worktreeId]);
+
+  if (!isOpen) {
+    return null;
+  }
+  return (
+    <FileSearchPalette
+      onClose={() => setIsOpen(false)}
+      onSelectFile={onSelectFile}
+      worktreeId={worktreeId}
+    />
+  );
+}
+
+interface FileSearchPaletteProps {
   onClose: () => void;
   onSelectFile: (path: string) => void;
   worktreeId: string;
@@ -28,7 +61,7 @@ interface FileSearchResult {
 
 const MAX_RESULTS = 200;
 
-export function FileSearch({ onClose, onSelectFile, worktreeId }: FileSearchProps) {
+function FileSearchPalette({ onClose, onSelectFile, worktreeId }: FileSearchPaletteProps) {
   const [query, setQuery] = useState("");
   const [candidates, setCandidates] = useState<FileCandidate[] | null>(null);
   const [recentPaths, setRecentPaths] = useState<string[]>([]);

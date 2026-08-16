@@ -17,7 +17,7 @@ import type {
 import type { WorktreeListItem } from "../../shared/metadata";
 import type { RateLimitStop, SessionProvider, TerminalRuntimeId } from "../../shared/session";
 import { DiffPreviewPanel } from "../preview/DiffPreviewPanel";
-import { ExplorerPanel, type ExplorerTab } from "../explorer/ExplorerPanel";
+import { ExplorerPanel } from "../explorer/ExplorerPanel";
 import { FileSearch } from "../files/FileSearch";
 import { TerminalBar } from "../terminal/TerminalBar";
 import { TerminalPanel } from "../terminal/TerminalPanel";
@@ -105,9 +105,6 @@ export const WorktreeView = memo(function WorktreeView({
   const [gitPathStates, setGitPathStates] = useState<GitPathState[]>([]);
   const [reviewState, setReviewState] = useState<GitReviewState | null>(null);
   const reviewMutationVersionRef = useRef(0);
-  const [isFileSearchOpen, setIsFileSearchOpen] = useState(false);
-  const [explorerTab, setExplorerTab] = useState<ExplorerTab>("changes");
-  const [searchFocusRequest, setSearchFocusRequest] = useState(0);
   const paneLayout = usePaneLayout({
     appRef,
     sidebarWidth,
@@ -241,39 +238,6 @@ export const WorktreeView = memo(function WorktreeView({
     },
     [worktreeId],
   );
-
-  // Cmd+P の初期候補に使う「最近開いたファイル」を残す。開いた経路 (ファイルツリー、Changes、
-  // ターミナルのリンク、Cmd+P) を問わず、プレビューに出た path をそのまま履歴にする。
-  useEffect(() => {
-    const openedPath = previewSelection?.path;
-    if (!openedPath) {
-      return;
-    }
-    void window.electronAPI.recordRecentFile(worktreeId, openedPath);
-  }, [previewSelection?.path, worktreeId]);
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent): void => {
-      const isPaletteShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "p";
-      const isCodeSearchShortcut =
-        (event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "f";
-      if (!isPaletteShortcut && !isCodeSearchShortcut) {
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      if (isPaletteShortcut) {
-        setIsFileSearchOpen((prev) => !prev);
-        return;
-      }
-      setExplorerTab("search");
-      setSearchFocusRequest((prev) => prev + 1);
-    };
-    window.addEventListener("keydown", handleKeyDown, true);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown, true);
-    };
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -439,28 +403,18 @@ export const WorktreeView = memo(function WorktreeView({
         aria-hidden="true"
       />
       <ExplorerPanel
-        activeTab={explorerTab}
         gitPathStates={gitPathStates}
         onPreviewSelectionChange={setPreviewSelection}
-        onTabChange={(tab) => {
-          setExplorerTab(tab);
-          if (tab === "search") {
-            setSearchFocusRequest((prev) => prev + 1);
-          }
-        }}
         previewSelection={previewSelection}
         reviewState={reviewState}
-        searchFocusRequest={searchFocusRequest}
         width={paneLayout.changesPanelWidth}
         worktreeId={worktreeId}
       />
-      {isFileSearchOpen && (
-        <FileSearch
-          onClose={() => setIsFileSearchOpen(false)}
-          onSelectFile={(path) => setPreviewSelection({ path })}
-          worktreeId={worktreeId}
-        />
-      )}
+      <FileSearch
+        onSelectFile={(path) => setPreviewSelection({ path })}
+        openedPath={previewSelection?.path ?? null}
+        worktreeId={worktreeId}
+      />
     </>
   );
 });
