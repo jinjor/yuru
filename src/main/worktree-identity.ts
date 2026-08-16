@@ -4,6 +4,11 @@ export function toWorktreeId(repoId: string, worktreePath: string): string {
   return `worktree:${repoId}:${worktreePath}`;
 }
 
+// toWorktreeId の逆。worktree path 側はコロンを含みうるので、repoId だけを取り出す。
+export function toRepoId(worktreeId: string): string | null {
+  return /^worktree:([^:]+):/.exec(worktreeId)?.[1] ?? null;
+}
+
 export function toWorktreePathKey(worktreePath: string): string {
   return path.resolve(worktreePath);
 }

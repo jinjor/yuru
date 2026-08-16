@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { findRepoByWorktreePath } from "../../../src/main/repos/find-repo.ts";
+import { findRepoByWorktreeId, findRepoByWorktreePath } from "../../../src/main/repos/find-repo.ts";
+import { toWorktreeId } from "../../../src/main/worktree-identity.ts";
 
 test("findRepoByWorktreePath は Git worktree 一覧から所属 repo を解決する", async () => {
   const repos = [
@@ -56,4 +57,23 @@ test("findRepoByWorktreePath は利用できない登録 repo を読み飛ばす
 
   assert.deepEqual(repo, repos[1]);
   assert.deepEqual(listedRepoPaths, ["/repos/a"]);
+});
+
+test("findRepoByWorktreeId は worktreeId が持つ repoId から repo を解決する", () => {
+  const repos = [
+    { id: "repo-a", repoPath: "/repos/a" },
+    { id: "repo-b", repoPath: "/repos/b" },
+  ];
+
+  // worktree path にコロンが含まれても repoId だけを取り出す。
+  const worktreeId = toWorktreeId("repo-b", "/repos/b/.yuru/worktrees/task:1");
+
+  assert.deepEqual(findRepoByWorktreeId(worktreeId, repos), repos[1]);
+});
+
+test("findRepoByWorktreeId は未登録の repo と worktreeId でない文字列に null を返す", () => {
+  const repos = [{ id: "repo-a", repoPath: "/repos/a" }];
+
+  assert.equal(findRepoByWorktreeId(toWorktreeId("repo-b", "/repos/b"), repos), null);
+  assert.equal(findRepoByWorktreeId("/repos/a", repos), null);
 });

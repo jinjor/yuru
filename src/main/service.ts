@@ -112,7 +112,7 @@ import { deliverInitialInput } from "./terminal/initial-input.js";
 import { isCursorPositionQuery, isCursorPositionReport } from "./terminal/cursor-position.js";
 import { TerminalScreen } from "./terminal/screen.js";
 import { createInteractiveShellLaunchCommand } from "./terminal/shell-launch.js";
-import { findRepoByWorktreePath } from "./repos/find-repo.js";
+import { findRepoByWorktreeId, findRepoByWorktreePath } from "./repos/find-repo.js";
 import {
   indexPrimaryWorktreePathsBySessionKey,
   indexTerminalRuntimeIdsByTaskWorktreePath,
@@ -919,29 +919,29 @@ export class YuruService {
     }
   }
 
-  async listRecentFiles(worktreeId: string) {
-    const worktree = await this.findGitWorktree(worktreeId);
-    if (!worktree) {
+  listRecentFiles(worktreeId: string) {
+    const repo = findRepoByWorktreeId(worktreeId);
+    if (!repo) {
       return ok([] as string[]);
     }
     try {
-      return ok(loadRecentFiles(worktree.repoPath));
+      return ok(loadRecentFiles(repo.repoPath));
     } catch (error) {
       return this.failAndReport(toAppError(error));
     }
   }
 
-  async recordRecentFile(worktreeId: string, filePath: string): Promise<void> {
+  recordRecentFile(worktreeId: string, filePath: string): void {
     // 履歴は repo 単位で、worktree をまたいで同じ相対パスを指す。worktree の外を指す
     // 絶対パス (ターミナルのリンクから開いた場合) は他の worktree で開き直せないので残さない。
     if (path.isAbsolute(filePath)) {
       return;
     }
-    const worktree = await this.findGitWorktree(worktreeId);
-    if (!worktree) {
+    const repo = findRepoByWorktreeId(worktreeId);
+    if (!repo) {
       return;
     }
-    addRecentFile(worktree.repoPath, filePath);
+    addRecentFile(repo.repoPath, filePath);
   }
 
   async readWorktreeFile(worktreeId: string, filePath: string): Promise<Result<string | null>> {
