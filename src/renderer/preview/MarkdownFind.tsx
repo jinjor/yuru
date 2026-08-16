@@ -114,6 +114,8 @@ const inlineTagNames = new Set([
 ]);
 
 // 大文字小文字を無視した部分一致。SourceFind (閲覧モード) の検索と同じ扱いにする。
+// 改行や連続する空白は DOM にある通りに扱う (表示上は空白 1 個に見えるので、そこをまたぐ
+// 語句は探せない)。
 function findTextRanges(root: HTMLElement, query: string): Range[] {
   if (query.length === 0) {
     return [];
@@ -122,15 +124,17 @@ function findTextRanges(root: HTMLElement, query: string): Range[] {
   const ranges: Range[] = [];
 
   for (const block of collectTextBlocks(root)) {
-    const searchable = buildSearchableText(block);
-    const text = searchable.text.toLowerCase();
+    const text = block
+      .map((node) => node.data)
+      .join("")
+      .toLowerCase();
     let from = 0;
     while (from <= text.length - loweredQuery.length) {
       const found = text.indexOf(loweredQuery, from);
       if (found < 0) {
         break;
       }
-      ranges.push(createRange(searchable, found, found + loweredQuery.length));
+      ranges.push(createRange(block, found, found + loweredQuery.length));
       from = found + loweredQuery.length;
     }
   }
@@ -138,26 +142,19 @@ function findTextRanges(root: HTMLElement, query: string): Range[] {
   return ranges;
 }
 
-interface TextBlock {
-  nodes: Text[];
-  // <pre> の中は空白と改行がそのまま表示される (ブラウザ既定のスタイル)。それ以外は
-  // 続く空白・改行が 1 個の空白として表示される。
-  preformatted: boolean;
-}
-
 // テキストノードを、続けて 1 つの文字列として検索する単位にまとめる。
-function collectTextBlocks(root: HTMLElement): TextBlock[] {
-  const blocks: TextBlock[] = [];
+function collectTextBlocks(root: HTMLElement): Text[][] {
+  const blocks: Text[][] = [];
   let current: Text[] = [];
 
-  const flush = (preformatted: boolean): void => {
+  const flush = (): void => {
     if (current.length > 0) {
-      blocks.push({ nodes: current, preformatted });
+      blocks.push(current);
       current = [];
     }
   };
 
-  const walk = (element: Element, preformatted: boolean): void => {
+  const walk = (element: Element): void => {
     for (const node of element.childNodes) {
       if (node.nodeType === Node.TEXT_NODE) {
         current.push(node as Text);
@@ -168,63 +165,36 @@ function collectTextBlocks(root: HTMLElement): TextBlock[] {
       }
       const child = node as Element;
       if (inlineTagNames.has(child.tagName)) {
-        walk(child, preformatted);
+        walk(child);
         continue;
       }
-      flush(preformatted);
-      const childPreformatted = preformatted || child.tagName === "PRE";
-      walk(child, childPreformatted);
-      flush(childPreformatted);
+      flush();
+      walk(child);
+      flush();
     }
   };
 
-  walk(root, false);
-  flush(false);
+  walk(root);
+  flush();
   return blocks;
 }
 
-interface SearchableText {
-  // 検索する文字列。画面に出ている通りに読めるよう、空白の並びを 1 個の空白に畳んである。
-  text: string;
-  // text[i] が元のどのテキストノードの何文字目から来たか。Range を作るのに使う。
-  nodes: Text[];
-  offsets: number[];
-}
+// まとめたテキスト内の位置 [start, end) を、テキストノードをまたげる Range に直す。
+function createRange(nodes: readonly Text[], start: number, end: number): Range {
+  const range = document.createRange();
+  let consumed = 0;
 
-// ブロックのテキストノードを、画面に見えている文字列と、その 1 文字ずつの出どころに直す。
-function buildSearchableText(block: TextBlock): SearchableText {
-  const characters: string[] = [];
-  const nodes: Text[] = [];
-  const offsets: number[] = [];
-  // ブロック先頭の空白は表示されないので、空白が続いている状態から始める。
-  let inWhitespace = true;
-
-  for (const node of block.nodes) {
-    const data = node.data;
-    for (let offset = 0; offset < data.length; offset++) {
-      const character = data[offset];
-      const isWhitespace = !block.preformatted && collapsibleWhitespace.test(character);
-      if (isWhitespace && inWhitespace) {
-        continue;
-      }
-      inWhitespace = isWhitespace;
-      characters.push(isWhitespace ? " " : character);
-      nodes.push(node);
-      offsets.push(offset);
+  for (const node of nodes) {
+    const nodeEnd = consumed + node.length;
+    if (start >= consumed && start < nodeEnd) {
+      range.setStart(node, start - consumed);
     }
+    if (end > consumed && end <= nodeEnd) {
+      range.setEnd(node, end - consumed);
+      break;
+    }
+    consumed = nodeEnd;
   }
 
-  return { text: characters.join(""), nodes, offsets };
-}
-
-// CSS が 1 個の空白に畳む文字。
-const collapsibleWhitespace = /[ \t\n\r\f]/;
-
-// 見えている文字列の位置 [start, end) を、テキストノードをまたげる Range に直す。
-function createRange(searchable: SearchableText, start: number, end: number): Range {
-  const range = document.createRange();
-  const last = end - 1;
-  range.setStart(searchable.nodes[start], searchable.offsets[start]);
-  range.setEnd(searchable.nodes[last], searchable.offsets[last] + 1);
   return range;
 }

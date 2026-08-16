@@ -10,8 +10,9 @@ import {
   visibleWorktreeView,
 } from "./helpers";
 
-// 検索は「見えている文字」に対して行う。強調をまたぐ needle と大文字の NEEDLE も同じ 1 語として
-// 数え、段落をまたぐ endof + block は繋げない。最後の 1 件はスクロールしないと見えない位置に置く。
+// 検索は Markdown の記法ではなく描画されたテキストに対して行う。強調をまたぐ needle と大文字の
+// NEEDLE も同じ 1 語として数え、段落をまたぐ endof + block は繋げない。最後の 1 件はスクロール
+// しないと見えない位置に置く。
 const findMarkdown = [
   "# find e2e",
   "",
@@ -22,15 +23,6 @@ const findMarkdown = [
   "paragraph ending with endof",
   "",
   "block starts this paragraph.",
-  "",
-  "soft wrapped",
-  "phrase here.",
-  "",
-  "spaced   words here.",
-  "",
-  "```",
-  "code  fence",
-  "```",
   "",
   ...Array.from({ length: 80 }, (_, index) => `filler line ${index}\n`),
   "last **NEEDLE** here.",
@@ -78,18 +70,6 @@ test("Markdown プレビューを Cmd+F で検索できる", async () => {
     await sessionView.locator(".find-input").fill("endofblock");
     await expect(sessionView.locator(".find-count")).toHaveText("0/0");
     expect(await highlightSize(window, "markdown-find")).toBeNull();
-
-    // 改行や連続空白は画面上 1 個の空白なので、見えている通りの文字列で探せる
-    await sessionView.locator(".find-input").fill("wrapped phrase");
-    await expect(sessionView.locator(".find-count")).toHaveText("1/1");
-    await sessionView.locator(".find-input").fill("spaced words");
-    await expect(sessionView.locator(".find-count")).toHaveText("1/1");
-
-    // コードブロックは書いた通りに表示されるので、空白も畳まない
-    await sessionView.locator(".find-input").fill("code  fence");
-    await expect(sessionView.locator(".find-count")).toHaveText("1/1");
-    await sessionView.locator(".find-input").fill("code fence");
-    await expect(sessionView.locator(".find-count")).toHaveText("0/0");
 
     // 閉じたら塗りも消える
     await window.keyboard.press("Escape");
