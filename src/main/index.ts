@@ -12,7 +12,6 @@ import { fetchGitHubPullRequests } from "./github/github.js";
 import { listWorktrees } from "./git/worktree.js";
 import { PullRequestMonitor } from "./github/pull-request-monitor.js";
 import { PlanUsageMonitor } from "./agents/plan-usage-monitor.js";
-import { RateLimitRecovery } from "./agents/rate-limit-recovery.js";
 import { resolveCommandPaths } from "./agents/command.js";
 import { getAgent, agents } from "./agents/registry.js";
 import type {
@@ -70,6 +69,9 @@ const service = new YuruService(
     sessionChanged: sendSessionChanged,
     repoListChanged: sendRepoListChanged,
     rateLimitStopsChanged: sendRateLimitStopsChanged,
+    refreshPlanUsage: () => {
+      void planUsageMonitor.refreshOnce();
+    },
     refreshWorktreeWatcher,
     addWorktreeWatcherRepo,
   },
@@ -137,18 +139,6 @@ function sendPullRequestsChanged(updates: PullRequestUpdate[]): void {
 let latestPlanUsages: ProviderPlanUsage[] = [];
 let latestRateLimitStops: RateLimitStop[] = [];
 
-// rate limit の解消を、プラン利用状況の更新のたびに見る。解消していれば
-// その provider のセッションを続きから動かす (F58)。
-const rateLimitRecovery = new RateLimitRecovery({
-  refreshPlanUsage: () => {
-    void planUsageMonitor.refreshOnce();
-  },
-  hasWaitingSessions: (provider) => service.hasSessionsWaitingForRateLimitReset(provider),
-  resumeSessions: (provider) => {
-    void service.resumeAfterRateLimit(provider);
-  },
-});
-
 function sendRateLimitStopsChanged(stops: RateLimitStop[]): void {
   latestRateLimitStops = stops;
   sendToRenderer("rateLimitStops:changed", stops);
@@ -156,9 +146,6 @@ function sendRateLimitStopsChanged(stops: RateLimitStop[]): void {
 
 function sendProviderPlanUsageChanged(usages: ProviderPlanUsage[]): void {
   latestPlanUsages = usages;
-  // 解消の判定を先に通す。ここで指定済みの session へ送るので、止まっている
-  // session の一覧を作り直すのはその後になる。
-  rateLimitRecovery.update(usages);
   void service.refreshRateLimitStops(usages);
   sendToRenderer("providerPlanUsage:changed", usages);
 }
@@ -347,7 +334,6 @@ async function stopApplicationServices(): Promise<void> {
   servicesStopped = true;
   pullRequestMonitor.stop();
   planUsageMonitor.stop();
-  rateLimitRecovery.stop();
   worktreeWatcher?.stop();
   try {
     await apiServer?.stop();
