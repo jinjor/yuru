@@ -14,6 +14,8 @@ import {
 } from "./paths.js";
 import { loadWorktreeContextPrompt } from "../worktree-context-prompt.js";
 import { IncrementalSessionPreviewReader } from "../preview-reader.js";
+import { isStoppedAtRateLimit } from "../rate-limit-stop.js";
+import { classifyClaudeTranscriptLine } from "./rate-limit-stop.js";
 import { getYuruClaudePluginDir } from "../../api/skill-materializer.js";
 import { loadClaudePlanUsage } from "./plan-usage.js";
 
@@ -233,6 +235,13 @@ function escapeRegex(value: string): string {
   return value.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
 }
 
+async function isStoppedByRateLimit(agentSessionId: string): Promise<boolean> {
+  const sessionFilePath = await findClaudeSessionFile(agentSessionId);
+  return sessionFilePath === null
+    ? false
+    : isStoppedAtRateLimit(sessionFilePath, classifyClaudeTranscriptLine);
+}
+
 async function hasStoredSession(agentSessionId: string): Promise<boolean> {
   return (await findClaudeSessionFile(agentSessionId)) !== null;
 }
@@ -267,6 +276,7 @@ export const agent: Agent = {
   resolvesSessionIdLazily: false,
   loadStoredSessions,
   loadStoredSessionPreview,
+  isStoppedByRateLimit,
   loadWorktreeSessionHints,
   hasStoredSession,
   loadPlanUsage: loadClaudePlanUsage,

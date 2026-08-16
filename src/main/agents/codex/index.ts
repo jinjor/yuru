@@ -10,6 +10,8 @@ import { codexSessionDateDirFromId, getCodexHistoryPath, getCodexSessionsDir } f
 import { loadWorktreeContextPrompt } from "../worktree-context-prompt.js";
 import { detectCodexWorktreeSessionLines } from "./session-detection.js";
 import { IncrementalSessionPreviewReader } from "../preview-reader.js";
+import { isStoppedAtRateLimit } from "../rate-limit-stop.js";
+import { classifyCodexRolloutLine } from "./rate-limit-stop.js";
 import { loadCodexPlanUsage } from "./plan-usage.js";
 
 interface CodexSessionMeta {
@@ -226,6 +228,13 @@ async function loadStoredSessionPreview(agentSessionId: string): Promise<Session
   return sessionFilePath ? readCodexSessionPreview(sessionFilePath) : null;
 }
 
+async function isStoppedByRateLimit(agentSessionId: string): Promise<boolean> {
+  const sessionFilePath = await findCodexSessionFile(agentSessionId);
+  return sessionFilePath === null
+    ? false
+    : isStoppedAtRateLimit(sessionFilePath, classifyCodexRolloutLine);
+}
+
 async function findCodexSessionFile(agentSessionId: string): Promise<string | null> {
   const cachedFilePath = sessionFilePathsById.get(agentSessionId);
   if (cachedFilePath && fs.existsSync(cachedFilePath)) {
@@ -399,4 +408,5 @@ export const agent: Agent = {
   },
   waitForSessionId,
   detectUserActionRequired,
+  isStoppedByRateLimit,
 };

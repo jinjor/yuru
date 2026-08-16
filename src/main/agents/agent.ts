@@ -85,6 +85,10 @@ export interface Agent {
   // detects an agent-specific signal; false does not determine the overall
   // activity state.
   detectUserActionRequired?(terminalTitle: string): boolean;
+  // Whether the session is stopped where the provider refused a request for
+  // rate limiting. Reads the agent's own record of the refusal; agents that do
+  // not record one leave this out and never auto-continue.
+  isStoppedByRateLimit?(agentSessionId: string): Promise<boolean>;
   // Whether the agent recorded the injected initialInput into the session
   // store. Only providers that launch with initialInput implement this; the
   // runtime uses it to verify the injection did not get lost.

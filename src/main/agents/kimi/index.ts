@@ -3,6 +3,8 @@ import fs from "fs";
 import path from "path";
 import { streamRipgrepLineMatches } from "../../ripgrep.js";
 import type { PendingSession, SessionPreview, Agent, SessionSnapshot } from "../agent.js";
+import { isStoppedAtRateLimit } from "../rate-limit-stop.js";
+import { classifyKimiSessionLogLine } from "./rate-limit-stop.js";
 import { parseJsonLinesAs, readTextFileIfExists } from "../store-utils.js";
 import type { WorktreeSessionHint } from "../session-detection.js";
 import {
@@ -13,6 +15,7 @@ import { assertValidTerminalInput } from "../../terminal/initial-input.js";
 import {
   kimiSessionIndexPath,
   kimiSessionStatePath,
+  kimiSessionLogPath,
   kimiSessionsDir,
   kimiWireLogPath,
 } from "./paths.js";
@@ -162,6 +165,13 @@ async function loadStoredSessionPreview(agentSessionId: string): Promise<Session
   return state ? toSessionPreview(state) : null;
 }
 
+async function isStoppedByRateLimit(agentSessionId: string): Promise<boolean> {
+  const entry = await findKimiSessionRef(agentSessionId);
+  return entry === null
+    ? false
+    : isStoppedAtRateLimit(kimiSessionLogPath(entry.sessionDir), classifyKimiSessionLogLine);
+}
+
 async function hasStoredSession(agentSessionId: string): Promise<boolean> {
   return (await findKimiSessionRef(agentSessionId)) !== null;
 }
@@ -277,6 +287,7 @@ export const agent: Agent = {
   loadStoredSessionPreview,
   loadWorktreeSessionHints,
   hasStoredSession,
+  isStoppedByRateLimit,
   loadPlanUsage: loadKimiPlanUsage,
   async createResumeLaunch(session) {
     // kimi refuses to resume unless the process cwd equals the session's

@@ -18,6 +18,10 @@ export function kimiSessionStatePath(sessionDir: string): string {
   return path.join(sessionDir, "state.json");
 }
 
+export function kimiSessionLogPath(sessionDir: string): string {
+  return path.join(sessionDir, "logs", "kimi-code.log");
+}
+
 export function kimiWireLogPath(sessionDir: string): string {
   return path.join(sessionDir, "agents", "main", "wire.jsonl");
 }
