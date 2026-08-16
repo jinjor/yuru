@@ -20,9 +20,8 @@ interface FileCandidate {
   dir: string;
 }
 
-interface ScoredResult {
+interface FileSearchResult {
   candidate: FileCandidate;
-  score: number;
   basenameMatches: MatchRange[];
   dirMatches: MatchRange[];
 }
@@ -32,6 +31,7 @@ const MAX_RESULTS = 200;
 export function FileSearch({ onClose, onSelectFile, worktreeId }: FileSearchProps) {
   const [query, setQuery] = useState("");
   const [candidates, setCandidates] = useState<FileCandidate[] | null>(null);
+  const [recentPaths, setRecentPaths] = useState<string[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -44,17 +44,27 @@ export function FileSearch({ onClose, onSelectFile, worktreeId }: FileSearchProp
       const paths = resultDataOrNull(result) ?? [];
       setCandidates(paths.map(toCandidate));
     });
+    window.electronAPI.listRecentFiles(worktreeId).then((result) => {
+      if (cancelled) {
+        return;
+      }
+      setRecentPaths(resultDataOrNull(result) ?? []);
+    });
     return () => {
       cancelled = true;
     };
   }, [worktreeId]);
 
+  // 入力前は「最近開いたファイル」を候補にする。
   const results = useMemo(() => {
-    if (!candidates || query.trim().length === 0) {
-      return [] as ScoredResult[];
+    if (!candidates) {
+      return [] as FileSearchResult[];
+    }
+    if (query.trim().length === 0) {
+      return recentResults(candidates, recentPaths);
     }
     return scoreCandidates(candidates, query);
-  }, [candidates, query]);
+  }, [candidates, query, recentPaths]);
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -138,7 +148,7 @@ function FileSearchRow({
   isSelected: boolean;
   onClick: () => void;
   onHover: () => void;
-  result: ScoredResult;
+  result: FileSearchResult;
 }) {
   const { candidate, basenameMatches, dirMatches } = result;
   return (
@@ -199,7 +209,21 @@ function toCandidate(filePath: string): FileCandidate {
   };
 }
 
-function scoreCandidates(candidates: FileCandidate[], query: string): ScoredResult[] {
+// 履歴は開いた順そのものを並び順にするので、スコアもハイライトも付けない。
+function recentResults(candidates: FileCandidate[], recentPaths: string[]): FileSearchResult[] {
+  const candidatesByPath = new Map(candidates.map((candidate) => [candidate.path, candidate]));
+  const results: FileSearchResult[] = [];
+  for (const recentPath of recentPaths) {
+    // もう存在しないファイルは候補一覧に居ないので、そのまま履歴から落とす。
+    const candidate = candidatesByPath.get(recentPath);
+    if (candidate) {
+      results.push({ candidate, basenameMatches: [], dirMatches: [] });
+    }
+  }
+  return results;
+}
+
+function scoreCandidates(candidates: FileCandidate[], query: string): FileSearchResult[] {
   const terms = query
     .toLowerCase()
     .split(/\s+/)
@@ -208,7 +232,7 @@ function scoreCandidates(candidates: FileCandidate[], query: string): ScoredResu
     return [];
   }
 
-  const scored: ScoredResult[] = [];
+  const scored: { result: FileSearchResult; score: number }[] = [];
   for (const candidate of candidates) {
     const basenameLower = candidate.basename.toLowerCase();
     const dirLower = candidate.dir.toLowerCase();
@@ -250,10 +274,12 @@ function scoreCandidates(candidates: FileCandidate[], query: string): ScoredResu
     }
 
     scored.push({
-      candidate,
+      result: {
+        candidate,
+        basenameMatches: mergeRanges(basenameMatches),
+        dirMatches: mergeRanges(dirMatches),
+      },
       score,
-      basenameMatches: mergeRanges(basenameMatches),
-      dirMatches: mergeRanges(dirMatches),
     });
   }
 
@@ -261,13 +287,15 @@ function scoreCandidates(candidates: FileCandidate[], query: string): ScoredResu
     if (b.score !== a.score) {
       return b.score - a.score;
     }
-    if (a.candidate.path.length !== b.candidate.path.length) {
-      return a.candidate.path.length - b.candidate.path.length;
+    const aPath = a.result.candidate.path;
+    const bPath = b.result.candidate.path;
+    if (aPath.length !== bPath.length) {
+      return aPath.length - bPath.length;
     }
-    return a.candidate.path.localeCompare(b.candidate.path);
+    return aPath.localeCompare(bPath);
   });
 
-  return scored.slice(0, MAX_RESULTS);
+  return scored.slice(0, MAX_RESULTS).map((entry) => entry.result);
 }
 
 function mergeRanges(ranges: MatchRange[]): MatchRange[] {

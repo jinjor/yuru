@@ -62,6 +62,9 @@ const electronAPI: ElectronAPI = {
   listFiles: (worktreeId: string, relativePath?: string) =>
     ipcRenderer.invoke("files:list", worktreeId, relativePath),
   listAllFiles: (worktreeId: string) => ipcRenderer.invoke("files:listAll", worktreeId),
+  listRecentFiles: (worktreeId: string) => ipcRenderer.invoke("files:listRecent", worktreeId),
+  recordRecentFile: (worktreeId: string, filePath: string) =>
+    ipcRenderer.invoke("files:recordRecent", worktreeId, filePath),
   resolveRepoFile: (worktreeId: string, filePath: string) =>
     ipcRenderer.invoke("files:resolveRepoFile", worktreeId, filePath),
   readWorktreeFile: (worktreeId: string, filePath: string) =>

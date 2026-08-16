@@ -519,6 +519,14 @@ function registerIpcHandlers(): void {
     return service.listAllFiles(worktreeId);
   });
 
+  handleIpc("files:listRecent", (_event, worktreeId: string) => {
+    return service.listRecentFiles(worktreeId);
+  });
+
+  handleIpc("files:recordRecent", (_event, worktreeId: string, filePath: string) => {
+    return service.recordRecentFile(worktreeId, filePath);
+  });
+
   handleIpc("files:resolveRepoFile", (_event, worktreeId: string, filePath: string) => {
     return service.resolveRepoFile(worktreeId, filePath);
   });

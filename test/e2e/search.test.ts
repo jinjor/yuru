@@ -1,12 +1,16 @@
-import { expect, test, type ElectronApplication } from "@playwright/test";
+import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
 import {
   closeYuru,
   createCommittedRepo,
   createE2eContext,
+  createGitWorktree,
   expectPreviewPath,
   launchWindow,
   openMainTerminal,
   registerRepo,
+  visibleWorktreeView,
+  worktreeCard,
+  writeFiles,
 } from "./helpers";
 
 test("Cmd+P でファイル検索パレットを開き選択したファイルをプレビューする", async () => {
@@ -73,6 +77,65 @@ test("Cmd+Shift+F で code search を開き結果をプレビューする", asyn
     await context.cleanup();
   }
 });
+
+test("ファイル検索パレットは空入力のとき最近開いたファイルを repo 共通で出し、再起動後も残す", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context, {
+      "README.md": "# e2e\n",
+      "src/recent-one.ts": "export const label = 'from main worktree';\n",
+      "src/recent-two.ts": "export const two = 2;\n",
+    });
+    const otherWorktree = await createGitWorktree(context, repoDir, "recent-other");
+    await writeFiles(otherWorktree, {
+      "src/recent-one.ts": "export const label = 'from other worktree';\n",
+    });
+    await registerRepo(context, repoDir, [{ worktreePath: otherWorktree }]);
+
+    let launched = await launchWindow(context);
+    app = launched.app;
+    await openMainTerminal(launched.window);
+
+    await openFromPalette(launched.window, "recent-one", "src/recent-one.ts");
+    await openFromPalette(launched.window, "recent-two", "src/recent-two.ts");
+
+    await closeYuru(app);
+    app = null;
+
+    launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+    // 別の worktree でも、同じ repo で開いたファイルがそのまま候補になる。
+    await worktreeCard(window, "recent-other").click();
+    await expect(worktreeCard(window, "recent-other")).toHaveClass(/selected/);
+
+    await window.keyboard.press("Meta+P");
+    await expect(window.locator(".file-search .text-input")).toHaveValue("");
+    await expect(window.locator(".file-search-row")).toHaveCount(2);
+    await expect(window.locator(".file-search-row").first()).toContainText("recent-two.ts");
+    await expect(window.locator(".file-search-row").nth(1)).toContainText("recent-one.ts");
+
+    // 開くのは選択中 worktree のファイル。
+    await window.locator(".file-search-row", { hasText: "recent-one.ts" }).click();
+    await expectPreviewPath(window, "src/recent-one.ts");
+    await expect(
+      visibleWorktreeView(window).locator(".source-line", { hasText: "from other worktree" }),
+    ).toBeVisible();
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+async function openFromPalette(window: Page, query: string, fullPath: string): Promise<void> {
+  await window.keyboard.press("Meta+P");
+  await window.locator(".file-search .text-input").fill(query);
+  await expect(window.locator(".file-search-row.selected", { hasText: query })).toBeVisible();
+  await window.keyboard.press("Enter");
+  await expect(window.locator(".file-search")).toBeHidden();
+  await expectPreviewPath(window, fullPath);
+}
 
 test("ファイル検索パレットは Enter で先頭候補を開ける", async () => {
   const context = await createE2eContext();

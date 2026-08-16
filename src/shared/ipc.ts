@@ -260,6 +260,9 @@ export interface ElectronAPI {
   releaseHtmlPreview: (grantId: string) => Promise<void>;
   listFiles: (worktreeId: string, relativePath?: string) => Promise<Result<FileTreeNode[]>>;
   listAllFiles: (worktreeId: string) => Promise<Result<string[]>>;
+  // Cmd+P で開いたときの初期候補。新しく開いた順の相対パス。
+  listRecentFiles: (worktreeId: string) => Promise<Result<string[]>>;
+  recordRecentFile: (worktreeId: string, filePath: string) => Promise<void>;
   // ターミナルのファイルリンクの解決。worktree 内なら相対パス、外なら絶対パス、開けなければ null。
   resolveRepoFile: (worktreeId: string, filePath: string) => Promise<string | null>;
   readWorktreeFile: (worktreeId: string, filePath: string) => Promise<Result<string | null>>;

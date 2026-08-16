@@ -1,6 +1,6 @@
 # Architecture Notes
 
-Last updated: 2026-08-13
+Last updated: 2026-08-16
 
 この文書は現在の Yuru のアーキテクチャをまとめる。
 実装の細部、型定義、処理手順の正確な姿はコードを正とする。
@@ -53,6 +53,9 @@ Yuru の中では、Claude Code / Codex CLI / Kimi CLI そのものを `agent` �
 - file review store
   - worktree ごとの、ファイル内容に対するレビュー済み宣言
   - 表示中の checked 状態そのものではなく、fork 元と承認済み内容の blob OID を保存する
+- recent file store
+  - repo ごとの、プレビューで開いたファイルの新しい順の並び
+  - ファイル検索パレット (Cmd+P) の、入力前の候補になる
 - process memory
   - active terminal runtime
   - PTY process と scrollback
@@ -100,6 +103,15 @@ Git 上には存在するが、まだ Yuru metadata に strong link を持たな
 `~/.yuru/file-reviews.json` に分けて保存する。worktree の絶対 path とファイルの相対 path を key にし、
 値は「fork 元の blob OID : 承認した内容の blob OID」である。現在の表示がレビュー済みかどうかは、
 この記録と Git の各層にある実際の blob OID を比較して毎回導出する。
+
+最近開いたファイルの履歴も同じ理由で `~/.yuru/recent-files.json` に分ける。
+こちらは worktree ではなく repo の絶対 path を key にし、値は開いたファイルの相対 path を
+新しい順に並べた配列である。同じ repo の worktree は履歴を共有し、候補は選択中 worktree の
+ファイルを指す。よく使うファイルは worktree をまたいで必要になるためである。
+開いた経路 (ファイルツリー、Changes、ターミナルのリンク、パレット) は区別せず、
+プレビューに出たファイルをそのまま記録する。worktree の外を指す絶対 path は、
+他の worktree で開き直せないので記録しない。表示時は選択中 worktree のファイル一覧と
+突き合わせ、そこに無いファイルは候補から落とす。
 
 ## Repo assembly
 

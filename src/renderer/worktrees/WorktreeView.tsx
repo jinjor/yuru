@@ -242,6 +242,16 @@ export const WorktreeView = memo(function WorktreeView({
     [worktreeId],
   );
 
+  // Cmd+P の初期候補に使う「最近開いたファイル」を残す。開いた経路 (ファイルツリー、Changes、
+  // ターミナルのリンク、Cmd+P) を問わず、プレビューに出た path をそのまま履歴にする。
+  useEffect(() => {
+    const openedPath = previewSelection?.path;
+    if (!openedPath) {
+      return;
+    }
+    void window.electronAPI.recordRecentFile(worktreeId, openedPath);
+  }, [previewSelection?.path, worktreeId]);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
       const isPaletteShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "p";

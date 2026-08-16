@@ -54,6 +54,7 @@ import {
   resolveRepoFile as resolveRepoFilePath,
   writeFile as writeRepoFile,
 } from "./files/files.js";
+import { addRecentFile, loadRecentFiles } from "./files/recent-files.js";
 import { getAgent } from "./agents/registry.js";
 import {
   exhaustedUntil,
@@ -916,6 +917,31 @@ export class YuruService {
     } catch (error) {
       return this.failAndReport(toAppError(error, { command: "git" }));
     }
+  }
+
+  async listRecentFiles(worktreeId: string) {
+    const worktree = await this.findGitWorktree(worktreeId);
+    if (!worktree) {
+      return ok([] as string[]);
+    }
+    try {
+      return ok(loadRecentFiles(worktree.repoPath));
+    } catch (error) {
+      return this.failAndReport(toAppError(error));
+    }
+  }
+
+  async recordRecentFile(worktreeId: string, filePath: string): Promise<void> {
+    // 履歴は repo 単位で、worktree をまたいで同じ相対パスを指す。worktree の外を指す
+    // 絶対パス (ターミナルのリンクから開いた場合) は他の worktree で開き直せないので残さない。
+    if (path.isAbsolute(filePath)) {
+      return;
+    }
+    const worktree = await this.findGitWorktree(worktreeId);
+    if (!worktree) {
+      return;
+    }
+    addRecentFile(worktree.repoPath, filePath);
   }
 
   async readWorktreeFile(worktreeId: string, filePath: string): Promise<Result<string | null>> {
