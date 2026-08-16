@@ -1040,10 +1040,11 @@ export class YuruService {
   // 使い切っている provider が無い間は agent の記録を一切読まない。
   async refreshRateLimitStops(usages: readonly ProviderPlanUsage[]): Promise<void> {
     const resetsAtByProvider = new Map<SessionProvider, number | null>();
-    // 利用状況を取れなかった provider は、解消したとも使い切っているとも言えない。
+    // 使用率を読めた provider だけが解消の根拠になる。取得に失敗した場合も、
+    // ログインが切れてプランの枠自体が見えなくなった場合も、解消したとは言えない。
     const unknownProviders = new Set<SessionProvider>();
     for (const usage of usages) {
-      if (usage.state === "failed") {
+      if (usage.state !== "ok") {
         unknownProviders.add(usage.provider);
         continue;
       }
@@ -1099,7 +1100,7 @@ export class YuruService {
     }
     this.events.rateLimitStopsChanged(stops);
     this.scheduleRateLimitRecheck();
-    await Promise.all(resumed.map((stop) => this.sendRateLimitResumeInput(stop.terminalRuntimeId)));
+    await Promise.all(resumed.map((stop) => this.sendRateLimitResumeInput(stop)));
   }
 
   setContinueWhenRateLimitResets(terminalRuntimeId: string, continueWhenReset: boolean): void {
@@ -1138,9 +1139,17 @@ export class YuruService {
   // 選択肢が出ている可能性があるので、まず Esc で閉じてから送る。Esc はどの agent でも
   // キャンセル側にしか倒れず、承認はしない。Esc は入力欄を消さないので、人が打ちかけて
   // いた文字に続きが繋がらないよう Ctrl+U で消してから入力する。
-  private async sendRateLimitResumeInput(terminalRuntimeId: string): Promise<void> {
+  private async sendRateLimitResumeInput(stop: RateLimitStop): Promise<void> {
+    const terminalRuntimeId = stop.terminalRuntimeId;
     const proc = this.ptyProcesses.get(terminalRuntimeId);
-    if (!proc) {
+    const agentSessionId = this.terminalRuntimeMap.get(terminalRuntimeId)?.agentSessionId;
+    if (!proc || !agentSessionId) {
+      return;
+    }
+    // 止まっていることが分かったのは最後に記録を読んだ時点なので、その後に人が自分で
+    // 続きを始めていることがある。動いているターンに Esc を送ると中断させてしまうため、
+    // 送る直前に読み直して、まだ止まったままの時だけ送る。
+    if (!(await getAgent(stop.provider).isStoppedByRateLimit?.(agentSessionId))) {
       return;
     }
     // 送った直後に PTY が死ぬこともあるので、書き込みのたびに生死を見る。
