@@ -167,14 +167,19 @@ async function runPermissionPrompt(window: Page, provider: ProviderActivityE2e):
 }
 
 async function runInterrupt(window: Page, provider: ProviderActivityE2e): Promise<void> {
+  const startedMarker = "ACTIVITY_INTERRUPT";
   await submitPrompt(
     window,
     [
-      "Keep listing integers, one per line, until interrupted.",
+      "First print the two words ACTIVITY and INTERRUPT separated by a single underscore.",
+      "Then keep listing integers, one per line, until interrupted.",
       "Do not ask for confirmation and do not stop on your own.",
     ].join(" "),
   );
   await expectActivity(window, provider, "working", 30_000);
+  await expect(visibleWorktreeView(window).locator(".xterm")).toContainText(startedMarker, {
+    timeout: 30_000,
+  });
   await visibleWorktreeView(window).locator(".xterm").click();
   await window.keyboard.press("Control+C");
   await expectActivity(window, provider, "waiting", 20_000);
@@ -216,9 +221,10 @@ function sessionDot(window: Page, provider: ProviderActivityE2e, activity: "work
 }
 
 async function readTerminalText(window: Page): Promise<string> {
-  return visibleWorktreeView(window)
-    .locator(".xterm")
-    .evaluate((element) => element.querySelector(".xterm-rows")?.textContent ?? "");
+  const terminal = visibleWorktreeView(window).locator(".xterm");
+  return (await terminal.count()) === 0
+    ? "(terminal missing)"
+    : terminal.evaluate((element) => element.querySelector(".xterm-rows")?.textContent ?? "");
 }
 
 async function readSessionDotLabels(
