@@ -150,6 +150,7 @@ task worktree に対して新規 session を開始すると、agent session id �
 その場で primary の末尾に attach し、遅れて分かる provider は session id 解決後に attach する。
 初回起動時だけ worktree context を hidden prompt として注入する。
 この prompt は「agent session は repo root で起動しているが、実際の作業場所は task worktree である」ことを明示し、ファイル操作・コマンド実行・build/test は `worktreePath` で行い、回答中のファイルパスは `worktreePath` 基準の相対パスまたは絶対パスで記述するよう指示する。
+あわせて、このメッセージは Yuru が注入した環境コンテキストでありユーザーからのタスク指示ではないこと、ユーザーが明示するまで作業を開始しないことも指示する。
 
 - Claude: `--append-system-prompt`
 - Codex: `-c developer_instructions=...`
