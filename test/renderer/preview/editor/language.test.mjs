@@ -30,3 +30,22 @@ test("Dockerfile の編集時に命令をハイライトする", async () => {
     assert.deepEqual(highlighted, [{ text: "FROM", classes: "tok-keyword" }], path);
   }
 });
+
+test(".proto の編集時にキーワードをハイライトする", async () => {
+  const language = loadLanguageExtension("api/service.proto");
+  assert.ok(language);
+
+  const state = EditorState.create({
+    doc: "message Foo {}",
+    extensions: [await language],
+  });
+  const highlighted = [];
+  highlightTree(syntaxTree(state), classHighlighter, (from, to, classes) => {
+    highlighted.push({ text: state.sliceDoc(from, to), classes });
+  });
+
+  assert.deepEqual(highlighted, [
+    { text: "message", classes: "tok-keyword" },
+    { text: "Foo", classes: "tok-variableName" },
+  ]);
+});

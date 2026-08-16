@@ -54,6 +54,10 @@ export function loadLanguageExtension(filePath: string): Promise<Extension> | nu
       return import("@codemirror/legacy-modes/mode/dockerfile").then((m) =>
         StreamLanguage.define(m.dockerFile),
       );
+    case "proto":
+      return import("@codemirror/legacy-modes/mode/protobuf").then((m) =>
+        StreamLanguage.define(m.protobuf),
+      );
     default:
       return null;
   }

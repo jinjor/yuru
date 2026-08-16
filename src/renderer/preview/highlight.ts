@@ -18,6 +18,7 @@ const defaultLangs: BundledLanguage[] = [
   "rust",
   "go",
   "dockerfile",
+  "proto",
 ];
 
 function getHighlighter(): Promise<Highlighter> {
@@ -54,6 +55,7 @@ const extensionToLang: Record<string, BundledLanguage> = {
   rs: "rust",
   go: "go",
   dockerfile: "dockerfile",
+  proto: "proto",
 };
 
 function detectLanguage(filePath: string): BundledLanguage | null {

@@ -17,3 +17,9 @@ test("Dockerfile をファイル名で判定してハイライトする", async 
     assert.notEqual(line.tokens[0]?.color, "#d4d4d4", path);
   }
 });
+
+test(".proto を拡張子で判定してハイライトする", async () => {
+  const [line] = await tokenizeCode("message Foo {}", "api/service.proto", 14);
+  assert.equal(line.tokens[0]?.content, "message");
+  assert.notEqual(line.tokens[0]?.color, "#d4d4d4");
+});
