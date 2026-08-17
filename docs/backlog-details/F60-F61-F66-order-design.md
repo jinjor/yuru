@@ -1,6 +1,6 @@
 # F60/F61/F66 並び替えの構造設計
 
-Last updated: 2026-08-17
+Last updated: 2026-08-18
 
 ## Goal
 
@@ -144,3 +144,27 @@ HTML5 D&D (`dataTransfer`) が自然で、並び替えがポインタベース
 - 「primary session は attach 順を保持する」→ ユーザー指定順を保持する、に書き換え
 - タブ順の記述 (「保存された primary session の順」) は構造上変わらないが、
   「保存された順」の意味が attach 順からユーザー指定順に変わる点を明確にする
+
+## 実装前に決めたこと (2026-08-18)
+
+- **壊れた repo entry は起動時に消す。** `isSupportedGitRepo` が false の repo entry と、
+  その `repoId` を持つ `taskWorktrees` entry をまとめて消す (repo が消えると後者は誰も
+  読まない死んだデータになるため)。消した分は error center に warning で残す。置き場所は
+  起動時の `cleanupStaleTaskWorktrees` (`src/main/repos/maintenance.ts`) の隣。未マウントの
+  外部ボリューム上にある repo は削除と区別できないが、その使い方はしないので許容する。
+- **`repos:reorder` は送られた ID 順に `metadata.repos` を書く。** 上の「IPC」節は
+  セット一致の検証を 3 つ共通としているが、repo だけこちらを採る。送られなかった entry は
+  消えるので、壊れた repo は起動時の掃除でも並び替えでも消えることになる。
+  worktree と primary session はセット一致のまま残す。こちらは agent や CLI が動作中に
+  worktree・session を作るので、古い一覧からの上書きが実際に起きる。
+
+## 実装ステップ
+
+1. 壊れた repo entry の掃除。並び替えとは独立なので main から別 worktree で進める
+2. F61 repo の並び替え。並び替えドラッグの土台 (hook と CSS) 込みで、3〜5 はこれを使い回す
+3. F66 worktree の並び替え。`worktreeOrder` の導入と表示順の変更を含む
+4. F60 ホームの session 行の並び替え。primary session の並びの書き込み経路を含む
+5. F60 タブの並び替え。renderer だけで、4 の経路に「左隣のタブの直後」の規則で翻訳して渡す
+
+依存は 2 → 3 と 2 → 4 → 5。3 と 4 は 2 の後なら並行できる。2〜5 はそれぞれ e2e 1 ケースと
+`docs/backlog.md` の行削除まで含めて閉じ、architecture.md の書き換えは 5 で行う。
