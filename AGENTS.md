@@ -2,14 +2,16 @@
 
 ## Development
 
-After editing files on macOS, rebuild and restart the app to check behavior changes:
+After editing files on macOS, run verification relevant to the change.
+
+When the change affects behavior observable in the running Yuru app, rebuild and restart it:
 
 ```sh
 npm run build
 npm run app:restart
 ```
 
-Run these from the active task worktree, not from the repository root. Documentation-only edits need no rebuild or restart.
+Run these from the active task worktree, not from the repository root. Changes with no running app behavior to verify, such as documentation, tests, developer tooling, or package-manager-only metadata, need no app restart. Run a build only when the changed files can affect compilation or bundling.
 
 ## E2E
 
