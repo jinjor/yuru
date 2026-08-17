@@ -35,11 +35,13 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F65 | feature | Files / Code | `.proto` のシンタックスハイライト | `.proto` ファイルを読みやすくしたい |
 | B16 | bug | Changes / Diff | Committed の diff を正確にする | commit 済みの変更を正しい差分でレビューしたい |
 | F67 | feature | Files / Terminal | ファイル名を右ペインからターミナルにドロップできるようにする | ファイルパスを手入力せずターミナルへ渡したい |
+| F70 | feature | API / Worktrees / Sessions | リポジトリを横断して yuru worktree/session を API で作れるようにする | 対象リポジトリを指定して外部から作業を開始したい |
 
 ## Next
 
 | ID | Type | Area | Item | Notes |
 |---|---|---|---|---|
+| F69 | feature | API / Sessions | API でセッション作成時に effort レベルを設定できるようにする | セッションの用途に応じて推論量を指定したい |
 | F68 | feature | Sessions / Rate Limits | もうすぐ 100% になる時にあらかじめ rate limit 解除を予約したい | rate limit に達した後の待ち時間を減らしたい |
 | F54 | feature | Changes | ショートカットキーでレビュー済みにできるようにする | ファイルレビューを素早く進めたい |
 | F55 | feature | Mobile | モバイル連携 | モバイルから Yuru を使えるようにしたい |
