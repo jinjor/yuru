@@ -20,7 +20,9 @@ const {
   upsertTaskWorktree,
 } = await import("../../../src/main/repos/metadata.ts");
 const { loadRepoList } = await import("../../../src/main/repos/repo-list.ts");
-const { cleanupStaleTaskWorktrees } = await import("../../../src/main/repos/maintenance.ts");
+const { cleanupBrokenRepos, cleanupStaleTaskWorktrees } = await import(
+  "../../../src/main/repos/maintenance.ts",
+);
 const { toWorktreeId } = await import("../../../src/main/worktree-identity.ts");
 const { toSessionKey } = await import("../../../src/shared/session.ts");
 
@@ -999,6 +1001,60 @@ test("loadRepoList は suggested worktree session を並び替えずに返す", 
     result[0].taskWorktrees[0].suggestedSessions.map((session) => session.agentSessionKey),
     [toSessionKey("claude", "claude-b"), toSessionKey("claude", "claude-a")],
   );
+});
+
+test("cleanupBrokenRepos は Git repo でなくなった repo とその task worktree を削除する", async () => {
+  seed({
+    repos: [
+      { id: "repo-1", repoPath: "/tmp/repo-a" },
+      { id: "repo-2", repoPath: "/tmp/repo-b" },
+    ],
+    taskWorktrees: [
+      {
+        repoId: "repo-1",
+        worktreePath: "/tmp/repo-a/worktrees/keep",
+        primarySessions: [{ provider: "codex", agentSessionId: "codex-1" }],
+      },
+      {
+        repoId: "repo-2",
+        worktreePath: "/tmp/repo-b/worktrees/gone",
+        primarySessions: [{ provider: "claude", agentSessionId: "claude-1" }],
+      },
+    ],
+  });
+
+  const removedRepos = await cleanupBrokenRepos(async (repoPath) => repoPath === "/tmp/repo-a");
+
+  assert.deepEqual(removedRepos, [{ repoId: "repo-2", repoPath: "/tmp/repo-b" }]);
+  assert.deepEqual(loadMetadata(), {
+    repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
+    taskWorktrees: [
+      {
+        repoId: "repo-1",
+        worktreePath: "/tmp/repo-a/worktrees/keep",
+        primarySessions: [{ provider: "codex", agentSessionId: "codex-1" }],
+      },
+    ],
+  });
+});
+
+test("cleanupBrokenRepos は全 repo が有効なら metadata を書き換えない", async () => {
+  seed({
+    repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
+    taskWorktrees: [
+      {
+        repoId: "unknown-repo",
+        worktreePath: "/tmp/unknown/worktrees/orphan",
+        primarySessions: [],
+      },
+    ],
+  });
+  const before = fs.readFileSync(metadataPath, "utf8");
+
+  const removedRepos = await cleanupBrokenRepos(async () => true);
+
+  assert.deepEqual(removedRepos, []);
+  assert.equal(fs.readFileSync(metadataPath, "utf8"), before);
 });
 
 test("cleanupStaleTaskWorktrees は list に成功した repo の stale task worktree を削除する", async () => {

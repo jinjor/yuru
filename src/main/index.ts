@@ -2,7 +2,7 @@ import { app, BrowserWindow, Menu, ipcMain, protocol, session } from "electron";
 import type { IpcMainInvokeEvent, MenuItemConstructorOptions } from "electron";
 import path from "path";
 import { loadRepos } from "./repos/metadata.js";
-import { cleanupStaleTaskWorktrees } from "./repos/maintenance.js";
+import { cleanupBrokenRepos, cleanupStaleTaskWorktrees } from "./repos/maintenance.js";
 import { WorktreeWatcher } from "./repos/watcher.js";
 import { YuruService } from "./service.js";
 import { APP_NAME, getWindowTitleForAppPath } from "./app-title.js";
@@ -580,6 +580,14 @@ app.whenReady().then(async () => {
       ...appError,
       message: "Yuru skill could not be installed.",
       detail: appError.message,
+    });
+  }
+  // 壊れた repo を先に消しておくと、その repo の worktree list 失敗が
+  // stale task worktree cleanup の skip として二重に警告されない。
+  for (const removedRepo of await cleanupBrokenRepos()) {
+    recordAppWarning({
+      code: "git_failed",
+      message: `Removed ${removedRepo.repoPath} from Yuru because it is no longer a Git repository.`,
     });
   }
   const cleanupResult = await cleanupStaleTaskWorktrees();

@@ -218,9 +218,10 @@ worktree context prompt は `~/.yuru/worktree-context-prompt.txt` で差し替�
   - 削除が成功したら metadata の task worktree record と file review record も削除する。branch と agent session 履歴は残す
   - 実削除に失敗したら一覧を再取得してカードを実態に合わせ、モーダルは開かない。準備後に dirty / process が発生した場合は warning、その他の失敗は error として Error ログに記録する
 - startup maintenance
-  - app 起動時に registered repo ごとに `git worktree list` を実行する
+  - app 起動時に registered repo が Git repository のままかを確認し、そうでない repo record は
+    その repo の task worktree record ごと削除する。削除したことは warning として Error ログに残す
+  - 残った repo ごとに `git worktree list` を実行する
   - list に成功した repo だけ、metadata に残った stale task worktree record を削除する
-  - repo 自体の cleanup はしない
 
 ## UI structure
 
