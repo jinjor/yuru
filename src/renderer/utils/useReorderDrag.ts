@@ -134,7 +134,6 @@ export function useReorderDrag({
         window.removeEventListener("pointermove", handlePointerMove);
         window.removeEventListener("pointerup", handlePointerUp);
         window.removeEventListener("pointercancel", stop);
-        window.removeEventListener("keydown", handleKeyDown);
         stopRef.current = null;
         const session = sessionRef.current;
         if (!session) {
@@ -178,6 +177,9 @@ export function useReorderDrag({
         // 離した位置で決め直してから確定する。
         if (session) {
           applyPointer(session, upEvent.clientY);
+          // 掴んだ項目はポインタに付いて動くので、離すと同じ項目の click が続けて届く。
+          // 並び替えは選択を変えないので、その 1 回だけ握り潰す。
+          suppressNextClick();
         }
         const targetIndex = session?.targetIndex;
         const fromIndex = session?.fromIndex;
@@ -188,19 +190,10 @@ export function useReorderDrag({
         onReorder(moveItem(currentItemIds, fromIndex, targetIndex));
       };
 
-      const handleKeyDown = (keyEvent: KeyboardEvent): void => {
-        if (keyEvent.key !== "Escape") {
-          return;
-        }
-        // 取り消しは元の並びに戻すだけで、何も書かない。
-        stop();
-      };
-
       stopRef.current = stop;
       window.addEventListener("pointermove", handlePointerMove);
       window.addEventListener("pointerup", handlePointerUp);
       window.addEventListener("pointercancel", stop);
-      window.addEventListener("keydown", handleKeyDown);
     },
     [containerRef, itemIds, onReorder],
   );
@@ -218,6 +211,17 @@ export function useReorderDrag({
     itemStyle: (itemId) => toItemStyle(view, itemId),
     onItemPointerDown,
   };
+}
+
+function suppressNextClick(): void {
+  const swallowClick = (clickEvent: MouseEvent): void => {
+    clickEvent.stopPropagation();
+    window.removeEventListener("click", swallowClick, true);
+  };
+  window.addEventListener("click", swallowClick, true);
+  // ポインタを離した先が別の要素なら click は来ない。次のタスクまで待って外し、
+  // 後から来る普通の click を巻き込まないようにする。
+  setTimeout(() => window.removeEventListener("click", swallowClick, true), 0);
 }
 
 function toItemClassName(view: DragView | null, itemId: string): string {

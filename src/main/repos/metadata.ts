@@ -50,6 +50,19 @@ export function saveRepoOrder(repoIds: readonly string[]): void {
   saveMetadata(metadata);
 }
 
+// 送られた path の順をその repo の task worktree の表示順として書く。ここは並びだけを
+// 持ち、worktree の実体は Git 側が持つ。実在しない path は読み出し時 (repo-list) に
+// 捨てられるので、worktree を消した後の掃除は要らない。
+export function saveWorktreeOrder(repoId: string, worktreePaths: readonly string[]): void {
+  const metadata = loadMetadata();
+  const repo = metadata.repos.find((entry) => entry.id === repoId);
+  if (!repo) {
+    throw new Error(`Yuru metadata has no repo with id "${repoId}".`);
+  }
+  repo.worktreeOrder = [...worktreePaths];
+  saveMetadata(metadata);
+}
+
 export function upsertTaskWorktree(repoId: string, worktreePath: string): void {
   const metadata = loadMetadata();
   const worktreePathKey = toWorktreePathKey(worktreePath);
@@ -155,11 +168,21 @@ function parseRepo(value: unknown): RepoMetadata {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Yuru metadata repo entries must be objects.");
   }
-  const maybe = value as { id?: unknown; repoPath?: unknown };
+  const maybe = value as { id?: unknown; repoPath?: unknown; worktreeOrder?: unknown };
   if (typeof maybe.id !== "string" || typeof maybe.repoPath !== "string") {
     throw new Error("Yuru metadata repo entries must have string id and repoPath.");
   }
-  return { id: maybe.id, repoPath: maybe.repoPath };
+  const repo: RepoMetadata = { id: maybe.id, repoPath: maybe.repoPath };
+  if (maybe.worktreeOrder !== undefined) {
+    if (
+      !Array.isArray(maybe.worktreeOrder) ||
+      maybe.worktreeOrder.some((worktreePath) => typeof worktreePath !== "string")
+    ) {
+      throw new Error("Yuru metadata repo worktreeOrder must be an array of strings.");
+    }
+    repo.worktreeOrder = maybe.worktreeOrder;
+  }
+  return repo;
 }
 
 function parseTaskWorktrees(value: unknown): TaskWorktreeMetadata[] {

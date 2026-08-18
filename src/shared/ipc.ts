@@ -194,6 +194,8 @@ export interface ElectronAPI {
   getRepos: () => Promise<RepoListItem[]>;
   // 並び替え後の全 repo ID。渡した順がそのまま保存される。
   reorderRepos: (repoIds: string[]) => Promise<void>;
+  // 並び替え後の、その repo の全 task worktree path。今ある worktree と食い違えば保存しない。
+  reorderWorktrees: (repoId: string, worktreePaths: string[]) => Promise<Result<void>>;
   // 購読を始める前の分を取りこぼさないための初期値。以降は push で置き換える。
   getProviderPlanUsage: () => Promise<ProviderPlanUsage[]>;
   getRateLimitStops: () => Promise<RateLimitStop[]>;

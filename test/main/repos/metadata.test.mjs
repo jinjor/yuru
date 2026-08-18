@@ -18,12 +18,14 @@ const {
   parseMetadata,
   removeTaskWorktreeByPath,
   saveRepoOrder,
+  saveWorktreeOrder,
   upsertTaskWorktree,
 } = await import("../../../src/main/repos/metadata.ts");
 const { loadRepoList } = await import("../../../src/main/repos/repo-list.ts");
 const { cleanupBrokenRepos, cleanupStaleTaskWorktrees } = await import(
   "../../../src/main/repos/maintenance.ts",
 );
+const { saveTaskWorktreeOrder } = await import("../../../src/main/repos/worktree-order.ts");
 const { toWorktreeId } = await import("../../../src/main/worktree-identity.ts");
 const { toSessionKey } = await import("../../../src/shared/session.ts");
 
@@ -1004,6 +1006,80 @@ test("loadRepoList は suggested worktree session を並び替えずに返す", 
   );
 });
 
+test("loadRepoList は worktreeOrder の順に task worktree を並べる", async () => {
+  const repoPath = createGitRepo("repo-order");
+  seed({
+    repos: [
+      {
+        id: "repo-1",
+        repoPath,
+        worktreeOrder: [`${repoPath}/wt-c`, `${repoPath}/wt-a`],
+      },
+    ],
+    taskWorktrees: [],
+  });
+  const gitWorktrees = [
+    { path: `${repoPath}/wt-a`, branch: "a", headSha: "a".repeat(40), locked: false, createdAt: 1 },
+    { path: `${repoPath}/wt-b`, branch: "b", headSha: "b".repeat(40), locked: false, createdAt: 2 },
+    { path: `${repoPath}/wt-c`, branch: "c", headSha: "c".repeat(40), locked: false, createdAt: 3 },
+  ];
+
+  const result = await loadRepoList(
+    undefined,
+    listGitWorktreesFrom(new Map([[repoPath, gitWorktrees]])),
+  );
+
+  assert.deepEqual(
+    result[0].taskWorktrees.map((worktree) => worktree.name),
+    ["wt-c", "wt-a", "wt-b"],
+  );
+});
+
+test("loadRepoList は worktreeOrder に残った実在しない path を無視する", async () => {
+  const repoPath = createGitRepo("repo-order-stale");
+  seed({
+    repos: [
+      {
+        id: "repo-1",
+        repoPath,
+        worktreeOrder: [`${repoPath}/wt-removed`, `${repoPath}/wt-b`, `${repoPath}/wt-a`],
+      },
+    ],
+    taskWorktrees: [],
+  });
+  const gitWorktrees = [
+    { path: `${repoPath}/wt-a`, branch: "a", headSha: "a".repeat(40), locked: false, createdAt: 1 },
+    { path: `${repoPath}/wt-b`, branch: "b", headSha: "b".repeat(40), locked: false, createdAt: 2 },
+  ];
+
+  const result = await loadRepoList(
+    undefined,
+    listGitWorktreesFrom(new Map([[repoPath, gitWorktrees]])),
+  );
+
+  assert.deepEqual(
+    result[0].taskWorktrees.map((worktree) => worktree.name),
+    ["wt-b", "wt-a"],
+  );
+});
+
+test("loadRepoList は worktreeOrder を renderer へ渡さない", async () => {
+  const repoPath = createGitRepo("repo-order-hidden");
+  seed({
+    repos: [{ id: "repo-1", repoPath, worktreeOrder: [`${repoPath}/wt-a`] }],
+    taskWorktrees: [],
+  });
+
+  const result = await loadRepoList(undefined, async () => []);
+
+  assert.deepEqual(Object.keys(result[0]).sort(), [
+    "id",
+    "mainWorktree",
+    "repoPath",
+    "taskWorktrees",
+  ]);
+});
+
 test("cleanupBrokenRepos は Git repo でなくなった repo とその task worktree を削除する", async () => {
   seed({
     repos: [
@@ -1219,6 +1295,104 @@ test("saveRepoOrder は知らない ID を無視する", () => {
 
   saveRepoOrder(["missing-repo", "repo-1"]);
 
+  assert.deepEqual(loadMetadata().repos, [{ id: "repo-1", repoPath: "/tmp/repo-a" }]);
+});
+
+test("parseMetadata は repo の worktreeOrder を読み取る", () => {
+  const metadata = parseMetadata({
+    repos: [{ id: "repo-1", repoPath: "/tmp/repo", worktreeOrder: ["/tmp/wt-b", "/tmp/wt-a"] }],
+  });
+
+  assert.deepEqual(metadata.repos[0].worktreeOrder, ["/tmp/wt-b", "/tmp/wt-a"]);
+});
+
+test("parseMetadata は文字列以外を含む worktreeOrder を弾く", () => {
+  assert.throws(() =>
+    parseMetadata({ repos: [{ id: "repo-1", repoPath: "/tmp/repo", worktreeOrder: ["/tmp/wt", 1] }] }),
+  );
+});
+
+test("saveWorktreeOrder は対象 repo にだけ並びを書く", () => {
+  seed({
+    repos: [
+      { id: "repo-1", repoPath: "/tmp/repo-a" },
+      { id: "repo-2", repoPath: "/tmp/repo-b", worktreeOrder: ["/tmp/repo-b/wt-1"] },
+    ],
+    taskWorktrees: [],
+  });
+
+  saveWorktreeOrder("repo-1", ["/tmp/repo-a/wt-2", "/tmp/repo-a/wt-1"]);
+
+  assert.deepEqual(loadMetadata().repos, [
+    {
+      id: "repo-1",
+      repoPath: "/tmp/repo-a",
+      worktreeOrder: ["/tmp/repo-a/wt-2", "/tmp/repo-a/wt-1"],
+    },
+    { id: "repo-2", repoPath: "/tmp/repo-b", worktreeOrder: ["/tmp/repo-b/wt-1"] },
+  ]);
+});
+
+test("saveWorktreeOrder は知らない repo なら失敗する", () => {
+  seed({ repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }], taskWorktrees: [] });
+
+  assert.throws(() => saveWorktreeOrder("repo-2", ["/tmp/repo-a/wt-1"]));
+});
+
+function gitWorktree(worktreePath) {
+  return { path: worktreePath, branch: "b", headSha: "s".repeat(40), locked: false, createdAt: 1 };
+}
+
+test("saveTaskWorktreeOrder は今ある worktree と顔ぶれが同じなら並びを書く", async () => {
+  seed({ repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }], taskWorktrees: [] });
+
+  const saved = await saveTaskWorktreeOrder(
+    "repo-1",
+    ["/tmp/repo-a/wt-2", "/tmp/repo-a/wt-1"],
+    listGitWorktreesFrom(
+      new Map([["/tmp/repo-a", [gitWorktree("/tmp/repo-a/wt-1"), gitWorktree("/tmp/repo-a/wt-2")]]]),
+    ),
+  );
+
+  assert.equal(saved, true);
+  assert.deepEqual(loadMetadata().repos[0].worktreeOrder, [
+    "/tmp/repo-a/wt-2",
+    "/tmp/repo-a/wt-1",
+  ]);
+});
+
+test("saveTaskWorktreeOrder は顔ぶれが違うなら何も書かない", async () => {
+  seed({ repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }], taskWorktrees: [] });
+
+  const saved = await saveTaskWorktreeOrder(
+    "repo-1",
+    ["/tmp/repo-a/wt-2", "/tmp/repo-a/wt-1"],
+    listGitWorktreesFrom(
+      new Map([
+        [
+          "/tmp/repo-a",
+          [
+            gitWorktree("/tmp/repo-a/wt-1"),
+            gitWorktree("/tmp/repo-a/wt-2"),
+            gitWorktree("/tmp/repo-a/wt-3"),
+          ],
+        ],
+      ]),
+    ),
+  );
+
+  assert.equal(saved, false);
+  assert.equal(loadMetadata().repos[0].worktreeOrder, undefined);
+});
+
+test("saveTaskWorktreeOrder は知らない repo なら何も書かない", async () => {
+  seed({ repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }], taskWorktrees: [] });
+
+  const saved = await saveTaskWorktreeOrder("repo-2", ["/tmp/repo-b/wt-1"], async () => {
+    throw new Error("must not list worktrees");
+  });
+
+  assert.equal(saved, false);
   assert.deepEqual(loadMetadata().repos, [{ id: "repo-1", repoPath: "/tmp/repo-a" }]);
 });
 

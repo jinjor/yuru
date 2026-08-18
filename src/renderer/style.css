@@ -598,6 +598,18 @@ body,
   box-shadow: 0 0 0 2px rgba(123, 193, 255, 0.18);
 }
 
+/* カードは選択中の枠と自前の transition を持つので、並び替え中の見た目はそれより
+   後で上書きする。掴んだ側は浮かせ、どく側だけ transform を滑らせる。 */
+.task-worktree-card.reorder-dragging {
+  box-shadow:
+    0 0 0 1px var(--border-strong),
+    0 14px 28px rgba(0, 0, 0, 0.55);
+}
+
+.task-worktree-card.reorder-shift {
+  transition: transform 140ms ease;
+}
+
 .task-worktree-card.removing,
 .task-worktree-card.removing:hover {
   border-color: var(--border);
@@ -2411,6 +2423,12 @@ button.github-badge {
 .task-worktree-card.action-open .task-worktree-overflow {
   opacity: 1;
   pointer-events: auto;
+}
+
+/* 掴んでいる間はホバーで出る副操作を隠す */
+.task-worktree-card.reorder-dragging .task-worktree-overflow {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .task-worktree-menu {

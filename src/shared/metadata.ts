@@ -3,6 +3,9 @@ import type { AgentActivityState, GitHubPullRequest, SessionProvider } from "./s
 export interface RepoMetadata {
   id: string;
   repoPath: string;
+  // task worktree の表示順 (worktreePath の配列)。ユーザーが並び替えた時にだけ書かれる。
+  // 実在しない path は読み出し時に捨て、ここに無い worktree は作成日時順で末尾に並ぶ。
+  worktreeOrder?: string[];
 }
 
 export interface PrimarySessionMetadata {
@@ -59,7 +62,11 @@ export interface WorktreeListItem {
   activeTerminalRuntimeIds: string[];
 }
 
-export interface RepoListItem extends RepoMetadata {
+// 一覧の表示に必要な分だけを renderer へ渡す。worktreeOrder は taskWorktrees の並びとして
+// 既に反映済みなので含めない。
+export interface RepoListItem {
+  id: string;
+  repoPath: string;
   mainWorktree: WorktreeListItem;
   taskWorktrees: WorktreeListItem[];
 }

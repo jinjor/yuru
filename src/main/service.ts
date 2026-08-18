@@ -114,6 +114,7 @@ import { isCursorPositionQuery, isCursorPositionReport } from "./terminal/cursor
 import { TerminalScreen } from "./terminal/screen.js";
 import { createInteractiveShellLaunchCommand } from "./terminal/shell-launch.js";
 import { findRepoByWorktreeId, findRepoByWorktreePath } from "./repos/find-repo.js";
+import { saveTaskWorktreeOrder } from "./repos/worktree-order.js";
 import {
   indexPrimaryWorktreePathsBySessionKey,
   indexTerminalRuntimeIdsByTaskWorktreePath,
@@ -408,6 +409,19 @@ export class YuruService {
   reorderRepos(repoIds: string[]): void {
     saveRepoOrder(repoIds);
     this.events.repoListChanged();
+  }
+
+  // 並び替えは renderer が持っている一覧の全 task worktree を順に送る。書けなかった時は
+  // 一覧が古かった時なので、error center には残さず renderer に取り直させる。
+  async reorderTaskWorktrees(repoId: string, worktreePaths: string[]): Promise<Result<void>> {
+    if (!(await saveTaskWorktreeOrder(repoId, worktreePaths))) {
+      return fail({
+        code: "invalid_path",
+        message: "Worktrees changed while reordering. The new order was not saved.",
+      });
+    }
+    this.events.repoListChanged();
+    return ok(undefined);
   }
 
   async resumeSuggestedSession(

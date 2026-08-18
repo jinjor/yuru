@@ -160,6 +160,55 @@ test("yuru add registers the specified Git repository once", (t) => {
   assert.equal(typeof metadata.repos[0].id, "string");
 });
 
+test("yuru add keeps the worktree order of already registered repositories", (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-cli-order-"));
+  t.after(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  const repoDir = path.join(tempDir, "repo");
+  const yuruHome = path.join(tempDir, "home");
+  fs.mkdirSync(repoDir, { recursive: true });
+  fs.mkdirSync(yuruHome, { recursive: true });
+  execFileSync("git", ["init"], {
+    cwd: repoDir,
+    env: cleanGitEnv(process.env),
+    stdio: "ignore",
+  });
+  const metadataPath = path.join(yuruHome, "metadata.json");
+  fs.writeFileSync(
+    metadataPath,
+    `${JSON.stringify(
+      {
+        repos: [
+          { id: "repo-1", repoPath: "/tmp/other-repo", worktreeOrder: ["/tmp/wt-b", "/tmp/wt-a"] },
+        ],
+        taskWorktrees: [],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+
+  execFileSync(process.execPath, [cliPath, "add", "."], {
+    cwd: repoDir,
+    env: {
+      ...process.env,
+      GIT_DIR: "/nonexistent-yuru-test-git-dir",
+      YURU_HOME: yuruHome,
+    },
+    encoding: "utf8",
+  });
+
+  const metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8"));
+  assert.deepEqual(metadata.repos[0], {
+    id: "repo-1",
+    repoPath: "/tmp/other-repo",
+    worktreeOrder: ["/tmp/wt-b", "/tmp/wt-a"],
+  });
+  assert.equal(metadata.repos.length, 2);
+});
+
 test("yuru add requires a directory argument", () => {
   assert.throws(
     () =>

@@ -95,24 +95,26 @@ export async function loadRepoList(
     : undefined;
 
   return repoEntries.map(({ repo, taskWorktreeMetadataByPath, gitWorktrees, mainWorktree }) => {
-    const taskWorktrees = gitWorktrees.map((gitWorktree) =>
-      toWorktreeListItem(
-        repo.id,
-        gitWorktree,
-        taskWorktreeMetadataByPath.get(toWorktreePathKey(gitWorktree.path)),
-        terminalRuntimeIdsBySessionKey,
-        unresolvedTerminalRuntimesByLaunchWorktreePath,
-        primarySessionPreviewsByKey,
-        suggestedSessionsByWorktreePath?.get(gitWorktree.path) ?? [],
-        gitWorktree.branch
-          ? getGitHubPullRequest?.(repo.repoPath, gitWorktree.branch, gitWorktree.headSha)
-          : undefined,
-        agentActivityStatesByTerminalRuntimeId,
-        terminalRuntimeIdsByTaskWorktreePath,
-      ),
+    const taskWorktrees = sortWorktreesByOrder(gitWorktrees, repo.worktreeOrder).map(
+      (gitWorktree) =>
+        toWorktreeListItem(
+          repo.id,
+          gitWorktree,
+          taskWorktreeMetadataByPath.get(toWorktreePathKey(gitWorktree.path)),
+          terminalRuntimeIdsBySessionKey,
+          unresolvedTerminalRuntimesByLaunchWorktreePath,
+          primarySessionPreviewsByKey,
+          suggestedSessionsByWorktreePath?.get(gitWorktree.path) ?? [],
+          gitWorktree.branch
+            ? getGitHubPullRequest?.(repo.repoPath, gitWorktree.branch, gitWorktree.headSha)
+            : undefined,
+          agentActivityStatesByTerminalRuntimeId,
+          terminalRuntimeIdsByTaskWorktreePath,
+        ),
     );
     return {
-      ...repo,
+      id: repo.id,
+      repoPath: repo.repoPath,
       mainWorktree: toWorktreeListItem(
         repo.id,
         mainWorktree,
@@ -129,6 +131,27 @@ export async function loadRepoList(
       taskWorktrees,
     };
   });
+}
+
+// 表示順はユーザーが並び替えた worktreeOrder の順。そこに無い worktree (新しく作った
+// ものや git で直接掘ったもの) は、渡された作成日時順のまま末尾に並ぶ。worktreeOrder に
+// 残った実在しない path はここで自然に落ちる。
+export function sortWorktreesByOrder(
+  gitWorktrees: readonly WorktreeInfo[],
+  worktreeOrder: readonly string[] | undefined,
+): WorktreeInfo[] {
+  if (!worktreeOrder) {
+    return [...gitWorktrees];
+  }
+  const orderByPathKey = new Map(
+    worktreeOrder.map((worktreePath, index) => [toWorktreePathKey(worktreePath), index]),
+  );
+  const toOrder = (worktree: WorktreeInfo): number =>
+    orderByPathKey.get(toWorktreePathKey(worktree.path)) ?? worktreeOrder.length;
+  return gitWorktrees
+    .map((worktree, index) => ({ worktree, index }))
+    .sort((a, b) => toOrder(a.worktree) - toOrder(b.worktree) || a.index - b.index)
+    .map((entry) => entry.worktree);
 }
 
 async function loadMainWorktree(repoPath: string): Promise<WorktreeListSource> {

@@ -422,3 +422,61 @@ test("最後の移動と同じフレームで離しても離した位置に並�
     await context.cleanup();
   }
 });
+
+test("worktree カードをドラッグすると並びが変わり metadata にも保存される", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context);
+    const worktreesDir = await mkdtemp(path.join(tmpdir(), "yuru-e2e-reorder-worktrees-"));
+    context.addCleanupDir(worktreesDir);
+    for (const branch of ["first", "second", "third"]) {
+      git(["worktree", "add", "-b", branch, path.join(worktreesDir, branch)], repoDir);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    await writeMetadata(context, {
+      repos: [{ id: "repo-1", repoPath: repoDir }],
+      taskWorktrees: [],
+    });
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+
+    await expect(window.locator(".task-worktree-name")).toHaveText([
+      "main",
+      "first",
+      "second",
+      "third",
+    ]);
+
+    const firstCardBox = await worktreeCard(window, "first").boundingBox();
+    const thirdCardBox = await worktreeCard(window, "third").boundingBox();
+    expect(firstCardBox).not.toBeNull();
+    expect(thirdCardBox).not.toBeNull();
+    const startX = thirdCardBox!.x + thirdCardBox!.width / 2;
+    await window.mouse.move(startX, thirdCardBox!.y + thirdCardBox!.height / 2);
+    await window.mouse.down();
+    // 先頭の task worktree カードの位置まで上げると、その手前に落ちる。
+    await window.mouse.move(startX, firstCardBox!.y + firstCardBox!.height / 2, { steps: 8 });
+    await window.mouse.up();
+
+    await expect(window.locator(".task-worktree-name")).toHaveText([
+      "main",
+      "third",
+      "first",
+      "second",
+    ]);
+    // 並び替えは選択を変えない。
+    await expect(window.locator(".task-worktree-card.selected")).toHaveCount(0);
+    await expect
+      .poll(async () =>
+        (await readMetadata(context)).repos[0].worktreeOrder?.map((worktreePath) =>
+          path.basename(worktreePath),
+        ),
+      )
+      .toEqual(["third", "first", "second"]);
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});

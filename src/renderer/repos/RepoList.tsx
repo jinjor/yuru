@@ -3,9 +3,12 @@ import {
   useEffect,
   useRef,
   useState,
+  type Dispatch,
   type KeyboardEvent,
   type MouseEvent,
   type ReactNode,
+  type RefObject,
+  type SetStateAction,
 } from "react";
 import type { PrimarySessionListItem, RepoListItem, WorktreeListItem } from "../../shared/metadata";
 import { worktreeLabelText } from "./worktreeLabel";
@@ -13,7 +16,7 @@ import { GitHubBadge } from "../pull-requests/GitHubBadge";
 import { SessionProviderDot } from "../providers/SessionProviderDot";
 import { EmptyState } from "../ui/EmptyState";
 import { IconButton } from "../ui/IconButton";
-import { useReorderDrag } from "../utils/useReorderDrag";
+import { useReorderDrag, type ReorderDrag } from "../utils/useReorderDrag";
 
 interface RepoListProps {
   repos: RepoListItem[];
@@ -23,6 +26,7 @@ interface RepoListProps {
   onSelectWorktree: (worktree: WorktreeListItem) => void;
   onRequestRemoveWorktree: (worktreeId: string) => void;
   onReorderRepos: (repoIds: string[]) => void;
+  onReorderWorktrees: (repoId: string, worktreePaths: string[]) => void;
 }
 
 export function RepoList({
@@ -33,6 +37,7 @@ export function RepoList({
   onSelectWorktree,
   onRequestRemoveWorktree,
   onReorderRepos,
+  onReorderWorktrees,
 }: RepoListProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const [openMenuWorktreeId, setOpenMenuWorktreeId] = useState<string | null>(null);
@@ -68,50 +73,104 @@ export function RepoList({
   return (
     <div ref={listRef} className="repo-list" onClick={() => setOpenMenuWorktreeId(null)}>
       {repos.map((repo) => (
-        <div
+        <RepoGroup
           key={repo.id}
-          className={["repo-group", reorder.itemClassName(repo.id)].join(" ").trim()}
-          style={reorder.itemStyle(repo.id)}
-          data-reorder-id={repo.id}
-        >
-          <div
-            className="repo-row"
-            title={repo.repoPath}
-            onPointerDown={(event) => reorder.onItemPointerDown(repo.id, event)}
-          >
-            <div className="repo-row-text">
-              <span className="repo-name">{repo.repoPath.split("/").pop() || repo.repoPath}</span>
-              <span className="repo-path">{repo.repoPath}</span>
-            </div>
-            <IconButton
-              className="repo-row-new-btn"
-              label="New worktree"
-              onClick={() => onCreateWorktree(repo.repoPath)}
-            >
-              <Plus size={15} strokeWidth={2} aria-hidden="true" />
-            </IconButton>
-          </div>
-          <div className="repo-task-worktrees">
-            {[repo.mainWorktree, ...repo.taskWorktrees].map((worktree) => (
-              <WorktreeCard
-                key={worktree.worktreeId}
-                worktree={worktree}
-                selectedWorktreeId={selectedWorktreeId}
-                isRemoving={removingWorktreeIds.has(worktree.worktreeId)}
-                isMenuOpen={openMenuWorktreeId === worktree.worktreeId}
-                onCloseMenu={() => setOpenMenuWorktreeId(null)}
-                onToggleMenu={() => {
-                  setOpenMenuWorktreeId((prev) =>
-                    prev === worktree.worktreeId ? null : worktree.worktreeId,
-                  );
-                }}
-                onSelectWorktree={onSelectWorktree}
-                onRequestRemoveWorktree={onRequestRemoveWorktree}
-              />
-            ))}
-          </div>
-        </div>
+          repo={repo}
+          listRef={listRef}
+          repoReorder={reorder}
+          selectedWorktreeId={selectedWorktreeId}
+          removingWorktreeIds={removingWorktreeIds}
+          openMenuWorktreeId={openMenuWorktreeId}
+          setOpenMenuWorktreeId={setOpenMenuWorktreeId}
+          onCreateWorktree={onCreateWorktree}
+          onSelectWorktree={onSelectWorktree}
+          onRequestRemoveWorktree={onRequestRemoveWorktree}
+          onReorderWorktrees={onReorderWorktrees}
+        />
       ))}
+    </div>
+  );
+}
+
+interface RepoGroupProps {
+  repo: RepoListItem;
+  // worktree の並び替えもサイドバー全体をスクロールするので、repo と同じコンテナで測る。
+  listRef: RefObject<HTMLDivElement | null>;
+  repoReorder: ReorderDrag;
+  selectedWorktreeId: string | null;
+  removingWorktreeIds: ReadonlySet<string>;
+  openMenuWorktreeId: string | null;
+  setOpenMenuWorktreeId: Dispatch<SetStateAction<string | null>>;
+  onCreateWorktree: (repoPath: string) => void;
+  onSelectWorktree: (worktree: WorktreeListItem) => void;
+  onRequestRemoveWorktree: (worktreeId: string) => void;
+  onReorderWorktrees: (repoId: string, worktreePaths: string[]) => void;
+}
+
+function RepoGroup({
+  repo,
+  listRef,
+  repoReorder,
+  selectedWorktreeId,
+  removingWorktreeIds,
+  openMenuWorktreeId,
+  setOpenMenuWorktreeId,
+  onCreateWorktree,
+  onSelectWorktree,
+  onRequestRemoveWorktree,
+  onReorderWorktrees,
+}: RepoGroupProps) {
+  // 並び替えは repo をまたがないので、掴めるのはこの repo の task worktree だけ。
+  const worktreeReorder = useReorderDrag({
+    itemIds: repo.taskWorktrees.map((worktree) => worktree.worktreePath),
+    containerRef: listRef,
+    onReorder: (worktreePaths) => onReorderWorktrees(repo.id, worktreePaths),
+  });
+
+  return (
+    <div
+      className={["repo-group", repoReorder.itemClassName(repo.id)].join(" ").trim()}
+      style={repoReorder.itemStyle(repo.id)}
+      data-reorder-id={repo.id}
+    >
+      <div
+        className="repo-row"
+        title={repo.repoPath}
+        onPointerDown={(event) => repoReorder.onItemPointerDown(repo.id, event)}
+      >
+        <div className="repo-row-text">
+          <span className="repo-name">{repo.repoPath.split("/").pop() || repo.repoPath}</span>
+          <span className="repo-path">{repo.repoPath}</span>
+        </div>
+        <IconButton
+          className="repo-row-new-btn"
+          label="New worktree"
+          onClick={() => onCreateWorktree(repo.repoPath)}
+        >
+          <Plus size={15} strokeWidth={2} aria-hidden="true" />
+        </IconButton>
+      </div>
+      <div className="repo-task-worktrees">
+        {[repo.mainWorktree, ...repo.taskWorktrees].map((worktree) => (
+          <WorktreeCard
+            key={worktree.worktreeId}
+            worktree={worktree}
+            selectedWorktreeId={selectedWorktreeId}
+            isRemoving={removingWorktreeIds.has(worktree.worktreeId)}
+            isMenuOpen={openMenuWorktreeId === worktree.worktreeId}
+            // main worktree は常に先頭なので掴めず、落とす先にもならない。
+            reorder={worktree.isMainWorktree === true ? null : worktreeReorder}
+            onCloseMenu={() => setOpenMenuWorktreeId(null)}
+            onToggleMenu={() => {
+              setOpenMenuWorktreeId((prev) =>
+                prev === worktree.worktreeId ? null : worktree.worktreeId,
+              );
+            }}
+            onSelectWorktree={onSelectWorktree}
+            onRequestRemoveWorktree={onRequestRemoveWorktree}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -121,6 +180,8 @@ interface WorktreeCardProps {
   selectedWorktreeId: string | null;
   isRemoving: boolean;
   isMenuOpen: boolean;
+  // 並び替えられないカード (main worktree) では null。
+  reorder: ReorderDrag | null;
   onCloseMenu: () => void;
   onToggleMenu: () => void;
   onSelectWorktree: (worktree: WorktreeListItem) => void;
@@ -132,6 +193,7 @@ function WorktreeCard({
   selectedWorktreeId,
   isRemoving,
   isMenuOpen,
+  reorder,
   onCloseMenu,
   onToggleMenu,
   onSelectWorktree,
@@ -174,11 +236,15 @@ function WorktreeCard({
         isSelected ? "selected" : "",
         isMenuOpen ? "action-open" : "",
         isRemoving ? "removing" : "",
+        reorder?.itemClassName(worktree.worktreePath) ?? "",
       ].join(" ")}
+      style={reorder?.itemStyle(worktree.worktreePath)}
+      data-reorder-id={reorder ? worktree.worktreePath : undefined}
       title={worktree.worktreePath}
       role="button"
       aria-disabled={isRemoving}
       tabIndex={isRemoving ? -1 : 0}
+      onPointerDown={(event) => reorder?.onItemPointerDown(worktree.worktreePath, event)}
       onClick={handleCardClick}
       onKeyDown={handleCardKeyDown}
     >

@@ -34,6 +34,7 @@ export interface MetadataSeed {
   repos: Array<{
     id: string;
     repoPath: string;
+    worktreeOrder?: string[];
   }>;
   taskWorktrees: Array<{
     repoId: string;

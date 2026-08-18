@@ -12,6 +12,8 @@ import type { ProviderPlanUsage, RateLimitStop, SessionProvider } from "../share
 const electronAPI: ElectronAPI = {
   getRepos: () => ipcRenderer.invoke("metadata:listRepos"),
   reorderRepos: (repoIds: string[]) => ipcRenderer.invoke("repos:reorder", repoIds),
+  reorderWorktrees: (repoId: string, worktreePaths: string[]) =>
+    ipcRenderer.invoke("worktrees:reorder", repoId, worktreePaths),
   getProviderPlanUsage: () => ipcRenderer.invoke("providerPlanUsage:list"),
   getRateLimitStops: () => ipcRenderer.invoke("rateLimitStops:list"),
   setContinueWhenRateLimitResets: (terminalRuntimeId, continueWhenReset) =>

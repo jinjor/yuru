@@ -27,6 +27,7 @@ import {
   collectKeepAliveWorktrees,
   findWorktree,
   sortReposByIds,
+  sortTaskWorktreesByPaths,
 } from "./repos/repoListState";
 
 export function App() {
@@ -209,12 +210,36 @@ export function App() {
 
   const handleReorderRepos = useCallback(
     (repoIds: string[]): void => {
+      // 走っている一覧取得はドロップ前の並びを持っているので、無効にしてから描き替える。
+      repoRefreshRequestRef.current += 1;
       setRepos((prev) => sortReposByIds(prev, repoIds));
       window.electronAPI.reorderRepos(repoIds).catch((error) => {
         // 書き込みは main が error center に残す。ここでは一覧を実態に戻すだけ。
         console.error("Failed to reorder repos.", error);
         void refreshRepos();
       });
+    },
+    [refreshRepos],
+  );
+
+  const handleReorderWorktrees = useCallback(
+    (repoId: string, worktreePaths: string[]): void => {
+      repoRefreshRequestRef.current += 1;
+      setRepos((prev) => sortTaskWorktreesByPaths(prev, repoId, worktreePaths));
+      window.electronAPI
+        .reorderWorktrees(repoId, worktreePaths)
+        .then((result) => {
+          if (result.ok) {
+            return;
+          }
+          // ドラッグ中に worktree が増減していた場合。並びは書かれないので一覧を取り直す。
+          void refreshRepos();
+        })
+        .catch((error) => {
+          // 書き込みの失敗は main が error center に残す。ここでは一覧を実態に戻すだけ。
+          console.error("Failed to reorder worktrees.", error);
+          void refreshRepos();
+        });
     },
     [refreshRepos],
   );
@@ -270,6 +295,7 @@ export function App() {
             onSelectWorktree={(worktree) => selectWorktree(worktree.worktreeId)}
             onRequestRemoveWorktree={setRemovalTargetId}
             onReorderRepos={handleReorderRepos}
+            onReorderWorktrees={handleReorderWorktrees}
           />
         </div>
         <ProviderPlanUsageRows usages={planUsages} />

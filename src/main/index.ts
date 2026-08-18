@@ -366,6 +366,10 @@ function registerIpcHandlers(): void {
     service.reorderRepos(repoIds);
   });
 
+  handleIpc("worktrees:reorder", (_event, repoId: string, worktreePaths: string[]) => {
+    return service.reorderTaskWorktrees(repoId, worktreePaths);
+  });
+
   handleIpc("pty:attach", (_event, terminalRuntimeId: string) => {
     return service.attachPty(terminalRuntimeId);
   });

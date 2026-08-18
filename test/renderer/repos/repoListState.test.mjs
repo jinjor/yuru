@@ -6,6 +6,7 @@ import {
   applySessionUpdate,
   collectKeepAliveWorktrees,
   sortReposByIds,
+  sortTaskWorktreesByPaths,
 } from "../../../src/renderer/repos/repoListState.ts";
 
 function primarySession(runtimeId, preview = "before") {
@@ -231,4 +232,23 @@ test("sortReposByIds は ID に無い repo を末尾に残す", () => {
     next.map((entry) => entry.id),
     ["repo-b", "repo-a"],
   );
+});
+
+test("sortTaskWorktreesByPaths は対象 repo の task worktree を渡された順に並べ替える", () => {
+  const repos = [
+    repo("repo-a", [worktree("wt-1"), worktree("wt-2"), worktree("wt-3")]),
+    repo("repo-b", [worktree("wt-4")]),
+  ];
+
+  const next = sortTaskWorktreesByPaths(repos, "repo-a", [
+    "/repo/wt-3",
+    "/repo/wt-1",
+    "/repo/wt-2",
+  ]);
+
+  assert.deepEqual(
+    next[0].taskWorktrees.map((entry) => entry.worktreeId),
+    ["wt-3", "wt-1", "wt-2"],
+  );
+  assert.strictEqual(next[1], repos[1]);
 });

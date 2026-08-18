@@ -29,6 +29,26 @@ export function sortReposByIds(repos: RepoListItem[], repoIds: string[]): RepoLi
   );
 }
 
+// 並び替え直後の一覧。repo をまたがないので、対象 repo の task worktree だけを並べ替える。
+export function sortTaskWorktreesByPaths(
+  repos: RepoListItem[],
+  repoId: string,
+  worktreePaths: string[],
+): RepoListItem[] {
+  const orderByPath = new Map(worktreePaths.map((worktreePath, index) => [worktreePath, index]));
+  return repos.map((repo) => {
+    if (repo.id !== repoId) {
+      return repo;
+    }
+    const taskWorktrees = [...repo.taskWorktrees].sort(
+      (a, b) =>
+        (orderByPath.get(a.worktreePath) ?? worktreePaths.length) -
+        (orderByPath.get(b.worktreePath) ?? worktreePaths.length),
+    );
+    return { ...repo, taskWorktrees };
+  });
+}
+
 // keep-alive の単位は worktree (shell) であって session ではない。preview 選択・
 // ExplorerPanel のタブ・Files の展開・検索語はすべて worktree に紐づく情報で session の
 // 有無に依存しないため、「一度訪れた worktree」は app 起動中ずっと生かす。
