@@ -58,6 +58,11 @@ export function loadLanguageExtension(filePath: string): Promise<Extension> | nu
       return import("@codemirror/legacy-modes/mode/protobuf").then((m) =>
         StreamLanguage.define(m.protobuf),
       );
+    case "sql":
+      return import("@codemirror/lang-sql").then((m) => m.sql());
+    case "tf":
+    case "tfvars":
+      return import("codemirror-lang-hcl").then((m) => m.hcl());
     default:
       return null;
   }

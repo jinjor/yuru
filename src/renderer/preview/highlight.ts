@@ -19,6 +19,8 @@ const defaultLangs: BundledLanguage[] = [
   "go",
   "dockerfile",
   "proto",
+  "sql",
+  "terraform",
 ];
 
 function getHighlighter(): Promise<Highlighter> {
@@ -56,6 +58,9 @@ const extensionToLang: Record<string, BundledLanguage> = {
   go: "go",
   dockerfile: "dockerfile",
   proto: "proto",
+  sql: "sql",
+  tf: "terraform",
+  tfvars: "terraform",
 };
 
 function detectLanguage(filePath: string): BundledLanguage | null {

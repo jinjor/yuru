@@ -49,3 +49,58 @@ test(".proto の編集時にキーワードをハイライトする", async () =
     { text: "Foo", classes: "tok-variableName" },
   ]);
 });
+
+test(".sql の編集時にキーワードをハイライトする", async () => {
+  const language = loadLanguageExtension("db/schema.sql");
+  assert.ok(language);
+
+  const state = EditorState.create({
+    doc: "SELECT 1",
+    extensions: [await language],
+  });
+  const highlighted = [];
+  highlightTree(syntaxTree(state), classHighlighter, (from, to, classes) => {
+    highlighted.push({ text: state.sliceDoc(from, to), classes });
+  });
+
+  assert.deepEqual(highlighted, [
+    { text: "SELECT", classes: "tok-keyword" },
+    { text: "1", classes: "tok-number" },
+  ]);
+});
+
+test(".tf / .tfvars の編集時にハイライトする", async () => {
+  const tf = loadLanguageExtension("infra/main.tf");
+  assert.ok(tf);
+
+  const tfState = EditorState.create({
+    doc: 'variable "name" {}',
+    extensions: [await tf],
+  });
+  const tfHighlighted = [];
+  highlightTree(syntaxTree(tfState), classHighlighter, (from, to, classes) => {
+    tfHighlighted.push({ text: tfState.sliceDoc(from, to), classes });
+  });
+
+  assert.deepEqual(tfHighlighted.slice(0, 2), [
+    { text: "variable", classes: "tok-keyword" },
+    { text: '"', classes: "tok-string" },
+  ]);
+
+  const tfvars = loadLanguageExtension("infra/prod.tfvars");
+  assert.ok(tfvars);
+
+  const tfvarsState = EditorState.create({
+    doc: 'region = "us-east-1"',
+    extensions: [await tfvars],
+  });
+  const tfvarsHighlighted = [];
+  highlightTree(syntaxTree(tfvarsState), classHighlighter, (from, to, classes) => {
+    tfvarsHighlighted.push({ text: tfvarsState.sliceDoc(from, to), classes });
+  });
+
+  assert.deepEqual(tfvarsHighlighted[0], {
+    text: "region",
+    classes: "tok-propertyName tok-definition",
+  });
+});

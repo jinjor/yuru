@@ -23,3 +23,21 @@ test(".proto を拡張子で判定してハイライトする", async () => {
   assert.equal(line.tokens[0]?.content, "message");
   assert.notEqual(line.tokens[0]?.color, "#d4d4d4");
 });
+
+test(".sql を拡張子で判定してハイライトする", async () => {
+  const [line] = await tokenizeCode("SELECT 1", "db/schema.sql", 8);
+  assert.equal(line.tokens[0]?.content, "SELECT");
+  assert.notEqual(line.tokens[0]?.color, "#d4d4d4");
+});
+
+test(".tf を拡張子で判定してハイライトする", async () => {
+  const [line] = await tokenizeCode('variable "name" {}', "infra/main.tf", 18);
+  assert.equal(line.tokens[0]?.content, "variable");
+  assert.notEqual(line.tokens[0]?.color, "#d4d4d4");
+});
+
+test(".tfvars を拡張子で判定してハイライトする", async () => {
+  const [line] = await tokenizeCode('region = "us-east-1"', "infra/prod.tfvars", 20);
+  assert.equal(line.tokens[0]?.content, "region ");
+  assert.notEqual(line.tokens[0]?.color, "#d4d4d4");
+});
