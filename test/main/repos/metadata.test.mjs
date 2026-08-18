@@ -17,6 +17,7 @@ const {
   loadMetadata,
   parseMetadata,
   removeTaskWorktreeByPath,
+  saveRepoOrder,
   upsertTaskWorktree,
 } = await import("../../../src/main/repos/metadata.ts");
 const { loadRepoList } = await import("../../../src/main/repos/repo-list.ts");
@@ -1160,6 +1161,65 @@ test("cleanupStaleTaskWorktrees は list に失敗した repo の metadata を�
       primarySessions: [{ provider: "claude", agentSessionId: "claude-1" }],
     },
   ]);
+});
+
+test("saveRepoOrder は送られた ID の順に repos を書く", () => {
+  seed({
+    repos: [
+      { id: "repo-1", repoPath: "/tmp/repo-a" },
+      { id: "repo-2", repoPath: "/tmp/repo-b" },
+      { id: "repo-3", repoPath: "/tmp/repo-c" },
+    ],
+    taskWorktrees: [
+      { repoId: "repo-2", worktreePath: "/tmp/repo-b/worktrees/x", primarySessions: [] },
+    ],
+  });
+
+  saveRepoOrder(["repo-3", "repo-1", "repo-2"]);
+
+  assert.deepEqual(loadMetadata(), {
+    repos: [
+      { id: "repo-3", repoPath: "/tmp/repo-c" },
+      { id: "repo-1", repoPath: "/tmp/repo-a" },
+      { id: "repo-2", repoPath: "/tmp/repo-b" },
+    ],
+    taskWorktrees: [
+      { repoId: "repo-2", worktreePath: "/tmp/repo-b/worktrees/x", primarySessions: [] },
+    ],
+  });
+});
+
+test("saveRepoOrder は送られなかった repo をその task worktree ごと削除する", () => {
+  seed({
+    repos: [
+      { id: "repo-1", repoPath: "/tmp/repo-a" },
+      { id: "repo-2", repoPath: "/tmp/repo-b" },
+    ],
+    taskWorktrees: [
+      { repoId: "repo-1", worktreePath: "/tmp/repo-a/worktrees/keep", primarySessions: [] },
+      { repoId: "repo-2", worktreePath: "/tmp/repo-b/worktrees/gone", primarySessions: [] },
+    ],
+  });
+
+  saveRepoOrder(["repo-1"]);
+
+  assert.deepEqual(loadMetadata(), {
+    repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
+    taskWorktrees: [
+      { repoId: "repo-1", worktreePath: "/tmp/repo-a/worktrees/keep", primarySessions: [] },
+    ],
+  });
+});
+
+test("saveRepoOrder は知らない ID を無視する", () => {
+  seed({
+    repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
+    taskWorktrees: [],
+  });
+
+  saveRepoOrder(["missing-repo", "repo-1"]);
+
+  assert.deepEqual(loadMetadata().repos, [{ id: "repo-1", repoPath: "/tmp/repo-a" }]);
 });
 
 test("upsertTaskWorktree は新規登録する", () => {

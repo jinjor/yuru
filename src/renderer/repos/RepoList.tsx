@@ -13,6 +13,7 @@ import { GitHubBadge } from "../pull-requests/GitHubBadge";
 import { SessionProviderDot } from "../providers/SessionProviderDot";
 import { EmptyState } from "../ui/EmptyState";
 import { IconButton } from "../ui/IconButton";
+import { useReorderDrag } from "../utils/useReorderDrag";
 
 interface RepoListProps {
   repos: RepoListItem[];
@@ -21,6 +22,7 @@ interface RepoListProps {
   onCreateWorktree: (repoPath: string) => void;
   onSelectWorktree: (worktree: WorktreeListItem) => void;
   onRequestRemoveWorktree: (worktreeId: string) => void;
+  onReorderRepos: (repoIds: string[]) => void;
 }
 
 export function RepoList({
@@ -30,9 +32,16 @@ export function RepoList({
   onCreateWorktree,
   onSelectWorktree,
   onRequestRemoveWorktree,
+  onReorderRepos,
 }: RepoListProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const [openMenuWorktreeId, setOpenMenuWorktreeId] = useState<string | null>(null);
+  // 掴むのは repo のヘッダ行だけで、動くのは配下の worktree を含む repo group 全体。
+  const reorder = useReorderDrag({
+    itemIds: repos.map((repo) => repo.id),
+    containerRef: listRef,
+    onReorder: onReorderRepos,
+  });
 
   useEffect(() => {
     if (!openMenuWorktreeId) {
@@ -59,8 +68,17 @@ export function RepoList({
   return (
     <div ref={listRef} className="repo-list" onClick={() => setOpenMenuWorktreeId(null)}>
       {repos.map((repo) => (
-        <div key={repo.id} className="repo-group">
-          <div className="repo-row" title={repo.repoPath}>
+        <div
+          key={repo.id}
+          className={["repo-group", reorder.itemClassName(repo.id)].join(" ").trim()}
+          style={reorder.itemStyle(repo.id)}
+          data-reorder-id={repo.id}
+        >
+          <div
+            className="repo-row"
+            title={repo.repoPath}
+            onPointerDown={(event) => reorder.onItemPointerDown(repo.id, event)}
+          >
             <div className="repo-row-text">
               <span className="repo-name">{repo.repoPath.split("/").pop() || repo.repoPath}</span>
               <span className="repo-path">{repo.repoPath}</span>

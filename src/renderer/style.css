@@ -532,6 +532,34 @@ body,
   white-space: nowrap;
 }
 
+/* 並び替え (drag & drop) */
+.reorder-dragging {
+  position: relative;
+  z-index: 3;
+  cursor: grabbing;
+  opacity: 0.95;
+  box-shadow:
+    0 0 0 1px var(--border-strong),
+    0 14px 28px rgba(0, 0, 0, 0.55);
+}
+
+/* 落ちる場所を空けてどく側。掴んでいる側はポインタへの追従を優先して transition を持たない */
+.reorder-shift {
+  transition: transform 140ms ease;
+}
+
+/* repo group は普段背景を持たない。掴んでいる間だけ地を敷いて下の group から浮かせる */
+.repo-group.reorder-dragging {
+  background: #1d2532;
+  border-radius: 10px;
+  border-bottom-color: transparent;
+}
+
+/* 動いているのはヘッダだと読めるように、配下のカードは落とす */
+.repo-group.reorder-dragging .repo-task-worktrees {
+  opacity: 0.35;
+}
+
 .repo-task-worktrees {
   display: flex;
   flex-direction: column;
@@ -1759,7 +1787,8 @@ button.github-badge {
 }
 
 /* HTML preview (sandboxed iframe) */
-.is-pane-dragging .html-preview-frame {
+.is-pane-dragging .html-preview-frame,
+.is-reorder-dragging .html-preview-frame {
   pointer-events: none;
 }
 

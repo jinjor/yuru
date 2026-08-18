@@ -30,6 +30,26 @@ export function findRepoByPath(repoPath: string): RepoMetadata | null {
   return loadRepos().find((repo) => repo.repoPath === repoPath) ?? null;
 }
 
+// 送られた ID の順をそのまま repo の並びとして書く。renderer は一覧の全 repo を送るので、
+// 含まれない entry は一覧から落ちた repo (Git repository でなくなったもの) で、その task
+// worktree record ごと消える。
+export function saveRepoOrder(repoIds: readonly string[]): void {
+  const metadata = loadMetadata();
+  const nextRepos = repoIds
+    .map((repoId) => metadata.repos.find((repo) => repo.id === repoId))
+    .filter((repo) => repo !== undefined);
+  const nextRepoIds = new Set(nextRepos.map((repo) => repo.id));
+  const removedRepoIds = new Set(
+    metadata.repos.map((repo) => repo.id).filter((repoId) => !nextRepoIds.has(repoId)),
+  );
+
+  metadata.repos = nextRepos;
+  metadata.taskWorktrees = metadata.taskWorktrees.filter(
+    (entry) => !removedRepoIds.has(entry.repoId),
+  );
+  saveMetadata(metadata);
+}
+
 export function upsertTaskWorktree(repoId: string, worktreePath: string): void {
   const metadata = loadMetadata();
   const worktreePathKey = toWorktreePathKey(worktreePath);

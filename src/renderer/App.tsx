@@ -26,6 +26,7 @@ import {
   applySessionUpdate,
   collectKeepAliveWorktrees,
   findWorktree,
+  sortReposByIds,
 } from "./repos/repoListState";
 
 export function App() {
@@ -206,6 +207,18 @@ export function App() {
     [refreshRepos],
   );
 
+  const handleReorderRepos = useCallback(
+    (repoIds: string[]): void => {
+      setRepos((prev) => sortReposByIds(prev, repoIds));
+      window.electronAPI.reorderRepos(repoIds).catch((error) => {
+        // 書き込みは main が error center に残す。ここでは一覧を実態に戻すだけ。
+        console.error("Failed to reorder repos.", error);
+        void refreshRepos();
+      });
+    },
+    [refreshRepos],
+  );
+
   const handleCreateWorktree = useCallback(
     async (mode: CreateWorktreeMode, branchName: string): Promise<void> => {
       if (!worktreeTarget) {
@@ -256,6 +269,7 @@ export function App() {
             }}
             onSelectWorktree={(worktree) => selectWorktree(worktree.worktreeId)}
             onRequestRemoveWorktree={setRemovalTargetId}
+            onReorderRepos={handleReorderRepos}
           />
         </div>
         <ProviderPlanUsageRows usages={planUsages} />

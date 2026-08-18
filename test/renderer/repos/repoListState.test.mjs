@@ -5,6 +5,7 @@ import {
   applyPullRequestUpdates,
   applySessionUpdate,
   collectKeepAliveWorktrees,
+  sortReposByIds,
 } from "../../../src/renderer/repos/repoListState.ts";
 
 function primarySession(runtimeId, preview = "before") {
@@ -206,5 +207,28 @@ test("applyPullRequestUpdates は PR の値が同じなら元の repos を返す
   assert.strictEqual(
     applyPullRequestUpdates(repos, [{ worktreeId: "task", pullRequest: { ...githubPullRequest } }]),
     repos,
+  );
+});
+
+test("sortReposByIds は渡された ID の順に並べ替える", () => {
+  const repos = [repo("repo-a", []), repo("repo-b", []), repo("repo-c", [])];
+
+  const next = sortReposByIds(repos, ["repo-c", "repo-a", "repo-b"]);
+
+  assert.deepEqual(
+    next.map((entry) => entry.id),
+    ["repo-c", "repo-a", "repo-b"],
+  );
+  assert.strictEqual(next[0], repos[2]);
+});
+
+test("sortReposByIds は ID に無い repo を末尾に残す", () => {
+  const repos = [repo("repo-a", []), repo("repo-b", [])];
+
+  const next = sortReposByIds(repos, ["repo-b"]);
+
+  assert.deepEqual(
+    next.map((entry) => entry.id),
+    ["repo-b", "repo-a"],
   );
 });

@@ -64,7 +64,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F57 | feature | Files / Preview | HTML プレビューを手動でリロードできるようにする | CSS/JS 単独の変更は entry の content が変わらないと iframe が再読み込みされず表示に反映されない。現状は表示モードの切り替えで再マウントさせるしかない |
 | F12 | feature | Diff | Split mode | 面積と複雑さが増える |
 | F60 | feature | Sessions | セッションを並び替えられるようにする | よく使うセッションへ素早くアクセスしたい |
-| F61 | feature | Repos | リポジトリを並び替えられるようにする | よく使うリポジトリへ素早くアクセスしたい |
 | F66 | feature | Worktrees | worktree を並び替えられるようにする | よく使う worktree へ素早くアクセスしたい |
 | I22 | investigate | Main Worktree | main worktree の UX を考え直す | main worktree の使い方に合う操作と表示を整理したい |
 

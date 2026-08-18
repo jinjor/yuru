@@ -7,6 +7,7 @@ import * as pty from "node-pty";
 import {
   attachPrimarySessionByPath,
   detachPrimarySessionByPath,
+  saveRepoOrder,
   findRepoByPath,
   loadMetadata,
   loadRepos,
@@ -400,6 +401,13 @@ export class YuruService {
     agentSessionKey: string,
   ): Promise<Result<WorktreeSessionSelection>> {
     return this.resumePrimaryWorktreeSession(worktreeId, agentSessionKey);
+  }
+
+  // 並び替えは renderer が持っている一覧の全 repo を順に送る。metadata 側の検証はせず、
+  // 送られた順をそのまま書く。
+  reorderRepos(repoIds: string[]): void {
+    saveRepoOrder(repoIds);
+    this.events.repoListChanged();
   }
 
   async resumeSuggestedSession(

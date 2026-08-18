@@ -21,6 +21,14 @@ export function findWorktree(
   return null;
 }
 
+// 並び替え直後の一覧。書き込みの結果が push で戻るまで、ドロップした並びを描き続ける。
+export function sortReposByIds(repos: RepoListItem[], repoIds: string[]): RepoListItem[] {
+  const orderByRepoId = new Map(repoIds.map((repoId, index) => [repoId, index]));
+  return [...repos].sort(
+    (a, b) => (orderByRepoId.get(a.id) ?? repos.length) - (orderByRepoId.get(b.id) ?? repos.length),
+  );
+}
+
 // keep-alive の単位は worktree (shell) であって session ではない。preview 選択・
 // ExplorerPanel のタブ・Files の展開・検索語はすべて worktree に紐づく情報で session の
 // 有無に依存しないため、「一度訪れた worktree」は app 起動中ずっと生かす。

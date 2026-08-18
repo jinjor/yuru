@@ -362,6 +362,10 @@ function handleIpc<Args extends unknown[]>(
 function registerIpcHandlers(): void {
   handleIpc("metadata:listRepos", () => service.getRepos());
 
+  handleIpc("repos:reorder", (_event, repoIds: string[]) => {
+    service.reorderRepos(repoIds);
+  });
+
   handleIpc("pty:attach", (_event, terminalRuntimeId: string) => {
     return service.attachPty(terminalRuntimeId);
   });

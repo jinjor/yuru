@@ -314,3 +314,111 @@ test("provider store から消えた primary session は通知して detach さ�
     await context.cleanup();
   }
 });
+
+test("repo 行をドラッグすると並びが変わり metadata にも保存される", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const firstRepo = await createCommittedRepo(context);
+    const secondRepo = await createCommittedRepo(context);
+    await writeMetadata(context, {
+      repos: [
+        { id: "repo-1", repoPath: firstRepo },
+        { id: "repo-2", repoPath: secondRepo },
+      ],
+      taskWorktrees: [],
+    });
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+
+    await expect(window.locator(".repo-path")).toHaveText([firstRepo, secondRepo]);
+
+    const secondRow = window.locator(".repo-group", { hasText: secondRepo }).locator(".repo-row");
+    const firstGroupBox = await window.locator(".repo-group").first().boundingBox();
+    const secondRowBox = await secondRow.boundingBox();
+    expect(firstGroupBox).not.toBeNull();
+    expect(secondRowBox).not.toBeNull();
+    const startX = secondRowBox!.x + secondRowBox!.width / 2;
+    const startY = secondRowBox!.y + secondRowBox!.height / 2;
+    await window.mouse.move(startX, startY);
+    await window.mouse.down();
+    // 1 つ目の repo group の高さの分だけ上へ動かすと、先頭に落ちる。
+    await window.mouse.move(startX, startY - firstGroupBox!.height, { steps: 8 });
+    await window.mouse.up();
+
+    await expect(window.locator(".repo-path")).toHaveText([secondRepo, firstRepo]);
+    await expect
+      .poll(async () => (await readMetadata(context)).repos.map((repo) => repo.id))
+      .toEqual(["repo-2", "repo-1"]);
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+test("最後の移動と同じフレームで離しても離した位置に並び替わる", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const firstRepo = await createCommittedRepo(context);
+    const secondRepo = await createCommittedRepo(context);
+    await writeMetadata(context, {
+      repos: [
+        { id: "repo-1", repoPath: firstRepo },
+        { id: "repo-2", repoPath: secondRepo },
+      ],
+      taskWorktrees: [],
+    });
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+
+    await expect(window.locator(".repo-path")).toHaveText([firstRepo, secondRepo]);
+
+    const firstGroupBox = await window.locator(".repo-group").first().boundingBox();
+    const secondRowBox = await window
+      .locator(".repo-group", { hasText: secondRepo })
+      .locator(".repo-row")
+      .boundingBox();
+    expect(firstGroupBox).not.toBeNull();
+    expect(secondRowBox).not.toBeNull();
+
+    // pointermove と pointerup を同じフレームで続けて起こす。ドラッグ開始のしきい値を
+    // 越えるだけの移動の直後に一気に上まで動かして離しても、離した位置が使われる。
+    await window.evaluate(
+      ({ x, startY, thresholdY, endY }) => {
+        const row = document.querySelectorAll(".repo-group")[1].querySelector(".repo-row");
+        const pointer = (type: string, clientY: number) =>
+          new PointerEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            clientX: x,
+            clientY,
+            button: 0,
+            buttons: type === "pointerup" ? 0 : 1,
+            pointerId: 1,
+            isPrimary: true,
+          });
+        row?.dispatchEvent(pointer("pointerdown", startY));
+        window.dispatchEvent(pointer("pointermove", thresholdY));
+        window.dispatchEvent(pointer("pointermove", endY));
+        window.dispatchEvent(pointer("pointerup", endY));
+      },
+      {
+        x: secondRowBox!.x + secondRowBox!.width / 2,
+        startY: secondRowBox!.y + secondRowBox!.height / 2,
+        thresholdY: secondRowBox!.y + secondRowBox!.height / 2 - 6,
+        endY: secondRowBox!.y + secondRowBox!.height / 2 - firstGroupBox!.height,
+      },
+    );
+
+    await expect(window.locator(".repo-path")).toHaveText([secondRepo, firstRepo]);
+    await expect
+      .poll(async () => (await readMetadata(context)).repos.map((repo) => repo.id))
+      .toEqual(["repo-2", "repo-1"]);
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
