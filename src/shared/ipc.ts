@@ -196,6 +196,9 @@ export interface ElectronAPI {
   reorderRepos: (repoIds: string[]) => Promise<void>;
   // 並び替え後の、その repo の全 task worktree path。今ある worktree と食い違えば保存しない。
   reorderWorktrees: (repoId: string, worktreePaths: string[]) => Promise<Result<void>>;
+  // 並び替え後の、その worktree の全 primary session の key。今ある session と食い違えば
+  // 保存しない。
+  reorderPrimarySessions: (worktreeId: string, agentSessionKeys: string[]) => Promise<Result<void>>;
   // 購読を始める前の分を取りこぼさないための初期値。以降は push で置き換える。
   getProviderPlanUsage: () => Promise<ProviderPlanUsage[]>;
   getRateLimitStops: () => Promise<RateLimitStop[]>;

@@ -6,7 +6,7 @@ import type {
   TaskWorktreeMetadata,
   YuruMetadata,
 } from "../../shared/metadata.js";
-import { SESSION_PROVIDER_IDS, type SessionProvider } from "../../shared/session.js";
+import { SESSION_PROVIDER_IDS, toSessionKey, type SessionProvider } from "../../shared/session.js";
 import { toWorktreePathKey } from "../worktree-identity.js";
 import { getYuruHome } from "../yuru-home.js";
 
@@ -124,6 +124,43 @@ export function detachPrimarySessionByPath(
   }
   target.primarySessions = primarySessions;
   saveMetadata(metadata);
+}
+
+// 送られた key の順をその worktree の primary session の並びとして書く。今ある session と
+// 顔ぶれが同じ時だけ書き、違うなら、ドラッグ中に session が増減した古い一覧から来た並びで、
+// 他の変更を巻き込んで上書きしてしまうため、何も書かずに false を返す。
+export function savePrimarySessionOrder(
+  worktreePath: string,
+  agentSessionKeys: readonly string[],
+): boolean {
+  const metadata = loadMetadata();
+  const worktreePathKey = toWorktreePathKey(worktreePath);
+  const target = metadata.taskWorktrees.find(
+    (entry) => toWorktreePathKey(entry.worktreePath) === worktreePathKey,
+  );
+  if (!target) {
+    return false;
+  }
+  const sessionsByKey = new Map(
+    target.primarySessions.map((session) => [
+      toSessionKey(session.provider, session.agentSessionId),
+      session,
+    ]),
+  );
+  const nextPrimarySessions = agentSessionKeys
+    .map((agentSessionKey) => sessionsByKey.get(agentSessionKey))
+    .filter((session) => session !== undefined);
+  // 今ある session に無い key が混ざっていれば 1 つ目で、数が足りない・重複していれば
+  // 2 つ目で落ちる。両方を通るのは顔ぶれが同じ時だけ。
+  if (
+    nextPrimarySessions.length !== agentSessionKeys.length ||
+    new Set(agentSessionKeys).size !== sessionsByKey.size
+  ) {
+    return false;
+  }
+  target.primarySessions = nextPrimarySessions;
+  saveMetadata(metadata);
+  return true;
 }
 
 function samePrimarySession(a: PrimarySessionMetadata, b: PrimarySessionMetadata): boolean {

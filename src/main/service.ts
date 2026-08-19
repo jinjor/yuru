@@ -7,6 +7,7 @@ import * as pty from "node-pty";
 import {
   attachPrimarySessionByPath,
   detachPrimarySessionByPath,
+  savePrimarySessionOrder,
   saveRepoOrder,
   findRepoByPath,
   loadMetadata,
@@ -418,6 +419,23 @@ export class YuruService {
       return fail({
         code: "invalid_path",
         message: "Worktrees changed while reordering. The new order was not saved.",
+      });
+    }
+    this.events.repoListChanged();
+    return ok(undefined);
+  }
+
+  // 並び替えは renderer が持っているホームの全 primary session を順に送る。書けなかった時は
+  // 一覧が古かった時なので、error center には残さず renderer に取り直させる。
+  async reorderPrimarySessions(
+    worktreeId: string,
+    agentSessionKeys: string[],
+  ): Promise<Result<void>> {
+    const worktree = await this.findGitWorktree(worktreeId);
+    if (!worktree || !savePrimarySessionOrder(worktree.worktreePath, agentSessionKeys)) {
+      return fail({
+        code: "unknown",
+        message: "Sessions changed while reordering. The new order was not saved.",
       });
     }
     this.events.repoListChanged();

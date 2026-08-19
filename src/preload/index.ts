@@ -14,6 +14,8 @@ const electronAPI: ElectronAPI = {
   reorderRepos: (repoIds: string[]) => ipcRenderer.invoke("repos:reorder", repoIds),
   reorderWorktrees: (repoId: string, worktreePaths: string[]) =>
     ipcRenderer.invoke("worktrees:reorder", repoId, worktreePaths),
+  reorderPrimarySessions: (worktreeId: string, agentSessionKeys: string[]) =>
+    ipcRenderer.invoke("worktreeSession:reorderPrimary", worktreeId, agentSessionKeys),
   getProviderPlanUsage: () => ipcRenderer.invoke("providerPlanUsage:list"),
   getRateLimitStops: () => ipcRenderer.invoke("rateLimitStops:list"),
   setContinueWhenRateLimitResets: (terminalRuntimeId, continueWhenReset) =>

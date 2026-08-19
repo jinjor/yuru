@@ -26,6 +26,7 @@ import {
   applySessionUpdate,
   collectKeepAliveWorktrees,
   findWorktree,
+  sortPrimarySessionsByKeys,
   sortReposByIds,
   sortTaskWorktreesByPaths,
 } from "./repos/repoListState";
@@ -244,6 +245,28 @@ export function App() {
     [refreshRepos],
   );
 
+  const handleReorderPrimarySessions = useCallback(
+    (worktreeId: string, agentSessionKeys: string[]): void => {
+      repoRefreshRequestRef.current += 1;
+      setRepos((prev) => sortPrimarySessionsByKeys(prev, worktreeId, agentSessionKeys));
+      window.electronAPI
+        .reorderPrimarySessions(worktreeId, agentSessionKeys)
+        .then((result) => {
+          if (result.ok) {
+            return;
+          }
+          // ドラッグ中に session が増減していた場合。並びは書かれないので一覧を取り直す。
+          void refreshRepos();
+        })
+        .catch((error) => {
+          // 書き込みの失敗は main が error center に残す。ここでは一覧を実態に戻すだけ。
+          console.error("Failed to reorder primary sessions.", error);
+          void refreshRepos();
+        });
+    },
+    [refreshRepos],
+  );
+
   const handleCreateWorktree = useCallback(
     async (mode: CreateWorktreeMode, branchName: string): Promise<void> => {
       if (!worktreeTarget) {
@@ -331,6 +354,7 @@ export function App() {
             worktree={worktree}
             worktreeId={worktree.worktreeId}
             onError={setToastError}
+            onReorderPrimarySessions={handleReorderPrimarySessions}
             onSessionsChanged={refreshRepos}
           />
         </Activity>

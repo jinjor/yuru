@@ -536,11 +536,17 @@ body,
 .reorder-dragging {
   position: relative;
   z-index: 3;
-  cursor: grabbing;
   opacity: 0.95;
   box-shadow:
     0 0 0 1px var(--border-strong),
     0 14px 28px rgba(0, 0, 0, 0.55);
+}
+
+/* 掴んでいる間だけ grabbing。カードや行の中のボタンが自前の cursor を持つので、
+   body に付けた cursor では足りず、掴んだ項目とその中身を明示的に上書きする */
+.is-reorder-dragging .reorder-dragging,
+.is-reorder-dragging .reorder-dragging * {
+  cursor: grabbing;
 }
 
 /* 落ちる場所を空けてどく側。掴んでいる側はポインタへの追従を優先して transition を持たない */

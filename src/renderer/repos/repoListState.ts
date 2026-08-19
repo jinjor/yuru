@@ -1,5 +1,5 @@
 import type { PullRequestUpdate, SessionUpdate } from "../../shared/ipc";
-import type { RepoListItem, WorktreeListItem } from "../../shared/metadata";
+import type { PrimarySessionListItem, RepoListItem, WorktreeListItem } from "../../shared/metadata";
 import type { GitHubPullRequest, TerminalRuntimeId } from "../../shared/session";
 
 export function findWorktree(
@@ -44,6 +44,33 @@ export function sortTaskWorktreesByPaths(
       (a, b) =>
         (orderByPath.get(a.worktreePath) ?? worktreePaths.length) -
         (orderByPath.get(b.worktreePath) ?? worktreePaths.length),
+    );
+    return { ...repo, taskWorktrees };
+  });
+}
+
+// 並び替え直後の一覧。worktree をまたがないので、対象 worktree の primary session だけを
+// 並べ替える。
+export function sortPrimarySessionsByKeys(
+  repos: RepoListItem[],
+  worktreeId: string,
+  agentSessionKeys: string[],
+): RepoListItem[] {
+  const orderByKey = new Map(agentSessionKeys.map((key, index) => [key, index]));
+  const toOrder = (session: PrimarySessionListItem): number =>
+    (session.agentSessionKey === null ? undefined : orderByKey.get(session.agentSessionKey)) ??
+    agentSessionKeys.length;
+  return repos.map((repo) => {
+    if (!repo.taskWorktrees.some((worktree) => worktree.worktreeId === worktreeId)) {
+      return repo;
+    }
+    const taskWorktrees = repo.taskWorktrees.map((worktree) =>
+      worktree.worktreeId === worktreeId
+        ? {
+            ...worktree,
+            primarySessions: [...worktree.primarySessions].sort((a, b) => toOrder(a) - toOrder(b)),
+          }
+        : worktree,
     );
     return { ...repo, taskWorktrees };
   });

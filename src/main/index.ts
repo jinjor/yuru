@@ -422,6 +422,13 @@ function registerIpcHandlers(): void {
   );
 
   handleIpc(
+    "worktreeSession:reorderPrimary",
+    (_event, worktreeId: string, agentSessionKeys: string[]) => {
+      return service.reorderPrimarySessions(worktreeId, agentSessionKeys);
+    },
+  );
+
+  handleIpc(
     "worktreeSession:detachPrimary",
     (_event, worktreeId: string, agentSessionKey: string) => {
       return service.detachPrimarySession(worktreeId, agentSessionKey);

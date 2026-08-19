@@ -82,8 +82,11 @@ export function useReorderDrag({
       if (event.button !== 0 || stopRef.current) {
         return;
       }
-      // 項目の中の副操作ボタン (repo 行の + など) の上では並び替えを始めない。
-      if ((event.target as HTMLElement).closest("button")) {
+      // 項目の中の副操作ボタン (repo 行の +、worktree カードの ︙、session 行の Detach) の
+      // 上では並び替えを始めない。項目の本体がボタンでできている場合 (session の行) は、
+      // そのボタンに data-reorder-grab を付けて掴める側に戻す。
+      const button = (event.target as HTMLElement).closest("button");
+      if (button && !button.hasAttribute("data-reorder-grab")) {
         return;
       }
       const container = containerRef.current;

@@ -17,6 +17,7 @@ const {
   loadMetadata,
   parseMetadata,
   removeTaskWorktreeByPath,
+  savePrimarySessionOrder,
   saveRepoOrder,
   saveWorktreeOrder,
   upsertTaskWorktree,
@@ -1549,6 +1550,84 @@ test("detachPrimarySessionByPath は provider や session id が違えば外さ�
   assert.deepEqual(loadMetadata().taskWorktrees[0].primarySessions, [
     { provider: "claude", agentSessionId: "abc" },
   ]);
+});
+
+test("savePrimarySessionOrder は送られた key の順に primary session を書く", () => {
+  seed({
+    repos: [{ id: "repo-1", repoPath: "/tmp/repo" }],
+    taskWorktrees: [
+      {
+        repoId: "repo-1",
+        worktreePath: "/tmp/wt-a",
+        primarySessions: [
+          { provider: "claude", agentSessionId: "abc" },
+          { provider: "codex", agentSessionId: "def" },
+        ],
+      },
+      {
+        repoId: "repo-1",
+        worktreePath: "/tmp/wt-b",
+        primarySessions: [{ provider: "claude", agentSessionId: "ghi" }],
+      },
+    ],
+  });
+
+  const saved = savePrimarySessionOrder("/tmp/wt-a", [
+    toSessionKey("codex", "def"),
+    toSessionKey("claude", "abc"),
+  ]);
+
+  assert.equal(saved, true);
+  const taskWorktrees = loadMetadata().taskWorktrees;
+  assert.deepEqual(taskWorktrees[0].primarySessions, [
+    { provider: "codex", agentSessionId: "def" },
+    { provider: "claude", agentSessionId: "abc" },
+  ]);
+  // 並び替えは worktree をまたがない。
+  assert.deepEqual(taskWorktrees[1].primarySessions, [
+    { provider: "claude", agentSessionId: "ghi" },
+  ]);
+});
+
+test("savePrimarySessionOrder は顔ぶれが違うなら何も書かない", () => {
+  const primarySessions = [
+    { provider: "claude", agentSessionId: "abc" },
+    { provider: "codex", agentSessionId: "def" },
+  ];
+  seed({
+    repos: [{ id: "repo-1", repoPath: "/tmp/repo" }],
+    taskWorktrees: [{ repoId: "repo-1", worktreePath: "/tmp/wt", primarySessions }],
+  });
+
+  // ドラッグ中に detach された古い一覧からの並び。
+  assert.equal(savePrimarySessionOrder("/tmp/wt", [toSessionKey("codex", "def")]), false);
+  // ドラッグ中に attach された古い一覧からの並び。
+  assert.equal(
+    savePrimarySessionOrder("/tmp/wt", [
+      toSessionKey("codex", "def"),
+      toSessionKey("claude", "abc"),
+      toSessionKey("claude", "ghi"),
+    ]),
+    false,
+  );
+  assert.deepEqual(loadMetadata().taskWorktrees[0].primarySessions, primarySessions);
+});
+
+test("savePrimarySessionOrder は知らない worktree なら何も書かない", () => {
+  const taskWorktrees = [
+    {
+      repoId: "repo-1",
+      worktreePath: "/tmp/wt",
+      primarySessions: [{ provider: "claude", agentSessionId: "abc" }],
+    },
+  ];
+  seed({ repos: [{ id: "repo-1", repoPath: "/tmp/repo" }], taskWorktrees });
+
+  assert.equal(
+    savePrimarySessionOrder("/tmp/other", [toSessionKey("claude", "abc")]),
+    false,
+  );
+  assert.deepEqual(loadMetadata().taskWorktrees, taskWorktrees);
 });
 
 test("removeTaskWorktreeByPath は対象だけ削除する", () => {

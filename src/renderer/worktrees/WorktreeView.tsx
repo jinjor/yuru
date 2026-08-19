@@ -37,6 +37,8 @@ interface WorktreeViewProps {
   sidebarWidth: number;
   worktree: WorktreeListItem | null;
   worktreeId: string;
+  // ホームの Sessions の並び替え。渡すのはこの worktree の全 primary session の key。
+  onReorderPrimarySessions: (worktreeId: string, agentSessionKeys: string[]) => void;
   // session の開始・終了で変わる左ペインの dot / preview を更新するため、
   // App に repos の再取得を頼む。detach は取り直しの完了を待って表示を切り替えるので、
   // 再取得の完了で resolve する。
@@ -79,6 +81,7 @@ export const WorktreeView = memo(function WorktreeView({
   sidebarWidth,
   worktree,
   worktreeId,
+  onReorderPrimarySessions,
   onSessionsChanged,
 }: WorktreeViewProps) {
   // memo の実効性を E2E で固定するための、計測専用の意図的な render 副作用。
@@ -377,6 +380,9 @@ export const WorktreeView = memo(function WorktreeView({
               }}
               onDetachPrimarySession={(agentSessionKey) => {
                 void detachPrimarySession(agentSessionKey);
+              }}
+              onReorderPrimarySessions={(agentSessionKeys) => {
+                onReorderPrimarySessions(worktreeId, agentSessionKeys);
               }}
               onResumeSuggestedSession={(agentSessionKey) => {
                 void startTerminalRuntime(() =>

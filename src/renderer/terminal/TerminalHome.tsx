@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Terminal as TerminalIcon, Unlink } from "lucide-react";
 import type {
   PrimarySessionListItem,
@@ -7,6 +8,7 @@ import type {
 import type { SessionProvider, TerminalRuntimeId } from "../../shared/session";
 import { providerLabel } from "../providers/providerLabel";
 import { SessionProviderDot } from "../providers/SessionProviderDot";
+import { useReorderDrag, type ReorderDrag } from "../utils/useReorderDrag";
 
 interface TerminalHomeProps {
   providers: SessionProvider[];
@@ -14,6 +16,7 @@ interface TerminalHomeProps {
   onSelectPrimarySession: (terminalRuntimeId: TerminalRuntimeId) => void;
   onResumePrimarySession: (agentSessionKey: string) => void;
   onDetachPrimarySession: (agentSessionKey: string) => void;
+  onReorderPrimarySessions: (agentSessionKeys: string[]) => void;
   onResumeSuggestedSession: (agentSessionKey: string) => void;
   onCreateSessionForWorktree: (provider: SessionProvider) => void;
   onOpenWorktreeTerminal: () => void;
@@ -26,12 +29,24 @@ export function TerminalHome({
   onSelectPrimarySession,
   onResumePrimarySession,
   onDetachPrimarySession,
+  onReorderPrimarySessions,
   onResumeSuggestedSession,
   onCreateSessionForWorktree,
   onOpenWorktreeTerminal,
 }: TerminalHomeProps) {
+  const homeRef = useRef<HTMLDivElement>(null);
+  // 並び替えられるのは Sessions の行だけ。Suggested と New session は掴めず、
+  // 落とす先にもならない。
+  const sessionReorder = useReorderDrag({
+    itemIds:
+      worktree?.primarySessions.flatMap((primarySession) =>
+        primarySession.agentSessionKey === null ? [] : [primarySession.agentSessionKey],
+      ) ?? [],
+    containerRef: homeRef,
+    onReorder: onReorderPrimarySessions,
+  });
   return (
-    <div className="terminal-session-start">
+    <div className="terminal-session-start" ref={homeRef}>
       {worktree && (
         <div className="terminal-session-start-panel">
           {worktree.isMainWorktree ? (
@@ -45,6 +60,7 @@ export function TerminalHome({
                     <PrimarySessionAction
                       key={primarySession.agentSessionKey ?? primarySession.activeTerminalRuntimeId}
                       primarySession={primarySession}
+                      reorder={sessionReorder}
                       onSelectRuntime={onSelectPrimarySession}
                       onResume={onResumePrimarySession}
                       onDetach={onDetachPrimarySession}
@@ -115,6 +131,7 @@ function OpenTerminalSection({ onOpen }: OpenTerminalSectionProps) {
 
 interface PrimarySessionActionProps {
   primarySession: PrimarySessionListItem;
+  reorder: ReorderDrag;
   onSelectRuntime: (terminalRuntimeId: TerminalRuntimeId) => void;
   onResume: (agentSessionKey: string) => void;
   onDetach: (agentSessionKey: string) => void;
@@ -122,6 +139,7 @@ interface PrimarySessionActionProps {
 
 function PrimarySessionAction({
   primarySession,
+  reorder,
   onSelectRuntime,
   onResume,
   onDetach,
@@ -134,11 +152,25 @@ function PrimarySessionAction({
     primarySession.state === "active" ? terminalRuntimeId !== null : agentSessionKey !== null;
   return (
     <div
-      className={`action-surface-row primary-session-action session-home-row ${primarySession.state}`}
+      className={[
+        "action-surface-row primary-session-action session-home-row",
+        primarySession.state,
+        // agentSessionKey が並び替えでの ID。起動直後の、まだ session id が決まっていない
+        // 行だけは持たないので掴めないが、その時この worktree の行はそれ 1 つしかない。
+        agentSessionKey === null ? "" : reorder.itemClassName(agentSessionKey),
+      ].join(" ")}
+      style={agentSessionKey === null ? undefined : reorder.itemStyle(agentSessionKey)}
+      data-reorder-id={agentSessionKey ?? undefined}
+      onPointerDown={(event) => {
+        if (agentSessionKey !== null) {
+          reorder.onItemPointerDown(agentSessionKey, event);
+        }
+      }}
     >
       <button
         type="button"
         className="session-home-select resume-primary-action"
+        data-reorder-grab=""
         disabled={!canSelect}
         onClick={() => {
           if (primarySession.state === "active" && terminalRuntimeId) {

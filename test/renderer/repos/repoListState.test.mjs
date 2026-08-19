@@ -5,6 +5,7 @@ import {
   applyPullRequestUpdates,
   applySessionUpdate,
   collectKeepAliveWorktrees,
+  sortPrimarySessionsByKeys,
   sortReposByIds,
   sortTaskWorktreesByPaths,
 } from "../../../src/renderer/repos/repoListState.ts";
@@ -250,5 +251,27 @@ test("sortTaskWorktreesByPaths は対象 repo の task worktree を渡された�
     next[0].taskWorktrees.map((entry) => entry.worktreeId),
     ["wt-3", "wt-1", "wt-2"],
   );
+  assert.strictEqual(next[1], repos[1]);
+});
+
+test("sortPrimarySessionsByKeys は対象 worktree の primary session を渡された順に並べ替える", () => {
+  const repos = [
+    repo("repo-a", [
+      worktree("wt-1", {
+        primarySessions: [primarySession("run-1"), primarySession("run-2"), primarySession("run-3")],
+      }),
+      worktree("wt-2", { primarySessions: [primarySession("run-4")] }),
+    ]),
+    repo("repo-b", []),
+  ];
+
+  const next = sortPrimarySessionsByKeys(repos, "wt-1", ["codex:run-3", "codex:run-1", "codex:run-2"]);
+
+  assert.deepEqual(
+    next[0].taskWorktrees[0].primarySessions.map((entry) => entry.agentSessionKey),
+    ["codex:run-3", "codex:run-1", "codex:run-2"],
+  );
+  // 並び替えは worktree も repo もまたがない。
+  assert.strictEqual(next[0].taskWorktrees[1], repos[0].taskWorktrees[1]);
   assert.strictEqual(next[1], repos[1]);
 });
