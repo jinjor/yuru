@@ -15,6 +15,7 @@ export function TerminalBar({
   currentGitHub,
   onKillTerminalRuntime,
   onOpenExternal,
+  onReorderPrimarySessions,
   onSelectTerminalRuntime,
   primarySessions,
   selectedTerminalRuntimeId,
@@ -27,6 +28,7 @@ export function TerminalBar({
         selectedTerminalRuntimeId={selectedTerminalRuntimeId}
         onSelectTerminalRuntime={onSelectTerminalRuntime}
         onKillTerminalRuntime={onKillTerminalRuntime}
+        onReorderPrimarySessions={onReorderPrimarySessions}
       />
       <div className="terminal-bar-meta">
         {currentBranch && (

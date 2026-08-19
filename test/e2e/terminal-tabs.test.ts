@@ -21,6 +21,7 @@ const FIRST_SESSION_ID = "019e5862-8776-7723-8de9-3460e9600119";
 const SECOND_SESSION_ID = "019e5862-8776-7723-8de9-3460e9600120";
 const SUGGESTED_SESSION_ID = "019e5862-8776-7723-8de9-3460e9600121";
 const LAZY_SESSION_ID = "019e5862-8776-7723-8de9-3460e9600122";
+const THIRD_SESSION_ID = "019e5862-8776-7723-8de9-3460e9600123";
 
 test("ホームは空の session セクションを表示しない", async () => {
   const context = await createE2eContext();
@@ -690,6 +691,97 @@ test("複数 runtime をタブで切り替え、kill と exit 後はホームへ
     await expect(
       sessionView.locator(".resume-primary-action", { hasText: updatedPreview }),
     ).toBeVisible();
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+test("タブをドラッグすると primary session の並びが変わり metadata にも保存される", async () => {
+  test.setTimeout(60_000);
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context);
+    const worktreePath = await createGitWorktree(context, repoDir, "session-tab-order");
+    await seedCodexStoredSession(context.tmpHome, repoDir, FIRST_SESSION_ID, "First session");
+    await seedCodexStoredSession(context.tmpHome, repoDir, SECOND_SESSION_ID, "Second session");
+    await seedCodexStoredSession(context.tmpHome, repoDir, THIRD_SESSION_ID, "Third session");
+    await registerRepo(context, repoDir, [
+      {
+        worktreePath,
+        primarySessions: [
+          { provider: "codex", agentSessionId: FIRST_SESSION_ID },
+          { provider: "codex", agentSessionId: SECOND_SESSION_ID },
+          { provider: "codex", agentSessionId: THIRD_SESSION_ID },
+        ],
+      },
+    ]);
+    const fakeBin = await createFakeCodexBin(context.tmpHome);
+    const launched = await launchWindow(context, {
+      env: { PATH: `${fakeBin}:${process.env.PATH ?? ""}` },
+    });
+    app = launched.app;
+    const window = launched.window;
+    const sessionView = visibleWorktreeView(window);
+    await worktreeCard(window, "session-tab-order").click();
+
+    // 3 つの primary のうち 1 番目と 3 番目だけ resume する。2 番目は inactive なので
+    // タブには出ず、タブ列の並びだけでは置き場所が決まらない。
+    const homeTab = sessionView.locator(".session-tab-home");
+    const primaryRows = sessionView.locator(".session-home-row");
+    await primaryRows.nth(0).locator(".resume-primary-action").click();
+    await expect(sessionView.locator(".xterm")).toContainText(FIRST_SESSION_ID, {
+      timeout: 10_000,
+    });
+    await homeTab.click();
+    await primaryRows.nth(2).locator(".resume-primary-action").click();
+    await expect(sessionView.locator(".xterm")).toContainText(THIRD_SESSION_ID, {
+      timeout: 10_000,
+    });
+
+    const runtimeTabs = sessionView.locator(".session-tab:not(.session-tab-home)");
+    await expect(runtimeTabs.locator(".session-tab-label")).toHaveText([
+      "First session",
+      "Third session",
+    ]);
+    const firstTab = runtimeTabs.filter({ hasText: "First session" });
+    await firstTab.click();
+    await expect(firstTab).toHaveClass(/selected/);
+
+    const firstTabBox = await firstTab.boundingBox();
+    const thirdTab = runtimeTabs.filter({ hasText: "Third session" });
+    const thirdTabBox = await thirdTab.boundingBox();
+    expect(firstTabBox).not.toBeNull();
+    expect(thirdTabBox).not.toBeNull();
+    const startY = thirdTabBox!.y + thirdTabBox!.height / 2;
+    await window.mouse.move(thirdTabBox!.x + thirdTabBox!.width / 2, startY);
+    await window.mouse.down();
+    // 先頭のタブの位置まで左へ動かすと、その手前 (タブ列の左端) に落ちる。
+    await window.mouse.move(firstTabBox!.x + firstTabBox!.width / 2, startY, { steps: 8 });
+    await window.mouse.up();
+
+    await expect(runtimeTabs.locator(".session-tab-label")).toHaveText([
+      "Third session",
+      "First session",
+    ]);
+    // 並び替えは表示中のタブを変えない。
+    await expect(firstTab).toHaveClass(/selected/);
+
+    // タブ列の左端は全体の先頭。タブに出ていない 2 番目の session は動かない。
+    await homeTab.click();
+    await expect(primaryRows.locator(".action-surface-row-main")).toHaveText([
+      "Third session",
+      "First session",
+      "Second session",
+    ]);
+    await expect
+      .poll(async () =>
+        (await readMetadata(context)).taskWorktrees[0].primarySessions.map(
+          (session) => session.agentSessionId,
+        ),
+      )
+      .toEqual([THIRD_SESSION_ID, FIRST_SESSION_ID, SECOND_SESSION_ID]);
   } finally {
     await closeYuru(app);
     await context.cleanup();

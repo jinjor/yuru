@@ -7,17 +7,17 @@ import {
   toSlotSize,
 } from "../../../src/renderer/utils/useReorderDrag.ts";
 
-// 高さ 50px の項目が 10px 間隔で 4 つ並ぶ (スロットの大きさは 60px)。
-function metrics(heights = [50, 50, 50, 50]) {
-  let top = 0;
-  return heights.map((height) => {
-    const item = { top, height };
-    top += height + 10;
+// 大きさ 50px の項目が 10px 間隔で 4 つ並ぶ (スロットの大きさは 60px)。
+function metrics(sizes = [50, 50, 50, 50]) {
+  let start = 0;
+  return sizes.map((size) => {
+    const item = { start, size };
+    start += size + 10;
     return item;
   });
 }
 
-test("toSlotSize は隣との隙間を含む縦幅を返す", () => {
+test("toSlotSize は隣との隙間を含む幅を返す", () => {
   assert.equal(toSlotSize(metrics(), 0), 60);
   assert.equal(toSlotSize(metrics(), 1), 60);
   // 末尾の項目は 1 つ前との隙間から求める。
@@ -48,8 +48,8 @@ test("resolveTargetIndex は端まで動かすと端の index を返す", () => 
   assert.equal(resolveTargetIndex(items, 3, 60, -180), 0);
 });
 
-test("resolveTargetIndex は高さがばらばらでも掴んだ項目のスロットを単位に入れ替わる", () => {
-  // 高さ 50 / 20 / 80 の 3 つ。掴むのは先頭 (スロットの大きさは 60)。
+test("resolveTargetIndex は大きさがばらばらでも掴んだ項目のスロットを単位に入れ替わる", () => {
+  // 大きさ 50 / 20 / 80 の 3 つ。掴むのは先頭 (スロットの大きさは 60)。
   const items = metrics([50, 20, 80]);
   assert.equal(resolveTargetIndex(items, 0, 60, 14), 0);
   assert.equal(resolveTargetIndex(items, 0, 60, 16), 1);

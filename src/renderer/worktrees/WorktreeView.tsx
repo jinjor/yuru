@@ -343,6 +343,9 @@ export const WorktreeView = memo(function WorktreeView({
               void killTerminalRuntime(terminalRuntimeId);
             }}
             onOpenExternal={onOpenExternal}
+            onReorderPrimarySessions={(agentSessionKeys) => {
+              onReorderPrimarySessions(worktreeId, agentSessionKeys);
+            }}
             onSelectTerminalRuntime={setSelectedTerminalRuntimeId}
           />
           {displayedRateLimitStop && (

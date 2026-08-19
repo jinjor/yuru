@@ -21,7 +21,7 @@ Yuru の中では、Claude Code / Codex CLI / Kimi CLI そのものを `agent` �
   - 現在位置は `worktreePath` で表す
 - `primary session`
   - task worktree に attach された session
-  - 1 task worktree に複数存在でき、attach 順を保持する
+  - 1 task worktree に複数存在でき、ユーザーが並び替えた順を保持する (新しい session は末尾)
   - 1 agent session は同時に複数 task worktree の primary にはならない
 - `suggested session`
   - Yuru 外で作られ、task worktree に紐づいていると推測される session
@@ -50,6 +50,7 @@ Yuru の中では、Claude Code / Codex CLI / Kimi CLI そのものを `agent` �
   - どの repo を主導線に表示するか
   - repo と task worktree の path link
   - task worktree と primary session の strong link
+  - 一覧の表示順 (repo / task worktree / primary session をユーザーが並び替えた順)
 - file review store
   - worktree ごとの、ファイル内容に対するレビュー済み宣言
   - 表示中の checked 状態そのものではなく、fork 元と承認済み内容の blob OID を保存する
@@ -120,7 +121,9 @@ Git 上には存在するが、まだ Yuru metadata に strong link を持たな
 
 各 repo の task worktree 一覧は、その repo に対して Git から worktree 群を読んで組み立てる。
 main worktree は task worktree として表示しない。
-task worktree は Git の管理ディレクトリの作成日時が古い順に表示する。
+task worktree は、ユーザーが並び替えた順に表示する。並びが保存されていない worktree
+(新しく作ったものや Git で直接作ったもの) は、その後ろに Git の管理ディレクトリの
+作成日時が古い順で並ぶ。
 その上に Yuru metadata、agent store、active terminal runtime を重ねる。
 
 - metadata の `primarySessions` が有効なら、それらを task worktree の primary として扱う
@@ -232,6 +235,10 @@ task worktree row は branch、先頭の primary session の状態、provider、
 row のクリックは常に worktree の選択で、session やプロセスの起動は行わない (F43)。
 row に残る操作は選択と `︙ → Remove worktree` (worktree lifecycle) だけである。
 
+repo 行と task worktree カードは drag & drop で並び替えられる。並び替えは 1 つの入れ物の
+中に閉じ (repo をまたいで worktree を動かすことはしない)、選択は変えない。決めた並びは
+Yuru metadata に保存する。main worktree は常に先頭で、掴めず落とす先にもならない。
+
 session lifecycle の操作は選択中 worktree の Terminal が担う。Terminal のヘッダは
 `[ホーム] [live terminal runtime...]` のタブ列で、runtime の生成・終了から一覧を導出する。
 ホームは常設で、session の一覧と開始操作を表示する。
@@ -244,13 +251,19 @@ session lifecycle の操作は選択中 worktree の Terminal が担う。Termin
 - suggested session 行: primary へ昇格して resume する
 - main worktree: standalone terminal を開く操作
 
-runtime タブは保存された primary session の順に active なものを並べ、session id がまだ
-解決していない runtime と standalone terminal はその後ろに runtime の起動順で並べる。
+runtime タブは保存された primary session の順 (= ユーザーが並び替えた順) に active なものを
+並べ、session id がまだ解決していない runtime と standalone terminal はその後ろに runtime の
+起動順で並べる。
 対応する primary session があれば preview と provider/activity のドットを表示し、対応が
 なければ `Terminal` と表示する。× は terminal runtime だけを kill し、provider session の
 履歴と primary link は残す。
 active な suggested session を primary に昇格すると、既存 runtime のタブは同じ PTY と
 scrollback を保ったまま新しい primary worktree へ移る。
+
+ホームの primary session 行とタブは drag & drop で並び替えられ、metadata の primary session の
+並びを書き替える。タブに出るのは runtime を持つ session だけなので、タブでのドラッグは
+「落とした場所の左隣のタブの直後へ移す」(左端に落としたら全体の先頭へ) という規則で、
+タブに出ていない session も含む全体の並びへ翻訳する。並び替えても表示中のタブは変わらない。
 
 右側の `Terminal`, `Files`, `Changes`, preview は選択中の worktree に連動する。
 App が持つ選択状態は `worktreeId` だけである (P20)。右ペイン (WorktreeView) は選択が

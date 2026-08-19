@@ -19,30 +19,73 @@ const AUTO_SCROLL_MAX_SPEED_PX = 14;
 const DRAGGING_BODY_CLASS = "is-reorder-dragging";
 
 export interface ReorderItemMetrics {
-  // スクロールコンテナの content 座標 (viewport 座標 + scrollTop)。この座標で持つと
+  // スクロールコンテナの content 座標 (viewport 座標 + スクロール量)。この座標で持つと
   // 自動スクロールしても測り直さずに済む。
-  top: number;
-  height: number;
+  start: number;
+  size: number;
 }
 
+export type ReorderAxis = "vertical" | "horizontal";
+
+// 縦か横かで読む座標が変わるだけなので、軸の違いはこの表に閉じる。
+interface AxisAccess {
+  pointerPosition: (event: { clientX: number; clientY: number }) => number;
+  rectStart: (rect: DOMRect) => number;
+  rectSize: (rect: DOMRect) => number;
+  rectEnd: (rect: DOMRect) => number;
+  scroll: (container: HTMLElement) => number;
+  setScroll: (container: HTMLElement, next: number) => void;
+  maxScroll: (container: HTMLElement) => number;
+  translate: (offset: number) => string;
+}
+
+const AXIS_ACCESS: Record<ReorderAxis, AxisAccess> = {
+  vertical: {
+    pointerPosition: (event) => event.clientY,
+    rectStart: (rect) => rect.top,
+    rectSize: (rect) => rect.height,
+    rectEnd: (rect) => rect.bottom,
+    scroll: (container) => container.scrollTop,
+    setScroll: (container, next) => {
+      container.scrollTop = next;
+    },
+    maxScroll: (container) => container.scrollHeight - container.clientHeight,
+    translate: (offset) => `translateY(${offset}px)`,
+  },
+  horizontal: {
+    pointerPosition: (event) => event.clientX,
+    rectStart: (rect) => rect.left,
+    rectSize: (rect) => rect.width,
+    rectEnd: (rect) => rect.right,
+    scroll: (container) => container.scrollLeft,
+    setScroll: (container, next) => {
+      container.scrollLeft = next;
+    },
+    maxScroll: (container) => container.scrollWidth - container.clientWidth,
+    translate: (offset) => `translateX(${offset}px)`,
+  },
+};
+
 interface DragSession {
+  axis: AxisAccess;
   itemIds: readonly string[];
   metrics: ReorderItemMetrics[];
   fromIndex: number;
-  // 掴んだ項目が占める縦幅 (高さ + 隣との隙間)。どく項目はこの分だけずれる。
+  // 掴んだ項目が占める幅 (項目の大きさ + 隣との隙間)。どく項目はこの分だけずれる。
   slotSize: number;
   minOffset: number;
   maxOffset: number;
   container: HTMLElement;
-  containerTop: number;
-  containerBottom: number;
-  startContentY: number;
-  pointerY: number;
+  containerStart: number;
+  containerEnd: number;
+  startContentPosition: number;
+  pointerPosition: number;
   targetIndex: number;
   frameId: number;
 }
 
 interface DragView {
+  axis: AxisAccess;
   itemIds: readonly string[];
   itemId: string;
   fromIndex: number;
@@ -62,15 +105,18 @@ interface ReorderDragOptions {
   itemIds: readonly string[];
   // 項目を含むスクロールコンテナ。項目は data-reorder-id 属性で探す。
   containerRef: RefObject<HTMLElement | null>;
-  // 並びが変わって離したときだけ呼ぶ。渡すのは並び替え後の全 ID。
-  onReorder: (itemIds: string[]) => void;
+  // 項目が縦に並ぶか横に並ぶか。既定は縦。
+  axis?: ReorderAxis;
+  // 並びが変わって離したときだけ呼ぶ。渡すのは並び替え後の全 ID と、動かした項目の ID。
+  onReorder: (itemIds: string[], movedItemId: string) => void;
 }
 
-// 1 つの入れ物の中を縦に並び替える drag & drop。掴んだ項目はポインタに追従し、
+// 1 つの入れ物の中を 1 次元に並び替える drag & drop。掴んだ項目はポインタに追従し、
 // 落ちる場所を空けるために他の項目が 1 スロット分ずれる。
 export function useReorderDrag({
   itemIds,
   containerRef,
+  axis = "vertical",
   onReorder,
 }: ReorderDragOptions): ReorderDrag {
   const sessionRef = useRef<DragSession | null>(null);
@@ -82,9 +128,9 @@ export function useReorderDrag({
       if (event.button !== 0 || stopRef.current) {
         return;
       }
-      // 項目の中の副操作ボタン (repo 行の +、worktree カードの ︙、session 行の Detach) の
-      // 上では並び替えを始めない。項目の本体がボタンでできている場合 (session の行) は、
-      // そのボタンに data-reorder-grab を付けて掴める側に戻す。
+      // 項目の中の副操作ボタン (repo 行の +、worktree カードの ︙、session 行の Detach、
+      // タブの ×) の上では並び替えを始めない。項目の本体がボタンでできている場合
+      // (session の行とタブ) は、そのボタンに data-reorder-grab を付けて掴める側に戻す。
       const button = (event.target as HTMLElement).closest("button");
       if (button && !button.hasAttribute("data-reorder-grab")) {
         return;
@@ -94,14 +140,16 @@ export function useReorderDrag({
         return;
       }
 
+      const axisAccess = AXIS_ACCESS[axis];
       const startX = event.clientX;
       const startY = event.clientY;
+      const startPosition = axisAccess.pointerPosition(event);
       const currentItemIds = [...itemIds];
 
       // ポインタの位置から落ちる位置を決め直す。ポインタが動いた時と、止まったまま
       // 自動スクロールした時の両方から呼ぶ。
-      const applyPointer = (session: DragSession, pointerY: number): void => {
-        session.pointerY = pointerY;
+      const applyPointer = (session: DragSession, pointerPosition: number): void => {
+        session.pointerPosition = pointerPosition;
         const offset = toOffset(session);
         session.targetIndex = resolveTargetIndex(
           session.metrics,
@@ -113,6 +161,7 @@ export function useReorderDrag({
           previous && previous.offset === offset && previous.targetIndex === session.targetIndex
             ? previous
             : {
+                axis: session.axis,
                 itemIds: session.itemIds,
                 itemId,
                 fromIndex: session.fromIndex,
@@ -129,7 +178,7 @@ export function useReorderDrag({
           return;
         }
         autoScroll(session, toOffset(session));
-        applyPointer(session, session.pointerY);
+        applyPointer(session, session.pointerPosition);
         session.frameId = requestAnimationFrame(step);
       };
 
@@ -153,7 +202,7 @@ export function useReorderDrag({
       const handlePointerMove = (moveEvent: PointerEvent): void => {
         const session = sessionRef.current;
         if (session) {
-          applyPointer(session, moveEvent.clientY);
+          applyPointer(session, axisAccess.pointerPosition(moveEvent));
           return;
         }
         if (
@@ -161,7 +210,7 @@ export function useReorderDrag({
         ) {
           return;
         }
-        const started = startSession(container, currentItemIds, itemId, startY);
+        const started = startSession(axisAccess, container, currentItemIds, itemId, startPosition);
         if (!started) {
           stop();
           return;
@@ -170,7 +219,7 @@ export function useReorderDrag({
         document.body.classList.add(DRAGGING_BODY_CLASS);
         document.body.style.userSelect = "none";
         document.body.style.cursor = "grabbing";
-        applyPointer(started, moveEvent.clientY);
+        applyPointer(started, axisAccess.pointerPosition(moveEvent));
         step();
       };
 
@@ -179,7 +228,7 @@ export function useReorderDrag({
         // 最後の pointermove と pointerup が同じフレームに続けて届くこともあるので、
         // 離した位置で決め直してから確定する。
         if (session) {
-          applyPointer(session, upEvent.clientY);
+          applyPointer(session, axisAccess.pointerPosition(upEvent));
           // 掴んだ項目はポインタに付いて動くので、離すと同じ項目の click が続けて届く。
           // 並び替えは選択を変えないので、その 1 回だけ握り潰す。
           suppressNextClick();
@@ -190,7 +239,7 @@ export function useReorderDrag({
         if (targetIndex === undefined || fromIndex === undefined || targetIndex === fromIndex) {
           return;
         }
-        onReorder(moveItem(currentItemIds, fromIndex, targetIndex));
+        onReorder(moveItem(currentItemIds, fromIndex, targetIndex), itemId);
       };
 
       stopRef.current = stop;
@@ -198,7 +247,7 @@ export function useReorderDrag({
       window.addEventListener("pointerup", handlePointerUp);
       window.addEventListener("pointercancel", stop);
     },
-    [containerRef, itemIds, onReorder],
+    [axis, containerRef, itemIds, onReorder],
   );
 
   const itemIdsKey = itemIds.join("\n");
@@ -239,13 +288,13 @@ function toItemStyle(view: DragView | null, itemId: string): CSSProperties | und
     return undefined;
   }
   if (itemId === view.itemId) {
-    return { transform: `translateY(${view.offset}px)` };
+    return { transform: view.axis.translate(view.offset) };
   }
   const index = view.itemIds.indexOf(itemId);
   if (index < 0) {
     return undefined;
   }
-  return { transform: `translateY(${toShift(view, index)}px)` };
+  return { transform: view.axis.translate(toShift(view, index)) };
 }
 
 // 掴んだ項目が抜けた場所と落ちる場所の間にある項目だけが 1 スロット分ずれる。
@@ -260,16 +309,18 @@ function toShift(view: DragView, index: number): number {
 }
 
 function startSession(
+  axis: AxisAccess,
   container: HTMLElement,
   itemIds: readonly string[],
   itemId: string,
-  startY: number,
+  startPosition: number,
 ): DragSession | null {
   const fromIndex = itemIds.indexOf(itemId);
   if (fromIndex < 0 || itemIds.length < 2) {
     return null;
   }
   const containerRect = container.getBoundingClientRect();
+  const containerStart = axis.rectStart(containerRect);
   const elementsById = new Map<string, Element>();
   for (const element of container.querySelectorAll("[data-reorder-id]")) {
     const id = element.getAttribute("data-reorder-id");
@@ -285,8 +336,8 @@ function startSession(
     }
     const rect = element.getBoundingClientRect();
     metrics.push({
-      top: rect.top - containerRect.top + container.scrollTop,
-      height: rect.height,
+      start: axis.rectStart(rect) - containerStart + axis.scroll(container),
+      size: axis.rectSize(rect),
     });
   }
 
@@ -294,38 +345,44 @@ function startSession(
   const first = metrics[0];
   const last = metrics[metrics.length - 1];
   return {
+    axis,
     itemIds,
     metrics,
     fromIndex,
     slotSize: toSlotSize(metrics, fromIndex),
     // 掴んだ項目は自分の入れ物から出られない。
-    minOffset: first.top - dragged.top,
-    maxOffset: last.top + last.height - dragged.height - dragged.top,
+    minOffset: first.start - dragged.start,
+    maxOffset: last.start + last.size - dragged.size - dragged.start,
     container,
-    containerTop: containerRect.top,
-    containerBottom: containerRect.bottom,
-    startContentY: startY - containerRect.top + container.scrollTop,
-    pointerY: startY,
+    containerStart,
+    containerEnd: axis.rectEnd(containerRect),
+    startContentPosition: startPosition - containerStart + axis.scroll(container),
+    pointerPosition: startPosition,
     targetIndex: fromIndex,
     frameId: 0,
   };
 }
 
-// 掴んだ項目を抜くと詰まる縦幅。隣との隙間を含むので、項目の高さがばらばらでも
+// 掴んだ項目を抜くと詰まる幅。隣との隙間を含むので、項目の大きさがばらばらでも
 // 間にある項目はどれもちょうどこの分だけずれる。
 export function toSlotSize(metrics: readonly ReorderItemMetrics[], fromIndex: number): number {
   const dragged = metrics[fromIndex];
   const next = metrics[fromIndex + 1];
   if (next) {
-    return next.top - dragged.top;
+    return next.start - dragged.start;
   }
   const previous = metrics[fromIndex - 1];
-  return dragged.top + dragged.height - (previous.top + previous.height);
+  return dragged.start + dragged.size - (previous.start + previous.size);
 }
 
 function toOffset(session: DragSession): number {
-  const pointerContentY = session.pointerY - session.containerTop + session.container.scrollTop;
-  return clamp(pointerContentY - session.startContentY, session.minOffset, session.maxOffset);
+  const pointerContentPosition =
+    session.pointerPosition - session.containerStart + session.axis.scroll(session.container);
+  return clamp(
+    pointerContentPosition - session.startContentPosition,
+    session.minOffset,
+    session.maxOffset,
+  );
 }
 
 // 落ちる位置 = 掴んだ項目より手前に来る項目の数。基準は「掴んだ項目を抜いた後」の
@@ -340,13 +397,13 @@ export function resolveTargetIndex(
   offset: number,
 ): number {
   const dragged = metrics[fromIndex];
-  const draggedCenter = dragged.top + dragged.height / 2 + offset;
+  const draggedCenter = dragged.start + dragged.size / 2 + offset;
   let targetIndex = 0;
   for (const [index, item] of metrics.entries()) {
     if (index === fromIndex) {
       continue;
     }
-    const center = item.top + item.height / 2 - (index > fromIndex ? slotSize : 0);
+    const center = item.start + item.size / 2 - (index > fromIndex ? slotSize : 0);
     if (center + slotSize / 2 < draggedCenter) {
       targetIndex += 1;
     }
@@ -355,24 +412,25 @@ export function resolveTargetIndex(
 }
 
 function autoScroll(session: DragSession, offset: number): void {
-  const maxScrollTop = session.container.scrollHeight - session.container.clientHeight;
-  if (maxScrollTop <= 0) {
+  const maxScroll = session.axis.maxScroll(session.container);
+  if (maxScroll <= 0) {
     return;
   }
-  const distanceFromTop = session.pointerY - session.containerTop;
-  const distanceFromBottom = session.containerBottom - session.pointerY;
+  const distanceFromStart = session.pointerPosition - session.containerStart;
+  const distanceFromEnd = session.containerEnd - session.pointerPosition;
+  const scroll = session.axis.scroll(session.container);
   // 掴んだ項目がその方向の端に達していたら、行き止まりなのでスクロールもしない。
-  if (distanceFromTop < AUTO_SCROLL_ZONE_PX && offset > session.minOffset) {
-    session.container.scrollTop = Math.max(
-      0,
-      session.container.scrollTop - toAutoScrollSpeed(distanceFromTop),
+  if (distanceFromStart < AUTO_SCROLL_ZONE_PX && offset > session.minOffset) {
+    session.axis.setScroll(
+      session.container,
+      Math.max(0, scroll - toAutoScrollSpeed(distanceFromStart)),
     );
     return;
   }
-  if (distanceFromBottom < AUTO_SCROLL_ZONE_PX && offset < session.maxOffset) {
-    session.container.scrollTop = Math.min(
-      maxScrollTop,
-      session.container.scrollTop + toAutoScrollSpeed(distanceFromBottom),
+  if (distanceFromEnd < AUTO_SCROLL_ZONE_PX && offset < session.maxOffset) {
+    session.axis.setScroll(
+      session.container,
+      Math.min(maxScroll, scroll + toAutoScrollSpeed(distanceFromEnd)),
     );
   }
 }
