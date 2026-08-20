@@ -30,23 +30,19 @@ export function findRepoByPath(repoPath: string): RepoMetadata | null {
   return loadRepos().find((repo) => repo.repoPath === repoPath) ?? null;
 }
 
-// 送られた ID の順をそのまま repo の並びとして書く。renderer は一覧の全 repo を送るので、
-// 含まれない entry は一覧から落ちた repo (Git repository でなくなったもの) で、その task
-// worktree record ごと消える。
+// 送られた ID の順をそのまま repo の並びとして書く。送られなかった repo (一覧を取ってから
+// 並び替えるまでの間に壊れた・追加されたもの) は末尾にそのまま残す。壊れた repo の掃除は
+// 起動時の cleanupBrokenRepos の仕事で、並び替えは何も消さない。
 export function saveRepoOrder(repoIds: readonly string[]): void {
   const metadata = loadMetadata();
-  const nextRepos = repoIds
-    .map((repoId) => metadata.repos.find((repo) => repo.id === repoId))
-    .filter((repo) => repo !== undefined);
-  const nextRepoIds = new Set(nextRepos.map((repo) => repo.id));
-  const removedRepoIds = new Set(
-    metadata.repos.map((repo) => repo.id).filter((repoId) => !nextRepoIds.has(repoId)),
-  );
+  const sentRepoIds = new Set(repoIds);
 
-  metadata.repos = nextRepos;
-  metadata.taskWorktrees = metadata.taskWorktrees.filter(
-    (entry) => !removedRepoIds.has(entry.repoId),
-  );
+  metadata.repos = [
+    ...repoIds
+      .map((repoId) => metadata.repos.find((repo) => repo.id === repoId))
+      .filter((repo) => repo !== undefined),
+    ...metadata.repos.filter((repo) => !sentRepoIds.has(repo.id)),
+  ];
   saveMetadata(metadata);
 }
 

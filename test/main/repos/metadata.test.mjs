@@ -1266,7 +1266,7 @@ test("saveRepoOrder は送られた ID の順に repos を書く", () => {
   });
 });
 
-test("saveRepoOrder は送られなかった repo をその task worktree ごと削除する", () => {
+test("saveRepoOrder は送られなかった repo を末尾に残し、task worktree にも触れない", () => {
   seed({
     repos: [
       { id: "repo-1", repoPath: "/tmp/repo-a" },
@@ -1281,9 +1281,13 @@ test("saveRepoOrder は送られなかった repo をその task worktree ごと
   saveRepoOrder(["repo-1"]);
 
   assert.deepEqual(loadMetadata(), {
-    repos: [{ id: "repo-1", repoPath: "/tmp/repo-a" }],
+    repos: [
+      { id: "repo-1", repoPath: "/tmp/repo-a" },
+      { id: "repo-2", repoPath: "/tmp/repo-b" },
+    ],
     taskWorktrees: [
       { repoId: "repo-1", worktreePath: "/tmp/repo-a/worktrees/keep", primarySessions: [] },
+      { repoId: "repo-2", worktreePath: "/tmp/repo-b/worktrees/gone", primarySessions: [] },
     ],
   });
 });

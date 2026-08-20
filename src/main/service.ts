@@ -417,7 +417,7 @@ export class YuruService {
   async reorderTaskWorktrees(repoId: string, worktreePaths: string[]): Promise<Result<void>> {
     if (!(await saveTaskWorktreeOrder(repoId, worktreePaths))) {
       return fail({
-        code: "invalid_path",
+        code: "unknown",
         message: "Worktrees changed while reordering. The new order was not saved.",
       });
     }
