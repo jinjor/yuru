@@ -1,3 +1,5 @@
+import { findHttpUrls } from "../../shared/http-url.js";
+
 export type TerminalLink =
   | {
       kind: "file";
@@ -18,7 +20,6 @@ export type TerminalLink =
 // 相対パスは従来通り拡張子ありのみ。拡張子は `c++` のように + を含みうる。
 const filePathPattern =
   /(?:\/(?:[\w.+-]+\/)+[\w.+-]+|[\w./-][\w./-]*\.[\w+-]+)(?::(\d+)(?::\d+)?)?/g;
-const urlPattern = /\bhttps?:\/\/[^\s<>"'`]+/g;
 
 export function findTerminalLinks(lineText: string): TerminalLink[] {
   const urlLinks = findUrlLinks(lineText);
@@ -27,25 +28,14 @@ export function findTerminalLinks(lineText: string): TerminalLink[] {
 }
 
 function findUrlLinks(lineText: string): TerminalLink[] {
-  const links: TerminalLink[] = [];
-  let match: RegExpExecArray | null;
-
-  urlPattern.lastIndex = 0;
-  while ((match = urlPattern.exec(lineText)) !== null) {
-    const text = trimTrailingUrlPunctuation(match[0]);
-    if (!isHttpUrl(text)) {
-      continue;
-    }
-
-    links.push({
+  return findHttpUrls(lineText).map((match) => {
+    return {
       kind: "url",
-      text,
-      startIndex: match.index,
-      url: text,
-    });
-  }
-
-  return links;
+      text: match.url,
+      startIndex: match.startIndex,
+      url: match.url,
+    };
+  });
 }
 
 function findFileLinks(lineText: string, urlLinks: readonly TerminalLink[]): TerminalLink[] {
@@ -88,55 +78,3 @@ function overlapsAnyLink(
     (link) => startIndex < link.startIndex + link.text.length && endIndex > link.startIndex,
   );
 }
-
-function trimTrailingUrlPunctuation(text: string): string {
-  let trimmed = text;
-  while (trimmed.length > 0) {
-    const lastChar = trimmed.at(-1);
-    if (!lastChar) {
-      break;
-    }
-
-    if (".,;:!?".includes(lastChar) || isUnmatchedClosingBracket(trimmed, lastChar)) {
-      trimmed = trimmed.slice(0, -1);
-      continue;
-    }
-
-    break;
-  }
-  return trimmed;
-}
-
-function isUnmatchedClosingBracket(text: string, lastChar: string): boolean {
-  const matchingPair = matchingBrackets[lastChar];
-  if (!matchingPair) {
-    return false;
-  }
-
-  return countChar(text, lastChar) > countChar(text, matchingPair);
-}
-
-function countChar(text: string, char: string): number {
-  let count = 0;
-  for (const current of text) {
-    if (current === char) {
-      count++;
-    }
-  }
-  return count;
-}
-
-function isHttpUrl(text: string): boolean {
-  try {
-    const url = new URL(text);
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
-const matchingBrackets: Record<string, string> = {
-  ")": "(",
-  "]": "[",
-  "}": "{",
-};

@@ -8,7 +8,6 @@ interface TerminalPanelProps {
   changesPanelWidth: number;
   isPreviewOpen: boolean;
   onFileLinkActivate: (filePath: string, line?: number) => void;
-  onOpenExternal: (url: string) => void;
   previewRatio: number;
   terminalRuntimeId: string;
 }
@@ -31,7 +30,6 @@ export function TerminalPanel({
   changesPanelWidth,
   isPreviewOpen,
   onFileLinkActivate,
-  onOpenExternal,
   previewRatio,
   terminalRuntimeId,
 }: TerminalPanelProps) {
@@ -46,9 +44,7 @@ export function TerminalPanel({
     term.paste(relativePath);
   });
   const onFileLinkActivateRef = useRef(onFileLinkActivate);
-  const onOpenExternalRef = useRef(onOpenExternal);
   onFileLinkActivateRef.current = onFileLinkActivate;
-  onOpenExternalRef.current = onOpenExternal;
 
   const fitTerminal = useCallback((): void => {
     if (!terminalRef.current) {
@@ -81,7 +77,9 @@ export function TerminalPanel({
       // confirm ダイアログ + window.open が走り、Electron の子ウインドウが開いてしまう。
       linkHandler: {
         activate(_event, uri): void {
-          onOpenExternalRef.current(uri);
+          void window.electronAPI.openExternal(uri).catch((error) => {
+            console.error("Failed to open terminal URL.", error);
+          });
         },
       },
       theme: {
@@ -115,7 +113,9 @@ export function TerminalPanel({
             decorations: { pointerCursor: true, underline: true },
             activate(): void {
               if (entry.kind === "url") {
-                onOpenExternalRef.current(entry.url);
+                void window.electronAPI.openExternal(entry.url).catch((error) => {
+                  console.error("Failed to open terminal URL.", error);
+                });
                 return;
               }
 

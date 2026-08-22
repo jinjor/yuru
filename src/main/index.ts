@@ -69,6 +69,7 @@ const service = new YuruService(
     sessionChanged: sendSessionChanged,
     repoListChanged: sendRepoListChanged,
     rateLimitStopsChanged: sendRateLimitStopsChanged,
+    bookmarksChanged: sendBookmarksChanged,
     refreshPlanUsage: () => {
       void planUsageMonitor.refreshOnce();
     },
@@ -131,6 +132,10 @@ function sendSessionChanged(terminalRuntimeId: string, update: SessionUpdate): v
 
 function sendPullRequestsChanged(updates: PullRequestUpdate[]): void {
   sendToRenderer("pullRequests:changed", updates);
+}
+
+function sendBookmarksChanged(worktreeId: string): void {
+  sendToRenderer("bookmarks:changed", worktreeId);
 }
 
 // renderer は push で受け取るが、購読を始める前に最初の tick が終わることも、
@@ -467,6 +472,14 @@ function registerIpcHandlers(): void {
 
   handleIpc("shell:openExternal", (_event, url: string) => {
     return service.openExternal(url);
+  });
+
+  handleIpc("bookmarks:list", (_event, worktreeId: string) => {
+    return service.getBookmarks(worktreeId);
+  });
+
+  handleIpc("bookmarks:remove", (_event, worktreeId: string, url: string) => {
+    return service.removeBookmark(worktreeId, url);
   });
 
   handleIpc("git:pathStates", (_event, worktreeId: string) => {

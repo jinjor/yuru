@@ -93,12 +93,6 @@ export function App() {
     }
   }, []);
 
-  const openExternal = useCallback((url: string): void => {
-    void window.electronAPI.openExternal(url).catch((error) => {
-      console.error("Failed to open external URL.", error);
-    });
-  }, []);
-
   useEffect(() => {
     void refreshRepos();
     const disposeRepoListChanged = window.electronAPI.onRepoListChanged(() => {
@@ -347,7 +341,6 @@ export function App() {
         >
           <WorktreeView
             appRef={appRef}
-            onOpenExternal={openExternal}
             providers={availableProviders}
             rateLimitStops={rateLimitStops}
             sidebarWidth={sidebarWidth}

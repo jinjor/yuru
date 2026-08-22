@@ -66,6 +66,11 @@ Yuru metadata は source of truth の複製ではない。
 Git や agent store が持っている状態を丸ごとコピーせず、Yuru 自身が主導線を組み立てるために必要な最小限の情報だけを持つ。
 branch、diff、agent session の本文、terminal runtime は metadata に保存しない。
 
+agent store の会話ログは provider adapter が物理ファイルごとに 1 つの
+`IncrementalJsonlReader` で増分読み取りする。adapter は provider 固有の record を一度だけ
+user / assistant の会話へ変換し、その結果で preview を更新すると同時に bookmark 取得側へ通知する。
+この読み取りは既存の session monitor に相乗りし、bookmark 専用の polling は持たない。
+
 metadata は通常 `~/.yuru/metadata.json` に置く。
 テストや開発用に `YURU_METADATA_PATH` で保存先を差し替えられる。
 
@@ -104,6 +109,9 @@ Git 上には存在するが、まだ Yuru metadata に strong link を持たな
 `~/.yuru/file-reviews.json` に分けて保存する。worktree の絶対 path とファイルの相対 path を key にし、
 値は「fork 元の blob OID : 承認した内容の blob OID」である。現在の表示がレビュー済みかどうかは、
 この記録と Git の各層にある実際の blob OID を比較して毎回導出する。
+
+ブックマークも同じ理由で `~/.yuru/bookmarks.json` に分け、worktree の絶対 path ごとに
+URL と title の配列を追加順で保存する。
 
 最近開いたファイルの履歴も同じ理由で `~/.yuru/recent-files.json` に分ける。
 こちらは worktree ではなく repo の絶対 path を key にし、値は開いたファイルの相対 path を
@@ -276,7 +284,7 @@ App が持つ選択状態は `worktreeId` だけである (P20)。右ペイン (
 一度でも選択した worktree ∪ 選択中」で、対象外の instance だけが React `<Activity>`
 の hidden から実際に破棄される (worktree が repos 一覧から消えた時など)。表示状態は
 各コンポーネントの local state が持ち主のまま動かない。ExplorerPanel の `Files` /
-`Changes` / `Search` タブも同じ理由で 3 つとも keep-alive し、タブを離れても展開・
+`Changes` / `Search` / `Bookmarks` タブも同じ理由で 4 つとも keep-alive し、タブを離れても展開・
 検索語は残る。session の開始などの非同期操作が worktree を切り替えた後に完了しても、
 結果は操作元の (hidden な) instance にしか反映されず、表示中の worktree を引き戻す
 ことはない。

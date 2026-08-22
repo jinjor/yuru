@@ -18,6 +18,15 @@ import {
 } from "./repos/metadata.js";
 import { removeFileReviews } from "./review/store.js";
 import {
+  addBookmarks,
+  loadBookmarks,
+  removeBookmark as removeStoredBookmark,
+  removeBookmarks as removeStoredBookmarks,
+  updateBookmarkTitle,
+} from "./bookmarks/store.js";
+import { resolveUrlTitle } from "./bookmarks/title.js";
+import { findHttpUrls } from "../shared/http-url.js";
+import {
   getReviewState as loadReviewState,
   setFileReviewed as saveFileReviewed,
 } from "./review/review-state.js";
@@ -159,6 +168,7 @@ interface WorktreeSessionResumeTarget {
   cwd: string;
   project: string;
   repoPath: string;
+  worktreeId: string;
 }
 
 function resolveTaskWorktreePath(repoPath: string, branchName: string): string {
@@ -171,6 +181,7 @@ export interface YuruServiceEvents {
   terminalRuntimeExited(terminalRuntimeId: string): void;
   sessionChanged(terminalRuntimeId: string, update: SessionUpdate): void;
   rateLimitStopsChanged(stops: RateLimitStop[]): void;
+  bookmarksChanged(worktreeId: string): void;
   // 解除時刻になった後、サイドバーに出す利用状況も取り直す。
   refreshPlanUsage(): void;
   repoListChanged(): void;
@@ -185,6 +196,11 @@ interface SessionMonitorState {
   activityState: AgentActivityState;
   preview: string | null;
   checkingPreview: boolean;
+}
+
+interface BookmarkCaptureTarget {
+  worktreePath: string;
+  worktreeId: string;
 }
 
 function ok<T>(data: T): Result<T> {
@@ -318,6 +334,7 @@ export class YuruService {
   private rateLimitResetTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly terminalRuntimeLastInputAt = new Map<string, number>();
   private readonly sessionMonitorStates = new Map<string, SessionMonitorState>();
+  private readonly sessionMessageWatchStops = new Map<string, () => void>();
   private sessionMonitorTimer: ReturnType<typeof setInterval> | null = null;
   private readonly pendingProcesses = new Set<pty.IPty>();
   private readonly terminalRuntimeMap = new Map<string, TerminalRuntimeInfo>();
@@ -503,7 +520,10 @@ export class YuruService {
         "Failed to create worktree session",
         worktree.repoPath,
       );
-      const terminalRuntimeId = await this.startSession(agent, pending);
+      const terminalRuntimeId = await this.startSession(agent, pending, {
+        worktreePath: worktree.worktreePath,
+        worktreeId,
+      });
       pending.startupSettled = true;
       return ok({ worktreeId, terminalRuntimeId });
     } catch (error) {
@@ -827,6 +847,7 @@ export class YuruService {
 
     removeTaskWorktreeByPath(worktree.worktreePath);
     removeFileReviews(worktree.worktreePath);
+    removeStoredBookmarks(worktree.worktreePath);
     return ok(undefined);
   }
 
@@ -883,6 +904,76 @@ export class YuruService {
     } catch (error) {
       return this.failAndReport<void>(toAppError(error, { command: "git" }));
     }
+  }
+
+  async getBookmarks(worktreeId: string) {
+    const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
+    if (!workingRoot) {
+      return ok([]);
+    }
+    return ok(loadBookmarks(workingRoot));
+  }
+
+  async removeBookmark(worktreeId: string, url: string) {
+    const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
+    if (!workingRoot) {
+      return this.failAndReport<void>({
+        code: "invalid_path",
+        message: "Selected worktree is no longer available.",
+      });
+    }
+    removeStoredBookmark(workingRoot, url);
+    this.events.bookmarksChanged(worktreeId);
+    return ok(undefined);
+  }
+
+  // provider の保存ログに追加された user / assistant の会話本文から URL を記録する。
+  // tool result やターミナルのコマンド出力は provider 側の message reader が除外する。
+  private captureSessionMessageUrls(
+    target: BookmarkCaptureTarget,
+    messages: readonly string[],
+  ): void {
+    const urls = messages.flatMap((message) => findHttpUrls(message).map((match) => match.url));
+    if (urls.length === 0) {
+      return;
+    }
+    const added = addBookmarks(target.worktreePath, urls);
+    if (added.length === 0) {
+      return;
+    }
+    this.events.bookmarksChanged(target.worktreeId);
+    void Promise.all(
+      added.map(async (bookmark) => {
+        const title = await resolveUrlTitle(bookmark.url);
+        if (!title) {
+          return;
+        }
+        if (updateBookmarkTitle(target.worktreePath, bookmark.url, title)) {
+          this.events.bookmarksChanged(target.worktreeId);
+        }
+      }),
+    );
+  }
+
+  private async watchSessionMessagesForRuntime(
+    terminalRuntimeId: string,
+    agent: Agent,
+    agentSessionId: string,
+    includeExistingMessages: boolean,
+    target: BookmarkCaptureTarget,
+  ): Promise<void> {
+    const stop = await agent.watchSessionMessages(
+      agentSessionId,
+      includeExistingMessages,
+      (messages) => this.captureSessionMessageUrls(target, messages),
+    );
+    const runtime = this.terminalRuntimeMap.get(terminalRuntimeId);
+    if (runtime?.agentSessionId !== agentSessionId) {
+      stop();
+      return;
+    }
+    this.sessionMessageWatchStops.get(terminalRuntimeId)?.();
+    this.sessionMessageWatchStops.set(terminalRuntimeId, stop);
   }
 
   async getGitDiffDocument(worktreeId: string, filePath: string, scope?: GitDiffScope) {
@@ -1548,6 +1639,8 @@ export class YuruService {
     this.terminalRuntimeLastOutputAt.delete(terminalRuntimeId);
     this.terminalRuntimeLastInputAt.delete(terminalRuntimeId);
     this.sessionMonitorStates.delete(terminalRuntimeId);
+    this.sessionMessageWatchStops.get(terminalRuntimeId)?.();
+    this.sessionMessageWatchStops.delete(terminalRuntimeId);
     if (this.rateLimitStops.delete(terminalRuntimeId)) {
       this.events.rateLimitStopsChanged([...this.rateLimitStops.values()]);
     }
@@ -1557,6 +1650,10 @@ export class YuruService {
     this.terminalRuntimeLastOutputAt.clear();
     this.terminalRuntimeLastInputAt.clear();
     this.sessionMonitorStates.clear();
+    for (const stop of this.sessionMessageWatchStops.values()) {
+      stop();
+    }
+    this.sessionMessageWatchStops.clear();
     this.rateLimitStops.clear();
     this.events.rateLimitStopsChanged([]);
     this.scheduleRateLimitReset();
@@ -1567,6 +1664,7 @@ export class YuruService {
     agent: Agent,
     pending: PendingSession,
     terminalRuntimeId: string,
+    bookmarkTarget: BookmarkCaptureTarget,
   ): Promise<void> {
     try {
       const agentSessionId = await agent.waitForSessionId(pending);
@@ -1587,6 +1685,13 @@ export class YuruService {
         cwd: pending.launchCwd,
       });
       this.updateTerminalRuntimeAgentSessionId(terminalRuntimeId, agentSessionId);
+      await this.watchSessionMessagesForRuntime(
+        terminalRuntimeId,
+        agent,
+        agentSessionId,
+        true,
+        bookmarkTarget,
+      );
       this.deliverInitialMessages(agent, pending);
       await this.events.refreshWorktreeWatcher();
       this.events.repoListChanged();
@@ -1655,9 +1760,9 @@ export class YuruService {
     }
   }
 
-  // 動作中セッションの活動状態 (working/waiting) とプレビュー (最新メッセージ) の変化を
-  // 検知して、変わった時だけ renderer にセッション単位で push する。renderer が取りに
-  // 来るのは初期表示などの getRepos だけで、以降の更新はすべてこの push で届く。
+  // 動作中セッションの活動状態とプレビューを確認する。provider の同じ増分読み取りに
+  // message watcher も相乗りし、user / assistant message の URL を記録する。
+  // renderer が取りに来るのは初期表示などの getRepos だけで、以降の状態更新は push で届く。
   private handleSessionMonitorTick(): void {
     let hasAgentRuntime = false;
     for (const [terminalRuntimeId, runtime] of this.terminalRuntimeMap) {
@@ -1674,7 +1779,7 @@ export class YuruService {
       }
       // working 中はログが伸びるので毎 tick 確認する。working → waiting の遷移直後の
       // 1 回は、ターン終了時に書かれた最後のメッセージを取りこぼさないための確認。
-      if (activityState === "working" || activityChanged) {
+      if (state.preview === null || activityState === "working" || activityChanged) {
         void this.checkSessionPreview(
           terminalRuntimeId,
           runtime.provider,
@@ -1767,6 +1872,7 @@ export class YuruService {
       cwd: primarySession.cwd ?? worktree.repoPath,
       project: taskWorktree.worktreePath,
       repoPath: worktree.repoPath,
+      worktreeId,
     };
   }
 
@@ -1880,6 +1986,7 @@ export class YuruService {
     this.activatingSessionKeys.add(agentSessionKey);
     const agent = getAgent(target.provider);
     let pending: PendingSession | null = null;
+    let stopWatchingMessages: (() => void) | null = null;
     try {
       if (!(await agent.hasStoredSession(target.agentSessionId))) {
         if (options.detachMissingPrimary) {
@@ -1896,6 +2003,16 @@ export class YuruService {
         });
       }
 
+      stopWatchingMessages = await agent.watchSessionMessages(
+        target.agentSessionId,
+        false,
+        (messages) =>
+          this.captureSessionMessageUrls(
+            { worktreePath: target.project, worktreeId: target.worktreeId },
+            messages,
+          ),
+      );
+
       pending = this.launchPendingSession(
         agent,
         await agent.createResumeLaunch(target),
@@ -1903,8 +2020,11 @@ export class YuruService {
         target.repoPath,
       );
       this.registerTerminalRuntime(pending, target.agentSessionId);
+      this.sessionMessageWatchStops.set(pending.terminalRuntimeId, stopWatchingMessages);
+      stopWatchingMessages = null;
       return ok(pending.terminalRuntimeId);
     } catch (error) {
+      stopWatchingMessages?.();
       if (pending && !pending.exited) {
         pending.proc.kill();
       }
@@ -2034,12 +2154,16 @@ export class YuruService {
     }
   }
 
-  private async startSession(agent: Agent, pending: PendingSession): Promise<string> {
+  private async startSession(
+    agent: Agent,
+    pending: PendingSession,
+    bookmarkTarget: BookmarkCaptureTarget,
+  ): Promise<string> {
     const terminalRuntimeId = pending.terminalRuntimeId;
 
     if (agent.resolvesSessionIdLazily) {
       this.registerTerminalRuntime(pending, null);
-      void this.resolveLazySessionId(agent, pending, terminalRuntimeId);
+      void this.resolveLazySessionId(agent, pending, terminalRuntimeId, bookmarkTarget);
       return terminalRuntimeId;
     }
 
@@ -2051,6 +2175,13 @@ export class YuruService {
       cwd: pending.launchCwd,
     });
     this.registerTerminalRuntime(pending, agentSessionId);
+    await this.watchSessionMessagesForRuntime(
+      terminalRuntimeId,
+      agent,
+      agentSessionId,
+      true,
+      bookmarkTarget,
+    );
     this.deliverInitialMessages(agent, pending);
     return terminalRuntimeId;
   }

@@ -81,6 +81,9 @@ const electronAPI: ElectronAPI = {
   searchCode: (worktreeId: string, query: string) =>
     ipcRenderer.invoke("search:code", worktreeId, query),
   cancelCodeSearch: (worktreeId: string) => ipcRenderer.invoke("search:cancelCode", worktreeId),
+  getBookmarks: (worktreeId: string) => ipcRenderer.invoke("bookmarks:list", worktreeId),
+  removeBookmark: (worktreeId: string, url: string) =>
+    ipcRenderer.invoke("bookmarks:remove", worktreeId, url),
   onErrorNoticesChanged: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, notices: AppErrorNotice[]) =>
       callback(notices);
@@ -147,6 +150,14 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.on("files:changed", listener);
     return () => {
       ipcRenderer.removeListener("files:changed", listener);
+    };
+  },
+  onBookmarksChanged: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, worktreeId: string) =>
+      callback(worktreeId);
+    ipcRenderer.on("bookmarks:changed", listener);
+    return () => {
+      ipcRenderer.removeListener("bookmarks:changed", listener);
     };
   },
   attachPty: (terminalRuntimeId: string) => ipcRenderer.invoke("pty:attach", terminalRuntimeId),

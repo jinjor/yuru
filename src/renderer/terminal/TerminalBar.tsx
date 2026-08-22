@@ -6,7 +6,6 @@ import { TerminalTabs, type TerminalTabsProps } from "./TerminalTabs";
 interface TerminalBarProps extends TerminalTabsProps {
   currentBranch: string | null;
   currentGitHub: GitHubPullRequest | null;
-  onOpenExternal: (url: string) => void;
 }
 
 export function TerminalBar({
@@ -14,7 +13,6 @@ export function TerminalBar({
   currentBranch,
   currentGitHub,
   onKillTerminalRuntime,
-  onOpenExternal,
   onReorderPrimarySessions,
   onSelectTerminalRuntime,
   primarySessions,
@@ -41,7 +39,9 @@ export function TerminalBar({
           <GitHubBadge
             github={currentGitHub}
             onClick={() => {
-              onOpenExternal(currentGitHub.url);
+              void window.electronAPI.openExternal(currentGitHub.url).catch((error) => {
+                console.error("Failed to open pull request URL.", error);
+              });
             }}
           />
         )}

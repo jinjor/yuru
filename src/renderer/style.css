@@ -1604,6 +1604,47 @@ button.github-badge {
   border-radius: 3px;
 }
 
+/* Bookmarks pane */
+.bookmarks-pane {
+  padding: 4px 0;
+}
+
+.bookmark-row {
+  display: flex;
+  align-items: center;
+  padding-right: 8px;
+}
+
+.bookmark-row:hover {
+  background: var(--bg-hover);
+}
+
+.bookmark-open {
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 6px 12px;
+}
+
+.bookmark-title,
+.bookmark-url {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookmark-title {
+  font-size: 12px;
+}
+
+.bookmark-url {
+  color: var(--text-subtle);
+  font-size: 11px;
+}
+
 /* Preview panel */
 .preview-panel {
   min-width: 0;

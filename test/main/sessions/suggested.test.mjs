@@ -32,11 +32,8 @@ fs.writeFileSync(
   })}\n`,
 );
 
-const {
-  loadStoredSessionPreview,
-  loadStoredSessionPreviews,
-  loadSuggestedWorktreeSessions,
-} = await import("../../../src/main/sessions/suggested.ts");
+const { loadStoredSessionPreview, loadStoredSessionPreviews, loadSuggestedWorktreeSessions } =
+  await import("../../../src/main/sessions/suggested.ts");
 const { agent: codexAgent } = await import("../../../src/main/agents/codex/index.ts");
 const { agent: claudeAgent } = await import("../../../src/main/agents/claude/index.ts");
 const { agent: kimiAgent } = await import("../../../src/main/agents/kimi/index.ts");
@@ -157,7 +154,20 @@ fs.writeFileSync(
   }),
 );
 const kimiTranscriptPath = path.join(kimiSessionDir, "agents", "main", "wire.jsonl");
-fs.writeFileSync(kimiTranscriptPath, jsonl({ type: "metadata", protocol_version: "1.4" }));
+fs.writeFileSync(
+  kimiTranscriptPath,
+  jsonl(
+    { type: "metadata", protocol_version: "1.4" },
+    {
+      type: "context.append_loop_event",
+      timestamp: "2026-05-24T00:00:02.000Z",
+      event: {
+        type: "content.part",
+        part: { type: "text", text: "kimi assistant message" },
+      },
+    },
+  ),
+);
 
 test.after(() => {
   if (previousHome === undefined) {
@@ -178,7 +188,7 @@ test("loadStoredSessionPreviews は stored session の preview を key で返す
 
   assert.equal(previews.get(toSessionKey("claude", "claude-1")), "new claude assistant message");
   assert.equal(previews.get(toSessionKey("codex", codexSessionId)), "new codex assistant message");
-  assert.equal(previews.get(toSessionKey("kimi", kimiSessionId)), "kimi last prompt");
+  assert.equal(previews.get(toSessionKey("kimi", kimiSessionId)), "kimi assistant message");
   assert.equal(previews.has(toSessionKey("claude", missingClaudeSessionId)), false);
 });
 
@@ -191,12 +201,170 @@ test("loadStoredSessionPreview は指定 session の preview だけを返す", a
     ),
   );
 
-  assert.equal(await loadStoredSessionPreview("claude", "claude-1"), "new claude assistant message");
+  assert.equal(
+    await loadStoredSessionPreview("claude", "claude-1"),
+    "new claude assistant message",
+  );
   assert.equal(await loadStoredSessionPreview("claude", missingClaudeSessionId), null);
-  assert.equal(await loadStoredSessionPreview("codex", codexSessionId), "new codex assistant message");
+  assert.equal(
+    await loadStoredSessionPreview("codex", codexSessionId),
+    "new codex assistant message",
+  );
   assert.equal(await loadStoredSessionPreview("codex", "missing"), null);
-  assert.equal(await loadStoredSessionPreview("kimi", kimiSessionId), "kimi last prompt");
+  assert.equal(await loadStoredSessionPreview("kimi", kimiSessionId), "kimi assistant message");
   assert.equal(await loadStoredSessionPreview("kimi", "missing"), null);
+});
+
+test("Claude/Codex は user・assistant の会話本文だけを増分で返す", async () => {
+  fs.appendFileSync(
+    path.join(claudeProjectDir, "claude-1.jsonl"),
+    jsonl(
+      {
+        type: "user",
+        message: { role: "user", content: "claude user https://example.com/claude-user" },
+        origin: { kind: "human" },
+      },
+      {
+        type: "user",
+        message: {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              content: "tool output https://example.com/claude-tool",
+            },
+          ],
+        },
+      },
+      {
+        type: "assistant",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "claude assistant https://example.com/claude-answer" }],
+        },
+      },
+      {
+        type: "user",
+        isMeta: true,
+        message: { role: "user", content: "meta https://example.com/claude-meta" },
+      },
+      {
+        type: "user",
+        message: {
+          role: "user",
+          content: "<local-command-stdout>https://example.com/claude-stdout</local-command-stdout>",
+        },
+      },
+      {
+        type: "user",
+        message: {
+          role: "user",
+          content: "<command-name>review https://example.com/claude-command</command-name>",
+        },
+      },
+    ),
+  );
+  fs.appendFileSync(
+    codexSessionFile,
+    jsonl(
+      {
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: "user",
+          content: [{ type: "input_text", text: "codex user https://example.com/codex-user" }],
+        },
+      },
+      {
+        type: "response_item",
+        payload: {
+          type: "function_call_output",
+          output: "tool output https://example.com/codex-tool",
+        },
+      },
+      {
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: "assistant",
+          content: [
+            { type: "output_text", text: "codex assistant https://example.com/codex-answer" },
+          ],
+        },
+      },
+      {
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: "developer",
+          content: [{ type: "input_text", text: "developer https://example.com/codex-developer" }],
+        },
+      },
+      {
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: "# AGENTS.md instructions for /repo\nhttps://example.com/codex-agents",
+            },
+          ],
+        },
+      },
+      {
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: "<environment_context>https://example.com/codex-context</environment_context>",
+            },
+          ],
+        },
+      },
+    ),
+  );
+
+  const claudeMessages = [];
+  const stopClaudeMessages = await claudeAgent.watchSessionMessages(
+    "claude-1",
+    true,
+    (messages) => claudeMessages.push(...messages),
+  );
+  const claudePreview = await claudeAgent.loadStoredSessionPreview("claude-1");
+  assert.deepEqual(claudeMessages, [
+    "old claude assistant message",
+    "new claude assistant message",
+    "claude user https://example.com/claude-user",
+    "claude assistant https://example.com/claude-answer",
+  ]);
+  assert.equal(claudePreview?.lastMessage, "new claude assistant message");
+
+  const codexMessages = [];
+  const stopCodexMessages = await codexAgent.watchSessionMessages(
+    codexSessionId,
+    true,
+    (messages) => codexMessages.push(...messages),
+  );
+  const codexPreview = await codexAgent.loadStoredSessionPreview(codexSessionId);
+  assert.deepEqual(codexMessages, [
+    "old codex assistant message",
+    "new codex assistant message",
+    "codex user https://example.com/codex-user",
+    "codex assistant https://example.com/codex-answer",
+  ]);
+  assert.equal(codexPreview?.lastMessage, "new codex assistant message");
+
+  await claudeAgent.loadStoredSessionPreview("claude-1");
+  await codexAgent.loadStoredSessionPreview(codexSessionId);
+  assert.equal(claudeMessages.length, 4);
+  assert.equal(codexMessages.length, 4);
+  stopClaudeMessages();
+  stopCodexMessages();
 });
 
 test("Codex は Action Required の terminal title を識別する", () => {
@@ -323,10 +491,7 @@ test("provider worktree launch は repo root で起動して hidden context を�
 
   const codexLaunch = await codexAgent.createWorktreeLaunch(context);
   assert.equal(codexLaunch.cwd, repoPath);
-  assert.deepEqual(codexLaunch.args, [
-    "-c",
-    `developer_instructions=${JSON.stringify(prompt)}`,
-  ]);
+  assert.deepEqual(codexLaunch.args, ["-c", `developer_instructions=${JSON.stringify(prompt)}`]);
   assert.equal(codexLaunch.worktreePath, worktreePath);
   assert.ok(codexLaunch.existingAgentSessionIds instanceof Set);
 
@@ -406,11 +571,7 @@ test("provider worktree launch は制御入力に見える prompt もユーザ�
     assert.deepEqual(launch.args.slice(-2), ["--", ` ${initialPrompt}`]);
   }
 
-  for (const initialPrompt of [
-    "--dangerously-bypass-approvals-and-sandbox",
-    "help",
-    "logout",
-  ]) {
+  for (const initialPrompt of ["--dangerously-bypass-approvals-and-sandbox", "help", "logout"]) {
     const launch = await codexAgent.createWorktreeLaunch({ ...baseContext, initialPrompt });
     assert.deepEqual(launch.args.slice(-2), ["--", initialPrompt]);
   }
@@ -516,7 +677,12 @@ test("loadSuggestedWorktreeSessions は suggested session を worktree ごとに
   assert.deepEqual(suggestions.get(worktreeA), [
     { provider: "claude", agentSessionId: "claude-a", cwd: worktreeA, timestamp: 0 },
     { provider: "claude", agentSessionId: "claude-b", cwd: worktreeA, timestamp: 0 },
-    { provider: "codex", agentSessionId: "codex-a", cwd: path.join(worktreeA, "src"), timestamp: 0 },
+    {
+      provider: "codex",
+      agentSessionId: "codex-a",
+      cwd: path.join(worktreeA, "src"),
+      timestamp: 0,
+    },
   ]);
   assert.deepEqual(suggestions.get(worktreeB), [
     { provider: "claude", agentSessionId: "claude-a", cwd: worktreeB, timestamp: 0 },

@@ -190,6 +190,13 @@ export interface PullRequestUpdate {
   pullRequest: GitHubPullRequest | null;
 }
 
+// worktree に紐づく外部リンクのブックマーク。会話の user / assistant message に出た URL を記録する。
+// title は解決できるまで URL 文字列が仮 title として入る。
+export interface Bookmark {
+  url: string;
+  title: string;
+}
+
 export interface ElectronAPI {
   getRepos: () => Promise<RepoListItem[]>;
   // 並び替え後の全 repo ID。渡した順がそのまま保存される。
@@ -277,6 +284,8 @@ export interface ElectronAPI {
   syncFileWatchTargets: (worktreeId: string, relativePaths: string[]) => Promise<void>;
   searchCode: (worktreeId: string, query: string) => Promise<Result<CodeSearchResult>>;
   cancelCodeSearch: (worktreeId: string) => Promise<void>;
+  getBookmarks: (worktreeId: string) => Promise<Result<Bookmark[]>>;
+  removeBookmark: (worktreeId: string, url: string) => Promise<Result<void>>;
   onErrorNoticesChanged: (callback: (notices: AppErrorNotice[]) => void) => () => void;
   onRepoListChanged: (callback: () => void) => () => void;
   onTerminalRuntimeExited: (callback: (terminalRuntimeId: TerminalRuntimeId) => void) => () => void;
@@ -288,6 +297,7 @@ export interface ElectronAPI {
   onProviderPlanUsageChanged: (callback: (usages: ProviderPlanUsage[]) => void) => () => void;
   onRateLimitStopsChanged: (callback: (stops: RateLimitStop[]) => void) => () => void;
   onFileTreeChanged: (callback: (worktreeId: string, relativePath: string) => void) => () => void;
+  onBookmarksChanged: (callback: (worktreeId: string) => void) => () => void;
   attachPty: (terminalRuntimeId: TerminalRuntimeId) => Promise<string>;
   readyPty: (terminalRuntimeId: TerminalRuntimeId) => Promise<void>;
   detachPty: (terminalRuntimeId: TerminalRuntimeId) => Promise<void>;

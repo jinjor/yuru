@@ -788,14 +788,161 @@ test("タブをドラッグすると primary session の並びが変わり metad
   }
 });
 
+test("session の user・assistant message にある URL だけを Bookmarks に追加する", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context);
+    const worktreePath = await createGitWorktree(context, repoDir, "conversation-bookmarks");
+    const sessionFile = await seedCodexStoredSession(
+      context.tmpHome,
+      repoDir,
+      FIRST_SESSION_ID,
+      "Old assistant link http://127.0.0.1:1/from-old-assistant",
+    );
+    const appendedEntries = [
+      {
+        type: "response_item",
+        timestamp: new Date().toISOString(),
+        payload: {
+          type: "message",
+          role: "assistant",
+          content: [
+            {
+              type: "output_text",
+              text: "Assistant link http://127.0.0.1:1/from-assistant",
+            },
+          ],
+        },
+      },
+      {
+        type: "response_item",
+        timestamp: new Date().toISOString(),
+        payload: {
+          type: "message",
+          role: "user",
+          content: [{ type: "input_text", text: "User link http://127.0.0.1:1/from-user" }],
+        },
+      },
+      {
+        type: "response_item",
+        timestamp: new Date().toISOString(),
+        payload: {
+          type: "function_call_output",
+          output: "Tool output http://127.0.0.1:1/from-tool",
+        },
+      },
+      {
+        type: "response_item",
+        timestamp: new Date().toISOString(),
+        payload: {
+          type: "message",
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text:
+                "# AGENTS.md instructions for /repo\n" +
+                "http://127.0.0.1:1/from-project-instructions",
+            },
+          ],
+        },
+      },
+    ];
+    await registerRepo(context, repoDir, [
+      {
+        worktreePath,
+        primarySessions: [{ provider: "codex", agentSessionId: FIRST_SESSION_ID }],
+      },
+    ]);
+    const fakeBin = await createFakeCodexBin(context.tmpHome, undefined, {
+      filePath: sessionFile,
+      entries: appendedEntries,
+    });
+    let launched = await launchWindow(context, {
+      env: { PATH: `${fakeBin}:${process.env.PATH ?? ""}` },
+    });
+    app = launched.app;
+    let window = launched.window;
+    let sessionView = visibleWorktreeView(window);
+    await worktreeCard(window, "conversation-bookmarks").click();
+    await sessionView.locator(".resume-primary-action").click();
+    await expect(sessionView.locator(".xterm")).toContainText(FIRST_SESSION_ID, {
+      timeout: 10_000,
+    });
+
+    await sessionView.locator(".panel-tabs .tab", { hasText: "Bookmarks" }).click();
+    await expect(sessionView.locator(".bookmark-row")).toHaveCount(2, { timeout: 10_000 });
+    await expect(sessionView.locator(".bookmarks-pane")).toContainText(
+      "http://127.0.0.1:1/from-assistant",
+    );
+    await expect(sessionView.locator(".bookmarks-pane")).toContainText(
+      "http://127.0.0.1:1/from-user",
+    );
+    await expect(sessionView.locator(".bookmarks-pane")).not.toContainText(
+      "http://127.0.0.1:1/from-tool",
+    );
+    await expect(sessionView.locator(".bookmarks-pane")).not.toContainText(
+      "http://127.0.0.1:1/from-project-instructions",
+    );
+    await expect(sessionView.locator(".bookmarks-pane")).not.toContainText(
+      "http://127.0.0.1:1/from-old-assistant",
+    );
+
+    await app.evaluate(({ shell }) => {
+      shell.openExternal = async () => {
+        throw new Error("open failed for test");
+      };
+    });
+    await sessionView
+      .locator(".bookmark-row", { hasText: "http://127.0.0.1:1/from-user" })
+      .locator(".bookmark-open")
+      .click();
+    await expect(window.getByRole("alert")).toContainText("Failed to open bookmark.");
+
+    await sessionView
+      .locator(".bookmark-row", { hasText: "http://127.0.0.1:1/from-assistant" })
+      .getByRole("button", { name: "Remove bookmark" })
+      .click();
+    await expect(sessionView.locator(".bookmark-row")).toHaveCount(1);
+
+    await closeYuru(app);
+    app = null;
+    await createFakeCodexBin(context.tmpHome);
+    launched = await launchWindow(context, {
+      env: { PATH: `${fakeBin}:${process.env.PATH ?? ""}` },
+    });
+    app = launched.app;
+    window = launched.window;
+    sessionView = visibleWorktreeView(window);
+    await worktreeCard(window, "conversation-bookmarks").click();
+    await sessionView.locator(".resume-primary-action").click();
+    await expect(sessionView.locator(".xterm")).toContainText(FIRST_SESSION_ID, {
+      timeout: 10_000,
+    });
+    await sessionView.locator(".panel-tabs .tab", { hasText: "Bookmarks" }).click();
+    await expect(sessionView.locator(".bookmark-row")).toHaveCount(1);
+    await expect(sessionView.locator(".bookmarks-pane")).not.toContainText(
+      "http://127.0.0.1:1/from-assistant",
+    );
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
 async function createFakeCodexBin(
   home: string,
   resolvedSession?: { agentSessionId: string; cwd: string },
+  appendedSession?: { filePath: string; entries: unknown[] },
 ): Promise<string> {
   const binDir = path.join(home, "fake-bin");
   const executablePath = path.join(binDir, "codex");
   await mkdir(binDir, { recursive: true });
   const resolvedSessionLines: string[] = [];
+  if (resolvedSession || appendedSession) {
+    resolvedSessionLines.push('const fs = require("node:fs");');
+  }
   if (resolvedSession) {
     const sessionFile = codexStoredSessionFile(home, resolvedSession.agentSessionId);
     await mkdir(path.dirname(sessionFile), { recursive: true });
@@ -804,8 +951,13 @@ async function createFakeCodexBin(
       cwd: resolvedSession.cwd,
     });
     resolvedSessionLines.push(
-      'const fs = require("node:fs");',
       `setTimeout(() => fs.writeFileSync(${JSON.stringify(sessionFile)}, JSON.stringify({ type: "session_meta", timestamp: new Date().toISOString(), payload: ${sessionPayload} }) + "\\n"), 250);`,
+    );
+  }
+  if (appendedSession) {
+    const content = `${appendedSession.entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`;
+    resolvedSessionLines.push(
+      `setTimeout(() => fs.appendFileSync(${JSON.stringify(appendedSession.filePath)}, ${JSON.stringify(content)}), 250);`,
     );
   }
   await writeFile(

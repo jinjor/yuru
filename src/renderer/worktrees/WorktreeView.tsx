@@ -31,7 +31,6 @@ import { resultDataOrNull } from "../utils/result";
 interface WorktreeViewProps {
   appRef: RefObject<HTMLDivElement | null>;
   onError: (error: AppError) => void;
-  onOpenExternal: (url: string) => void;
   providers: SessionProvider[];
   rateLimitStops: RateLimitStop[];
   sidebarWidth: number;
@@ -75,7 +74,6 @@ function isPathChangedInScope(
 export const WorktreeView = memo(function WorktreeView({
   appRef,
   onError,
-  onOpenExternal,
   providers,
   rateLimitStops,
   sidebarWidth,
@@ -342,7 +340,6 @@ export const WorktreeView = memo(function WorktreeView({
             onKillTerminalRuntime={(terminalRuntimeId) => {
               void killTerminalRuntime(terminalRuntimeId);
             }}
-            onOpenExternal={onOpenExternal}
             onReorderPrimarySessions={(agentSessionKeys) => {
               onReorderPrimarySessions(worktreeId, agentSessionKeys);
             }}
@@ -367,7 +364,6 @@ export const WorktreeView = memo(function WorktreeView({
               onFileLinkActivate={(filePath, line) => {
                 void handleFileLinkActivate(filePath, line);
               }}
-              onOpenExternal={onOpenExternal}
               previewRatio={paneLayout.previewRatio}
               terminalRuntimeId={displayedTerminalRuntimeId}
             />
@@ -413,6 +409,7 @@ export const WorktreeView = memo(function WorktreeView({
       />
       <ExplorerPanel
         gitPathStates={gitPathStates}
+        onError={onError}
         onPreviewSelectionChange={setPreviewSelection}
         previewSelection={previewSelection}
         reviewState={reviewState}

@@ -12,7 +12,8 @@ const kimiDir = path.join(tempDir, ".kimi-code");
 process.env.KIMI_CODE_HOME = kimiDir;
 
 const { agent: kimiAgent } = await import("../../../../src/main/agents/kimi/index.ts");
-const { loadSuggestedWorktreeSessions } = await import("../../../../src/main/sessions/suggested.ts");
+const { loadSuggestedWorktreeSessions } =
+  await import("../../../../src/main/sessions/suggested.ts");
 
 test.after(() => {
   if (previousHome === undefined) {
@@ -139,7 +140,10 @@ test("hasStoredSession は index の entry と sessionDir の存在を見る", a
 test("hasRecordedInitialInput は wire.jsonl に注入文が記録されたかを返す", async () => {
   const recordedPrompt = `Use ${path.join(tempDir, "repo2", ".yuru", "worktrees", "task-b")} as the working directory for this task.`;
   assert.equal(await kimiAgent.hasRecordedInitialInput("session_injected", recordedPrompt), true);
-  assert.equal(await kimiAgent.hasRecordedInitialInput("session_injected", "not in the log"), false);
+  assert.equal(
+    await kimiAgent.hasRecordedInitialInput("session_injected", "not in the log"),
+    false,
+  );
   assert.equal(await kimiAgent.hasRecordedInitialInput("unknown", recordedPrompt), false);
 });
 
@@ -157,4 +161,77 @@ test("hasRecordedInitialInput は JSON escape された注入文にも一致す�
 
   assert.equal(await kimiAgent.hasRecordedInitialInput("session_escaped", 'say "hi"\nnow'), true);
   assert.equal(await kimiAgent.hasRecordedInitialInput("session_escaped", 'say "hi"\nnow\n'), true);
+});
+
+test("user-origin と assistant text だけを会話本文として返す", async () => {
+  writeKimiSession({
+    sessionId: "session_messages",
+    workDir: tempDir,
+    wireMessages: [
+      {
+        type: "context.append_message",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: "user https://example.com/kimi-user" }],
+          origin: { kind: "user" },
+        },
+      },
+      {
+        type: "context.append_message",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: "injection https://example.com/kimi-injection" }],
+          origin: { kind: "injection" },
+        },
+      },
+      {
+        type: "context.append_message",
+        message: {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text:
+                "Yuru opened this session for the task worktree 'task'. " +
+                "https://example.com/kimi-context",
+            },
+          ],
+          origin: { kind: "user" },
+        },
+      },
+      {
+        type: "context.append_loop_event",
+        event: {
+          type: "content.part",
+          part: { type: "text", text: "assistant https://example.com/kimi-answer" },
+        },
+      },
+      {
+        type: "context.append_loop_event",
+        event: {
+          type: "tool.result",
+          result: "tool output https://example.com/kimi-tool",
+        },
+      },
+      {
+        type: "context.append_loop_event",
+        event: { type: "content.part", part: { type: "think", think: "thinking URL" } },
+      },
+    ],
+  });
+
+  const messages = [];
+  const stopMessages = await kimiAgent.watchSessionMessages(
+    "session_messages",
+    true,
+    (next) => messages.push(...next),
+  );
+  await kimiAgent.loadStoredSessionPreview("session_messages");
+  assert.deepEqual(messages, [
+    "user https://example.com/kimi-user",
+    "assistant https://example.com/kimi-answer",
+  ]);
+  await kimiAgent.loadStoredSessionPreview("session_messages");
+  assert.equal(messages.length, 2);
+  stopMessages();
 });

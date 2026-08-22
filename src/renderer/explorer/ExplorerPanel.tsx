@@ -1,5 +1,5 @@
 import { Activity, useCallback, useState } from "react";
-import type { GitPathState, GitReviewState } from "../../shared/ipc";
+import type { AppError, GitPathState, GitReviewState } from "../../shared/ipc";
 import { useCommandShortcut } from "../utils/useCommandShortcut";
 import { useElementSize } from "../utils/useElementSize";
 import type { PreviewSelection } from "../previewSelection";
@@ -10,14 +10,16 @@ import {
   buildUnstagedFiles,
 } from "../changes/gitStatus";
 import { ChangesPane } from "../changes/ChangesPane";
+import { BookmarksPane } from "../bookmarks/BookmarksPane";
 import { FilesPane } from "../files/FilesPane";
 import { SearchPane } from "../search/SearchPane";
 import { Tab } from "../ui/Tab";
 
-type ExplorerTab = "changes" | "files" | "search";
+type ExplorerTab = "changes" | "files" | "search" | "bookmarks";
 
 interface ExplorerPanelProps {
   gitPathStates: readonly GitPathState[];
+  onError: (error: AppError) => void;
   onPreviewSelectionChange: (selection: PreviewSelection | null) => void;
   previewSelection: PreviewSelection | null;
   reviewState: GitReviewState | null;
@@ -27,6 +29,7 @@ interface ExplorerPanelProps {
 
 export function ExplorerPanel({
   gitPathStates,
+  onError,
   onPreviewSelectionChange,
   previewSelection,
   reviewState,
@@ -69,6 +72,9 @@ export function ExplorerPanel({
           <Tab selected={activeTab === "search"} onSelect={() => selectTab("search")}>
             Search
           </Tab>
+          <Tab selected={activeTab === "bookmarks"} onSelect={() => selectTab("bookmarks")}>
+            Bookmarks
+          </Tab>
         </div>
       </div>
       <Activity mode={activeTab === "changes" ? "visible" : "hidden"}>
@@ -88,6 +94,9 @@ export function ExplorerPanel({
           previewSelection={previewSelection}
           worktreeId={worktreeId}
         />
+      </Activity>
+      <Activity mode={activeTab === "bookmarks" ? "visible" : "hidden"}>
+        <BookmarksPane onError={onError} worktreeId={worktreeId} />
       </Activity>
       <Activity mode={activeTab === "files" ? "visible" : "hidden"}>
         <FilesPane

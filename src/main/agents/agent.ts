@@ -73,6 +73,11 @@ export interface Agent {
   resolvesSessionIdLazily: boolean;
   loadStoredSessions(): Promise<SessionSnapshot[]>;
   loadStoredSessionPreview(agentSessionId: string): Promise<SessionPreview | null>;
+  watchSessionMessages(
+    agentSessionId: string,
+    includeExistingMessages: boolean,
+    listener: (messages: readonly string[]) => void,
+  ): Promise<() => void>;
   loadWorktreeSessionHints(worktreePaths: readonly string[]): Promise<WorktreeSessionHint[]>;
   hasStoredSession(agentSessionId: string): Promise<boolean>;
   // command はログインシェルで解決した CLI の絶対パスと PATH。Yuru は認証情報を

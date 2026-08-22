@@ -79,6 +79,34 @@ test("OSC 8 ハイパーリンクのクリックは確認ダイアログなし�
   }
 });
 
+test("standalone terminal の URL は Bookmarks に追加されない", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context);
+    await registerRepo(context, repoDir);
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+
+    await openMainTerminal(window);
+    await window.locator(".xterm").click();
+    await window.keyboard.type("H=http; printf '%s://127.0.0.1:1/from-terminal\\n' \"$H\"");
+    await window.keyboard.press("Enter");
+    await expect(
+      window.locator(".xterm-rows > div", {
+        hasText: "http://127.0.0.1:1/from-terminal",
+      }),
+    ).toBeVisible({ timeout: 10_000 });
+
+    await window.locator(".panel-tabs .tab", { hasText: "Bookmarks" }).click();
+    await expect(window.getByText("No bookmarks", { exact: true })).toBeVisible();
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
 test("TUI が文中から複数行に描画したファイルパスの先頭行からプレビューできる", async () => {
   const context = await createE2eContext();
   let app: ElectronApplication | null = null;
