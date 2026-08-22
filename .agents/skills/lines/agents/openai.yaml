@@ -1,0 +1,3 @@
+interface:
+  display_name: "行数から実装の構造を見直す"
+  short_description: "実装差分の行数増減を手掛かりに構造上の複雑さをレビューする"
