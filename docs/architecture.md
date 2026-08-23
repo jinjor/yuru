@@ -66,12 +66,14 @@ Yuru metadata は source of truth の複製ではない。
 Git や agent store が持っている状態を丸ごとコピーせず、Yuru 自身が主導線を組み立てるために必要な最小限の情報だけを持つ。
 branch、diff、agent session の本文、terminal runtime は metadata に保存しない。
 
-Claude / Codex の会話ログは provider adapter が物理ファイルごとに 1 つの
-`IncrementalJsonlReader` で増分読み取りする。adapter は provider 固有の record を一度だけ
-user / assistant の会話へ変換し、その結果で preview を更新すると同時に bookmark 取得側へ通知する。
-Kimi の preview は従来どおり `state.json` の `lastPrompt` / `title` から読み、bookmark 用の会話だけを
-`wire.jsonl` の `IncrementalJsonlReader` で増分読み取りする。どちらも既存の session monitor の
-同じ tick で確認し、bookmark 専用の polling は持たない。
+Claude / Codex の会話ログと Kimi の `wire.jsonl` は、共有の `SessionLogWatcher`
+(`src/main/agents/session-log-watcher.ts`) が物理ファイルごとに 1 つの
+`IncrementalJsonlReader` で増分読み取りする。provider adapter は provider 固有の record を
+user / assistant の会話へ変換する関数を渡すだけで、watcher が変換結果で preview を更新すると
+同時に登録中の全 listener (bookmark 取得側) へ通知する。listener は 1 ファイルに複数登録でき、
+過去分が必要な listener には共有 reader を巻き戻さず、使い捨ての reader で先頭から再生する。
+Kimi の preview は従来どおり `state.json` の `lastPrompt` / `title` から読む。どちらも既存の
+session monitor の同じ tick で確認し、bookmark 専用の polling は持たない。
 
 metadata は通常 `~/.yuru/metadata.json` に置く。
 テストや開発用に `YURU_METADATA_PATH` で保存先を差し替えられる。

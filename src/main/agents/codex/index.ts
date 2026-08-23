@@ -4,7 +4,7 @@ import path from "path";
 import readline from "readline";
 import { streamRipgrepLineMatches } from "../../ripgrep.js";
 import type { PendingSession, SessionPreview, Agent, SessionSnapshot } from "../agent.js";
-import { IncrementalJsonlReader } from "../incremental-jsonl-reader.js";
+import { SessionLogWatcher, type ConversationMessage } from "../session-log-watcher.js";
 import { listFilesRecursive, parseJsonLinesAs, readTextFileIfExists } from "../store-utils.js";
 import type { WorktreeSessionHint } from "../session-detection.js";
 import { codexSessionDateDirFromId, getCodexHistoryPath, getCodexSessionsDir } from "./paths.js";
@@ -24,18 +24,6 @@ interface CodexSessionMeta {
 interface CodexHistoryEntry {
   sessionId: string;
   timestamp: number;
-}
-
-interface CodexConversationMessage {
-  role: "user" | "assistant";
-  text: string;
-  timestamp: number;
-}
-
-interface CodexSessionLog {
-  reader: IncrementalJsonlReader;
-  preview: SessionPreview | null;
-  messageListener: ((messages: readonly string[]) => void) | null;
 }
 
 const sessionFilePathsById = new Map<string, string>();
@@ -98,7 +86,7 @@ function parseCodexSessionMetaEntry(entry: unknown): Omit<CodexSessionMeta, "fil
   };
 }
 
-function parseCodexConversationMessageEntry(entry: unknown): CodexConversationMessage | null {
+function parseCodexConversationMessageEntry(entry: unknown): ConversationMessage | null {
   const message = entry as {
     type?: unknown;
     timestamp?: unknown;
@@ -133,20 +121,7 @@ function parseCodexConversationMessageEntry(entry: unknown): CodexConversationMe
     : null;
 }
 
-const sessionLogs = new Map<string, CodexSessionLog>();
-
-function getSessionLog(filePath: string): CodexSessionLog {
-  let log = sessionLogs.get(filePath);
-  if (!log) {
-    log = {
-      reader: new IncrementalJsonlReader(filePath),
-      preview: null,
-      messageListener: null,
-    };
-    sessionLogs.set(filePath, log);
-  }
-  return log;
-}
+const sessionLogWatcher = new SessionLogWatcher(parseCodexConversationMessageEntry);
 
 function detectUserActionRequired(terminalTitle: string): boolean {
   return terminalTitle.includes("Action Required |");
@@ -194,10 +169,6 @@ function extractCodexMessageTexts(content: unknown): string[] {
   return texts;
 }
 
-function normalizePreviewText(text: string): string {
-  return text.replace(/\s+/g, " ").trim();
-}
-
 async function readCodexSessionMetas(): Promise<Map<string, CodexSessionMeta>> {
   const filePaths = await listFilesRecursive(getCodexSessionsDir());
   const metas = new Map<string, CodexSessionMeta>();
@@ -238,7 +209,7 @@ async function loadStoredSessions(): Promise<SessionSnapshot[]> {
   const metas = await readCodexSessionMetas();
   return Promise.all(
     Array.from(metas.values()).map(async (meta) => {
-      const preview = await readCodexSessionLog(meta.filePath);
+      const preview = await sessionLogWatcher.read(meta.filePath);
       const historyTimestamp = historyTimestampsBySessionId.get(meta.agentSessionId) ?? 0;
       return {
         provider: "codex",
@@ -253,7 +224,7 @@ async function loadStoredSessions(): Promise<SessionSnapshot[]> {
 
 async function loadStoredSessionPreview(agentSessionId: string): Promise<SessionPreview | null> {
   const sessionFilePath = await findCodexSessionFile(agentSessionId);
-  return sessionFilePath ? readCodexSessionLog(sessionFilePath) : null;
+  return sessionFilePath ? sessionLogWatcher.read(sessionFilePath) : null;
 }
 
 async function watchSessionMessages(
@@ -265,20 +236,7 @@ async function watchSessionMessages(
   if (!sessionFilePath) {
     return () => {};
   }
-  const log = getSessionLog(sessionFilePath);
-  log.messageListener = null;
-  if (includeExistingMessages) {
-    await log.reader.reset();
-    log.preview = null;
-  } else {
-    await readCodexSessionLog(sessionFilePath);
-  }
-  log.messageListener = listener;
-  return () => {
-    if (log.messageListener === listener) {
-      log.messageListener = null;
-    }
-  };
+  return sessionLogWatcher.watch(sessionFilePath, includeExistingMessages, listener);
 }
 
 async function isStoppedByRateLimit(agentSessionId: string): Promise<boolean> {
@@ -308,40 +266,6 @@ async function findCodexSessionFile(agentSessionId: string): Promise<string | nu
   const filePath = path.join(sessionDateDir, sessionFileName);
   sessionFilePathsById.set(agentSessionId, filePath);
   return filePath;
-}
-
-async function readCodexSessionLog(filePath: string): Promise<SessionPreview | null> {
-  const log = getSessionLog(filePath);
-  const result = await log.reader.read();
-  if (result === null) {
-    log.preview = null;
-    return null;
-  }
-  if (result.reset) {
-    log.preview = null;
-  }
-
-  const messages = result.entries.flatMap((entry) => {
-    const message = parseCodexConversationMessageEntry(entry);
-    return message ? [message] : [];
-  });
-  for (const message of messages) {
-    const lastMessage = normalizePreviewText(message.text);
-    if (
-      message.role === "assistant" &&
-      lastMessage &&
-      (!log.preview || message.timestamp >= log.preview.timestamp)
-    ) {
-      log.preview = {
-        lastMessage,
-        timestamp: message.timestamp,
-      };
-    }
-  }
-  if (!result.reset && messages.length > 0) {
-    log.messageListener?.(messages.map((message) => message.text));
-  }
-  return log.preview;
 }
 
 async function loadWorktreeSessionHints(

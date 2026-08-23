@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { streamRipgrepLineMatches } from "../../ripgrep.js";
 import type { PendingSession, SessionPreview, Agent, SessionSnapshot } from "../agent.js";
-import { IncrementalJsonlReader } from "../incremental-jsonl-reader.js";
+import { SessionLogWatcher, type ConversationMessage } from "../session-log-watcher.js";
 import { isStoppedAtRateLimit } from "../rate-limit-stop.js";
 import { classifyKimiSessionLogLine } from "./rate-limit-stop.js";
 import { parseJsonLinesAs, readTextFileIfExists } from "../store-utils.js";
@@ -33,11 +33,6 @@ interface KimiSessionState {
   lastPrompt: string;
   createdAt: string;
   updatedAt: string;
-}
-
-interface KimiSessionMessageLog {
-  reader: IncrementalJsonlReader;
-  messageListener: ((messages: readonly string[]) => void) | null;
 }
 
 // Kimi has no model-facing initial-message input for its interactive TUI yet:
@@ -142,7 +137,10 @@ function toSessionPreview(state: KimiSessionState): SessionPreview {
   };
 }
 
-function parseKimiConversationMessageEntry(entry: unknown): string | null {
+// wire.jsonl の record を会話メッセージへ変換する。bookmark 取得にだけ使い、
+// preview は従来どおり state.json から読む。wire.jsonl の record は timestamp を
+// 持たないため 0 を入れる (preview に使われないので問題にならない)。
+function parseKimiConversationMessageEntry(entry: unknown): ConversationMessage | null {
   const maybeEntry = entry as {
     type?: unknown;
     message?: { role?: unknown; content?: unknown; origin?: { kind?: unknown } };
@@ -160,7 +158,7 @@ function parseKimiConversationMessageEntry(entry: unknown): string | null {
     const text = extractKimiTextContent(maybeEntry.message.content)
       .filter((text) => !text.includes(WORKTREE_CONTEXT_PROMPT_MARKER))
       .join("\n");
-    return text || null;
+    return text ? { role: "user", text, timestamp: 0 } : null;
   }
   if (
     maybeEntry?.type === "context.append_loop_event" &&
@@ -168,7 +166,7 @@ function parseKimiConversationMessageEntry(entry: unknown): string | null {
     maybeEntry.event.part?.type === "text" &&
     typeof maybeEntry.event.part.text === "string"
   ) {
-    return maybeEntry.event.part.text;
+    return { role: "assistant", text: maybeEntry.event.part.text, timestamp: 0 };
   }
   return null;
 }
@@ -184,19 +182,7 @@ function extractKimiTextContent(content: unknown): string[] {
       : [];
 }
 
-const sessionMessageLogs = new Map<string, KimiSessionMessageLog>();
-
-function getSessionMessageLog(filePath: string): KimiSessionMessageLog {
-  let log = sessionMessageLogs.get(filePath);
-  if (!log) {
-    log = {
-      reader: new IncrementalJsonlReader(filePath),
-      messageListener: null,
-    };
-    sessionMessageLogs.set(filePath, log);
-  }
-  return log;
-}
+const sessionLogWatcher = new SessionLogWatcher(parseKimiConversationMessageEntry);
 
 async function listExistingSessionIds(): Promise<Set<string>> {
   return new Set((await readKimiSessionIndex()).map((entry) => entry.agentSessionId));
@@ -230,21 +216,10 @@ async function loadStoredSessionPreview(agentSessionId: string): Promise<Session
   return state ? toSessionPreview(state) : null;
 }
 
+// preview は state.json から読むため返り値は使わず、watch 中の listener への
+// メッセージ通知という副作用のために読む。
 async function readKimiSessionMessages(entry: KimiStoredSessionRef): Promise<void> {
-  const filePath = kimiWireLogPath(entry.sessionDir);
-  const log = getSessionMessageLog(filePath);
-  const result = await log.reader.read();
-  if (result === null) {
-    return;
-  }
-
-  const messages = result.entries.flatMap((raw) => {
-    const message = parseKimiConversationMessageEntry(raw);
-    return message ? [message] : [];
-  });
-  if (!result.reset && messages.length > 0) {
-    log.messageListener?.(messages);
-  }
+  await sessionLogWatcher.read(kimiWireLogPath(entry.sessionDir));
 }
 
 async function watchSessionMessages(
@@ -256,20 +231,11 @@ async function watchSessionMessages(
   if (!entry) {
     return () => {};
   }
-  const filePath = kimiWireLogPath(entry.sessionDir);
-  const log = getSessionMessageLog(filePath);
-  log.messageListener = null;
-  if (includeExistingMessages) {
-    await log.reader.reset();
-  } else {
-    await readKimiSessionMessages(entry);
-  }
-  log.messageListener = listener;
-  return () => {
-    if (log.messageListener === listener) {
-      log.messageListener = null;
-    }
-  };
+  return sessionLogWatcher.watch(
+    kimiWireLogPath(entry.sessionDir),
+    includeExistingMessages,
+    listener,
+  );
 }
 
 async function isStoppedByRateLimit(agentSessionId: string): Promise<boolean> {

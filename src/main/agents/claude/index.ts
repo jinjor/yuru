@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { streamRipgrepLineMatches } from "../../ripgrep.js";
 import type { PendingSession, SessionPreview, Agent, SessionSnapshot } from "../agent.js";
-import { IncrementalJsonlReader } from "../incremental-jsonl-reader.js";
+import { SessionLogWatcher, type ConversationMessage } from "../session-log-watcher.js";
 import { parseJsonLinesAs, readTextFileIfExists } from "../store-utils.js";
 import { type WorktreeSessionHint } from "../session-detection.js";
 import { detectClaudeWorktreeSessionLines } from "./session-detection.js";
@@ -28,18 +28,6 @@ interface ClaudeHistoryEntry {
 
 interface ClaudeStoredSession extends SessionSnapshot {
   filePath: string;
-}
-
-interface ClaudeConversationMessage {
-  role: "user" | "assistant";
-  text: string;
-  timestamp: number;
-}
-
-interface ClaudeSessionLog {
-  reader: IncrementalJsonlReader;
-  preview: SessionPreview | null;
-  messageListener: ((messages: readonly string[]) => void) | null;
 }
 
 const sessionFilePathsById = new Map<string, string>();
@@ -78,7 +66,7 @@ function parseClaudeHistoryEntry(entry: unknown): ClaudeHistoryEntry | null {
   };
 }
 
-function parseClaudeConversationMessageEntry(entry: unknown): ClaudeConversationMessage | null {
+function parseClaudeConversationMessageEntry(entry: unknown): ConversationMessage | null {
   const message = entry as {
     type?: unknown;
     timestamp?: unknown;
@@ -106,20 +94,7 @@ function parseClaudeConversationMessageEntry(entry: unknown): ClaudeConversation
     : null;
 }
 
-const sessionLogs = new Map<string, ClaudeSessionLog>();
-
-function getSessionLog(filePath: string): ClaudeSessionLog {
-  let log = sessionLogs.get(filePath);
-  if (!log) {
-    log = {
-      reader: new IncrementalJsonlReader(filePath),
-      preview: null,
-      messageListener: null,
-    };
-    sessionLogs.set(filePath, log);
-  }
-  return log;
-}
+const sessionLogWatcher = new SessionLogWatcher(parseClaudeConversationMessageEntry);
 
 function extractClaudeMessageTexts(content: unknown): string[] {
   const texts: string[] = [];
@@ -148,10 +123,6 @@ function parseClaudeTimestamp(timestamp: unknown): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-function normalizePreviewText(text: string): string {
-  return text.replace(/\s+/g, " ").trim();
-}
-
 async function loadStoredSessions(): Promise<SessionSnapshot[]> {
   const sessionMap = new Map<string, ClaudeStoredSession>();
   for (const entry of await readClaudeHistoryEntries()) {
@@ -176,7 +147,7 @@ async function loadStoredSessions(): Promise<SessionSnapshot[]> {
   return Promise.all(
     Array.from(sessionMap.values()).map(async (session) => {
       sessionFilePathsById.set(session.agentSessionId, session.filePath);
-      const preview = await readClaudeSessionLog(session.filePath);
+      const preview = await sessionLogWatcher.read(session.filePath);
       return {
         provider: session.provider,
         agentSessionId: session.agentSessionId,
@@ -190,7 +161,7 @@ async function loadStoredSessions(): Promise<SessionSnapshot[]> {
 
 async function loadStoredSessionPreview(agentSessionId: string): Promise<SessionPreview | null> {
   const sessionFilePath = await findClaudeSessionFile(agentSessionId);
-  return sessionFilePath ? readClaudeSessionLog(sessionFilePath) : null;
+  return sessionFilePath ? sessionLogWatcher.read(sessionFilePath) : null;
 }
 
 async function watchSessionMessages(
@@ -202,20 +173,7 @@ async function watchSessionMessages(
   if (!sessionFilePath) {
     return () => {};
   }
-  const log = getSessionLog(sessionFilePath);
-  log.messageListener = null;
-  if (includeExistingMessages) {
-    await log.reader.reset();
-    log.preview = null;
-  } else {
-    await readClaudeSessionLog(sessionFilePath);
-  }
-  log.messageListener = listener;
-  return () => {
-    if (log.messageListener === listener) {
-      log.messageListener = null;
-    }
-  };
+  return sessionLogWatcher.watch(sessionFilePath, includeExistingMessages, listener);
 }
 
 async function readClaudeHistoryEntries(): Promise<ClaudeHistoryEntry[]> {
@@ -242,40 +200,6 @@ async function findClaudeSessionFile(agentSessionId: string): Promise<string | n
   }
 
   return null;
-}
-
-async function readClaudeSessionLog(filePath: string): Promise<SessionPreview | null> {
-  const log = getSessionLog(filePath);
-  const result = await log.reader.read();
-  if (result === null) {
-    log.preview = null;
-    return null;
-  }
-  if (result.reset) {
-    log.preview = null;
-  }
-
-  const messages = result.entries.flatMap((entry) => {
-    const message = parseClaudeConversationMessageEntry(entry);
-    return message ? [message] : [];
-  });
-  for (const message of messages) {
-    const lastMessage = normalizePreviewText(message.text);
-    if (
-      message.role === "assistant" &&
-      lastMessage &&
-      (!log.preview || message.timestamp >= log.preview.timestamp)
-    ) {
-      log.preview = {
-        lastMessage,
-        timestamp: message.timestamp,
-      };
-    }
-  }
-  if (!result.reset && messages.length > 0) {
-    log.messageListener?.(messages.map((message) => message.text));
-  }
-  return log.preview;
 }
 
 async function loadWorktreeSessionHints(
