@@ -46,9 +46,9 @@ Last updated: 2026-08-23
 ## 実装者からの申し送り（2026-08-23）
 
 - 上記の「過去ログを走査せず」は、過去の message を bookmark 取得側へ再生しないという意味。preview の構築と reader の位置合わせでは過去ログを読む場合がある。再開時は listener の登録前に現在位置まで読み、以後の追記だけを通知する。新規 session は `includeExistingMessages: true` で reader を先頭から開始し、session ID の判明前を含め、watch 登録時点ですでに保存されている会話も対象にする
-- `watchSessionMessages` は独立した filesystem watcher や timer を作らず、message listener と読み取り開始位置を設定する API。各 provider adapter は物理ログファイルごとに 1 個の `IncrementalJsonlReader` を持ち、既存の session monitor による preview の増分読み取り結果を bookmark にも通知する。bookmark 専用の polling と同一ファイルの二重読みは増やしていない。waiting が続き activity も変わらない間は、session monitor の timer は動いていてもログファイルは読まない
-- provider adapter はログの record を user / assistant の会話へ変換し、同じ変換結果から assistant の最新本文を preview に使い、user / assistant 両方の本文を bookmark 取得側へ渡す。tool result、system/meta、Yuru が注入した worktree context などの除外は provider adapter の責務。設計中の「フィルタは入れず」は localhost など URL の種類を除外しないという意味であり、message の出所はフィルタする
-- ログファイルの置換・truncate を検出した場合は先頭から preview を再構築するが、その batch は bookmark 取得側へ通知しない。過去 URL や削除済み URL の復活を防ぐためである
+- `watchSessionMessages` は独立した filesystem watcher や timer を作らず、message listener と読み取り開始位置を設定する API。Claude / Codex は既存の session monitor による preview の増分読み取り結果を bookmark にも通知する。Kimi は preview を従来どおり `state.json` の `lastPrompt` / `title` から読み、同じ monitor tick で bookmark 用の `wire.jsonl` の増分も確認する。bookmark 専用の polling と同一ファイルの二重読みは増やしていない。waiting が続き activity も変わらない間は、session monitor の timer は動いていてもログファイルは読まない
+- provider adapter はログの record を user / assistant の会話へ変換する。Claude / Codex は同じ変換結果から assistant の最新本文を preview に使い、user / assistant 両方の本文を bookmark 取得側へ渡す。Kimi の変換結果は bookmark だけに使う。tool result、system/meta、Yuru が注入した worktree context などの除外は provider adapter の責務。設計中の「フィルタは入れず」は localhost など URL の種類を除外しないという意味であり、message の出所はフィルタする
+- Claude / Codex の会話ログ、または Kimi の `wire.jsonl` の置換・truncate を検出した場合、その batch は bookmark 取得側へ通知しない。Claude / Codex は同時に preview も先頭から再構築する。過去 URL や削除済み URL の復活を防ぐためである
 - 削除済み URL の tombstone は持たない。Yuru の再起動や session の再開だけでは復活しないが、watch 開始後の新しい user / assistant message に同じ URL が再び現れた場合は新規 bookmark として追加される
 - standalone terminal の出力は対象外。bookmark 取得側は main worktree か task worktree かを特別扱いせず、provider session runtime に渡された worktree を保存先にする
 - renderer に共通の `openExternal` callback は置いていない。各利用箇所が preload API を直接呼び、Bookmark は失敗をユーザー向け toast にも表示する。main は全呼び出しで http/https を検証し、IPC の失敗を Error Center に記録する

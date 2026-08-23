@@ -66,10 +66,12 @@ Yuru metadata は source of truth の複製ではない。
 Git や agent store が持っている状態を丸ごとコピーせず、Yuru 自身が主導線を組み立てるために必要な最小限の情報だけを持つ。
 branch、diff、agent session の本文、terminal runtime は metadata に保存しない。
 
-agent store の会話ログは provider adapter が物理ファイルごとに 1 つの
+Claude / Codex の会話ログは provider adapter が物理ファイルごとに 1 つの
 `IncrementalJsonlReader` で増分読み取りする。adapter は provider 固有の record を一度だけ
 user / assistant の会話へ変換し、その結果で preview を更新すると同時に bookmark 取得側へ通知する。
-この読み取りは既存の session monitor に相乗りし、bookmark 専用の polling は持たない。
+Kimi の preview は従来どおり `state.json` の `lastPrompt` / `title` から読み、bookmark 用の会話だけを
+`wire.jsonl` の `IncrementalJsonlReader` で増分読み取りする。どちらも既存の session monitor の
+同じ tick で確認し、bookmark 専用の polling は持たない。
 
 metadata は通常 `~/.yuru/metadata.json` に置く。
 テストや開発用に `YURU_METADATA_PATH` で保存先を差し替えられる。

@@ -29,19 +29,14 @@ import {
 } from "./session-detection.js";
 
 interface KimiSessionState {
+  title: string;
+  lastPrompt: string;
   createdAt: string;
   updatedAt: string;
 }
 
-interface KimiConversationMessage {
-  role: "user" | "assistant";
-  text: string;
-  timestamp: number;
-}
-
-interface KimiSessionLog {
+interface KimiSessionMessageLog {
   reader: IncrementalJsonlReader;
-  preview: SessionPreview | null;
   messageListener: ((messages: readonly string[]) => void) | null;
 }
 
@@ -84,10 +79,14 @@ function parseKimiSessionState(value: unknown): KimiSessionState | null {
     return null;
   }
   const maybeState = value as {
+    title?: unknown;
+    lastPrompt?: unknown;
     createdAt?: unknown;
     updatedAt?: unknown;
   };
   return {
+    title: typeof maybeState.title === "string" ? maybeState.title : "",
+    lastPrompt: typeof maybeState.lastPrompt === "string" ? maybeState.lastPrompt : "",
     createdAt: typeof maybeState.createdAt === "string" ? maybeState.createdAt : "",
     updatedAt: typeof maybeState.updatedAt === "string" ? maybeState.updatedAt : "",
   };
@@ -136,10 +135,16 @@ async function readKimiSessionState(sessionDir: string): Promise<KimiSessionStat
   }
 }
 
-function parseKimiConversationMessageEntry(entry: unknown): KimiConversationMessage | null {
+function toSessionPreview(state: KimiSessionState): SessionPreview {
+  return {
+    lastMessage: state.lastPrompt || state.title,
+    timestamp: Math.max(parseKimiTimestamp(state.updatedAt), parseKimiTimestamp(state.createdAt)),
+  };
+}
+
+function parseKimiConversationMessageEntry(entry: unknown): string | null {
   const maybeEntry = entry as {
     type?: unknown;
-    timestamp?: unknown;
     message?: { role?: unknown; content?: unknown; origin?: { kind?: unknown } };
     event?: {
       type?: unknown;
@@ -155,9 +160,7 @@ function parseKimiConversationMessageEntry(entry: unknown): KimiConversationMess
     const text = extractKimiTextContent(maybeEntry.message.content)
       .filter((text) => !text.includes(WORKTREE_CONTEXT_PROMPT_MARKER))
       .join("\n");
-    return text
-      ? { role: "user", text, timestamp: parseKimiEntryTimestamp(maybeEntry.timestamp) }
-      : null;
+    return text || null;
   }
   if (
     maybeEntry?.type === "context.append_loop_event" &&
@@ -165,11 +168,7 @@ function parseKimiConversationMessageEntry(entry: unknown): KimiConversationMess
     maybeEntry.event.part?.type === "text" &&
     typeof maybeEntry.event.part.text === "string"
   ) {
-    return {
-      role: "assistant",
-      text: maybeEntry.event.part.text,
-      timestamp: parseKimiEntryTimestamp(maybeEntry.timestamp),
-    };
+    return maybeEntry.event.part.text;
   }
   return null;
 }
@@ -185,25 +184,16 @@ function extractKimiTextContent(content: unknown): string[] {
       : [];
 }
 
-function parseKimiEntryTimestamp(timestamp: unknown): number {
-  return typeof timestamp === "string" ? parseKimiTimestamp(timestamp) : 0;
-}
+const sessionMessageLogs = new Map<string, KimiSessionMessageLog>();
 
-function normalizePreviewText(text: string): string {
-  return text.replace(/\s+/g, " ").trim();
-}
-
-const sessionLogs = new Map<string, KimiSessionLog>();
-
-function getSessionLog(filePath: string): KimiSessionLog {
-  let log = sessionLogs.get(filePath);
+function getSessionMessageLog(filePath: string): KimiSessionMessageLog {
+  let log = sessionMessageLogs.get(filePath);
   if (!log) {
     log = {
       reader: new IncrementalJsonlReader(filePath),
-      preview: null,
       messageListener: null,
     };
-    sessionLogs.set(filePath, log);
+    sessionMessageLogs.set(filePath, log);
   }
   return log;
 }
@@ -216,20 +206,13 @@ async function loadStoredSessions(): Promise<SessionSnapshot[]> {
   const entries = await readKimiSessionIndex();
   return Promise.all(
     entries.map(async (entry) => {
-      const [state, preview] = await Promise.all([
-        readKimiSessionState(entry.sessionDir),
-        readKimiSessionLog(entry),
-      ]);
+      const state = await readKimiSessionState(entry.sessionDir);
       return {
         provider: "kimi",
         agentSessionId: entry.agentSessionId,
         project: entry.workDir,
-        lastMessage: preview?.lastMessage ?? "",
-        timestamp: Math.max(
-          parseKimiTimestamp(state?.updatedAt ?? ""),
-          parseKimiTimestamp(state?.createdAt ?? ""),
-          preview?.timestamp ?? 0,
-        ),
+        lastMessage: state ? toSessionPreview(state).lastMessage : "",
+        timestamp: state ? toSessionPreview(state).timestamp : 0,
       } satisfies SessionSnapshot;
     }),
   );
@@ -240,42 +223,28 @@ async function loadStoredSessionPreview(agentSessionId: string): Promise<Session
   if (!entry) {
     return null;
   }
-  return readKimiSessionLog(entry);
+  const [state] = await Promise.all([
+    readKimiSessionState(entry.sessionDir),
+    readKimiSessionMessages(entry),
+  ]);
+  return state ? toSessionPreview(state) : null;
 }
 
-async function readKimiSessionLog(entry: KimiStoredSessionRef): Promise<SessionPreview | null> {
+async function readKimiSessionMessages(entry: KimiStoredSessionRef): Promise<void> {
   const filePath = kimiWireLogPath(entry.sessionDir);
-  const log = getSessionLog(filePath);
+  const log = getSessionMessageLog(filePath);
   const result = await log.reader.read();
   if (result === null) {
-    log.preview = null;
-    return null;
-  }
-  if (result.reset) {
-    log.preview = null;
+    return;
   }
 
   const messages = result.entries.flatMap((raw) => {
     const message = parseKimiConversationMessageEntry(raw);
     return message ? [message] : [];
   });
-  for (const message of messages) {
-    const lastMessage = normalizePreviewText(message.text);
-    if (
-      message.role === "assistant" &&
-      lastMessage &&
-      (!log.preview || message.timestamp >= log.preview.timestamp)
-    ) {
-      log.preview = {
-        lastMessage,
-        timestamp: message.timestamp,
-      };
-    }
-  }
   if (!result.reset && messages.length > 0) {
-    log.messageListener?.(messages.map((message) => message.text));
+    log.messageListener?.(messages);
   }
-  return log.preview;
 }
 
 async function watchSessionMessages(
@@ -288,13 +257,12 @@ async function watchSessionMessages(
     return () => {};
   }
   const filePath = kimiWireLogPath(entry.sessionDir);
-  const log = getSessionLog(filePath);
+  const log = getSessionMessageLog(filePath);
   log.messageListener = null;
   if (includeExistingMessages) {
     await log.reader.reset();
-    log.preview = null;
   } else {
-    await readKimiSessionLog(entry);
+    await readKimiSessionMessages(entry);
   }
   log.messageListener = listener;
   return () => {

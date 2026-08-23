@@ -188,7 +188,7 @@ test("loadStoredSessionPreviews は stored session の preview を key で返す
 
   assert.equal(previews.get(toSessionKey("claude", "claude-1")), "new claude assistant message");
   assert.equal(previews.get(toSessionKey("codex", codexSessionId)), "new codex assistant message");
-  assert.equal(previews.get(toSessionKey("kimi", kimiSessionId)), "kimi assistant message");
+  assert.equal(previews.get(toSessionKey("kimi", kimiSessionId)), "kimi last prompt");
   assert.equal(previews.has(toSessionKey("claude", missingClaudeSessionId)), false);
 });
 
@@ -211,7 +211,7 @@ test("loadStoredSessionPreview は指定 session の preview だけを返す", a
     "new codex assistant message",
   );
   assert.equal(await loadStoredSessionPreview("codex", "missing"), null);
-  assert.equal(await loadStoredSessionPreview("kimi", kimiSessionId), "kimi assistant message");
+  assert.equal(await loadStoredSessionPreview("kimi", kimiSessionId), "kimi last prompt");
   assert.equal(await loadStoredSessionPreview("kimi", "missing"), null);
 });
 
