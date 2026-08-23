@@ -4,16 +4,21 @@ import test from "node:test";
 import { parseKimiResetHint } from "../../../../src/main/agents/kimi/plan-usage.ts";
 
 const fetchedAt = Date.parse("2026-08-09T10:00:00.000Z");
+// 表示は分単位で切り捨てられているので、実際のリセットに届くよう 1 分足される。
+const truncation = 60 * 1000;
 
 test("kimi の残り時間表記を絶対時刻に直す", () => {
   assert.equal(
     parseKimiResetHint("resets in 6d 5h 28m", fetchedAt),
-    fetchedAt + ((6 * 24 + 5) * 3600 + 28 * 60) * 1000,
+    fetchedAt + ((6 * 24 + 5) * 3600 + 28 * 60) * 1000 + truncation,
   );
-  assert.equal(parseKimiResetHint("resets in 2h 28m", fetchedAt), fetchedAt + (2 * 3600 + 28 * 60) * 1000);
-  assert.equal(parseKimiResetHint("resets in 12m", fetchedAt), fetchedAt + 12 * 60 * 1000);
+  assert.equal(
+    parseKimiResetHint("resets in 2h 28m", fetchedAt),
+    fetchedAt + (2 * 3600 + 28 * 60) * 1000 + truncation,
+  );
+  assert.equal(parseKimiResetHint("resets in 12m", fetchedAt), fetchedAt + 12 * 60 * 1000 + truncation);
   // 秒は他の単位が 0 のときだけ出る。
-  assert.equal(parseKimiResetHint("resets in 30s", fetchedAt), fetchedAt + 30 * 1000);
+  assert.equal(parseKimiResetHint("resets in 30s", fetchedAt), fetchedAt + 30 * 1000 + truncation);
 });
 
 test("リセット済み・解釈できない表記は時刻を作らない", () => {

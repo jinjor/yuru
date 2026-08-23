@@ -8,6 +8,11 @@ const TIMEOUT_MS = 15_000;
 // token は初回起動時に kimi が自動生成して保存するもので、ユーザーの用意は要らない。
 const SERVER_URL_PATTERN = /http:\/\/127\.0\.0\.1:(\d+)\/#token=([A-Za-z0-9_-]+)/;
 const FIVE_HOUR_LABEL_PATTERN = /^(\d+)h limit$/;
+// 残り時間の表示は分単位で切り捨てられている (秒が出るのは残り 1 分未満のときだけ)。
+// 読んだ値をそのまま足すと実際のリセットより最大 1 分早い時刻になり、その時刻で続きを
+// 送ると同じ rate limit で断られる。切り捨てられうる 1 分を足して、確実にリセット後に
+// なる時刻を返す。
+const RESET_HINT_TRUNCATION_MS = 60_000;
 
 // kimi はプランの利用状況を返す口をローカルサーバ側に持っている (`kimi web` が立てる
 // REST の /oauth/usage)。その先は kimi 自身が OAuth トークンを付けて upstream を引く。
@@ -121,8 +126,9 @@ function toWindow(raw: unknown, fetchedAt: number): PlanUsageWindow | null {
 
 // kimi はリセットを絶対時刻ではなく "resets in 6d 5h 28m" という表示用の文字列でしか
 // 返さない。0 でない単位だけを空白区切りで並べる形 ("6d 5h 28m" / "2h 28m" / "12m" /
-// "30s") と決まっているので、取得時刻に足して絶対時刻へ直す。リセット済みを表す
-// "reset" や、解釈できない文字列は null にする (推測で時刻を作らない)。
+// "30s") と決まっているので、取得時刻に足して絶対時刻へ直す。切り捨てぶんの
+// RESET_HINT_TRUNCATION_MS も足す。リセット済みを表す "reset" や、解釈できない
+// 文字列は null にする (推測で時刻を作らない)。
 export function parseKimiResetHint(hint: string, fetchedAt: number): number | null {
   const remaining = /^resets in (.+)$/.exec(hint);
   if (!remaining) {
@@ -135,7 +141,11 @@ export function parseKimiResetHint(hint: string, fetchedAt: number): number | nu
   const [days, hours, minutes, seconds] = parts
     .slice(1)
     .map((part) => (part === undefined ? 0 : Number(part)));
-  return fetchedAt + ((days * 24 + hours) * 3600 + minutes * 60 + seconds) * 1000;
+  return (
+    fetchedAt +
+    ((days * 24 + hours) * 3600 + minutes * 60 + seconds) * 1000 +
+    RESET_HINT_TRUNCATION_MS
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
