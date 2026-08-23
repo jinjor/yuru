@@ -94,6 +94,7 @@ import { FileTreeWatcher } from "./files/tree-watcher.js";
 import {
   type AppError,
   type AppErrorNotice,
+  type Bookmark,
   type CreatedTaskWorktree,
   type GitDiffScope,
   type Result,
@@ -911,7 +912,11 @@ export class YuruService {
     if (!workingRoot) {
       return ok([]);
     }
-    return ok(loadBookmarks(workingRoot));
+    try {
+      return ok(loadBookmarks(workingRoot));
+    } catch (error) {
+      return this.failAndReport(toAppError(error));
+    }
   }
 
   async removeBookmark(worktreeId: string, url: string) {
@@ -922,13 +927,19 @@ export class YuruService {
         message: "Selected worktree is no longer available.",
       });
     }
-    removeStoredBookmark(workingRoot, url);
+    try {
+      removeStoredBookmark(workingRoot, url);
+    } catch (error) {
+      return this.failAndReport<void>(toAppError(error));
+    }
     this.events.bookmarksChanged(worktreeId);
     return ok(undefined);
   }
 
   // provider の保存ログに追加された user / assistant の会話本文から URL を記録する。
   // tool result やターミナルのコマンド出力は provider 側の message reader が除外する。
+  // session monitor の tick から呼ばれるので、保存の失敗 (bookmarks.json の破損など) は
+  // 警告に留めて preview 更新を巻き込まない。
   private captureSessionMessageUrls(
     target: BookmarkCaptureTarget,
     messages: readonly string[],
@@ -937,7 +948,13 @@ export class YuruService {
     if (urls.length === 0) {
       return;
     }
-    const added = addBookmarks(target.worktreePath, urls);
+    let added: Bookmark[];
+    try {
+      added = addBookmarks(target.worktreePath, urls);
+    } catch (error) {
+      recordAppWarning(toAppError(error));
+      return;
+    }
     if (added.length === 0) {
       return;
     }
@@ -948,8 +965,12 @@ export class YuruService {
         if (!title) {
           return;
         }
-        if (updateBookmarkTitle(target.worktreePath, bookmark.url, title)) {
-          this.events.bookmarksChanged(target.worktreeId);
+        try {
+          if (updateBookmarkTitle(target.worktreePath, bookmark.url, title)) {
+            this.events.bookmarksChanged(target.worktreeId);
+          }
+        } catch (error) {
+          recordAppWarning(toAppError(error));
         }
       }),
     );
