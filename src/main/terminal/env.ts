@@ -2,9 +2,10 @@ import type { SessionProvider } from "../../shared/session.js";
 
 export interface TerminalEnvOptions {
   apiSocketPath: string;
+  repoPath: string;
   yuruCliPath: string;
   provider?: SessionProvider;
-  worktreePath?: string;
+  worktreePath: string;
 }
 
 export function createTerminalEnv(
@@ -51,11 +52,8 @@ export function createTerminalEnv(
 
   env.YURU_API_SOCKET = options.apiSocketPath;
   env.YURU_CLI = options.yuruCliPath;
-  if (options.worktreePath) {
-    env.YURU_WORKTREE_PATH = options.worktreePath;
-  } else {
-    delete env.YURU_WORKTREE_PATH;
-  }
+  env.YURU_REPO_PATH = options.repoPath;
+  env.YURU_WORKTREE_PATH = options.worktreePath;
 
   return env;
 }

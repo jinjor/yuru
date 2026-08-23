@@ -1,4 +1,5 @@
 import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import {
   closeYuru,
@@ -8,6 +9,7 @@ import {
   openMainTerminal,
   registerRepo,
   visibleWorktreeView,
+  worktreeCard,
   writeMetadata,
 } from "./helpers";
 
@@ -105,6 +107,62 @@ test("worktree 選択を切り替えると対応する terminal runtime に切�
       timeout: 10_000,
     });
     await expect(sessionView.locator(".xterm")).not.toContainText("SECOND_RUNTIME");
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+test("main worktree の terminal から現在の repo と別の repo に worktree を作成できる", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const firstRepo = await createCommittedRepo(context);
+    const secondRepo = await createCommittedRepo(context);
+    await writeMetadata(context, {
+      repos: [
+        { id: "repo-1", repoPath: firstRepo },
+        { id: "repo-2", repoPath: secondRepo },
+      ],
+      taskWorktrees: [],
+    });
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+
+    await mainTerminalCardForRepo(window, firstRepo).click();
+    const sessionView = visibleWorktreeView(window);
+    await expect(sessionView.locator(".xterm")).toBeVisible({ timeout: 10_000 });
+    await sessionView.locator(".xterm").click();
+    await window.keyboard.type('node "$YURU_CLI" worktree create current-repo-api');
+    await window.keyboard.press("Enter");
+
+    const currentWorktreePath = path.join(firstRepo, ".yuru", "worktrees", "current-repo-api");
+    await expect(sessionView.locator(".xterm")).toContainText(
+      `Created worktree ${currentWorktreePath}`,
+      { timeout: 10_000 },
+    );
+    await expect(worktreeCard(window, "current-repo-api")).toBeVisible();
+    expect(existsSync(currentWorktreePath)).toBe(true);
+
+    await sessionView.locator(".xterm").click();
+    await window.keyboard.type(
+      `node "$YURU_CLI" worktree create cross-repo-api --repo ${JSON.stringify(secondRepo)}`,
+    );
+    await window.keyboard.press("Enter");
+
+    const crossRepoWorktreePath = path.join(secondRepo, ".yuru", "worktrees", "cross-repo-api");
+    await expect(sessionView.locator(".xterm")).toContainText(
+      `Created worktree ${crossRepoWorktreePath}`,
+      { timeout: 10_000 },
+    );
+    await expect(
+      window
+        .locator(".repo-group", { hasText: secondRepo })
+        .locator(".task-worktree-card", { hasText: "cross-repo-api" }),
+    ).toBeVisible();
+    expect(existsSync(crossRepoWorktreePath)).toBe(true);
+    expect(existsSync(path.join(firstRepo, ".yuru", "worktrees", "cross-repo-api"))).toBe(false);
   } finally {
     await closeYuru(app);
     await context.cleanup();

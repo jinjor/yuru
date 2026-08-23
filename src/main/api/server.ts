@@ -19,8 +19,8 @@ export interface ApiServer {
 }
 
 interface ApiService {
-  createTaskWorktreeFromWorktreePath(
-    worktreePath: string,
+  createTaskWorktreeForRepoPath(
+    repoPath: string,
     branchName: string,
   ): Promise<Result<{ worktreePath: string; branchName: string }>>;
   createSessionForWorktreePath(
@@ -155,25 +155,30 @@ export function handleApiRequest(request: ApiRequest): Result<unknown> {
 export function createApiRequestHandler(service: ApiService): ApiRequestHandler {
   return (request) => {
     if (request.command === "worktree.create") {
-      const { worktreePath, branchName } = request.args;
-      if (typeof worktreePath !== "string" || typeof branchName !== "string") {
+      const { repoPath, branchName } = request.args;
+      if (
+        typeof repoPath !== "string" ||
+        !path.isAbsolute(repoPath) ||
+        typeof branchName !== "string"
+      ) {
         return invalidRequest(
-          "worktree.create requires string worktreePath and branchName arguments.",
+          "worktree.create requires an absolute string repoPath and a string branchName argument.",
         );
       }
-      return service.createTaskWorktreeFromWorktreePath(worktreePath, branchName);
+      return service.createTaskWorktreeForRepoPath(repoPath, branchName);
     }
 
     if (request.command === "session.create") {
       const { worktreePath, provider, prompt, model } = request.args;
       if (
         typeof worktreePath !== "string" ||
+        !path.isAbsolute(worktreePath) ||
         !isSessionProvider(provider) ||
         (prompt !== undefined && typeof prompt !== "string") ||
         (model !== undefined && (typeof model !== "string" || model.length === 0))
       ) {
         return invalidRequest(
-          "session.create requires string worktreePath, a supported provider, an optional string prompt, and an optional non-empty string model.",
+          "session.create requires an absolute string worktreePath, a supported provider, an optional string prompt, and an optional non-empty string model.",
         );
       }
       return service.createSessionForWorktreePath(worktreePath, provider, prompt, model);

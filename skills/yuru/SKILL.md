@@ -27,14 +27,28 @@ This prints `pong` when the current terminal can reach the running Yuru app.
 node "$YURU_CLI" worktree create <branch-name>
 ```
 
-Run this from a Yuru task worktree session. The result prints the new worktree's absolute path and branch name. Keep the returned path if a session will be created for that worktree.
+This creates the worktree in the current session's repository. It works from both the main worktree and a task worktree.
+
+To create it in another repository registered in Yuru, add its absolute repository root:
+
+```sh
+node "$YURU_CLI" worktree create <branch-name> \
+  --repo <absolute-repo-path>
+```
+
+The result prints the new worktree's absolute path and branch name. Keep the returned path if a session will be created for that worktree.
 
 ## Create a session
 
 ```sh
 node "$YURU_CLI" session create \
-  --worktree <absolute-worktree-path> \
   --provider <claude|codex|kimi>
+```
+
+This starts the session in the current worktree. To start it in another existing worktree, including one in another repository, add:
+
+```sh
+--worktree <absolute-worktree-path>
 ```
 
 To select a model, add:
@@ -70,7 +84,7 @@ You may share or append to the same file across sessions when the use case calls
 ## Handle errors
 
 - If the CLI says the Yuru API is unavailable, run it inside a terminal created by the running Yuru app.
-- If worktree creation says it requires a Yuru task worktree terminal, start from a task worktree session rather than a standalone terminal.
+- If no repository or worktree target is available, pass the absolute path requested by the error. The repository must already be registered in Yuru, and the worktree must already exist.
 - Treat other CLI errors as operation failures and report them. Do not bypass the API by changing Git worktrees or Yuru metadata directly.
 - In Codex, its sandbox may deny the Unix socket connection. If that happens, rerun the same CLI command with escalated execution and request the user's approval. Do not change the user's Codex configuration or enable broader network access.
 

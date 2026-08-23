@@ -158,6 +158,7 @@ interface WorktreeSessionResumeTarget {
   agentSessionId: string;
   cwd: string;
   project: string;
+  repoPath: string;
 }
 
 function resolveTaskWorktreePath(repoPath: string, branchName: string): string {
@@ -500,9 +501,7 @@ export class YuruService {
           this.createContextForExistingWorktree(worktree, initialPrompt, model),
         ),
         "Failed to create worktree session",
-        path.resolve(worktree.worktreePath) === path.resolve(worktree.repoPath)
-          ? undefined
-          : worktree.worktreePath,
+        worktree.repoPath,
       );
       const terminalRuntimeId = await this.startSession(agent, pending);
       pending.startupSettled = true;
@@ -586,10 +585,8 @@ export class YuruService {
         cwd: worktree.worktreePath,
         env: createTerminalEnv(process.env, {
           ...this.terminalEnv,
-          worktreePath:
-            path.resolve(worktree.worktreePath) === path.resolve(worktree.repoPath)
-              ? undefined
-              : worktree.worktreePath,
+          repoPath: worktree.repoPath,
+          worktreePath: worktree.worktreePath,
         }),
         launchLabel: "Failed to start terminal",
         runtimeKind: "standalone",
@@ -626,29 +623,20 @@ export class YuruService {
     );
   }
 
-  async createTaskWorktreeFromWorktreePath(
-    callerWorktreePath: string,
+  async createTaskWorktreeForRepoPath(
+    repoPath: string,
     branchName: string,
   ): Promise<Result<{ worktreePath: string; branchName: string }>> {
-    let repo;
-    try {
-      repo = await findRepoByWorktreePath(callerWorktreePath);
-    } catch (error) {
-      return this.failAndReport(toAppError(error, { command: "git" }));
-    }
-    if (!repo) {
-      return this.failAndReport({
-        code: "unknown",
-        message: `Worktree "${callerWorktreePath}" does not belong to a repository registered in Yuru.`,
-      });
-    }
-
-    const result = await this.createTaskWorktree(repo.repoPath, branchName);
+    const result = await this.createTaskWorktree(repoPath, branchName);
     if (!result.ok) {
       return result;
     }
+    // API callers cannot refresh the renderer after receiving the result. This
+    // explicit push also covers a repo whose first task worktree was just
+    // created, because its .git/worktrees watcher did not exist before creation.
+    this.events.repoListChanged();
     return ok({
-      worktreePath: resolveTaskWorktreePath(repo.repoPath, branchName),
+      worktreePath: resolveTaskWorktreePath(repoPath, branchName),
       branchName,
     });
   }
@@ -673,6 +661,14 @@ export class YuruService {
     const worktreeName = branchName.replace(/\//g, "-");
     const worktreePath = resolveTaskWorktreePath(repoPath, branchName);
 
+    const repo = findRepoByPath(repoPath);
+    if (!repo) {
+      return this.failAndReport<CreatedTaskWorktree>({
+        code: "unknown",
+        message: `Repository "${repoPath}" is not registered in Yuru. Run \`yuru add <directory>\` first.`,
+      });
+    }
+
     if (fs.existsSync(worktreePath)) {
       return this.failAndReport<CreatedTaskWorktree>({
         code: "filesystem_failed",
@@ -683,14 +679,6 @@ export class YuruService {
       return this.failAndReport<CreatedTaskWorktree>({
         code: "git_failed",
         message: `Branch "${branchName}" already exists`,
-      });
-    }
-
-    const repo = findRepoByPath(repoPath);
-    if (!repo) {
-      return this.failAndReport<CreatedTaskWorktree>({
-        code: "unknown",
-        message: `Repository "${repoPath}" is not registered in Yuru. Run \`yuru add <directory>\` first.`,
       });
     }
 
@@ -1353,7 +1341,7 @@ export class YuruService {
     agent: Agent,
     request: LaunchRequest,
     launchLabel: string,
-    worktreePath?: string,
+    repoPath: string,
   ): PendingSession {
     const pendingTerminal = this.launchPendingTerminal(
       {
@@ -1361,7 +1349,8 @@ export class YuruService {
         env: createTerminalEnv(process.env, {
           ...this.terminalEnv,
           provider: agent.definition.id,
-          worktreePath,
+          repoPath,
+          worktreePath: request.worktreePath,
         }),
         launchLabel,
         runtimeKind: agent.definition.id,
@@ -1777,6 +1766,7 @@ export class YuruService {
       // all created at the repo root, so fall back to it.
       cwd: primarySession.cwd ?? worktree.repoPath,
       project: taskWorktree.worktreePath,
+      repoPath: worktree.repoPath,
     };
   }
 
@@ -1910,7 +1900,7 @@ export class YuruService {
         agent,
         await agent.createResumeLaunch(target),
         "Failed to resume session",
-        target.project,
+        target.repoPath,
       );
       this.registerTerminalRuntime(pending, target.agentSessionId);
       return ok(pending.terminalRuntimeId);

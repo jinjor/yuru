@@ -258,7 +258,7 @@ test("yuru ping は Yuru terminal 外では実行しない", async () => {
   });
 });
 
-test("yuru worktree create は呼び出し元 worktree を渡して作成結果を表示する", async (t) => {
+test("yuru worktree create は現在の repo を渡して作成結果を表示する", async (t) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-cli-worktree-create-"));
   const socketPath = path.join(tempDir, "api.sock");
   const requests = [];
@@ -283,43 +283,86 @@ test("yuru worktree create は呼び出し元 worktree を渡して作成結果�
   const result = await runCli(["worktree", "create", "child/task"], {
     ...process.env,
     YURU_API_SOCKET: socketPath,
-    YURU_WORKTREE_PATH: "/repo/.yuru/worktrees/parent-task",
+    YURU_REPO_PATH: "/repo",
   });
 
   assert.deepEqual(result, {
     code: 0,
-    stdout:
-      "Created worktree /repo/.yuru/worktrees/child-task on branch child/task\n",
+    stdout: "Created worktree /repo/.yuru/worktrees/child-task on branch child/task\n",
     stderr: "",
   });
   assert.deepEqual(requests, [
     {
       command: "worktree.create",
       args: {
-        worktreePath: "/repo/.yuru/worktrees/parent-task",
+        repoPath: "/repo",
         branchName: "child/task",
       },
     },
   ]);
 });
 
-test("yuru worktree create は task worktree terminal 外では実行しない", async () => {
+test("yuru worktree create は --repo で別の repo を指定できる", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-cli-cross-repo-worktree-"));
+  const socketPath = path.join(tempDir, "api.sock");
+  const requests = [];
+  const server = await startApiServer({
+    socketPath,
+    handleRequest(request) {
+      requests.push(request);
+      return {
+        ok: true,
+        data: {
+          worktreePath: "/other/.yuru/worktrees/child-task",
+          branchName: "child-task",
+        },
+      };
+    },
+  });
+  t.after(async () => {
+    await server.stop();
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  const result = await runCli(["worktree", "create", "child-task", "--repo", "/other"], {
+    ...process.env,
+    YURU_API_SOCKET: socketPath,
+    YURU_REPO_PATH: "/current",
+  });
+
+  assert.deepEqual(result, {
+    code: 0,
+    stdout: "Created worktree /other/.yuru/worktrees/child-task on branch child-task\n",
+    stderr: "",
+  });
+  assert.deepEqual(requests, [
+    {
+      command: "worktree.create",
+      args: {
+        repoPath: "/other",
+        branchName: "child-task",
+      },
+    },
+  ]);
+});
+
+test("yuru worktree create は現在の repo がなければ明示指定を求める", async () => {
   const env = { ...process.env, YURU_API_SOCKET: "/unused/api.sock" };
-  delete env.YURU_WORKTREE_PATH;
+  delete env.YURU_REPO_PATH;
 
   const result = await runCli(["worktree", "create", "child-task"], env);
 
   assert.deepEqual(result, {
     code: 1,
     stdout: "",
-    stderr: "This command must be run inside a Yuru task worktree terminal.\n",
+    stderr: "No repository target is available. Pass --repo <absolute-repo-path>.\n",
   });
 });
 
 test("yuru worktree create は Yuru terminal 外では実行しない", async () => {
   const env = { ...process.env };
   delete env.YURU_API_SOCKET;
-  delete env.YURU_WORKTREE_PATH;
+  delete env.YURU_REPO_PATH;
 
   const result = await runCli(["worktree", "create", "child-task"], env);
 
@@ -336,7 +379,7 @@ test("yuru worktree create は branch name を必須にする", async () => {
   assert.deepEqual(result, {
     code: 1,
     stdout: "",
-    stderr: "Usage: yuru worktree create <branch-name>\n",
+    stderr: "Usage: yuru worktree create <branch-name> [--repo <absolute-repo-path>]\n",
   });
 });
 
@@ -379,6 +422,7 @@ test("yuru session create は worktree、provider、model、prompt を渡して�
     {
       ...process.env,
       YURU_API_SOCKET: socketPath,
+      YURU_WORKTREE_PATH: "/repo/.yuru/worktrees/current-task",
     },
   );
 
@@ -398,6 +442,64 @@ test("yuru session create は worktree、provider、model、prompt を渡して�
       },
     },
   ]);
+});
+
+test("yuru session create は --worktree 省略時に現在の worktree を渡す", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-cli-current-session-"));
+  const socketPath = path.join(tempDir, "api.sock");
+  const requests = [];
+  const server = await startApiServer({
+    socketPath,
+    handleRequest(request) {
+      requests.push(request);
+      return {
+        ok: true,
+        data: {
+          worktreePath: "/repo",
+          provider: "codex",
+          agentSessionId: null,
+        },
+      };
+    },
+  });
+  t.after(async () => {
+    await server.stop();
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  const result = await runCli(["session", "create", "--provider", "codex"], {
+    ...process.env,
+    YURU_API_SOCKET: socketPath,
+    YURU_WORKTREE_PATH: "/repo",
+  });
+
+  assert.deepEqual(result, {
+    code: 0,
+    stdout: "Created codex session for /repo\n",
+    stderr: "",
+  });
+  assert.deepEqual(requests, [
+    {
+      command: "session.create",
+      args: {
+        worktreePath: "/repo",
+        provider: "codex",
+      },
+    },
+  ]);
+});
+
+test("yuru session create は現在の worktree がなければ明示指定を求める", async () => {
+  const env = { ...process.env, YURU_API_SOCKET: "/unused/api.sock" };
+  delete env.YURU_WORKTREE_PATH;
+
+  const result = await runCli(["session", "create", "--provider", "codex"], env);
+
+  assert.deepEqual(result, {
+    code: 1,
+    stdout: "",
+    stderr: "No worktree target is available. Pass --worktree <absolute-worktree-path>.\n",
+  });
 });
 
 test(

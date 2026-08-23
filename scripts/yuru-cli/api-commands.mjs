@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { parseArgs } from "node:util";
 import { apiSocketPath, requestApi } from "./api-client.mjs";
 import { errorMessage, fail } from "./utils.mjs";
 
@@ -20,21 +21,45 @@ export async function ping() {
   console.log(response.data);
 }
 
-async function createTaskWorktree(args) {
-  if (args.length !== 1) {
-    fail("Usage: yuru worktree create <branch-name>");
+const worktreeCreateUsage =
+  "Usage: yuru worktree create <branch-name> [--repo <absolute-repo-path>]";
+
+function parseCommandArgs(config, usage) {
+  try {
+    return parseArgs(config);
+  } catch {
+    fail(usage);
   }
+}
+
+function parseWorktreeCreateArgs(args) {
+  const { values, positionals } = parseCommandArgs(
+    {
+      args,
+      allowPositionals: true,
+      options: { repo: { type: "string" } },
+    },
+    worktreeCreateUsage,
+  );
+  if (positionals.length !== 1 || !positionals[0]) {
+    fail(worktreeCreateUsage);
+  }
+  return { branchName: positionals[0], repoPath: values.repo };
+}
+
+async function createTaskWorktree(args) {
+  const { branchName, repoPath: explicitRepoPath } = parseWorktreeCreateArgs(args);
   apiSocketPath();
-  const callerWorktreePath = process.env.YURU_WORKTREE_PATH;
-  if (!callerWorktreePath) {
-    fail("This command must be run inside a Yuru task worktree terminal.");
+  const repoPath = explicitRepoPath ?? process.env.YURU_REPO_PATH;
+  if (!repoPath) {
+    fail("No repository target is available. Pass --repo <absolute-repo-path>.");
   }
 
   let response;
   try {
     response = await requestApi("worktree.create", {
-      worktreePath: callerWorktreePath,
-      branchName: args[0],
+      repoPath,
+      branchName,
     });
   } catch (error) {
     fail(`Could not connect to Yuru: ${errorMessage(error)}`);
@@ -59,60 +84,47 @@ async function createTaskWorktree(args) {
 
 export async function worktree(args) {
   if (args[0] !== "create") {
-    fail("Usage: yuru worktree create <branch-name>");
+    fail(worktreeCreateUsage);
   }
   await createTaskWorktree(args.slice(1));
 }
 
 const sessionCreateUsage =
-  "Usage: yuru session create --worktree <path> --provider <claude|codex|kimi> [--model <model>] [--prompt <text>]";
+  "Usage: yuru session create --provider <claude|codex|kimi> [--worktree <absolute-worktree-path>] [--model <model>] [--prompt <text>]";
 const agents = new Set(["claude", "codex", "kimi"]);
 
 function parseSessionCreateArgs(args) {
-  let worktreePath;
-  let provider;
-  let model;
-  let prompt;
-
-  for (let index = 0; index < args.length; index += 2) {
-    const option = args[index];
-    const value = args[index + 1];
-    if (value === undefined) {
-      fail(sessionCreateUsage);
-    }
-    if (option === "--worktree" && worktreePath === undefined) {
-      worktreePath = value;
-      continue;
-    }
-    if (option === "--provider" && provider === undefined) {
-      provider = value;
-      continue;
-    }
-    if (option === "--model" && model === undefined) {
-      model = value;
-      continue;
-    }
-    if (option === "--prompt" && prompt === undefined) {
-      prompt = value;
-      continue;
-    }
-    fail(sessionCreateUsage);
-  }
-
-  if (
-    !worktreePath ||
-    !provider ||
-    !agents.has(provider) ||
-    (model !== undefined && !model)
-  ) {
+  const { values } = parseCommandArgs(
+    {
+      args,
+      options: {
+        worktree: { type: "string" },
+        provider: { type: "string" },
+        model: { type: "string" },
+        prompt: { type: "string" },
+      },
+    },
+    sessionCreateUsage,
+  );
+  const { worktree: worktreePath, provider, model, prompt } = values;
+  if (!provider || !agents.has(provider) || (model !== undefined && !model)) {
     fail(sessionCreateUsage);
   }
   return { worktreePath, provider, model, prompt };
 }
 
 async function createSession(args) {
-  const { worktreePath, provider, model, prompt } = parseSessionCreateArgs(args);
+  const {
+    worktreePath: explicitWorktreePath,
+    provider,
+    model,
+    prompt,
+  } = parseSessionCreateArgs(args);
   apiSocketPath();
+  const worktreePath = explicitWorktreePath ?? process.env.YURU_WORKTREE_PATH;
+  if (!worktreePath) {
+    fail("No worktree target is available. Pass --worktree <absolute-worktree-path>.");
+  }
 
   let response;
   try {
@@ -135,8 +147,7 @@ async function createSession(args) {
     Array.isArray(response.data) ||
     typeof response.data.worktreePath !== "string" ||
     response.data.provider !== provider ||
-    (response.data.agentSessionId !== null &&
-      typeof response.data.agentSessionId !== "string")
+    (response.data.agentSessionId !== null && typeof response.data.agentSessionId !== "string")
   ) {
     fail("Yuru returned an invalid session create response.");
   }

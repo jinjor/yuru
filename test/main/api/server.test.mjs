@@ -71,8 +71,8 @@ test("handleApiRequest は ping に pong を返し、未知の command を拒否
 test("createApiRequestHandler は worktree.create を service に渡す", async () => {
   const calls = [];
   const handler = createApiRequestHandler({
-    async createTaskWorktreeFromWorktreePath(worktreePath, branchName) {
-      calls.push({ worktreePath, branchName });
+    async createTaskWorktreeForRepoPath(repoPath, branchName) {
+      calls.push({ repoPath, branchName });
       return {
         ok: true,
         data: {
@@ -87,7 +87,7 @@ test("createApiRequestHandler は worktree.create を service に渡す", async 
     await handler({
       command: "worktree.create",
       args: {
-        worktreePath: "/repo/.yuru/worktrees/parent-task",
+        repoPath: "/repo",
         branchName: "child-task",
       },
     }),
@@ -101,7 +101,7 @@ test("createApiRequestHandler は worktree.create を service に渡す", async 
   );
   assert.deepEqual(calls, [
     {
-      worktreePath: "/repo/.yuru/worktrees/parent-task",
+      repoPath: "/repo",
       branchName: "child-task",
     },
   ]);
@@ -109,7 +109,7 @@ test("createApiRequestHandler は worktree.create を service に渡す", async 
 
 test("createApiRequestHandler は worktree.create の不正な引数を拒否する", async () => {
   const handler = createApiRequestHandler({
-    async createTaskWorktreeFromWorktreePath() {
+    async createTaskWorktreeForRepoPath() {
       throw new Error("must not be called");
     },
   });
@@ -118,9 +118,24 @@ test("createApiRequestHandler は worktree.create の不正な引数を拒否す
     ok: false,
     error: {
       code: "unknown",
-      message: "worktree.create requires string worktreePath and branchName arguments.",
+      message:
+        "worktree.create requires an absolute string repoPath and a string branchName argument.",
     },
   });
+  assert.deepEqual(
+    await handler({
+      command: "worktree.create",
+      args: { repoPath: "relative/repo", branchName: "child-task" },
+    }),
+    {
+      ok: false,
+      error: {
+        code: "unknown",
+        message:
+          "worktree.create requires an absolute string repoPath and a string branchName argument.",
+      },
+    },
+  );
 });
 
 test("createApiRequestHandler は session.create を service に渡す", async () => {
@@ -179,7 +194,7 @@ test("createApiRequestHandler は session.create の不正な引数を拒否す�
     error: {
       code: "unknown",
       message:
-        "session.create requires string worktreePath, a supported provider, an optional string prompt, and an optional non-empty string model.",
+        "session.create requires an absolute string worktreePath, a supported provider, an optional string prompt, and an optional non-empty string model.",
     },
   };
 
@@ -201,6 +216,13 @@ test("createApiRequestHandler は session.create の不正な引数を拒否す�
     await handler({
       command: "session.create",
       args: { worktreePath: "/repo/worktree", provider: "claude", model: "" },
+    }),
+    expected,
+  );
+  assert.deepEqual(
+    await handler({
+      command: "session.create",
+      args: { worktreePath: "relative/worktree", provider: "claude" },
     }),
     expected,
   );

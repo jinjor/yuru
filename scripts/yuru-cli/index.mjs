@@ -13,9 +13,9 @@ Commands:
               Register the directory's Git repository in Yuru
   yuru latest Update the managed checkout, rebuild, and replace Yuru.app
   yuru ping   Check the connection to the running Yuru app
-  yuru worktree create <branch-name>
-              Create a task worktree from the current worktree's repository
-  yuru session create --worktree <path> --provider <claude|codex|kimi>
+  yuru worktree create <branch-name> [--repo <path>]
+              Create a task worktree in the current or specified repository
+  yuru session create --provider <claude|codex|kimi> [--worktree <path>]
               [--model <model>] [--prompt <text>]
               Create a provider session for a task worktree
   yuru help   Show this message

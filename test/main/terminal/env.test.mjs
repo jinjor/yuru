@@ -5,7 +5,9 @@ import { createTerminalEnv } from "../../../src/main/terminal/env.ts";
 
 const terminalEnvOptions = {
   apiSocketPath: "/tmp/yuru/run/123.sock",
+  repoPath: "/repo",
   yuruCliPath: "/app/scripts/yuru-cli/index.mjs",
+  worktreePath: "/repo",
 };
 
 test("createTerminalEnv は親プロセスの NO_COLOR を引き継がない", () => {
@@ -78,27 +80,31 @@ test("createTerminalEnv は Codex 起動時に親の Codex thread/session 情報
   assert.equal(env.CODEX_CONVERSATION_ID, undefined);
 });
 
-test("createTerminalEnv は Yuru API と CLI と task worktree の位置を注入する", () => {
+test("createTerminalEnv は Yuru API と CLI と repo / worktree の位置を注入する", () => {
   const env = createTerminalEnv(
     {},
     {
       ...terminalEnvOptions,
+      repoPath: "/repo",
       worktreePath: "/repo/.yuru/worktrees/task-a",
     },
   );
 
   assert.equal(env.YURU_API_SOCKET, terminalEnvOptions.apiSocketPath);
   assert.equal(env.YURU_CLI, terminalEnvOptions.yuruCliPath);
+  assert.equal(env.YURU_REPO_PATH, "/repo");
   assert.equal(env.YURU_WORKTREE_PATH, "/repo/.yuru/worktrees/task-a");
 });
 
-test("createTerminalEnv は task worktree でない terminal に親の worktree 情報を渡さない", () => {
+test("createTerminalEnv は main worktree でも現在の repo / worktree 情報で親の値を上書きする", () => {
   const env = createTerminalEnv(
     {
+      YURU_REPO_PATH: "/parent",
       YURU_WORKTREE_PATH: "/parent/.yuru/worktrees/parent-task",
     },
     terminalEnvOptions,
   );
 
-  assert.equal(env.YURU_WORKTREE_PATH, undefined);
+  assert.equal(env.YURU_REPO_PATH, "/repo");
+  assert.equal(env.YURU_WORKTREE_PATH, "/repo");
 });
