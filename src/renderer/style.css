@@ -542,6 +542,21 @@ body,
     0 14px 28px rgba(0, 0, 0, 0.55);
 }
 
+/* ファイル行から Terminal へパスを運ぶ transfer drag。並び替えと同じ浮き方に揃える。 */
+.file-transfer-dragging {
+  position: relative;
+  z-index: 3;
+  opacity: 0.95;
+  box-shadow:
+    0 0 0 1px var(--border-strong),
+    0 14px 28px rgba(0, 0, 0, 0.55);
+}
+
+.is-file-transfer-dragging .file-transfer-dragging,
+.is-file-transfer-dragging .file-transfer-dragging * {
+  cursor: grabbing;
+}
+
 /* 掴んでいる間だけ grabbing。カードや行の中のボタンが自前の cursor を持つので、
    body に付けた cursor では足りず、掴んだ項目とその中身を明示的に上書きする */
 .is-reorder-dragging .reorder-dragging,
@@ -1173,6 +1188,11 @@ button.github-badge {
   position: relative;
   min-height: 0;
   padding: 4px;
+  transition: box-shadow 120ms ease;
+}
+
+.terminal-host.file-drop-target {
+  box-shadow: inset 0 0 0 1px rgba(123, 193, 255, 0.45);
 }
 
 .terminal {
@@ -1812,7 +1832,8 @@ button.github-badge {
 
 /* HTML preview (sandboxed iframe) */
 .is-pane-dragging .html-preview-frame,
-.is-reorder-dragging .html-preview-frame {
+.is-reorder-dragging .html-preview-frame,
+.is-file-transfer-dragging .html-preview-frame {
   pointer-events: none;
 }
 

@@ -6,6 +6,7 @@ import { statusColor, statusLabel } from "./gitStatus";
 import { LineStatLabel } from "./LineStatLabel";
 import { buildChangeSections, type ChangeSection } from "./changes";
 import { EmptyState } from "../ui/EmptyState";
+import { beginWorktreeFileDrag, endWorktreeFileDrag } from "../utils/fileDrag";
 
 interface ChangesPaneProps {
   conflictedFiles: readonly GitFileStatus[];
@@ -146,6 +147,11 @@ function ChangeSectionView({
             <div
               key={`${section.label}:${file.path}`}
               className={`change-item ${isSelected ? "selected" : ""} ${file.reviewed ? "reviewed" : ""}`}
+              draggable
+              onDragEnd={(event) => endWorktreeFileDrag(event.currentTarget)}
+              onDragStart={(event) =>
+                beginWorktreeFileDrag(event.dataTransfer, event.currentTarget, file.path)
+              }
               onClick={() => onPreviewSelectionChange({ path: file.path, scope })}
             >
               <span className="change-status" style={{ color: statusColor(file.status) }}>

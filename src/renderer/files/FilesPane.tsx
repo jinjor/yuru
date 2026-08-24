@@ -16,6 +16,7 @@ import {
 } from "./fileTree";
 import { Button } from "../ui/Button";
 import { EmptyState } from "../ui/EmptyState";
+import { beginWorktreeFileDrag, endWorktreeFileDrag } from "../utils/fileDrag";
 
 interface FilesPaneProps {
   changedFiles: readonly GitFileStatus[];
@@ -318,6 +319,13 @@ function FileTreeRow({
   return (
     <div
       className={`file-tree-row ${isSelected ? "selected" : ""}`}
+      draggable={!isDirectory}
+      onDragEnd={(event) => endWorktreeFileDrag(event.currentTarget)}
+      onDragStart={(event) => {
+        if (!isDirectory) {
+          beginWorktreeFileDrag(event.dataTransfer, event.currentTarget, node.path);
+        }
+      }}
       onClick={() => {
         if (isDirectory) {
           onDirectoryToggle(node.path);

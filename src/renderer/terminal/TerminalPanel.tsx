@@ -1,6 +1,7 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal, type ILink, type ILinkProvider } from "@xterm/xterm";
-import { useCallback, useEffect, useRef } from "react";
+import { type DragEvent, useCallback, useEffect, useRef, useState } from "react";
+import { hasWorktreeFileDrag, readWorktreeFileDrag } from "../utils/fileDrag";
 import { findTerminalLinksInBufferLine } from "./terminalBufferLinks";
 
 interface TerminalPanelProps {
@@ -18,6 +19,14 @@ interface TerminalInstance {
   container: HTMLDivElement;
 }
 
+interface WorktreeFileDropTarget {
+  isDragOver: boolean;
+  onDragEnter: (event: DragEvent<HTMLDivElement>) => void;
+  onDragLeave: (event: DragEvent<HTMLDivElement>) => void;
+  onDragOver: (event: DragEvent<HTMLDivElement>) => void;
+  onDrop: (event: DragEvent<HTMLDivElement>) => void;
+}
+
 export function TerminalPanel({
   changesPanelWidth,
   isPreviewOpen,
@@ -28,6 +37,14 @@ export function TerminalPanel({
 }: TerminalPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<TerminalInstance | null>(null);
+  const fileDropTarget = useWorktreeFileDrop((relativePath) => {
+    const term = terminalRef.current?.term;
+    if (!term) {
+      return;
+    }
+    term.focus();
+    term.paste(relativePath);
+  });
   const onFileLinkActivateRef = useRef(onFileLinkActivate);
   const onOpenExternalRef = useRef(onOpenExternal);
   onFileLinkActivateRef.current = onFileLinkActivate;
@@ -204,7 +221,61 @@ export function TerminalPanel({
     return () => window.removeEventListener("resize", handleResize);
   }, [fitTerminal]);
 
-  return <div ref={containerRef} className="terminal-host" />;
+  return (
+    <div
+      ref={containerRef}
+      className={`terminal-host ${fileDropTarget.isDragOver ? "file-drop-target" : ""}`}
+      onDragEnter={fileDropTarget.onDragEnter}
+      onDragLeave={fileDropTarget.onDragLeave}
+      onDragOver={fileDropTarget.onDragOver}
+      onDrop={fileDropTarget.onDrop}
+    />
+  );
+}
+
+function useWorktreeFileDrop(onPathDrop: (relativePath: string) => void): WorktreeFileDropTarget {
+  const dragDepthRef = useRef(0);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const onDragEnter = (event: DragEvent<HTMLDivElement>): void => {
+    if (!hasWorktreeFileDrag(event.dataTransfer)) {
+      return;
+    }
+    event.preventDefault();
+    dragDepthRef.current += 1;
+    setIsDragOver(true);
+  };
+
+  const onDragOver = (event: DragEvent<HTMLDivElement>): void => {
+    if (!hasWorktreeFileDrag(event.dataTransfer)) {
+      return;
+    }
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  };
+
+  const onDragLeave = (event: DragEvent<HTMLDivElement>): void => {
+    if (!hasWorktreeFileDrag(event.dataTransfer)) {
+      return;
+    }
+    dragDepthRef.current = Math.max(dragDepthRef.current - 1, 0);
+    if (dragDepthRef.current === 0) {
+      setIsDragOver(false);
+    }
+  };
+
+  const onDrop = (event: DragEvent<HTMLDivElement>): void => {
+    if (!hasWorktreeFileDrag(event.dataTransfer)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    dragDepthRef.current = 0;
+    setIsDragOver(false);
+    onPathDrop(readWorktreeFileDrag(event.dataTransfer));
+  };
+
+  return { isDragOver, onDragEnter, onDragLeave, onDragOver, onDrop };
 }
 
 function terminalKeySequence(event: KeyboardEvent): string | null {
