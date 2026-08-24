@@ -13,6 +13,9 @@ require_macos() {
     exit 1
   fi
 
+  # Electron's package entry point downloads the binary on demand when needed.
+  (cd "$ROOT_DIR" && node -e 'require("electron")')
+
   if [[ ! -d "$APP_BUNDLE" ]]; then
     echo "Electron app bundle not found: $APP_BUNDLE" >&2
     exit 1

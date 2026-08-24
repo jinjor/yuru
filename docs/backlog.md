@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-08-24
+Last updated: 2026-08-25
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -26,7 +26,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 
 | ID | Type | Area | Item | Why now |
 |---|---|---|---|---|
-| B17 | bug | App / Development | Electron 43 のオンデマンドダウンロードに `app:restart` を対応させる | クリーンな依存インストール後は Electron.app がまだ存在せず、開発用アプリを起動できない。詳細: docs/backlog-details/B17-electron-43-app-restart.md |
 | P18 | polish | Changes | Changes のファイル表示順を最適化する | 確認したい変更へ素早くたどり着けるようにしたい |
 | P22 | polish | App / Sessions | worktree の表示データを App の一括配布から worktreeId 単位の取得・購読に変える | WorktreeView が worktree オブジェクトを props で受け取っており、session の push 1 件で無関係な表示まで再描画が波及する。F51 の keep-alive で instance が増えると影響が拡大する。詳細: docs/backlog-details/P22-worktree-data-subscription.md |
 | B12 | bug | Sessions / Worktree Context | Claude の resume で worktree の作業指示が引き継がれない | `--append-system-prompt` の指示が保存されないため、resume すると Claude が repo root で作業してしまう。詳細: docs/backlog-details/B12-resume-worktree-context.md |
