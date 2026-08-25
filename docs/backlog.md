@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-08-25
+Last updated: 2026-08-26
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -32,6 +32,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | B15 | bug | Terminal | ターミナルにフォーカスできないことがある | キーボード入力を始められないことがある |
 | P25 | polish | Home | ホーム画面のスタイルを改善する | 最初に目に入る画面の見た目を整えたい |
 | B16 | bug | Changes / Diff | Committed の diff を正確にする | commit 済みの変更を正しい差分でレビューしたい |
+| B18 | bug | Sessions / Preview | 巨大なセッションログの preview 取得を全履歴走査せず完了する | streaming 読み込みならメモリ不足によるクラッシュは避けられるが、preview のためにログ全体を走査する時間は残る。詳細: docs/backlog-details/B18-large-session-preview.md |
 | F71 | feature | Worktrees / Bookmarks | worktree ごとに役に立つリンクをブックマークできるようにする | worktree に関連する資料や画面へ素早くアクセスしたい |
 | F72 | feature | Files / Blame | GitLens みたいな blame 表示機能 | コードの各行が変更された経緯をファイル表示から確認したい |
 
