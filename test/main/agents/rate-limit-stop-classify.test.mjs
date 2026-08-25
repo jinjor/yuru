@@ -62,17 +62,26 @@ test("claude: an unreadable line is ignored", () => {
 
 const codex = {
   refused: JSON.stringify({
-    timestamp: "2026-04-26T03:59:26.729Z",
+    timestamp: "2026-08-25T16:56:58.175Z",
     type: "event_msg",
     payload: {
-      type: "error",
-      message: "You've hit your usage limit. Upgrade to Pro ... try again at 3:31 PM.",
-      codex_error_info: "usage_limit_exceeded",
+      type: "task_complete",
+      turn_id: "01a039da",
+      last_agent_message: null,
+      error: {
+        message: "You've hit your usage limit. Upgrade to Pro ... try again at 5:12 AM.",
+        codex_error_info: "usage_limit_exceeded",
+      },
     },
   }),
   otherError: JSON.stringify({
     type: "event_msg",
-    payload: { type: "error", message: "stream disconnected", codex_error_info: "stream_error" },
+    payload: {
+      type: "task_complete",
+      turn_id: "01a039da",
+      last_agent_message: null,
+      error: { message: "stream disconnected", codex_error_info: "stream_error" },
+    },
   }),
   taskComplete: JSON.stringify({
     type: "event_msg",
@@ -93,12 +102,15 @@ test("codex: a usage limit error is a stop", () => {
   assert.equal(classifyCodexRolloutLine(codex.refused), "stopped");
 });
 
-test("codex: an error for another reason is not a stop", () => {
+test("codex: a turn failed for another reason is not a stop", () => {
   assert.equal(classifyCodexRolloutLine(codex.otherError), null);
 });
 
-test("codex: task_complete written right after the error is ignored", () => {
+test("codex: a turn that ended without an error is not a stop", () => {
   assert.equal(classifyCodexRolloutLine(codex.taskComplete), null);
+});
+
+test("codex: bookkeeping entries written right after the refusal are ignored", () => {
   assert.equal(classifyCodexRolloutLine(codex.tokenCount), null);
 });
 

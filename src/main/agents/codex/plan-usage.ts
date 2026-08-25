@@ -36,7 +36,7 @@ export async function loadCodexPlanUsage(command: ResolvedAgentCommand): Promise
       throw new Error("codex account/rateLimits/read returned no rateLimits");
     }
     // Codex は枠を primary / secondary という順序で返し、どちらがどの長さかは
-    // windowDurationMins でしか分からない (2026-08 時点では週枠しか返らない)。
+    // windowDurationMins でしか分からない。
     const windows = [rateLimits.rateLimits.primary, rateLimits.rateLimits.secondary];
     return {
       state: "ok",
