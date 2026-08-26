@@ -1312,6 +1312,16 @@ button.github-badge {
   margin-left: 8px;
 }
 
+/* テストファイルは下線で示す。色は git の状態が使い切っているため使えない。
+   下線と打ち消し線は同じ text-decoration を奪い合うので、
+   レビュー済みの規則を後に置いて打ち消し線を優先させる。 */
+.change-item.test-file .change-filename {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--text-subtle);
+  text-underline-offset: 2px;
+}
+
 .change-item.reviewed .change-filename {
   color: var(--text-subtle);
   text-decoration: line-through;
@@ -1460,6 +1470,13 @@ button.github-badge {
 
 .file-tree-name.ignored {
   color: #566275;
+}
+
+.file-tree-name.test-file {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--text-subtle);
+  text-underline-offset: 2px;
 }
 
 /* Code search */

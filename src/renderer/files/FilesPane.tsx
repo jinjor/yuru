@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { FileTreeNode, GitFileStatus, GitPathState } from "../../shared/ipc";
+import { isTestFile } from "../../shared/test-file";
 import type { PreviewSelection } from "../previewSelection";
 import { buildIgnoredPathSet, buildTreeStatusMap, treeStatusClass } from "../changes/gitStatus";
 import { resultDataOrNull } from "../utils/result";
@@ -344,7 +345,9 @@ function FileTreeRow({
           )
         ) : null}
       </span>
-      <span className={`file-tree-name ${node.kind} ${statusClass} ${isIgnored ? "ignored" : ""}`}>
+      <span
+        className={`file-tree-name ${node.kind} ${statusClass} ${isIgnored ? "ignored" : ""} ${isTestFile(node.path) ? "test-file" : ""}`}
+      >
         {node.name}
         {isLoading ? "..." : ""}
       </span>

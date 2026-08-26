@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import type { GitFileStatus, GitReviewState } from "../../shared/ipc";
+import { isTestFile } from "../../shared/test-file";
 import type { PreviewSelection } from "../previewSelection";
 import { statusColor, statusLabel } from "./gitStatus";
 import { LineStatLabel } from "./LineStatLabel";
@@ -146,7 +147,7 @@ function ChangeSectionView({
           return (
             <div
               key={`${section.label}:${file.path}`}
-              className={`change-item ${isSelected ? "selected" : ""} ${file.reviewed ? "reviewed" : ""}`}
+              className={`change-item ${isSelected ? "selected" : ""} ${file.reviewed ? "reviewed" : ""} ${isTestFile(file.path) ? "test-file" : ""}`}
               draggable
               onDragEnd={(event) => endWorktreeFileDrag(event.currentTarget)}
               onDragStart={(event) =>
