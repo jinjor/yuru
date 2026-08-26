@@ -52,8 +52,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | P16 | polish | Worktrees / Changes | 左ペインで worktree の Git 変更状態を分かるようにする | いま選択していない worktree に unstaged/staged/untracked 変更があることに気づけない |
 | F9 | feature | Terminal | ウィンドウを広げた時に 1 行の文字数を増やす | xterm fit を調整 |
 | F25 | feature | Updates | Yuru の更新通知を出す | ローカル build 運用だと更新に気づきにくい |
-| F36 | feature | Repos | `yuru add` の結果を実行中の画面に反映する | 詳細: docs/backlog-details/F36-yuru-add-refresh.md |
-| F40 | feature | Files / Editor | ファイルを埋め込みエディタで編集できるようにする (編集モード) | 詳細: docs/backlog-details/F40-edit-mode.md |
 | I15 | investigate | IPC | `electronAPI` と IPC channel の対応を追いやすくする | renderer / preload / main で名前がズレていて読みにくいため、channel 名を露出するか shared RPC wrapper に寄せるか決めたい |
 | I16 | investigate | Events | backend event の発火ポリシーと購読設計を整理する | frontend 起点 IPC の応答代わりに push すると race しやすいため、外部変化・非同期完了・プロセス終了などに用途を限定したい |
 | I11 | investigate | App | モーダルとショートカットの管理設計を決める (詳細: docs/backlog-details/I11-modal-management.md) | FileSearch 導入時に Cmd+P が他モーダル裏で発火する問題が出たため、場当たり対応せず設計として直したい |
@@ -75,6 +73,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | P23 | polish | Files / Preview | diff パネルが表示している内容を 1 つの取得経路にまとめる | 差分テキストと画像で loader も state も別々にあり、表示中の内容を指す共通の識別子がない。今は取得契機と間隔をそろえて実害を消しているだけなので、片方だけ追従が漏れると「見ていない内容を Reviewed にできる」形の不整合が再発しうる |
 | P24 | polish | Sessions / Providers | Codex CLI 0.147 未満のログ形式 (exec_command function_call / patch_apply_end) 向けの後方互換パーサを削除する | 2026-09-11 以降に `~/.codex/sessions` を再確認し、旧形式が1ヶ月出現していなければ削除可。確認方法込みで詳細: docs/backlog-details/P24-remove-legacy-codex-exec-format.md |
 | F62 | feature | Worktrees / Terminal | worktree でターミナルを使えるようにする | エージェントのセッションとは別にコマンドを実行したい |
+| F36 | feature | Repos | `yuru add` の結果を実行中の画面に反映する | 詳細: docs/backlog-details/F36-yuru-add-refresh.md |
 
 ## Open decisions
 
