@@ -26,20 +26,21 @@ UI 改善も機能追加も同じ土俵で扱う。
 
 | ID | Type | Area | Item | Why now |
 |---|---|---|---|---|
-| P18 | polish | Changes | Changes のファイル表示順を最適化する | 確認したい変更へ素早くたどり着けるようにしたい |
 | P22 | polish | App / Sessions | worktree の表示データを App の一括配布から worktreeId 単位の取得・購読に変える | WorktreeView が worktree オブジェクトを props で受け取っており、session の push 1 件で無関係な表示まで再描画が波及する。F51 の keep-alive で instance が増えると影響が拡大する。詳細: docs/backlog-details/P22-worktree-data-subscription.md |
 | B12 | bug | Sessions / Worktree Context | Claude の resume で worktree の作業指示が引き継がれない | `--append-system-prompt` の指示が保存されないため、resume すると Claude が repo root で作業してしまう。詳細: docs/backlog-details/B12-resume-worktree-context.md |
 | B15 | bug | Terminal | ターミナルにフォーカスできないことがある | キーボード入力を始められないことがある |
-| P25 | polish | Home | ホーム画面のスタイルを改善する | 最初に目に入る画面の見た目を整えたい |
 | B16 | bug | Changes / Diff | Committed の diff を正確にする | commit 済みの変更を正しい差分でレビューしたい |
 | F71 | feature | Worktrees / Bookmarks | worktree ごとに役に立つリンクをブックマークできるようにする | worktree に関連する資料や画面へ素早くアクセスしたい |
 | F72 | feature | Files / Blame | GitLens みたいな blame 表示機能 | コードの各行が変更された経緯をファイル表示から確認したい |
 | F8 | feature | Files / Navigation | 開いたファイルの位置を Files ツリーにも反映する | ターミナルのリンク、ファイル名検索、横断文字列検索、Changes のどこから開いても、対象ファイルの位置をツリーですぐ確認したい |
+| P28 | polish | Files | テストファイルを一目で区別できるように表示する | 実装ファイルとテストファイルを素早く見分けたい |
 
 ## Next
 
 | ID | Type | Area | Item | Notes |
 |---|---|---|---|---|
+| P18 | polish | Changes | Changes のファイル表示順を最適化する | 確認したい変更へ素早くたどり着けるようにしたい |
+| P25 | polish | Home | ホーム画面のスタイルを改善する | 最初に目に入る画面の見た目を整えたい |
 | F69 | feature | API / Sessions | API でセッション作成時に effort レベルを設定できるようにする | セッションの用途に応じて推論量を指定したい |
 | F68 | feature | Sessions / Rate Limits | もうすぐ 100% になる時にあらかじめ rate limit 解除を予約したい | rate limit に達した後の待ち時間を減らしたい |
 | F54 | feature | Changes | ショートカットキーでレビュー済みにできるようにする | ファイルレビューを素早く進めたい |
