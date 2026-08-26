@@ -4,6 +4,8 @@ import { ChevronDown, ChevronUp, X } from "lucide-react";
 import { IconButton } from "../ui/IconButton";
 
 interface Find {
+  /** 検索バーを表示しているか。 */
+  isOpen: boolean;
   /** 検索文字列。バーを閉じている間は "" (どこも検索していない状態)。 */
   query: string;
   /** 前後移動で選んでいるマッチの番号 (0-based)。1 件も見つかっていなければ 0。 */
@@ -121,5 +123,5 @@ export function useFind(matchCount: number): Find {
     </div>
   ) : null;
 
-  return { query: isOpen ? query : "", activeIndex, findBar };
+  return { isOpen, query: isOpen ? query : "", activeIndex, findBar };
 }

@@ -2164,6 +2164,14 @@ button.github-badge {
 }
 
 /* Code editor (CodeMirror, edit mode) */
+.code-editor-wrap {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  position: relative;
+}
+
 .code-editor {
   flex: 1;
   min-width: 0;
@@ -2271,6 +2279,16 @@ button.github-badge {
 }
 
 .source-find-match.active {
+  background: #7d5a14;
+  outline: 1px solid #ffd479;
+}
+
+.cm-find-match {
+  background: #4c3916;
+  border-radius: 2px;
+}
+
+.cm-find-match.active {
   background: #7d5a14;
   outline: 1px solid #ffd479;
 }

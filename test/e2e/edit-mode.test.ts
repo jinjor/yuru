@@ -59,6 +59,50 @@ test("編集モードで編集するとディスクへ自動保存され、ガ�
   }
 });
 
+test("編集モードでも Cmd+F で文字列を検索できる", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context, {
+      "find.txt": [
+        "first needle",
+        ...Array.from({ length: 80 }, () => "filler"),
+        "last NEEDLE",
+      ].join("\n"),
+    });
+    await registerRepo(context, repoDir);
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+    await openMainTerminal(window);
+
+    await window.locator(".panel-tabs .tab", { hasText: "Files" }).click();
+    await window.locator(".file-tree-row", { hasText: "find.txt" }).click();
+    await expectPreviewPath(window, "find.txt");
+    await editButton(window).click();
+    await expect(window.locator(".cm-editor")).toBeVisible();
+
+    await window.keyboard.press("Meta+F");
+    await expect(window.locator(".find-input")).toBeFocused();
+    await window.locator(".find-input").fill("needle");
+
+    await expect(window.locator(".find-count")).toHaveText("1/2");
+    await expect(window.locator(".cm-find-match.active")).toHaveText("needle");
+
+    await window.keyboard.press("Enter");
+    await expect(window.locator(".find-count")).toHaveText("2/2");
+    await expect(window.locator(".cm-find-match.active")).toHaveText("NEEDLE");
+
+    await window.keyboard.press("Escape");
+    await expect(window.locator(".find-bar")).toBeHidden();
+    await expect(window.locator(".cm-find-match")).toHaveCount(0);
+    await expect(window.locator(".cm-content")).toBeFocused();
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
 test("staged 差分では編集が無効で、unstaged からは作業ツリーを編集できる", async () => {
   const context = await createE2eContext();
   let app: ElectronApplication | null = null;
@@ -102,7 +146,10 @@ test("バイナリファイルは編集アイコンが無効になる", async ()
   let app: ElectronApplication | null = null;
   try {
     const repoDir = await createCommittedRepo(context, { "README.md": "# e2e\n" });
-    writeFileSync(path.join(repoDir, "logo.bin"), Buffer.from([0x89, 0x50, 0x00, 0x4e, 0x00, 0x47]));
+    writeFileSync(
+      path.join(repoDir, "logo.bin"),
+      Buffer.from([0x89, 0x50, 0x00, 0x4e, 0x00, 0x47]),
+    );
     await registerRepo(context, repoDir);
     const launched = await launchWindow(context);
     app = launched.app;

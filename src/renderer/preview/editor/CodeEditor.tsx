@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Compartment, EditorState } from "@codemirror/state";
 import {
   EditorView,
@@ -8,7 +8,9 @@ import {
   lineNumbers,
 } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
+import { useFind } from "../Find";
 import { changeTracker, setOriginalEffect } from "./changeGutter";
+import { editorFind, findEditorMatches, setEditorFindEffect } from "./find";
 import { loadLanguageExtension } from "./language";
 import { editorThemeExtensions } from "./theme";
 
@@ -33,6 +35,13 @@ export default function CodeEditor({
 }: CodeEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const [documentVersion, setDocumentVersion] = useState(0);
+  const [findMatchCount, setFindMatchCount] = useState(0);
+  const { isOpen: isFindOpen, query, activeIndex, findBar } = useFind(findMatchCount);
+  const hasFindQueryRef = useRef(query.length > 0);
+  hasFindQueryRef.current = query.length > 0;
+  const previousFindTargetRef = useRef({ query: "", activeIndex: 0 });
+  const wasFindOpenRef = useRef(false);
   // seed 値とコールバックは「最新を読むが再マウントの引き金にはしない」ので ref に逃がす。
   const latestRef = useRef({ initialContent, originalContent, onSave });
   latestRef.current = { initialContent, originalContent, onSave };
@@ -83,9 +92,13 @@ export default function CodeEditor({
           editorThemeExtensions(),
           languageCompartment.of([]),
           changeTracker(latestRef.current.originalContent),
+          editorFind(),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) {
               scheduleWrite(update.state.doc.toString());
+              if (hasFindQueryRef.current) {
+                setDocumentVersion((version) => version + 1);
+              }
             }
           }),
         ],
@@ -122,5 +135,41 @@ export default function CodeEditor({
     viewRef.current?.dispatch({ effects: setOriginalEffect.of(originalContent) });
   }, [originalContent]);
 
-  return <div ref={hostRef} className="code-editor" />;
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) {
+      return;
+    }
+
+    const matches = findEditorMatches(view.state.doc, query);
+    setFindMatchCount(matches.length);
+
+    const previousTarget = previousFindTargetRef.current;
+    const targetChanged =
+      previousTarget.query !== query || previousTarget.activeIndex !== activeIndex;
+    previousFindTargetRef.current = { query, activeIndex };
+
+    const activeMatch = matches[activeIndex];
+    const findEffect = setEditorFindEffect.of({ matches, activeIndex });
+    view.dispatch({
+      effects:
+        targetChanged && activeMatch
+          ? [findEffect, EditorView.scrollIntoView(activeMatch.from, { y: "center" })]
+          : findEffect,
+    });
+  }, [activeIndex, documentVersion, query]);
+
+  useEffect(() => {
+    if (wasFindOpenRef.current && !isFindOpen) {
+      viewRef.current?.focus();
+    }
+    wasFindOpenRef.current = isFindOpen;
+  }, [isFindOpen]);
+
+  return (
+    <div className="code-editor-wrap">
+      {findBar}
+      <div ref={hostRef} className="code-editor" />
+    </div>
+  );
 }
