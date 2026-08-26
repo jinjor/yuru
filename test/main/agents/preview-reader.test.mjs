@@ -30,22 +30,30 @@ function createReader(onParse = () => {}) {
   });
 }
 
-test("初回は全JSONLから最新previewを選び、以降は追記されたrecordだけをparseする", async (t) => {
+test("初回は末尾側の最新previewまで、以降は追記されたrecordだけをparseする", async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-preview-reader-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const filePath = path.join(dir, "session.jsonl");
-  fs.writeFileSync(filePath, jsonl(previewEntry("old", 1), { kind: "other" }));
+  fs.writeFileSync(
+    filePath,
+    jsonl(
+      previewEntry("old", 1),
+      { kind: "unread" },
+      previewEntry("latest", 2),
+      { kind: "trailing" },
+    ),
+  );
 
   let parseCount = 0;
   const reader = createReader(() => parseCount++);
-  assert.deepEqual(await reader.read(filePath), { lastMessage: "old", timestamp: 1 });
+  assert.deepEqual(await reader.read(filePath), { lastMessage: "latest", timestamp: 2 });
   assert.equal(parseCount, 2);
 
-  assert.deepEqual(await reader.read(filePath), { lastMessage: "old", timestamp: 1 });
+  assert.deepEqual(await reader.read(filePath), { lastMessage: "latest", timestamp: 2 });
   assert.equal(parseCount, 2);
 
-  fs.appendFileSync(filePath, jsonl(previewEntry("new", 2)));
-  assert.deepEqual(await reader.read(filePath), { lastMessage: "new", timestamp: 2 });
+  fs.appendFileSync(filePath, jsonl(previewEntry("new", 3)));
+  assert.deepEqual(await reader.read(filePath), { lastMessage: "new", timestamp: 3 });
   assert.equal(parseCount, 3);
 });
 

@@ -145,6 +145,11 @@ worktree の外部 rename は自動追跡しない。
 対応 provider は Claude と Codex である。
 provider ごとの session store や resume command の違いは agent の実装 (`src/main/agents/`) に閉じ込める。
 
+Claude / Codex の session preview は、初回に JSONL の末尾から最新の assistant message までを
+読み、以後はその位置から追記された record だけを読む。preview に不要な過去の tool result などを
+走査しないため、ログ全体のサイズは初回表示の読み取り量に影響しない。Kimi の preview は
+`state.json` の `lastPrompt` / `title` から読む。
+
 worktree session の create / resume は、Claude / Codex とも cwd = repo root で起動する。
 PTY 内で `cd` しても、`Files`, `Changes`, diff の作業ルートは runtime cwd ではなく選択中 task worktree の `worktreePath` で決まる。
 

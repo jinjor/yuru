@@ -1,5 +1,6 @@
 import fs from "fs";
 import type { SessionPreview } from "./agent.js";
+import { readLatestJsonlEntry } from "./jsonl-tail.js";
 
 interface SessionPreviewFileState {
   byteOffset: number;
@@ -7,9 +8,9 @@ interface SessionPreviewFileState {
   preview: SessionPreview | null;
 }
 
-// Session stores are append-only JSONL files. Parse the existing file once, then
-// retain only the latest preview and the last complete-line offset so polling
-// work stays proportional to newly appended records instead of total conversation length.
+// Session stores are append-only JSONL files. Find the initial preview from the
+// tail, then retain it and the last complete-line offset so polling work stays
+// proportional to newly appended records instead of total conversation length.
 export class IncrementalSessionPreviewReader {
   private readonly states = new Map<string, SessionPreviewFileState>();
   private readonly parseEntry: (entry: unknown) => SessionPreview | null;
@@ -38,11 +39,14 @@ export class IncrementalSessionPreviewReader {
         stat.size < state.byteOffset ||
         (stat.size === state.byteOffset && stat.mtimeMs !== state.mtimeMs)
       ) {
+        const latest = await readLatestJsonlEntry(handle, stat.size, this.parseEntry);
         state = {
-          byteOffset: 0,
+          byteOffset: latest.completeByteOffset,
           mtimeMs: stat.mtimeMs,
-          preview: null,
+          preview: latest.entry,
         };
+        this.states.set(filePath, state);
+        return state.preview;
       }
 
       const length = stat.size - state.byteOffset;
