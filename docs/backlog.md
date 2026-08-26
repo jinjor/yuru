@@ -34,6 +34,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | B16 | bug | Changes / Diff | Committed の diff を正確にする | commit 済みの変更を正しい差分でレビューしたい |
 | F71 | feature | Worktrees / Bookmarks | worktree ごとに役に立つリンクをブックマークできるようにする | worktree に関連する資料や画面へ素早くアクセスしたい |
 | F72 | feature | Files / Blame | GitLens みたいな blame 表示機能 | コードの各行が変更された経緯をファイル表示から確認したい |
+| F8 | feature | Files / Navigation | 開いたファイルの位置を Files ツリーにも反映する | ターミナルのリンク、ファイル名検索、横断文字列検索、Changes のどこから開いても、対象ファイルの位置をツリーですぐ確認したい |
 
 ## Next
 
@@ -48,14 +49,12 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F46 | feature | Repos | リポジトリを管理対象から削除できるようにする | `yuru add` と対になる機能として欲しい |
 | P9 | polish | New Session | 長い repo path の省略ルールを見直す | 折りたたみが不自然 |
 | P16 | polish | Worktrees / Changes | 左ペインで worktree の Git 変更状態を分かるようにする | いま選択していない worktree に unstaged/staged/untracked 変更があることに気づけない |
-| F8 | feature | Terminal | ファイルクリック時にツリー側も開く | navigation の連動 |
 | F9 | feature | Terminal | ウィンドウを広げた時に 1 行の文字数を増やす | xterm fit を調整 |
 | F25 | feature | Updates | Yuru の更新通知を出す | ローカル build 運用だと更新に気づきにくい |
 | F36 | feature | Repos | `yuru add` の結果を実行中の画面に反映する | 詳細: docs/backlog-details/F36-yuru-add-refresh.md |
 | F40 | feature | Files / Editor | ファイルを埋め込みエディタで編集できるようにする (編集モード) | 詳細: docs/backlog-details/F40-edit-mode.md |
 | I15 | investigate | IPC | `electronAPI` と IPC channel の対応を追いやすくする | renderer / preload / main で名前がズレていて読みにくいため、channel 名を露出するか shared RPC wrapper に寄せるか決めたい |
 | I16 | investigate | Events | backend event の発火ポリシーと購読設計を整理する | frontend 起点 IPC の応答代わりに push すると race しやすいため、外部変化・非同期完了・プロセス終了などに用途を限定したい |
-| F28 | feature | Files | ファイル検索の最近開いたファイル履歴 | Cmd+P 空入力時に履歴を出したい |
 | I11 | investigate | App | モーダルとショートカットの管理設計を決める (詳細: docs/backlog-details/I11-modal-management.md) | FileSearch 導入時に Cmd+P が他モーダル裏で発火する問題が出たため、場当たり対応せず設計として直したい |
 | P17 | polish | Repos / Sessions | getRepos が毎回全セッションのログを読むのをやめる | 一覧は ID と並び順程度に痩せさせ、プレビュー等のセッション表示状態はカード側が個別に取得する。session:changed push の続きで、将来のカード単位購読にも繋がる。I21 の「選択中セッションをカードに出す」拡張の前提でもある |
 | P27 | polish | Sessions / Codex | Codex で削除済みの raw rollout を Yuru の対象から除外する | 現在のデータソースに沿った挙動だが、削除済みセッションを preview・worktree 検出の解析対象から除外すれば不要な解析を減らせる |
