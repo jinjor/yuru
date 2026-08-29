@@ -29,15 +29,27 @@ export class SessionLogWatcher {
 
   async read(filePath: string): Promise<SessionPreview | null> {
     const log = this.getLog(filePath);
-    const result = await log.reader.read();
+    // 初回とファイル置換/truncate 後は末尾スキャンで最新の assistant message だけを拾い、
+    // 全件走査を避ける。listener には通知しない (過去 URL や削除済み URL の復活を防ぐ)。
+    const result = await log.reader.read((entry) => {
+      const message = this.parseEntry(entry);
+      if (!message || message.role !== "assistant") {
+        return null;
+      }
+      return normalizePreviewText(message.text) ? message : null;
+    });
     if (result === null) {
       log.preview = null;
       return null;
     }
-    if (result.reset) {
-      // ログファイルの置換・truncate。過去 URL や削除済み URL の復活を防ぐため、
-      // この batch は通知せず preview も先頭から再構築する。
-      log.preview = null;
+    if (result.tailEntry !== undefined) {
+      log.preview = result.tailEntry
+        ? {
+            lastMessage: normalizePreviewText(result.tailEntry.text),
+            timestamp: result.tailEntry.timestamp,
+          }
+        : null;
+      return log.preview;
     }
 
     const messages = result.entries.flatMap((entry) => {
@@ -57,7 +69,7 @@ export class SessionLogWatcher {
         };
       }
     }
-    if (!result.reset && messages.length > 0) {
+    if (messages.length > 0) {
       const texts = messages.map((message) => message.text);
       for (const listener of log.listeners) {
         listener(texts);

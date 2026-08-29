@@ -68,7 +68,10 @@ branch、diff、agent session の本文、terminal runtime は metadata に保�
 
 Claude / Codex の会話ログと Kimi の `wire.jsonl` は、共有の `SessionLogWatcher`
 (`src/main/agents/session-log-watcher.ts`) が物理ファイルごとに 1 つの
-`IncrementalJsonlReader` で増分読み取りする。provider adapter は provider 固有の record を
+`IncrementalJsonlReader` で増分読み取りする。初回とファイル置換/truncate 後は JSONL の
+末尾から最新の assistant message までを読み、以後はその位置から追記された record だけを読む。
+preview に不要な過去の tool result などを走査しないため、ログ全体のサイズは初回表示の
+読み取り量に影響しない。provider adapter は provider 固有の record を
 user / assistant の会話へ変換する関数を渡すだけで、watcher が変換結果で preview を更新すると
 同時に登録中の全 listener (bookmark 取得側) へ通知する。listener は 1 ファイルに複数登録でき、
 過去分が必要な listener には共有 reader を巻き戻さず、使い捨ての reader で先頭から再生する。

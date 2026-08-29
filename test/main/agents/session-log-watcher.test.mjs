@@ -146,3 +146,58 @@ test("hasListeners は listener の登録・解除を反映する", async (t) =>
   stop();
   assert.equal(watcher.hasListeners(filePath), false);
 });
+
+test("初回は末尾の最新assistantだけを読み、以降は追記されたrecordだけをparseする", async (t) => {
+  const filePath = createFixture(t);
+  fs.writeFileSync(
+    filePath,
+    jsonl(
+      { role: "assistant", text: "old", ts: 1 },
+      { kind: "unread" },
+      { role: "assistant", text: "latest", ts: 2 },
+      { kind: "trailing" },
+    ),
+  );
+
+  let parseCount = 0;
+  const watcher = new SessionLogWatcher((entry) => {
+    parseCount += 1;
+    return parseEntry(entry);
+  });
+
+  assert.deepEqual(await watcher.read(filePath), { lastMessage: "latest", timestamp: 2 });
+  // 末尾スキャンで受理・却下された record だけが parse される (全件走査しない)。
+  assert.equal(parseCount, 2);
+
+  assert.deepEqual(await watcher.read(filePath), { lastMessage: "latest", timestamp: 2 });
+  assert.equal(parseCount, 2);
+
+  fs.appendFileSync(filePath, jsonl({ role: "assistant", text: "new", ts: 3 }));
+  assert.deepEqual(await watcher.read(filePath), { lastMessage: "new", timestamp: 3 });
+  assert.equal(parseCount, 3);
+});
+
+test("途中まで追記された末尾recordは完成後にpreviewへ反映する", async (t) => {
+  const filePath = createFixture(t);
+  const nextLine = JSON.stringify({ role: "assistant", text: "new", ts: 2 });
+  const splitAt = Math.floor(nextLine.length / 2);
+  fs.writeFileSync(
+    filePath,
+    `${jsonl({ role: "assistant", text: "old", ts: 1 })}${nextLine.slice(0, splitAt)}`,
+  );
+  const watcher = new SessionLogWatcher(parseEntry);
+
+  assert.deepEqual(await watcher.read(filePath), { lastMessage: "old", timestamp: 1 });
+
+  fs.appendFileSync(filePath, `${nextLine.slice(splitAt)}\n`);
+  assert.deepEqual(await watcher.read(filePath), { lastMessage: "new", timestamp: 2 });
+});
+
+test("改行なしの完全な最終recordと存在しないfileを扱う", async (t) => {
+  const filePath = createFixture(t);
+  const watcher = new SessionLogWatcher(parseEntry);
+
+  assert.equal(await watcher.read(filePath), null);
+  fs.writeFileSync(filePath, JSON.stringify({ role: "assistant", text: "complete", ts: 1 }));
+  assert.deepEqual(await watcher.read(filePath), { lastMessage: "complete", timestamp: 1 });
+});

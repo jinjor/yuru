@@ -1,4 +1,5 @@
 import fs from "fs";
+import { readLatestJsonlEntry } from "./jsonl-tail.js";
 
 interface FileCursor {
   byteOffset: number;
@@ -6,9 +7,13 @@ interface FileCursor {
   mtimeMs: number;
 }
 
-export interface IncrementalJsonlReadResult {
+export interface IncrementalJsonlReadResult<T = unknown> {
   entries: unknown[];
   reset: boolean;
+  // tailParser 指定時の初回・reset 読み取りでは、末尾から遡って最初に受理された
+  // record が入る。この場合 entries は空で、カーソルは末尾の完全な行の直後
+  // (completeByteOffset) に置かれる。tailParser なしの読み取りでは省略される。
+  tailEntry?: T | null;
 }
 
 export class IncrementalJsonlReader {
@@ -20,8 +25,12 @@ export class IncrementalJsonlReader {
     this.filePath = filePath;
   }
 
-  read(): Promise<IncrementalJsonlReadResult | null> {
-    return this.enqueue(() => this.readNext());
+  // tailParser を渡すと、初回またはファイル置換/truncate 後の読み取りで先頭からの
+  // 全件走査をせず、末尾から遡って最新の受理 record だけを拾う。巨大なログの
+  // 初回読み取りを高速化するためのもので、全件が必要な読み手 (過去分の再生など) は
+  // tailParser なしで呼ぶこと。
+  read<T>(tailParser?: (entry: unknown) => T | null): Promise<IncrementalJsonlReadResult<T> | null> {
+    return this.enqueue(() => this.readNext(tailParser));
   }
 
   reset(): Promise<void> {
@@ -30,7 +39,9 @@ export class IncrementalJsonlReader {
     });
   }
 
-  private async readNext(): Promise<IncrementalJsonlReadResult | null> {
+  private async readNext<T>(
+    tailParser?: (entry: unknown) => T | null,
+  ): Promise<IncrementalJsonlReadResult<T> | null> {
     let handle: fs.promises.FileHandle;
     try {
       handle = await fs.promises.open(this.filePath, "r");
@@ -52,6 +63,15 @@ export class IncrementalJsonlReader {
           stat.size < cursor.byteOffset ||
           (stat.size === cursor.byteOffset && stat.mtimeMs !== cursor.mtimeMs));
       if (!cursor || reset) {
+        if (tailParser) {
+          const latest = await readLatestJsonlEntry(handle, stat.size, tailParser);
+          this.cursor = {
+            byteOffset: latest.completeByteOffset,
+            fileId,
+            mtimeMs: stat.mtimeMs,
+          };
+          return { entries: [], reset, tailEntry: latest.entry };
+        }
         cursor = {
           byteOffset: 0,
           fileId,
