@@ -10,6 +10,7 @@ interface TerminalPanelProps {
   onFileLinkActivate: (filePath: string, line?: number) => void;
   previewRatio: number;
   terminalRuntimeId: string;
+  worktreeId: string;
 }
 
 interface TerminalInstance {
@@ -32,6 +33,7 @@ export function TerminalPanel({
   onFileLinkActivate,
   previewRatio,
   terminalRuntimeId,
+  worktreeId,
 }: TerminalPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<TerminalInstance | null>(null);
@@ -45,6 +47,16 @@ export function TerminalPanel({
   });
   const onFileLinkActivateRef = useRef(onFileLinkActivate);
   onFileLinkActivateRef.current = onFileLinkActivate;
+  const worktreeIdRef = useRef(worktreeId);
+  worktreeIdRef.current = worktreeId;
+
+  // URL リンクをクリックしたら開くだけでなくブックマークにも登録する。
+  // 重複は main 側で除外される。失敗は Error Center に記録されるのでここでは握らない。
+  const registerUrlBookmark = useCallback((url: string): void => {
+    void window.electronAPI.addBookmark(worktreeIdRef.current, url).catch((error: unknown) => {
+      console.error("Failed to bookmark terminal URL.", error);
+    });
+  }, []);
 
   const fitTerminal = useCallback((): void => {
     if (!terminalRef.current) {
@@ -77,6 +89,7 @@ export function TerminalPanel({
       // confirm ダイアログ + window.open が走り、Electron の子ウインドウが開いてしまう。
       linkHandler: {
         activate(_event, uri): void {
+          registerUrlBookmark(uri);
           void window.electronAPI.openExternal(uri).catch((error) => {
             console.error("Failed to open terminal URL.", error);
           });
@@ -113,6 +126,7 @@ export function TerminalPanel({
             decorations: { pointerCursor: true, underline: true },
             activate(): void {
               if (entry.kind === "url") {
+                registerUrlBookmark(entry.url);
                 void window.electronAPI.openExternal(entry.url).catch((error) => {
                   console.error("Failed to open terminal URL.", error);
                 });
@@ -200,7 +214,7 @@ export function TerminalPanel({
       term.dispose();
       container.remove();
     };
-  }, [fitTerminal, terminalRuntimeId]);
+  }, [fitTerminal, registerUrlBookmark, terminalRuntimeId]);
 
   useEffect(() => {
     if (!terminalRef.current) {

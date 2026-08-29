@@ -82,6 +82,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke("search:code", worktreeId, query),
   cancelCodeSearch: (worktreeId: string) => ipcRenderer.invoke("search:cancelCode", worktreeId),
   getBookmarks: (worktreeId: string) => ipcRenderer.invoke("bookmarks:list", worktreeId),
+  addBookmark: (worktreeId: string, url: string) =>
+    ipcRenderer.invoke("bookmarks:add", worktreeId, url),
   removeBookmark: (worktreeId: string, url: string) =>
     ipcRenderer.invoke("bookmarks:remove", worktreeId, url),
   onErrorNoticesChanged: (callback) => {

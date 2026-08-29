@@ -132,3 +132,17 @@ test("file差し替え時はbatchを通知せずpreviewを再構築する", asyn
   assert.deepEqual(messages, ["old"]);
   assert.deepEqual(preview, { lastMessage: "replaced", timestamp: 2 });
 });
+
+test("hasListeners は listener の登録・解除を反映する", async (t) => {
+  const filePath = createFixture(t);
+  fs.writeFileSync(filePath, jsonl({ role: "user", text: "m1" }));
+  const watcher = new SessionLogWatcher(parseEntry);
+
+  assert.equal(watcher.hasListeners(filePath), false);
+
+  const stop = await watcher.watch(filePath, false, () => {});
+  assert.equal(watcher.hasListeners(filePath), true);
+
+  stop();
+  assert.equal(watcher.hasListeners(filePath), false);
+});

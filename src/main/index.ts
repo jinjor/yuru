@@ -477,6 +477,9 @@ function registerIpcHandlers(): void {
   handleIpc("bookmarks:list", (_event, worktreeId: string) => {
     return service.getBookmarks(worktreeId);
   });
+  handleIpc("bookmarks:add", (_event, worktreeId: string, url: string) => {
+    return service.addBookmark(worktreeId, url);
+  });
 
   handleIpc("bookmarks:remove", (_event, worktreeId: string, url: string) => {
     return service.removeBookmark(worktreeId, url);

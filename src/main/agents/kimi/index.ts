@@ -217,9 +217,14 @@ async function loadStoredSessionPreview(agentSessionId: string): Promise<Session
 }
 
 // preview は state.json から読むため返り値は使わず、watch 中の listener への
-// メッセージ通知という副作用のために読む。
+// メッセージ通知という副作用のために読む。listener がいなければ読まない
+// (bookmark の自動追加が無効なときに wire.jsonl を読む必要がない)。
 async function readKimiSessionMessages(entry: KimiStoredSessionRef): Promise<void> {
-  await sessionLogWatcher.read(kimiWireLogPath(entry.sessionDir));
+  const wireLogPath = kimiWireLogPath(entry.sessionDir);
+  if (!sessionLogWatcher.hasListeners(wireLogPath)) {
+    return;
+  }
+  await sessionLogWatcher.read(wireLogPath);
 }
 
 async function watchSessionMessages(

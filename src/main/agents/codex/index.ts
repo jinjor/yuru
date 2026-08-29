@@ -103,9 +103,7 @@ function parseCodexConversationMessageEntry(entry: unknown): ConversationMessage
   const texts = extractCodexMessageTexts(message.payload.content).filter(
     (text) =>
       role === "assistant" ||
-      !CODEX_INJECTED_USER_MESSAGE_PREFIXES.some((prefix) =>
-        text.trimStart().startsWith(prefix),
-      ),
+      !CODEX_INJECTED_USER_MESSAGE_PREFIXES.some((prefix) => text.trimStart().startsWith(prefix)),
   );
   return texts.length > 0
     ? {

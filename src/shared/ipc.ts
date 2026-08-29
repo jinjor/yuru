@@ -285,6 +285,7 @@ export interface ElectronAPI {
   searchCode: (worktreeId: string, query: string) => Promise<Result<CodeSearchResult>>;
   cancelCodeSearch: (worktreeId: string) => Promise<void>;
   getBookmarks: (worktreeId: string) => Promise<Result<Bookmark[]>>;
+  addBookmark: (worktreeId: string, url: string) => Promise<Result<void>>;
   removeBookmark: (worktreeId: string, url: string) => Promise<Result<void>>;
   onErrorNoticesChanged: (callback: (notices: AppErrorNotice[]) => void) => () => void;
   onRepoListChanged: (callback: () => void) => () => void;

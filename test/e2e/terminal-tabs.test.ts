@@ -860,7 +860,10 @@ test("session の user・assistant message にある URL だけを Bookmarks に
       entries: appendedEntries,
     });
     let launched = await launchWindow(context, {
-      env: { PATH: `${fakeBin}:${process.env.PATH ?? ""}` },
+      env: {
+        PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
+        YURU_BOOKMARK_AUTO_CAPTURE: "1",
+      },
     });
     app = launched.app;
     let window = launched.window;
@@ -910,7 +913,10 @@ test("session の user・assistant message にある URL だけを Bookmarks に
     app = null;
     await createFakeCodexBin(context.tmpHome);
     launched = await launchWindow(context, {
-      env: { PATH: `${fakeBin}:${process.env.PATH ?? ""}` },
+      env: {
+        PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
+        YURU_BOOKMARK_AUTO_CAPTURE: "1",
+      },
     });
     app = launched.app;
     window = launched.window;

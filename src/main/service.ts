@@ -204,6 +204,12 @@ interface BookmarkCaptureTarget {
   worktreeId: string;
 }
 
+// 会話ログからの bookmark 自動追加は実験中の機能。デフォルト OFF で、
+// YURU_BOOKMARK_AUTO_CAPTURE=1 を付けて起動したときだけ watch を登録する。
+function isBookmarkAutoCaptureEnabled(): boolean {
+  return process.env.YURU_BOOKMARK_AUTO_CAPTURE === "1";
+}
+
 function ok<T>(data: T): Result<T> {
   return {
     ok: true,
@@ -936,6 +942,55 @@ export class YuruService {
     return ok(undefined);
   }
 
+  // ターミナルやメッセージ表示でクリックされた URL をブックマークに登録する。
+  async addBookmark(worktreeId: string, url: string) {
+    const parsedUrl = URL.canParse(url) ? new URL(url) : null;
+    if (!parsedUrl || (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:")) {
+      return this.failAndReport<void>({
+        code: "invalid_path",
+        message: "Only http/https URLs can be bookmarked.",
+        detail: url,
+      });
+    }
+    const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
+    if (!workingRoot) {
+      return this.failAndReport<void>({
+        code: "invalid_path",
+        message: "Selected worktree is no longer available.",
+      });
+    }
+    let added: Bookmark[];
+    try {
+      added = addBookmarks(workingRoot, [url]);
+    } catch (error) {
+      return this.failAndReport<void>(toAppError(error));
+    }
+    if (added.length === 0) {
+      return ok(undefined);
+    }
+    this.events.bookmarksChanged(worktreeId);
+    this.resolveBookmarkTitles({ worktreePath: workingRoot, worktreeId }, added);
+    return ok(undefined);
+  }
+
+  private resolveBookmarkTitles(target: BookmarkCaptureTarget, added: Bookmark[]): void {
+    void Promise.all(
+      added.map(async (bookmark) => {
+        const title = await resolveUrlTitle(bookmark.url);
+        if (!title) {
+          return;
+        }
+        try {
+          if (updateBookmarkTitle(target.worktreePath, bookmark.url, title)) {
+            this.events.bookmarksChanged(target.worktreeId);
+          }
+        } catch (error) {
+          recordAppWarning(toAppError(error));
+        }
+      }),
+    );
+  }
+
   // provider の保存ログに追加された user / assistant の会話本文から URL を記録する。
   // tool result やターミナルのコマンド出力は provider 側の message reader が除外する。
   // session monitor の tick から呼ばれるので、保存の失敗 (bookmarks.json の破損など) は
@@ -959,21 +1014,7 @@ export class YuruService {
       return;
     }
     this.events.bookmarksChanged(target.worktreeId);
-    void Promise.all(
-      added.map(async (bookmark) => {
-        const title = await resolveUrlTitle(bookmark.url);
-        if (!title) {
-          return;
-        }
-        try {
-          if (updateBookmarkTitle(target.worktreePath, bookmark.url, title)) {
-            this.events.bookmarksChanged(target.worktreeId);
-          }
-        } catch (error) {
-          recordAppWarning(toAppError(error));
-        }
-      }),
-    );
+    this.resolveBookmarkTitles(target, added);
   }
 
   private async watchSessionMessagesForRuntime(
@@ -983,6 +1024,9 @@ export class YuruService {
     includeExistingMessages: boolean,
     target: BookmarkCaptureTarget,
   ): Promise<void> {
+    if (!isBookmarkAutoCaptureEnabled()) {
+      return;
+    }
     const stop = await agent.watchSessionMessages(
       agentSessionId,
       includeExistingMessages,
@@ -2024,15 +2068,14 @@ export class YuruService {
         });
       }
 
-      stopWatchingMessages = await agent.watchSessionMessages(
-        target.agentSessionId,
-        false,
-        (messages) =>
-          this.captureSessionMessageUrls(
-            { worktreePath: target.project, worktreeId: target.worktreeId },
-            messages,
-          ),
-      );
+      stopWatchingMessages = isBookmarkAutoCaptureEnabled()
+        ? await agent.watchSessionMessages(target.agentSessionId, false, (messages) =>
+            this.captureSessionMessageUrls(
+              { worktreePath: target.project, worktreeId: target.worktreeId },
+              messages,
+            ),
+          )
+        : null;
 
       pending = this.launchPendingSession(
         agent,
@@ -2041,8 +2084,10 @@ export class YuruService {
         target.repoPath,
       );
       this.registerTerminalRuntime(pending, target.agentSessionId);
-      this.sessionMessageWatchStops.set(pending.terminalRuntimeId, stopWatchingMessages);
-      stopWatchingMessages = null;
+      if (stopWatchingMessages) {
+        this.sessionMessageWatchStops.set(pending.terminalRuntimeId, stopWatchingMessages);
+        stopWatchingMessages = null;
+      }
       return ok(pending.terminalRuntimeId);
     } catch (error) {
       stopWatchingMessages?.();

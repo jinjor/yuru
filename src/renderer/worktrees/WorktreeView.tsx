@@ -366,6 +366,7 @@ export const WorktreeView = memo(function WorktreeView({
               }}
               previewRatio={paneLayout.previewRatio}
               terminalRuntimeId={displayedTerminalRuntimeId}
+              worktreeId={worktreeId}
             />
           ) : (
             <TerminalHome

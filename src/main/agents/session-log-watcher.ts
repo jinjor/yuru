@@ -93,6 +93,13 @@ export class SessionLogWatcher {
     };
   }
 
+  // listener が 1 件も登録されていないファイルの読み取りを呼び出し側が省略できるようにする。
+  // preview に使わないログ (Kimi の wire.jsonl) を bookmark 取得のためだけに読む場合に使う。
+  hasListeners(filePath: string): boolean {
+    const log = this.logs.get(filePath);
+    return log !== undefined && log.listeners.size > 0;
+  }
+
   private getLog(filePath: string): SessionLog {
     let log = this.logs.get(filePath);
     if (!log) {

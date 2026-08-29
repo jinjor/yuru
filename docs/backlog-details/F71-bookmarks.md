@@ -53,6 +53,13 @@ Last updated: 2026-08-23
 - standalone terminal の出力は対象外。bookmark 取得側は main worktree か task worktree かを特別扱いせず、provider session runtime に渡された worktree を保存先にする
 - renderer に共通の `openExternal` callback は置いていない。各利用箇所が preload API を直接呼び、Bookmark は失敗をユーザー向け toast にも表示する。main は全呼び出しで http/https を検証し、IPC の失敗を Error Center に記録する
 
+## 実装時の変更（2026-08-23 の会話・後半）
+
+- **クリック登録を追加**。ターミナルで URL リンク（buffer link provider / OSC 8 ハイパーリンク）をクリックすると、開くと同時にブックマークへ登録する。ユーザーの自分のメッセージもターミナルにエコーされるため同じ経路で拾える。エージェントが出した URL で「後で必要になるもの」はクリック時に意図が表れる
+- **ログからの自動追加は feature flag 化**。`YURU_BOOKMARK_AUTO_CAPTURE=1` を付けて起動したときだけ有効（デフォルト OFF）。クリック登録の体験が十分かどうかを比較するための措置で、体験が良ければ自動追加の実装は削る
+- flag OFF のとき Kimi は `wire.jsonl` を一切読まない。`SessionLogWatcher.hasListeners` で listener の有無を見てから読む（需要駆動）。Claude / Codex は preview のために同じ reader を読むので listener の有無でコストは変わらない
+- クリック登録用に `bookmarks:add` IPC を追加。main 側で http/https を検証し、title 解決は自動追加と同じ経路（fetch + GitHub は `gh api`）を使う
+
 ## 既存ソリューション調査
 
 同等の「worktree/タスクに紐づくリンク集」機能は、調べた範囲では見つからなかった。

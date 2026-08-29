@@ -10,7 +10,8 @@ interface BookmarksPaneProps {
   worktreeId: string;
 }
 
-// 会話の user / assistant message に出た URL を main が記録したブックマークの一覧。
+// worktree に紐づくブックマークの一覧。登録はターミナルの URL クリック、または
+// YURU_BOOKMARK_AUTO_CAPTURE=1 時に会話の user / assistant message から自動追加される。
 // クリックで既定ブラウザを開く。追加・並び替えの UI はなく、削除だけできる。
 export function BookmarksPane({ onError, worktreeId }: BookmarksPaneProps) {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);

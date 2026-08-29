@@ -107,6 +107,50 @@ test("standalone terminal の URL は Bookmarks に追加されない", async ()
   }
 });
 
+test("ターミナルで URL リンクをクリックすると Bookmarks に登録される", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context);
+    await registerRepo(context, repoDir);
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+    await stubOpenExternal(app);
+
+    await openMainTerminal(window);
+    await window.locator(".xterm").click();
+    // リンクテキストをシェル変数で組み立て、echo された入力行が出力行と
+    // 同じテキストにならないようにする（クリック対象の行を一意にするため）。
+    await window.keyboard.type("H=http; printf '%s://example.com/clicked\\n' \"$H\"");
+    await window.keyboard.press("Enter");
+    const linkRow = window.locator(".xterm-rows > div", {
+      hasText: "http://example.com/clicked",
+    });
+    await expect(linkRow).toBeVisible({ timeout: 10_000 });
+
+    // 行の上には xterm のオーバーレイ要素が重なっていて locator.click() は
+    // hit-target チェックで進まないため、座標を計算して mouse で直接クリックする。
+    // リンクは行頭から始まるので、行の左端付近を狙う。
+    const box = await linkRow.boundingBox();
+    if (!box) {
+      throw new Error("Link row is not visible");
+    }
+    const x = box.x + 20;
+    const y = box.y + box.height / 2;
+    await window.mouse.move(x, y);
+    await window.mouse.click(x, y);
+
+    await expect.poll(() => openedExternalUrls(app!)).toEqual(["http://example.com/clicked"]);
+    await window.locator(".panel-tabs .tab", { hasText: "Bookmarks" }).click();
+    await expect(window.locator(".bookmark-row")).toHaveCount(1);
+    await expect(window.locator(".bookmarks-pane")).toContainText("http://example.com/clicked");
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
 test("TUI が文中から複数行に描画したファイルパスの先頭行からプレビューできる", async () => {
   const context = await createE2eContext();
   let app: ElectronApplication | null = null;

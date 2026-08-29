@@ -72,8 +72,14 @@ Claude / Codex の会話ログと Kimi の `wire.jsonl` は、共有の `Session
 user / assistant の会話へ変換する関数を渡すだけで、watcher が変換結果で preview を更新すると
 同時に登録中の全 listener (bookmark 取得側) へ通知する。listener は 1 ファイルに複数登録でき、
 過去分が必要な listener には共有 reader を巻き戻さず、使い捨ての reader で先頭から再生する。
-Kimi の preview は従来どおり `state.json` の `lastPrompt` / `title` から読む。どちらも既存の
-session monitor の同じ tick で確認し、bookmark 専用の polling は持たない。
+Kimi の preview は従来どおり `state.json` の `lastPrompt` / `title` から読み、`wire.jsonl` は
+listener がいるときだけ読む (`SessionLogWatcher.hasListeners`)。
+どちらも既存の session monitor の同じ tick で確認し、bookmark 専用の polling は持たない。
+
+ブックマークの登録経路は 2 つ。ターミナルで URL リンクをクリックしたとき
+(`TerminalPanel` から `bookmarks:add` IPC) と、会話ログからの自動追加。
+自動追加は実験中の機能で、デフォルト OFF。`YURU_BOOKMARK_AUTO_CAPTURE=1` を付けて
+起動したときだけ session ログの watch を登録する。
 
 metadata は通常 `~/.yuru/metadata.json` に置く。
 テストや開発用に `YURU_METADATA_PATH` で保存先を差し替えられる。
