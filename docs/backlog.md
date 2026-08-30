@@ -30,7 +30,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | B12 | bug | Sessions / Worktree Context | Claude の resume で worktree の作業指示が引き継がれない | `--append-system-prompt` の指示が保存されないため、resume すると Claude が repo root で作業してしまう。詳細: docs/backlog-details/B12-resume-worktree-context.md |
 | B15 | bug | Terminal | ターミナルにフォーカスできないことがある | キーボード入力を始められないことがある |
 | B16 | bug | Changes / Diff | Committed の diff を正確にする | commit 済みの変更を正しい差分でレビューしたい |
-| F71 | feature | Worktrees / Bookmarks | worktree ごとに役に立つリンクをブックマークできるようにする | worktree に関連する資料や画面へ素早くアクセスしたい |
 | F72 | feature | Files / Blame | GitLens みたいな blame 表示機能 | コードの各行が変更された経緯をファイル表示から確認したい |
 | F8 | feature | Files / Navigation | 開いたファイルの位置を Files ツリーにも反映する | ターミナルのリンク、ファイル名検索、横断文字列検索、Changes のどこから開いても、対象ファイルの位置をツリーですぐ確認したい |
 
