@@ -33,6 +33,7 @@ first_running_pid() {
 restart_app() {
   local pid
   local pids
+  local config_name
 
   require_macos
 
@@ -60,12 +61,12 @@ restart_app() {
 
   node "$ROOT_DIR/scripts/prune-renderer-build.mjs"
 
-  # npm run exports the launching Node installation through these settings.
-  # Do not leak it into terminals that may select a different Node via .nvmrc.
-  env \
-    -u npm_config_prefix \
-    -u npm_config_globalconfig \
-    open -na "$APP_BUNDLE" --args "$ROOT_DIR" >/dev/null 2>&1
+  # npm run exports its effective config, including project .npmrc values, as
+  # lowercase variables. Do not leak that launch context into interactive terminals.
+  for config_name in "${!npm_config_@}"; do
+    unset "$config_name"
+  done
+  open -na "$APP_BUNDLE" --args "$ROOT_DIR" >/dev/null 2>&1
 
   for _ in {1..40}; do
     pid="$(first_running_pid)"
