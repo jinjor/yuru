@@ -29,7 +29,9 @@ export class IncrementalJsonlReader {
   // 全件走査をせず、末尾から遡って最新の受理 record だけを拾う。巨大なログの
   // 初回読み取りを高速化するためのもので、全件が必要な読み手 (過去分の再生など) は
   // tailParser なしで呼ぶこと。
-  read<T>(tailParser?: (entry: unknown) => T | null): Promise<IncrementalJsonlReadResult<T> | null> {
+  read<T>(
+    tailParser?: (entry: unknown) => T | null,
+  ): Promise<IncrementalJsonlReadResult<T> | null> {
     return this.enqueue(() => this.readNext(tailParser));
   }
 
