@@ -10,6 +10,7 @@ import {
   buildWatchTargets,
   buildVisibleTreeRows,
   collectAncestorDirectories,
+  collectDirectoryPaths,
   normalizeExpandedDirectories,
   removeDirectorySubtrees,
   ROOT_DIRECTORY_PATH,
@@ -61,6 +62,9 @@ export function FilesPane({
   const [filesCache, setFilesCache] = useState<FilesCache>(() => createEmptyFilesCache());
   const filesCacheRef = useRef<FilesCache>(filesCache);
   const directoryLoadsRef = useRef<Map<string, DirectoryLoad>>(new Map());
+  const fileTreeRef = useRef<HTMLDivElement>(null);
+  const lastRevealedPathRef = useRef<string | null>(null);
+  const [pendingRevealPath, setPendingRevealPath] = useState<string | null>(null);
   const treeStatusByPath = buildTreeStatusMap(gitPathStates);
   const treeIgnoredPaths = buildIgnoredPathSet(gitPathStates);
   const { loadingDirectories, treeData } = filesCache;
@@ -215,6 +219,57 @@ export function FilesPane({
     [commitFilesCache, loadDirectory],
   );
 
+  const refreshDirectoryForReveal = useCallback(
+    async (relativePath: string): Promise<void> => {
+      const activeLoad = directoryLoadsRef.current.get(relativePath);
+      if (activeLoad) {
+        await activeLoad.promise;
+        return;
+      }
+      await loadDirectory(relativePath, true);
+    },
+    [loadDirectory],
+  );
+
+  const revealFile = useCallback(
+    async (relativePath: string, signal: AbortSignal): Promise<void> => {
+      const directoryPaths = collectAncestorDirectories([relativePath]);
+
+      await refreshDirectoryForReveal(ROOT_DIRECTORY_PATH);
+      for (const directoryPath of directoryPaths) {
+        if (signal.aborted) {
+          return;
+        }
+        if (!collectDirectoryPaths(filesCacheRef.current.treeData).has(directoryPath)) {
+          lastRevealedPathRef.current = relativePath;
+          return;
+        }
+        await refreshDirectoryForReveal(directoryPath);
+      }
+
+      if (signal.aborted) {
+        return;
+      }
+      const nextExpandedDirectories = new Set(expandedDirectoriesRef.current);
+      let didExpandDirectory = false;
+      for (const directoryPath of normalizeExpandedDirectories(
+        directoryPaths,
+        filesCacheRef.current.treeData,
+      )) {
+        if (!nextExpandedDirectories.has(directoryPath)) {
+          nextExpandedDirectories.add(directoryPath);
+          didExpandDirectory = true;
+        }
+      }
+      lastRevealedPathRef.current = relativePath;
+      if (didExpandDirectory) {
+        commitExpandedDirectories(nextExpandedDirectories);
+      }
+      setPendingRevealPath(relativePath);
+    },
+    [commitExpandedDirectories, refreshDirectoryForReveal],
+  );
+
   useEffect(() => {
     void window.electronAPI.syncFileWatchTargets(
       worktreeId,
@@ -229,6 +284,37 @@ export function FilesPane({
       controller.abort();
     };
   }, [reloadConnectedDirectories]);
+
+  useEffect(() => {
+    const selectedPath = previewSelection?.path ?? null;
+    if (!selectedPath || selectedPath.startsWith("/")) {
+      lastRevealedPathRef.current = selectedPath;
+      setPendingRevealPath(null);
+      return;
+    }
+    if (lastRevealedPathRef.current === selectedPath) {
+      return;
+    }
+
+    const controller = new AbortController();
+    void revealFile(selectedPath, controller.signal);
+    return () => {
+      controller.abort();
+    };
+  }, [previewSelection?.path, revealFile]);
+
+  useEffect(() => {
+    if (!pendingRevealPath) {
+      return;
+    }
+    if (previewSelection?.path === pendingRevealPath) {
+      const selectedRow = Array.from(
+        fileTreeRef.current?.querySelectorAll<HTMLElement>(".file-tree-row") ?? [],
+      ).find((row) => row.dataset.path === pendingRevealPath);
+      selectedRow?.scrollIntoView({ block: "nearest" });
+    }
+    setPendingRevealPath(null);
+  }, [pendingRevealPath, previewSelection?.path]);
 
   useEffect(() => {
     const dispose = window.electronAPI.onFileTreeChanged((changedWorktreeId, relativePath) => {
@@ -271,7 +357,7 @@ export function FilesPane({
           </Button>
         </div>
       </div>
-      <div className="file-tree" style={{ height }}>
+      <div ref={fileTreeRef} className="file-tree" style={{ height }}>
         {loadingDirectories.has(ROOT_DIRECTORY_PATH) && treeData.length === 0 ? (
           <EmptyState>Loading files...</EmptyState>
         ) : treeData.length === 0 ? (
@@ -320,6 +406,7 @@ function FileTreeRow({
   return (
     <div
       className={`file-tree-row ${isSelected ? "selected" : ""}`}
+      data-path={node.path}
       draggable={!isDirectory}
       onDragEnd={(event) => endWorktreeFileDrag(event.currentTarget)}
       onDragStart={(event) => {

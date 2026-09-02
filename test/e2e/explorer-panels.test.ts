@@ -393,6 +393,113 @@ test("Changed dirs で変更ファイルのディレクトリだけを展開し 
   }
 });
 
+test("開いたファイルを Files ツリーで展開して表示し、手動の展開と collapse を尊重する", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const files = Object.fromEntries(
+      Array.from({ length: 40 }, (_, index) => [
+        `dir-${String(index).padStart(2, "0")}/file.txt`,
+        `${index}\n`,
+      ]),
+    );
+    files["a-open/kept.txt"] = "kept\n";
+    files["z-target/nested/other.ts"] = "export const other = true;\n";
+    files["z-target/nested/selected.ts"] = "export const value = 1;\n";
+    const repoDir = await createCommittedRepo(context, files);
+    await writeFiles(repoDir, {
+      "z-target/nested/selected.ts": "export const value = 2;\n",
+    });
+    await registerRepo(context, repoDir);
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+    await openMainTerminal(window);
+
+    const filesTab = window.locator(".panel-tabs .tab", { hasText: "Files" });
+    const changesTab = window.locator(".panel-tabs .tab", { hasText: "Changes" });
+    await filesTab.click();
+    await window.locator('.file-tree-row[data-path="a-open"]').click();
+    await expect(window.locator('.file-tree-row[data-path="a-open/kept.txt"]')).toHaveCount(1);
+
+    await changesTab.click();
+    await window.locator(".change-item", { hasText: "selected.ts" }).click();
+    await expect(changesTab).toHaveClass(/selected/);
+
+    await filesTab.click();
+    const selectedRow = window.locator(
+      '.file-tree-row.selected[data-path="z-target/nested/selected.ts"]',
+    );
+    await expect(selectedRow).toBeVisible();
+    await expect(window.locator('.file-tree-row[data-path="a-open/kept.txt"]')).toHaveCount(1);
+    await expect
+      .poll(() => window.locator(".file-tree").evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(0);
+    await expect(selectedRow).toBeInViewport();
+
+    await window.locator('.file-tree-row[data-path="z-target"]').click();
+    await expect(
+      window.locator('.file-tree-row[data-path="z-target/nested/selected.ts"]'),
+    ).toHaveCount(0);
+    await changesTab.click();
+    await filesTab.click();
+    await expect(
+      window.locator('.file-tree-row[data-path="z-target/nested/selected.ts"]'),
+    ).toHaveCount(0);
+
+    await window.keyboard.press("Meta+P");
+    await window.locator(".file-search .text-input").fill("other");
+    await window.locator(".file-search-row", { hasText: "other.ts" }).click();
+    await expect(
+      window.locator('.file-tree-row.selected[data-path="z-target/nested/other.ts"]'),
+    ).toBeVisible();
+    await expect(window.locator('.file-tree-row[data-path="a-open/kept.txt"]')).toHaveCount(1);
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+test("Files が hidden の間に追加されたファイルを古い directory cache から reveal できる", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context, {
+      "existing/old.txt": "old\n",
+    });
+    await registerRepo(context, repoDir);
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+    await openMainTerminal(window);
+
+    const filesTab = window.locator(".panel-tabs .tab", { hasText: "Files" });
+    const changesTab = window.locator(".panel-tabs .tab", { hasText: "Changes" });
+    await filesTab.click();
+    const existingDirectory = window.locator('.file-tree-row[data-path="existing"]');
+    await existingDirectory.click();
+    await expect(window.locator('.file-tree-row[data-path="existing/old.txt"]')).toHaveCount(1);
+    await existingDirectory.click();
+    await expect(window.locator('.file-tree-row[data-path="existing/old.txt"]')).toHaveCount(0);
+
+    await changesTab.click();
+    await writeFiles(repoDir, {
+      "existing/new-directory/new.ts": "export const addedWhileHidden = true;\n",
+    });
+    const changedFile = window.locator(".change-item", { hasText: "new.ts" });
+    await expect(changedFile).toBeVisible({ timeout: 10_000 });
+    await changedFile.click();
+
+    await filesTab.click();
+    await expect(
+      window.locator('.file-tree-row.selected[data-path="existing/new-directory/new.ts"]'),
+    ).toBeVisible();
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
 test("Changes タブは staged と unstaged を別セクションで表示し、それぞれの diff と行数を出す", async () => {
   const context = await createE2eContext();
   let app: ElectronApplication | null = null;

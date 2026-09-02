@@ -31,7 +31,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | B15 | bug | Terminal | ターミナルにフォーカスできないことがある | キーボード入力を始められないことがある |
 | B16 | bug | Changes / Diff | Committed の diff を正確にする | commit 済みの変更を正しい差分でレビューしたい |
 | F72 | feature | Files / Blame | GitLens みたいな blame 表示機能 | コードの各行が変更された経緯をファイル表示から確認したい |
-| F8 | feature | Files / Navigation | 開いたファイルの位置を Files ツリーにも反映する | ターミナルのリンク、ファイル名検索、横断文字列検索、Changes のどこから開いても、対象ファイルの位置をツリーですぐ確認したい |
 
 ## Next
 

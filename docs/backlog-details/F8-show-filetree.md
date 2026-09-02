@@ -126,3 +126,13 @@ reveal による展開は `expandedDirectories` への追加のみで、既存�
 
 - 既存の `Changed dirs` ボタンは replace 型の展開 (F8 とは別物として残る)
 - F50「変更ファイルだけをツリー表示」と組み合わせる場合の話は今回のスコープ外
+
+## 実装時の補足: reveal 対象の directory listing は再取得する
+
+Files タブが hidden の間と、directory が collapse されている間は、その directory が
+file watcher の対象外になる。一度読み込んだ directory の cache が残っていても、その間に
+新しい子孫が追加されている可能性がある。
+
+そのため reveal では、各祖先 directory がすでに再取得中ならその完了を待ち、そうでなければ
+listing を再取得してから次の祖先を探す。cache だけを見て存在しないと判断し、実在する選択
+ファイルの reveal を以後スキップすることを防ぐ。
