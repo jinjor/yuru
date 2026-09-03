@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-08-27
+Last updated: 2026-09-03
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -31,11 +31,17 @@ UI 改善も機能追加も同じ土俵で扱う。
 | B15 | bug | Terminal | ターミナルにフォーカスできないことがある | キーボード入力を始められないことがある |
 | B16 | bug | Changes / Diff | Committed の diff を正確にする | commit 済みの変更を正しい差分でレビューしたい |
 | F72 | feature | Files / Blame | GitLens みたいな blame 表示機能 | コードの各行が変更された経緯をファイル表示から確認したい |
+| F74 | feature | Terminal / Bookmarks | Terminal に表示されている PR のクリック時にもブックマークに登録する | Terminal から開いた PR を worktree の関連情報として残したい |
+| F75 | feature | Terminal / GitHub | Terminal の `#NNNN` から GitHub の Issue / PR にリンクする | Issue / PR 番号から対象をすぐに開きたい |
+| F76 | feature | Terminal / Bookmarks | Terminal の `#NNNN` のクリック時にもブックマークに登録する | 番号リンクから開いた Issue / PR も worktree の関連情報として残したい |
+| F77 | feature | Worktrees / Bookmarks | ブックマークが GitHub の Issue / PR ならステータスも表示する | 関連する Issue / PR の状態をブックマーク一覧で把握したい |
 
 ## Next
 
 | ID | Type | Area | Item | Notes |
 |---|---|---|---|---|
+| B17 | bug | Files / Preview | Markdown プレビューで追加と削除が混ざっていても緑で表示されてしまう | Markdown の差分で追加と削除を正しく見分けたい |
+| B18 | bug | Files / Edit | 編集モードで閲覧中に更新された内容が反映されない | 外部で更新されたファイルの最新内容を編集モードでも確認したい |
 | F73 | investigate | Worktrees / Bookmarks | 自動ブックマーク（会話ログからの URL 自動追加）を残すか消すか判断する | URL クリック登録の体験を見て判断。`YURU_BOOKMARK_AUTO_CAPTURE=1` で有効化できる。詳細: docs/backlog-details/F71-bookmarks.md |
 | P18 | polish | Changes | Changes のファイル表示順を最適化する | 確認したい変更へ素早くたどり着けるようにしたい |
 | P25 | polish | Home | ホーム画面のスタイルを改善する | 最初に目に入る画面の見た目を整えたい |
