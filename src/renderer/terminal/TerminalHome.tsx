@@ -12,7 +12,7 @@ import { useReorderDrag, type ReorderDrag } from "../utils/useReorderDrag";
 
 interface TerminalHomeProps {
   providers: SessionProvider[];
-  worktree: WorktreeListItem | null;
+  worktree: WorktreeListItem;
   onSelectPrimarySession: (terminalRuntimeId: TerminalRuntimeId) => void;
   onResumePrimarySession: (agentSessionKey: string) => void;
   onDetachPrimarySession: (agentSessionKey: string) => void;
@@ -38,72 +38,69 @@ export function TerminalHome({
   // 並び替えられるのは Sessions の行だけ。Suggested と New session は掴めず、
   // 落とす先にもならない。
   const sessionReorder = useReorderDrag({
-    itemIds:
-      worktree?.primarySessions.flatMap((primarySession) =>
-        primarySession.agentSessionKey === null ? [] : [primarySession.agentSessionKey],
-      ) ?? [],
+    itemIds: worktree.primarySessions.flatMap((primarySession) =>
+      primarySession.agentSessionKey === null ? [] : [primarySession.agentSessionKey],
+    ),
     containerRef: homeRef,
     onReorder: onReorderPrimarySessions,
   });
   return (
     <div className="terminal-session-start" ref={homeRef}>
-      {worktree && (
-        <div className="terminal-session-start-panel">
-          {worktree.isMainWorktree ? (
-            <OpenTerminalSection onOpen={onOpenWorktreeTerminal} />
-          ) : (
-            <>
-              {worktree.primarySessions.length > 0 && (
-                <div className="action-surface-section">
-                  <div className="action-surface-label">Sessions</div>
-                  {worktree.primarySessions.map((primarySession) => (
-                    <PrimarySessionAction
-                      key={primarySession.agentSessionKey ?? primarySession.activeTerminalRuntimeId}
-                      primarySession={primarySession}
-                      reorder={sessionReorder}
-                      onSelectRuntime={onSelectPrimarySession}
-                      onResume={onResumePrimarySession}
-                      onDetach={onDetachPrimarySession}
-                    />
-                  ))}
-                </div>
-              )}
-              {worktree.suggestedSessions.length > 0 && (
-                <div className="action-surface-section">
-                  <div className="action-surface-label">Suggested</div>
-                  {worktree.suggestedSessions.map((suggestedSession) => (
-                    <SuggestedSessionAction
-                      key={suggestedSession.agentSessionKey}
-                      suggestedSession={suggestedSession}
-                      onSelect={() => onResumeSuggestedSession(suggestedSession.agentSessionKey)}
-                    />
-                  ))}
-                </div>
-              )}
+      <div className="terminal-session-start-panel">
+        {worktree.isMainWorktree ? (
+          <OpenTerminalSection onOpen={onOpenWorktreeTerminal} />
+        ) : (
+          <>
+            {worktree.primarySessions.length > 0 && (
               <div className="action-surface-section">
-                <div className="action-surface-label">New session</div>
-                <div className="new-session-actions">
-                  {providers.map((provider) => (
-                    <button
-                      type="button"
-                      key={provider}
-                      className="action-surface-row new-session-action"
-                      onClick={() => onCreateSessionForWorktree(provider)}
-                      title={`Start new ${providerLabel(provider)} session`}
-                    >
-                      <span
-                        className={`session-provider-dot provider-${provider}`}
-                        aria-hidden="true"
-                      />
-                      <span className="action-surface-row-main">{providerLabel(provider)}</span>
-                    </button>
-                  ))}
-                </div>
+                <div className="action-surface-label">Sessions</div>
+                {worktree.primarySessions.map((primarySession) => (
+                  <PrimarySessionAction
+                    key={primarySession.agentSessionKey ?? primarySession.activeTerminalRuntimeId}
+                    primarySession={primarySession}
+                    reorder={sessionReorder}
+                    onSelectRuntime={onSelectPrimarySession}
+                    onResume={onResumePrimarySession}
+                    onDetach={onDetachPrimarySession}
+                  />
+                ))}
               </div>
-            </>
-          )}
-        </div>
-      )}
+            )}
+            {worktree.suggestedSessions.length > 0 && (
+              <div className="action-surface-section">
+                <div className="action-surface-label">Suggested</div>
+                {worktree.suggestedSessions.map((suggestedSession) => (
+                  <SuggestedSessionAction
+                    key={suggestedSession.agentSessionKey}
+                    suggestedSession={suggestedSession}
+                    onSelect={() => onResumeSuggestedSession(suggestedSession.agentSessionKey)}
+                  />
+                ))}
+              </div>
+            )}
+            <div className="action-surface-section">
+              <div className="action-surface-label">New session</div>
+              <div className="new-session-actions">
+                {providers.map((provider) => (
+                  <button
+                    type="button"
+                    key={provider}
+                    className="action-surface-row new-session-action"
+                    onClick={() => onCreateSessionForWorktree(provider)}
+                    title={`Start new ${providerLabel(provider)} session`}
+                  >
+                    <span
+                      className={`session-provider-dot provider-${provider}`}
+                      aria-hidden="true"
+                    />
+                    <span className="action-surface-row-main">{providerLabel(provider)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

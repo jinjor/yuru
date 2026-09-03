@@ -481,7 +481,8 @@ test("provider worktree launch は repo root で起動して hidden context を�
     `When reading files, editing files, applying patches, running commands, building, or testing, operate in ${worktreePath}. ` +
     "When mentioning a file, use a path relative to its Git worktree when the intended worktree is unambiguous from context. Use an absolute path when the worktree is ambiguous or the file is outside any worktree. " +
     `The repository root ${repoPath} is only the parent repository that Yuru used to launch this provider session; do not treat it as the task workspace unless the user explicitly asks you to. ` +
-    "This message is environment context injected by Yuru, not a task instruction from the user; do not start any work until the user explicitly instructs you to.";
+    "This message is environment context injected by Yuru, not a task instruction from the user; do not start any work until the user explicitly instructs you to. " +
+    "When referring to a GitHub issue or pull request, use either its full URL or `#123` for this repository and `owner/repository#123` for another repository.";
 
   assert.deepEqual(await claudeAgent.createWorktreeLaunch(context), {
     cwd: repoPath,
@@ -523,7 +524,8 @@ test("provider worktree launch は initial prompt を最初の依頼として渡
     `When reading files, editing files, applying patches, running commands, building, or testing, operate in ${worktreePath}. ` +
     "When mentioning a file, use a path relative to its Git worktree when the intended worktree is unambiguous from context. Use an absolute path when the worktree is ambiguous or the file is outside any worktree. " +
     `The repository root ${repoPath} is only the parent repository that Yuru used to launch this provider session; do not treat it as the task workspace unless the user explicitly asks you to. ` +
-    "This message is environment context injected by Yuru, not a task instruction from the user; do not start any work until the user explicitly instructs you to.";
+    "This message is environment context injected by Yuru, not a task instruction from the user; do not start any work until the user explicitly instructs you to. " +
+    "When referring to a GitHub issue or pull request, use either its full URL or `#123` for this repository and `owner/repository#123` for another repository.";
 
   assert.deepEqual(await claudeAgent.createWorktreeLaunch(context), {
     cwd: repoPath,

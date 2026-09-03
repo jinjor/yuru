@@ -86,7 +86,7 @@ async function hasGhAuthenticated(cwd: string): Promise<boolean> {
   return value;
 }
 
-function parseGitHubRepoSlug(remoteUrl: string): string | null {
+export function parseGitHubRepoSlug(remoteUrl: string): string | null {
   const trimmed = remoteUrl.trim();
   const patterns = [
     /^git@github\.com:([^/]+\/[^/]+?)(?:\.git)?$/,
@@ -104,7 +104,7 @@ function parseGitHubRepoSlug(remoteUrl: string): string | null {
   return null;
 }
 
-async function getRepoSlug(repoPath: string): Promise<string | null> {
+export async function getGitHubRepoSlug(repoPath: string): Promise<string | null> {
   if (repoSlugCache.has(repoPath)) {
     return repoSlugCache.get(repoPath) ?? null;
   }
@@ -234,7 +234,7 @@ export async function fetchGitHubPullRequests(
   if (!(await hasGhAuthenticated(repoPath))) {
     return null;
   }
-  const repoSlug = await getRepoSlug(repoPath);
+  const repoSlug = await getGitHubRepoSlug(repoPath);
   if (!repoSlug) {
     return null;
   }

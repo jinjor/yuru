@@ -20,11 +20,17 @@ export type TerminalLink =
 // 相対パスは従来通り拡張子ありのみ。拡張子は `c++` のように + を含みうる。
 const filePathPattern =
   /(?:\/(?:[\w.+-]+\/)+[\w.+-]+|[\w./-][\w./-]*\.[\w+-]+)(?::(\d+)(?::\d+)?)?/g;
+const gitHubIssueOrPrReferencePattern =
+  /(^|[^\w./-])((?:[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)?#([1-9]\d*))(?![A-Za-z0-9_])/g;
 
-export function findTerminalLinks(lineText: string): TerminalLink[] {
+export function findTerminalLinks(
+  lineText: string,
+  currentGitHubRepoSlug: string | null = null,
+): TerminalLink[] {
   const urlLinks = findUrlLinks(lineText);
-  const fileLinks = findFileLinks(lineText, urlLinks);
-  return [...urlLinks, ...fileLinks].sort((a, b) => a.startIndex - b.startIndex);
+  const gitHubLinks = findGitHubIssueOrPrLinks(lineText, currentGitHubRepoSlug, urlLinks);
+  const fileLinks = findFileLinks(lineText, [...urlLinks, ...gitHubLinks]);
+  return [...urlLinks, ...gitHubLinks, ...fileLinks].sort((a, b) => a.startIndex - b.startIndex);
 }
 
 function findUrlLinks(lineText: string): TerminalLink[] {
@@ -36,6 +42,39 @@ function findUrlLinks(lineText: string): TerminalLink[] {
       url: match.url,
     };
   });
+}
+
+function findGitHubIssueOrPrLinks(
+  lineText: string,
+  currentGitHubRepoSlug: string | null,
+  urlLinks: readonly TerminalLink[],
+): TerminalLink[] {
+  const links: TerminalLink[] = [];
+  let match: RegExpExecArray | null;
+
+  gitHubIssueOrPrReferencePattern.lastIndex = 0;
+  while ((match = gitHubIssueOrPrReferencePattern.exec(lineText)) !== null) {
+    const text = match[2];
+    const startIndex = match.index + match[1].length;
+    if (overlapsAnyLink(startIndex, startIndex + text.length, urlLinks)) {
+      continue;
+    }
+
+    const hashIndex = text.lastIndexOf("#");
+    const repoSlug = hashIndex === 0 ? currentGitHubRepoSlug : text.slice(0, hashIndex);
+    if (!repoSlug) {
+      continue;
+    }
+    const issueNumber = text.slice(hashIndex + 1);
+    links.push({
+      kind: "url",
+      text,
+      startIndex,
+      // GitHub redirects this route to /pull/NNNN when the number belongs to a PR.
+      url: `https://github.com/${repoSlug}/issues/${issueNumber}`,
+    });
+  }
+  return links;
 }
 
 function findFileLinks(lineText: string, urlLinks: readonly TerminalLink[]): TerminalLink[] {

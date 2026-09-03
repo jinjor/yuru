@@ -67,6 +67,8 @@ export interface WorktreeListItem {
 export interface RepoListItem {
   id: string;
   repoPath: string;
+  // origin が github.com のときの owner/repository。Terminal の Issue / PR link に使う。
+  githubRepoSlug?: string;
   mainWorktree: WorktreeListItem;
   taskWorktrees: WorktreeListItem[];
 }

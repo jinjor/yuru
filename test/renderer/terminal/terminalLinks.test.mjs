@@ -43,6 +43,46 @@ test("findTerminalLinks は URL の内側を file link として重複検出し�
   ]);
 });
 
+test("findTerminalLinks は #番号を現在の GitHub repository の Issue / PR URL にする", () => {
+  assert.deepEqual(findTerminalLinks("Fixes #75.", "jinjor/yuru"), [
+    {
+      kind: "url",
+      text: "#75",
+      startIndex: 6,
+      url: "https://github.com/jinjor/yuru/issues/75",
+    },
+  ]);
+});
+
+test("findTerminalLinks は owner/repository#番号を外部 GitHub repository の URL にする", () => {
+  assert.deepEqual(findTerminalLinks("See cli/cli#1000 and #76", "jinjor/yuru"), [
+    {
+      kind: "url",
+      text: "cli/cli#1000",
+      startIndex: 4,
+      url: "https://github.com/cli/cli/issues/1000",
+    },
+    {
+      kind: "url",
+      text: "#76",
+      startIndex: 21,
+      url: "https://github.com/jinjor/yuru/issues/76",
+    },
+  ]);
+});
+
+test("findTerminalLinks は GitHub repository が不明なら裸の #番号をリンクにしない", () => {
+  assert.deepEqual(findTerminalLinks("See #75 and repo#76 and #77abc"), []);
+  assert.deepEqual(findTerminalLinks("See owner/repo#75"), [
+    {
+      kind: "url",
+      text: "owner/repo#75",
+      startIndex: 4,
+      url: "https://github.com/owner/repo/issues/75",
+    },
+  ]);
+});
+
 test("findTerminalLinks は拡張子のない絶対パスを検出する", () => {
   assert.deepEqual(findTerminalLinks("open /tmp/mock and /tmp/Dockerfile"), [
     {

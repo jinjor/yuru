@@ -79,8 +79,10 @@ Kimi の preview は従来どおり `state.json` の `lastPrompt` / `title` か�
 listener がいるときだけ読む (`SessionLogWatcher.hasListeners`)。
 どちらも既存の session monitor の同じ tick で確認し、bookmark 専用の polling は持たない。
 
-ブックマークの登録経路は 2 つ。ターミナルで URL リンクをクリックしたとき
-(`TerminalPanel` から `bookmarks:add` IPC) と、会話ログからの自動追加。
+ブックマークの登録経路は、ターミナルで URL または GitHub の Issue / PR 参照をクリックしたとき、
+Terminal ヘッダの PR バッジをクリックしたとき、および会話ログからの自動追加。
+Issue / PR 参照は、現在の GitHub repository の `#123` と、外部 repository の
+`owner/repository#123` を扱う。どちらも GitHub URL にしてから通常のクリック登録へ流す。
 自動追加は実験中の機能で、デフォルト OFF。`YURU_BOOKMARK_AUTO_CAPTURE=1` を付けて
 起動したときだけ session ログの watch を登録する。
 
@@ -180,15 +182,19 @@ task worktree に対して新規 session を開始すると、agent session id �
 初回起動時だけ worktree context を hidden prompt として注入する。
 この prompt は「agent session は repo root で起動しているが、実際の作業場所は task worktree である」ことを明示し、ファイル操作・コマンド実行・build/test は `worktreePath` で行い、回答中のファイルパスは `worktreePath` 基準の相対パスまたは絶対パスで記述するよう指示する。
 あわせて、このメッセージは Yuru が注入した環境コンテキストでありユーザーからのタスク指示ではないこと、ユーザーが明示するまで作業を開始しないことも指示する。
+GitHub の Issue / PR を参照するときは、現在の repository なら `#123`、外部 repository なら
+`owner/repository#123` と書くよう、Yuru 固定の指示も付加する。
 
 - Claude: `--append-system-prompt`
 - Codex: `-c developer_instructions=...`
+- Kimi: system prompt を起動ごとに追加する CLI option がないため、PTY に最初の user message として入力
 
 resume 時には worktree context を再注入しない。
 Codex は repo root から保存済み session を再開するため、resume command に `--all` を付ける。
 
-worktree context prompt は `~/.yuru/worktree-context-prompt.txt` で差し替えられる。
-ファイルがない場合は Yuru 組み込みの default template を使う。
+worktree context prompt の worktree 部分は `~/.yuru/worktree-context-prompt.txt` で差し替えられる。
+ファイルがない場合は Yuru 組み込みの default template を使う。GitHub 参照の指示は
+Yuru の Terminal link 規則なので、custom template にかかわらず末尾へ付加する。
 
 ## Operations
 

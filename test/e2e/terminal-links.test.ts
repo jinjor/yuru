@@ -1,13 +1,20 @@
-import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
+import { expect, test, type ElectronApplication, type Locator, type Page } from "@playwright/test";
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
 import {
   closeYuru,
   createCommittedRepo,
+  createGitWorktree,
   createE2eContext,
   expectPreviewPath,
+  git,
   launchWindow,
   openMainTerminal,
   registerRepo,
+  visibleWorktreeView,
+  worktreeCard,
 } from "./helpers";
+import { toWorktreeId } from "../../src/main/worktree-identity";
 
 // 実ブラウザを開かないよう shell.openExternal を記録用スタブに差し替える。
 async function stubOpenExternal(app: ElectronApplication): Promise<void> {
@@ -33,6 +40,24 @@ function collectDialogs(window: Page): string[] {
     void dialog.dismiss();
   });
   return dialogs;
+}
+
+async function clickTerminalRowStart(row: Locator, window: Page): Promise<void> {
+  const box = await row.boundingBox();
+  if (!box) {
+    throw new Error("Terminal row is not visible");
+  }
+  const x = box.x + 20;
+  const y = box.y + box.height / 2;
+  await window.mouse.move(x, y);
+  await window.mouse.click(x, y);
+}
+
+async function createFakeGh(home: string): Promise<string> {
+  const binDir = path.join(home, "bin");
+  await mkdir(binDir, { recursive: true });
+  await writeFile(path.join(binDir, "gh"), '#!/bin/sh\necho "Issue title"\n', { mode: 0o755 });
+  return `${binDir}:${process.env.PATH ?? ""}`;
 }
 
 test("OSC 8 ハイパーリンクのクリックは確認ダイアログなしで shell.openExternal に流れる", async () => {
@@ -145,6 +170,84 @@ test("ターミナルで URL リンクをクリックすると Bookmarks に登�
     await window.locator(".panel-tabs .tab", { hasText: "Bookmarks" }).click();
     await expect(window.locator(".bookmark-row")).toHaveCount(1);
     await expect(window.locator(".bookmarks-pane")).toContainText("http://example.com/clicked");
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+test("ターミナルで #番号をクリックすると現在の GitHub Issue / PR を開いて Bookmarks に登録する", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context);
+    git(["remote", "add", "origin", "https://github.com/jinjor/yuru.git"], repoDir);
+    await registerRepo(context, repoDir);
+    const launched = await launchWindow(context, {
+      env: { PATH: await createFakeGh(context.tmpHome) },
+    });
+    app = launched.app;
+    const window = launched.window;
+    await stubOpenExternal(app);
+
+    await openMainTerminal(window);
+    await window.locator(".xterm").click();
+    await window.keyboard.type("N=75; printf '#%s\\n' \"$N\"");
+    await window.keyboard.press("Enter");
+    const referenceRow = window.locator(".xterm-rows > div", { hasText: "#75" });
+    await expect(referenceRow).toBeVisible({ timeout: 10_000 });
+
+    await clickTerminalRowStart(referenceRow, window);
+
+    const expectedUrl = "https://github.com/jinjor/yuru/issues/75";
+    await expect.poll(() => openedExternalUrls(app!)).toEqual([expectedUrl]);
+    await window.locator(".panel-tabs .tab", { hasText: "Bookmarks" }).click();
+    const bookmark = window.locator(".bookmark-row", { hasText: expectedUrl });
+    await expect(bookmark).toHaveCount(1);
+    await expect(bookmark).toContainText("Issue title");
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+test("Terminal ヘッダの PR をクリックすると Bookmarks に登録する", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context);
+    const worktreePath = await createGitWorktree(context, repoDir, "bookmark-pr");
+    const repoId = await registerRepo(context, repoDir, [{ worktreePath }]);
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+    await stubOpenExternal(app);
+    await worktreeCard(window, "bookmark-pr").click();
+
+    const pullRequestUrl = "http://127.0.0.1:1/pull/74";
+    await app.evaluate(
+      ({ BrowserWindow }, update) => {
+        BrowserWindow.getAllWindows()[0]?.webContents.send("pullRequests:changed", [update]);
+      },
+      {
+        worktreeId: toWorktreeId(repoId, worktreePath),
+        pullRequest: {
+          prNumber: 74,
+          state: "open",
+          isApproved: false,
+          url: pullRequestUrl,
+        },
+      },
+    );
+
+    const sessionView = visibleWorktreeView(window);
+    const pullRequestBadge = sessionView.locator(".github-badge", { hasText: "Open #74" });
+    await expect(pullRequestBadge).toBeVisible();
+    await pullRequestBadge.click();
+
+    await expect.poll(() => openedExternalUrls(app!)).toEqual([pullRequestUrl]);
+    await sessionView.locator(".panel-tabs .tab", { hasText: "Bookmarks" }).click();
+    await expect(sessionView.locator(".bookmark-row", { hasText: pullRequestUrl })).toHaveCount(1);
   } finally {
     await closeYuru(app);
     await context.cleanup();

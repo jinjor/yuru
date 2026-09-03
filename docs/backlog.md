@@ -31,9 +31,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | B15 | bug | Terminal | ターミナルにフォーカスできないことがある | キーボード入力を始められないことがある |
 | B16 | bug | Changes / Diff | Committed の diff を正確にする | commit 済みの変更を正しい差分でレビューしたい |
 | F72 | feature | Files / Blame | GitLens みたいな blame 表示機能 | コードの各行が変更された経緯をファイル表示から確認したい |
-| F74 | feature | Terminal / Bookmarks | Terminal に表示されている PR のクリック時にもブックマークに登録する | Terminal から開いた PR を worktree の関連情報として残したい |
-| F75 | feature | Terminal / GitHub | Terminal の `#NNNN` から GitHub の Issue / PR にリンクする | Issue / PR 番号から対象をすぐに開きたい |
-| F76 | feature | Terminal / Bookmarks | Terminal の `#NNNN` のクリック時にもブックマークに登録する | 番号リンクから開いた Issue / PR も worktree の関連情報として残したい |
 | F77 | feature | Worktrees / Bookmarks | ブックマークが GitHub の Issue / PR ならステータスも表示する | 関連する Issue / PR の状態をブックマーク一覧で把握したい |
 
 ## Next

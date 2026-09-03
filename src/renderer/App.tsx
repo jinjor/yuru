@@ -334,7 +334,7 @@ export function App() {
         onMouseDown={handleSidebarResizeStart}
         aria-hidden="true"
       />
-      {keepAliveWorktrees.map((worktree) => (
+      {keepAliveWorktrees.map(({ repo, worktree }) => (
         <Activity
           key={worktree.worktreeId}
           mode={worktree.worktreeId === selectedWorktreeId ? "visible" : "hidden"}
@@ -343,9 +343,9 @@ export function App() {
             appRef={appRef}
             providers={availableProviders}
             rateLimitStops={rateLimitStops}
+            repo={repo}
             sidebarWidth={sidebarWidth}
             worktree={worktree}
-            worktreeId={worktree.worktreeId}
             onError={setToastError}
             onReorderPrimarySessions={handleReorderPrimarySessions}
             onSessionsChanged={refreshRepos}

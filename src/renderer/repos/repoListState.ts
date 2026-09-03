@@ -6,16 +6,29 @@ export function findWorktree(
   repos: RepoListItem[],
   worktreeId: string | null,
 ): WorktreeListItem | null {
+  const repo = findRepoForWorktree(repos, worktreeId);
+  if (!repo || !worktreeId) {
+    return null;
+  }
+  if (repo.mainWorktree.worktreeId === worktreeId) {
+    return repo.mainWorktree;
+  }
+  return repo.taskWorktrees.find((entry) => entry.worktreeId === worktreeId) ?? null;
+}
+
+function findRepoForWorktree(
+  repos: RepoListItem[],
+  worktreeId: string | null,
+): RepoListItem | null {
   if (!worktreeId) {
     return null;
   }
   for (const repo of repos) {
     if (repo.mainWorktree.worktreeId === worktreeId) {
-      return repo.mainWorktree;
+      return repo;
     }
-    const taskWorktree = repo.taskWorktrees.find((entry) => entry.worktreeId === worktreeId);
-    if (taskWorktree) {
-      return taskWorktree;
+    if (repo.taskWorktrees.some((entry) => entry.worktreeId === worktreeId)) {
+      return repo;
     }
   }
   return null;
@@ -85,26 +98,26 @@ export function collectKeepAliveWorktrees(
   repos: RepoListItem[],
   selectedWorktreeId: string | null,
   visitedWorktreeIds: ReadonlySet<string>,
-): WorktreeListItem[] {
-  const worktrees: WorktreeListItem[] = [];
+): Array<{ repo: RepoListItem; worktree: WorktreeListItem }> {
+  const worktrees: Array<{ repo: RepoListItem; worktree: WorktreeListItem }> = [];
   const collectedWorktreeIds = new Set<string>();
 
-  const collect = (worktree: WorktreeListItem): void => {
+  const collect = (repo: RepoListItem, worktree: WorktreeListItem): void => {
     if (collectedWorktreeIds.has(worktree.worktreeId)) {
       return;
     }
     collectedWorktreeIds.add(worktree.worktreeId);
-    worktrees.push(worktree);
+    worktrees.push({ repo, worktree });
   };
 
   for (const repo of repos) {
-    collect(repo.mainWorktree);
+    collect(repo, repo.mainWorktree);
     for (const worktree of repo.taskWorktrees) {
       if (
         worktree.worktreeId === selectedWorktreeId ||
         visitedWorktreeIds.has(worktree.worktreeId)
       ) {
-        collect(worktree);
+        collect(repo, worktree);
       }
     }
   }

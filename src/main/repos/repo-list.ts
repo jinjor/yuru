@@ -51,10 +51,13 @@ interface UnresolvedTerminalRuntimeWorktreeSession {
 
 interface RepoListSource {
   repo: RepoMetadata;
+  githubRepoSlug: string | null;
   taskWorktreeMetadataByPath: Map<string, TaskWorktreeMetadata>;
   gitWorktrees: readonly WorktreeInfo[];
   mainWorktree: WorktreeListSource;
 }
+
+type GetGitHubRepoSlug = (repoPath: string) => Promise<string | null>;
 
 export async function loadRepoList(
   terminalRuntimeIdsBySessionKey?: ReadonlyMap<string, TerminalRuntimeId>,
@@ -69,6 +72,7 @@ export async function loadRepoList(
   agentActivityStatesByTerminalRuntimeId?: ReadonlyMap<TerminalRuntimeId, AgentActivityState>,
   terminalRuntimeIdsByTaskWorktreePath?: ReadonlyMap<string, readonly string[]>,
   metadata: YuruMetadata = loadMetadata(),
+  getGitHubRepoSlug?: GetGitHubRepoSlug,
 ): Promise<RepoListItem[]> {
   const repoEntries = (
     await Promise.all(
@@ -81,9 +85,12 @@ export async function loadRepoList(
         if (!(await isSupportedGitRepo(repo.repoPath))) {
           return null;
         }
-        const gitWorktrees = await listGitWorktrees(repo.repoPath);
-        const mainWorktree = await loadMainWorktree(repo.repoPath);
-        return { repo, taskWorktreeMetadataByPath, gitWorktrees, mainWorktree };
+        const [gitWorktrees, mainWorktree, githubRepoSlug] = await Promise.all([
+          listGitWorktrees(repo.repoPath),
+          loadMainWorktree(repo.repoPath),
+          getGitHubRepoSlug?.(repo.repoPath) ?? null,
+        ]);
+        return { repo, githubRepoSlug, taskWorktreeMetadataByPath, gitWorktrees, mainWorktree };
       }),
     )
   ).filter((entry): entry is RepoListSource => entry !== null);
@@ -94,7 +101,8 @@ export async function loadRepoList(
     ? await loadSuggestedSessions(worktreePaths)
     : undefined;
 
-  return repoEntries.map(({ repo, taskWorktreeMetadataByPath, gitWorktrees, mainWorktree }) => {
+  return repoEntries.map((entry) => {
+    const { repo, githubRepoSlug, taskWorktreeMetadataByPath, gitWorktrees, mainWorktree } = entry;
     const taskWorktrees = sortWorktreesByOrder(gitWorktrees, repo.worktreeOrder).map(
       (gitWorktree) =>
         toWorktreeListItem(
@@ -115,6 +123,7 @@ export async function loadRepoList(
     return {
       id: repo.id,
       repoPath: repo.repoPath,
+      ...(githubRepoSlug ? { githubRepoSlug } : {}),
       mainWorktree: toWorktreeListItem(
         repo.id,
         mainWorktree,

@@ -3,9 +3,21 @@ import test from "node:test";
 
 import {
   buildGitHubPullRequestQuery,
+  parseGitHubRepoSlug,
   parseGitHubPullRequestsResponse,
   toVisiblePullRequest,
 } from "../../../src/main/github/github.ts";
+
+test("parseGitHubRepoSlug は GitHub の origin URL から owner/repository を取り出す", () => {
+  for (const remoteUrl of [
+    "git@github.com:jinjor/yuru.git",
+    "https://github.com/jinjor/yuru.git",
+    "ssh://git@github.com/jinjor/yuru.git",
+  ]) {
+    assert.equal(parseGitHubRepoSlug(remoteUrl), "jinjor/yuru");
+  }
+  assert.equal(parseGitHubRepoSlug("https://gitlab.com/jinjor/yuru.git"), null);
+});
 
 test("buildGitHubPullRequestQuery は branch ごとのエイリアスを 1 クエリに束ねる", () => {
   const query = buildGitHubPullRequestQuery("jinjor/yuru", ["feature-a", "feature-b"]);

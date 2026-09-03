@@ -11,6 +11,7 @@ export function findTerminalLinksInBufferLine(
   buffer: IBuffer,
   cols: number,
   bufferLineNumber: number,
+  currentGitHubRepoSlug: string | null = null,
 ): TerminalBufferLink[] {
   const tuiWrappedLink = findTuiWrappedFileLink(buffer, cols, bufferLineNumber);
   if (tuiWrappedLink) {
@@ -23,7 +24,7 @@ export function findTerminalLinksInBufferLine(
   }
 
   const lineText = segments.map((segment) => segment.text).join("");
-  return findTerminalLinks(lineText)
+  return findTerminalLinks(lineText, currentGitHubRepoSlug)
     .map((link): TerminalBufferLink => {
       const range = getBufferRange(segments, link.startIndex, link.startIndex + link.text.length);
       return { ...link, range };

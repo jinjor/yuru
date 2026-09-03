@@ -6,6 +6,7 @@ import { TerminalTabs, type TerminalTabsProps } from "./TerminalTabs";
 interface TerminalBarProps extends TerminalTabsProps {
   currentBranch: string | null;
   currentGitHub: GitHubPullRequest | null;
+  worktreeId: string;
 }
 
 export function TerminalBar({
@@ -17,6 +18,7 @@ export function TerminalBar({
   onSelectTerminalRuntime,
   primarySessions,
   selectedTerminalRuntimeId,
+  worktreeId,
 }: TerminalBarProps) {
   return (
     <div className="panel-header terminal-bar">
@@ -39,6 +41,9 @@ export function TerminalBar({
           <GitHubBadge
             github={currentGitHub}
             onClick={() => {
+              void window.electronAPI.addBookmark(worktreeId, currentGitHub.url).catch((error) => {
+                console.error("Failed to bookmark pull request URL.", error);
+              });
               void window.electronAPI.openExternal(currentGitHub.url).catch((error) => {
                 console.error("Failed to open pull request URL.", error);
               });

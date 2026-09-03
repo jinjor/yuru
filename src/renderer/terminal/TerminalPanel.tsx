@@ -6,6 +6,7 @@ import { findTerminalLinksInBufferLine } from "./terminalBufferLinks";
 
 interface TerminalPanelProps {
   changesPanelWidth: number;
+  currentGitHubRepoSlug: string | null;
   isPreviewOpen: boolean;
   onFileLinkActivate: (filePath: string, line?: number) => void;
   previewRatio: number;
@@ -29,6 +30,7 @@ interface WorktreeFileDropTarget {
 
 export function TerminalPanel({
   changesPanelWidth,
+  currentGitHubRepoSlug,
   isPreviewOpen,
   onFileLinkActivate,
   previewRatio,
@@ -112,6 +114,7 @@ export function TerminalPanel({
           term.buffer.active,
           term.cols,
           bufferLineNumber,
+          currentGitHubRepoSlug,
         );
 
         if (matches.length === 0) {
@@ -214,7 +217,7 @@ export function TerminalPanel({
       term.dispose();
       container.remove();
     };
-  }, [fitTerminal, registerUrlBookmark, terminalRuntimeId]);
+  }, [currentGitHubRepoSlug, fitTerminal, registerUrlBookmark, terminalRuntimeId]);
 
   useEffect(() => {
     if (!terminalRef.current) {

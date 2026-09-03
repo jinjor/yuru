@@ -14,7 +14,7 @@ import type {
   Result,
   WorktreeSessionSelection,
 } from "../../shared/ipc";
-import type { WorktreeListItem } from "../../shared/metadata";
+import type { RepoListItem, WorktreeListItem } from "../../shared/metadata";
 import type { RateLimitStop, SessionProvider, TerminalRuntimeId } from "../../shared/session";
 import { DiffPreviewPanel } from "../preview/DiffPreviewPanel";
 import { ExplorerPanel } from "../explorer/ExplorerPanel";
@@ -33,15 +33,19 @@ interface WorktreeViewProps {
   onError: (error: AppError) => void;
   providers: SessionProvider[];
   rateLimitStops: RateLimitStop[];
+  repo: RepoListItem;
   sidebarWidth: number;
-  worktree: WorktreeListItem | null;
-  worktreeId: string;
+  worktree: WorktreeListItem;
   // ホームの Sessions の並び替え。渡すのはこの worktree の全 primary session の key。
   onReorderPrimarySessions: (worktreeId: string, agentSessionKeys: string[]) => void;
   // session の開始・終了で変わる左ペインの dot / preview を更新するため、
   // App に repos の再取得を頼む。detach は取り直しの完了を待って表示を切り替えるので、
   // 再取得の完了で resolve する。
   onSessionsChanged: () => Promise<unknown>;
+}
+
+interface WorktreeViewContentProps extends Omit<WorktreeViewProps, "repo"> {
+  githubRepoSlug: string | null;
 }
 
 function isPathChanged(states: readonly GitPathState[], path: string): boolean {
@@ -71,17 +75,22 @@ function isPathChangedInScope(
   return Boolean(entry.indexStatus || entry.worktreeStatus);
 }
 
-export const WorktreeView = memo(function WorktreeView({
+export function WorktreeView({ repo, ...props }: WorktreeViewProps) {
+  return <WorktreeViewContent {...props} githubRepoSlug={repo.githubRepoSlug ?? null} />;
+}
+
+const WorktreeViewContent = memo(function WorktreeViewContent({
   appRef,
+  githubRepoSlug,
   onError,
   providers,
   rateLimitStops,
   sidebarWidth,
   worktree,
-  worktreeId,
   onReorderPrimarySessions,
   onSessionsChanged,
-}: WorktreeViewProps) {
+}: WorktreeViewContentProps) {
+  const { worktreeId } = worktree;
   // memo の実効性を E2E で固定するための、計測専用の意図的な render 副作用。
   // hidden 中は effect が動かないため、Step 3 の複数 instance 計測でも effect では代替できない。
   window.__yuruWorktreeViewRenderCounts ??= {};
@@ -92,7 +101,7 @@ export const WorktreeView = memo(function WorktreeView({
   // この worktree で明示的に選んだ terminal runtime。null はホームを表す。
   const [selectedTerminalRuntimeId, setSelectedTerminalRuntimeId] =
     useState<TerminalRuntimeId | null>(null);
-  const activeTerminalRuntimeIds = worktree?.activeTerminalRuntimeIds ?? [];
+  const activeTerminalRuntimeIds = worktree.activeTerminalRuntimeIds;
   // 選択した runtime が生きている間だけ表示する。fresh mount、ホーム選択、表示中 runtime
   // の exit はすべてホームになる。生死は props から導出するため hidden 中の exit も漏れない。
   const displayedTerminalRuntimeId =
@@ -111,8 +120,8 @@ export const WorktreeView = memo(function WorktreeView({
     sidebarWidth,
     worktreeViewColumnRef,
   });
-  const currentBranch = worktree?.branch ?? null;
-  const currentGitHub = worktree?.githubPullRequest ?? null;
+  const currentBranch = worktree.branch;
+  const currentGitHub = worktree.githubPullRequest ?? null;
   const previewPath = previewSelection?.path ?? null;
   const committedPreviewFile =
     previewSelection?.scope === "base" && reviewState?.kind === "ready"
@@ -220,7 +229,7 @@ export const WorktreeView = memo(function WorktreeView({
   // main worktree は選択しただけで standalone terminal を開く (生きている runtime の再利用は
   // openWorktreeTerminal の IPC 側が行う)。terminal の exit 後に自動で開き直すことはせず、
   // session start surface の Open Terminal から開く。
-  const isMainWorktree = worktree?.isMainWorktree === true;
+  const isMainWorktree = worktree.isMainWorktree === true;
   useEffect(() => {
     if (!isMainWorktree) {
       return;
@@ -335,7 +344,8 @@ export const WorktreeView = memo(function WorktreeView({
             activeTerminalRuntimeIds={activeTerminalRuntimeIds}
             currentBranch={currentBranch}
             currentGitHub={currentGitHub}
-            primarySessions={worktree?.primarySessions ?? []}
+            worktreeId={worktreeId}
+            primarySessions={worktree.primarySessions}
             selectedTerminalRuntimeId={displayedTerminalRuntimeId}
             onKillTerminalRuntime={(terminalRuntimeId) => {
               void killTerminalRuntime(terminalRuntimeId);
@@ -360,6 +370,7 @@ export const WorktreeView = memo(function WorktreeView({
             <TerminalPanel
               key={displayedTerminalRuntimeId}
               changesPanelWidth={paneLayout.changesPanelWidth}
+              currentGitHubRepoSlug={githubRepoSlug}
               isPreviewOpen={previewSelection !== null}
               onFileLinkActivate={(filePath, line) => {
                 void handleFileLinkActivate(filePath, line);

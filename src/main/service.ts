@@ -56,7 +56,7 @@ import {
   getImageFileDocument,
 } from "./preview/image-diff.js";
 import { hasLiveProcessInWorktree, listLiveProcessesInWorktree } from "./repos/process-check.js";
-import { getLastKnownGitHubPullRequest } from "./github/github.js";
+import { getGitHubRepoSlug, getLastKnownGitHubPullRequest } from "./github/github.js";
 import {
   listAllFiles as listAllRepoFiles,
   listFiles as listRepoFiles,
@@ -378,6 +378,7 @@ export class YuruService {
         primaryWorktreePathsBySessionKey,
       ),
       metadata,
+      getGitHubRepoSlug,
     );
   }
 

@@ -68,15 +68,26 @@ test("collectKeepAliveWorktrees は repo 順で main・訪問済み・選択中�
   // (keep-alive の単位は worktree であって session ではない)。
   assert.deepEqual(
     collectKeepAliveWorktrees(repos, "visited-selected", visitedWorktreeIds).map(
-      (entry) => entry.worktreeId,
+      ({ repo, worktree }) => [repo.id, worktree.worktreeId],
     ),
-    ["repo-a-main", "visited-selected", "repo-b-main", "visited-other"],
+    [
+      ["repo-a", "repo-a-main"],
+      ["repo-a", "visited-selected"],
+      ["repo-b", "repo-b-main"],
+      ["repo-b", "visited-other"],
+    ],
   );
 
   // 選択中は visited に無くても単独で含む。
   assert.deepEqual(
-    collectKeepAliveWorktrees(repos, "unvisited", new Set()).map((entry) => entry.worktreeId),
-    ["repo-a-main", "unvisited", "repo-b-main"],
+    collectKeepAliveWorktrees(repos, "unvisited", new Set()).map(
+      ({ repo, worktree }) => [repo.id, worktree.worktreeId],
+    ),
+    [
+      ["repo-a", "repo-a-main"],
+      ["repo-a", "unvisited"],
+      ["repo-b", "repo-b-main"],
+    ],
   );
 });
 
@@ -87,8 +98,13 @@ test("collectKeepAliveWorktrees は選択中の main worktree を重複させな
   const repos = [repo("repo-a", []), repo("repo-b", [duplicateMainId])];
 
   assert.deepEqual(
-    collectKeepAliveWorktrees(repos, "repo-a-main", new Set()).map((entry) => entry.worktreeId),
-    ["repo-a-main", "repo-b-main"],
+    collectKeepAliveWorktrees(repos, "repo-a-main", new Set()).map(
+      ({ repo, worktree }) => [repo.id, worktree.worktreeId],
+    ),
+    [
+      ["repo-a", "repo-a-main"],
+      ["repo-b", "repo-b-main"],
+    ],
   );
 });
 

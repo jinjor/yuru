@@ -12,6 +12,9 @@ const DEFAULT_WORKTREE_CONTEXT_PROMPT = [
   "This message is environment context injected by Yuru, not a task instruction from the user; do not start any work until the user explicitly instructs you to.",
 ].join(" ");
 
+const GITHUB_REFERENCE_PROMPT =
+  "When referring to a GitHub issue or pull request, use either its full URL or `#123` for this repository and `owner/repository#123` for another repository.";
+
 const TEMPLATE_PATH = "worktree-context-prompt.txt";
 
 // First sentence of the default template. Providers without launch-flag
@@ -26,12 +29,13 @@ export function worktreeContextPromptPath(): string {
 
 export async function loadWorktreeContextPrompt(context: WorktreeContext): Promise<string> {
   const template = await readTemplate();
-  return renderTemplate(template, {
+  const worktreePrompt = renderTemplate(template, {
     branchName: context.branchName,
     repoPath: context.repoPath,
     worktreeName: context.worktreeName,
     worktreePath: context.worktreePath,
   });
+  return `${worktreePrompt.trim()} ${GITHUB_REFERENCE_PROMPT}`.trim();
 }
 
 async function readTemplate(): Promise<string> {
