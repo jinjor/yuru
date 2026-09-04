@@ -65,13 +65,13 @@ function findGitHubIssueOrPrLinks(
     if (!repoSlug) {
       continue;
     }
-    const issueNumber = text.slice(hashIndex + 1);
+    const issueOrPrNumber = text.slice(hashIndex + 1);
     links.push({
       kind: "url",
       text,
       startIndex,
-      // GitHub redirects this route to /pull/NNNN when the number belongs to a PR.
-      url: `https://github.com/${repoSlug}/issues/${issueNumber}`,
+      // GitHub redirects this route to /issues/NNNN when the number belongs to an Issue.
+      url: `https://github.com/${repoSlug}/pull/${issueOrPrNumber}`,
     });
   }
   return links;

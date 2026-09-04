@@ -199,7 +199,7 @@ test("ターミナルで #番号をクリックすると現在の GitHub Issue /
 
     await clickTerminalRowStart(referenceRow, window);
 
-    const expectedUrl = "https://github.com/jinjor/yuru/issues/75";
+    const expectedUrl = "https://github.com/jinjor/yuru/pull/75";
     await expect.poll(() => openedExternalUrls(app!)).toEqual([expectedUrl]);
     await window.locator(".panel-tabs .tab", { hasText: "Bookmarks" }).click();
     const bookmark = window.locator(".bookmark-row", { hasText: expectedUrl });

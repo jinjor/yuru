@@ -49,7 +49,7 @@ test("findTerminalLinks は #番号を現在の GitHub repository の Issue / PR
       kind: "url",
       text: "#75",
       startIndex: 6,
-      url: "https://github.com/jinjor/yuru/issues/75",
+      url: "https://github.com/jinjor/yuru/pull/75",
     },
   ]);
 });
@@ -60,13 +60,13 @@ test("findTerminalLinks は owner/repository#番号を外部 GitHub repository �
       kind: "url",
       text: "cli/cli#1000",
       startIndex: 4,
-      url: "https://github.com/cli/cli/issues/1000",
+      url: "https://github.com/cli/cli/pull/1000",
     },
     {
       kind: "url",
       text: "#76",
       startIndex: 21,
-      url: "https://github.com/jinjor/yuru/issues/76",
+      url: "https://github.com/jinjor/yuru/pull/76",
     },
   ]);
 });
@@ -78,7 +78,7 @@ test("findTerminalLinks は GitHub repository が不明なら裸の #番号を�
       kind: "url",
       text: "owner/repo#75",
       startIndex: 4,
-      url: "https://github.com/owner/repo/issues/75",
+      url: "https://github.com/owner/repo/pull/75",
     },
   ]);
 });
