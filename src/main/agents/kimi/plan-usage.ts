@@ -7,12 +7,6 @@ const TIMEOUT_MS = 15_000;
 // 起動時に標準出力へ出る URL。--port 0 を渡すと実際に割り当てられたポートがここに出る。
 // token は初回起動時に kimi が自動生成して保存するもので、ユーザーの用意は要らない。
 const SERVER_URL_PATTERN = /http:\/\/127\.0\.0\.1:(\d+)\/#token=([A-Za-z0-9_-]+)/;
-const FIVE_HOUR_LABEL_PATTERN = /^(\d+)h limit$/;
-// 残り時間の表示は分単位で切り捨てられている (秒が出るのは残り 1 分未満のときだけ)。
-// 読んだ値をそのまま足すと実際のリセットより最大 1 分早い時刻になり、その時刻で続きを
-// 送ると同じ rate limit で断られる。切り捨てられうる 1 分を足して、確実にリセット後に
-// なる時刻を返す。
-const RESET_HINT_TRUNCATION_MS = 60_000;
 
 // kimi はプランの利用状況を返す口をローカルサーバ側に持っている (`kimi web` が立てる
 // REST の /oauth/usage)。その先は kimi 自身が OAuth トークンを付けて upstream を引く。
@@ -33,11 +27,10 @@ export async function loadKimiPlanUsage(command: ResolvedAgentCommand): Promise<
           `kimi usage request failed: ${isRecord(usage) ? String(usage.message) : "unreadable response"}`,
         );
       }
-      const fetchedAt = Date.now();
       return {
         state: "ok",
-        fiveHour: toWindow(findFiveHourRow(usage.limits), fetchedAt),
-        weekly: toWindow(usage.summary, fetchedAt),
+        fiveHour: toWindow(findFiveHourRow(usage.limits)),
+        weekly: toWindow(usage.summary),
       };
     },
   );
@@ -92,60 +85,41 @@ async function getJson(server: KimiServer, path: string): Promise<unknown> {
   return body.data;
 }
 
-// 5 時間枠は limits[] に入るが、どの枠かを見分ける手掛かりは表示用の label しかない
-// (kimi が upstream の窓の長さから "5h limit" のように組み立てている)。label から
-// 長さを読めなければ、間違った数字を出すより枠が無いものとして扱う。
-function findFiveHourRow(limits: unknown): unknown {
+// 5 時間枠は limits[] に入る。各枠は window: { duration, unit } (例: { duration: 5,
+// unit: "hour" }) で窓の長さを持つので、どの枠かはこれで見分ける。読めなければ、
+// 間違った数字を出すより枠が無いものとして扱う。
+export function findFiveHourRow(limits: unknown): unknown {
   if (!Array.isArray(limits)) {
     return null;
   }
   return (
     limits.find((row) => {
-      if (!isRecord(row) || typeof row.label !== "string") {
+      if (!isRecord(row) || !isRecord(row.window)) {
         return false;
       }
-      const match = FIVE_HOUR_LABEL_PATTERN.exec(row.label);
-      return match !== null && Number(match[1]) === 5;
+      return row.window.duration === 5 && row.window.unit === "hour";
     }) ?? null
   );
 }
 
-function toWindow(raw: unknown, fetchedAt: number): PlanUsageWindow | null {
+function toWindow(raw: unknown): PlanUsageWindow | null {
   if (!isRecord(raw)) {
     return null;
   }
   if (typeof raw.used !== "number" || typeof raw.limit !== "number" || raw.limit <= 0) {
     throw new Error("kimi usage row has no usable used/limit");
   }
+  // リセット時刻は ISO 8601 の reset_at で返る。欠けていたり解釈できない文字列は
+  // null にする (推測で時刻を作らない)。
   return {
     usedPercent: (raw.used / raw.limit) * 100,
-    resetsAt:
-      typeof raw.reset_hint === "string" ? parseKimiResetHint(raw.reset_hint, fetchedAt) : null,
+    resetsAt: typeof raw.reset_at === "string" ? toEpochMs(raw.reset_at) : null,
   };
 }
 
-// kimi はリセットを絶対時刻ではなく "resets in 6d 5h 28m" という表示用の文字列でしか
-// 返さない。0 でない単位だけを空白区切りで並べる形 ("6d 5h 28m" / "2h 28m" / "12m" /
-// "30s") と決まっているので、取得時刻に足して絶対時刻へ直す。切り捨てぶんの
-// RESET_HINT_TRUNCATION_MS も足す。リセット済みを表す "reset" や、解釈できない
-// 文字列は null にする (推測で時刻を作らない)。
-export function parseKimiResetHint(hint: string, fetchedAt: number): number | null {
-  const remaining = /^resets in (.+)$/.exec(hint);
-  if (!remaining) {
-    return null;
-  }
-  const parts = /^(?:(\d+)d)?\s*(?:(\d+)h)?\s*(?:(\d+)m)?\s*(?:(\d+)s)?$/.exec(remaining[1].trim());
-  if (!parts || parts.slice(1).every((part) => part === undefined)) {
-    return null;
-  }
-  const [days, hours, minutes, seconds] = parts
-    .slice(1)
-    .map((part) => (part === undefined ? 0 : Number(part)));
-  return (
-    fetchedAt +
-    ((days * 24 + hours) * 3600 + minutes * 60 + seconds) * 1000 +
-    RESET_HINT_TRUNCATION_MS
-  );
+function toEpochMs(value: string): number | null {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

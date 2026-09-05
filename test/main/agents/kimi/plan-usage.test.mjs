@@ -1,31 +1,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseKimiResetHint } from "../../../../src/main/agents/kimi/plan-usage.ts";
+import { findFiveHourRow } from "../../../../src/main/agents/kimi/plan-usage.ts";
 
-const fetchedAt = Date.parse("2026-08-09T10:00:00.000Z");
-// 表示は分単位で切り捨てられているので、実際のリセットに届くよう 1 分足される。
-const truncation = 60 * 1000;
-
-test("kimi の残り時間表記を絶対時刻に直す", () => {
-  assert.equal(
-    parseKimiResetHint("resets in 6d 5h 28m", fetchedAt),
-    fetchedAt + ((6 * 24 + 5) * 3600 + 28 * 60) * 1000 + truncation,
-  );
-  assert.equal(
-    parseKimiResetHint("resets in 2h 28m", fetchedAt),
-    fetchedAt + (2 * 3600 + 28 * 60) * 1000 + truncation,
-  );
-  assert.equal(parseKimiResetHint("resets in 12m", fetchedAt), fetchedAt + 12 * 60 * 1000 + truncation);
-  // 秒は他の単位が 0 のときだけ出る。
-  assert.equal(parseKimiResetHint("resets in 30s", fetchedAt), fetchedAt + 30 * 1000 + truncation);
+test("limits の中から 5 時間枠を window の長さで見つける", () => {
+  const fiveHour = {
+    window: { duration: 5, unit: "hour" },
+    used: 6,
+    limit: 100,
+    reset_at: "2026-09-05T04:37:59.075132Z",
+  };
+  const weekly = {
+    window: { duration: 1, unit: "week" },
+    used: 73,
+    limit: 100,
+    reset_at: "2026-09-05T15:37:59.075132Z",
+  };
+  assert.equal(findFiveHourRow([weekly, fiveHour]), fiveHour);
 });
 
-test("リセット済み・解釈できない表記は時刻を作らない", () => {
-  // 既にリセットされている。
-  assert.equal(parseKimiResetHint("reset", fetchedAt), null);
-  // upstream の時刻を kimi 側が解釈できなかったときの形。
-  assert.equal(parseKimiResetHint("resets at 2026-08-14T20:00:00+09:00", fetchedAt), null);
-  assert.equal(parseKimiResetHint("", fetchedAt), null);
-  assert.equal(parseKimiResetHint("resets in soon", fetchedAt), null);
+test("5 時間枠が無い、または形を読めないときは null", () => {
+  assert.equal(findFiveHourRow([{ window: { duration: 1, unit: "week" } }]), null);
+  // 窓の長さが違う枠は拾わない。
+  assert.equal(findFiveHourRow([{ window: { duration: 5, unit: "minute" } }]), null);
+  // window を持たない形 (旧レスポンスなど) は読めないので無いものとして扱う。
+  assert.equal(findFiveHourRow([{ label: "5h limit", used: 6, limit: 100 }]), null);
+  assert.equal(findFiveHourRow([]), null);
+  assert.equal(findFiveHourRow(null), null);
 });
