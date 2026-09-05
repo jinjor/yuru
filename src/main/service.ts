@@ -1732,16 +1732,30 @@ export class YuruService {
     terminalRuntimeId: string,
     bookmarkTarget: BookmarkCaptureTarget,
   ): Promise<void> {
+    let agentSessionId: string;
     try {
-      const agentSessionId = await agent.waitForSessionId(pending);
-      if (pending.exited) {
-        return;
+      agentSessionId = await agent.waitForSessionId(pending);
+    } catch (error) {
+      // Exiting cancels initialization. A live process that fails to initialize
+      // must report the failure and release its runtime, just like eager startup.
+      if (!pending.exited) {
+        pending.startupFailureReported = true;
+        recordAppError(toAppError(error, { command: agent.command }));
+        pending.proc.kill();
       }
-      pending.agentSessionId = agentSessionId;
-      pending.startupSettled = true;
-      if (!this.terminalRuntimeMap.has(terminalRuntimeId)) {
-        return;
-      }
+      return;
+    }
+    if (pending.exited) {
+      return;
+    }
+    pending.agentSessionId = agentSessionId;
+    pending.startupSettled = true;
+    if (!this.terminalRuntimeMap.has(terminalRuntimeId)) {
+      return;
+    }
+    // 以降は session が動き出した後の登録処理。ここで失敗しても session 自体は使えるので、
+    // 起動失敗として扱わない (kill しない)。
+    try {
       // primary を先に attach し、runtime の ID 更新まで await を挟まない。一覧取得からは、
       // launch target 上の ID 未確定 runtime か、primary に結びついた既知 runtime の
       // どちらかとしてだけ観測される。
@@ -1758,11 +1772,16 @@ export class YuruService {
         true,
         bookmarkTarget,
       );
-      this.deliverInitialMessages(agent, pending);
+      void this.deliverInitialPrompt(agent, pending);
       await this.events.refreshWorktreeWatcher();
       this.events.repoListChanged();
-    } catch {
-      // Codex can stay active before it persists a resumable session; ignore resolution failures here.
+    } catch (error) {
+      console.warn("[Yuru] failed to register the resolved session", {
+        terminalRuntimeId,
+        provider: pending.provider,
+        agentSessionId,
+        error,
+      });
     }
   }
 
@@ -2155,31 +2174,16 @@ export class YuruService {
     return this.resumePrimaryWorktreeSession(worktreeId, agentSessionKey);
   }
 
-  private deliverInitialMessages(agent: Agent, pending: PendingSession): void {
-    void (async () => {
-      if (pending.initialInput !== null) {
-        await this.deliverInitialMessage(agent, pending, pending.initialInput, "context");
-      }
-      if (pending.initialPrompt !== null) {
-        await this.deliverInitialMessage(agent, pending, pending.initialPrompt, "prompt");
-      }
-    })();
-  }
-
-  private async deliverInitialMessage(
-    agent: Agent,
-    pending: PendingSession,
-    initialInput: string,
-    kind: "context" | "prompt",
-  ): Promise<void> {
-    if (pending.exited) {
+  private async deliverInitialPrompt(agent: Agent, pending: PendingSession): Promise<void> {
+    const initialPrompt = pending.initialPrompt;
+    if (pending.exited || initialPrompt === null) {
       return;
     }
     const agentSessionId = pending.agentSessionId;
     const hasRecordedInitialInput = agent.hasRecordedInitialInput;
     const verify =
       hasRecordedInitialInput && agentSessionId
-        ? () => hasRecordedInitialInput(agentSessionId, initialInput)
+        ? () => hasRecordedInitialInput(agentSessionId, initialPrompt)
         : undefined;
     // node-pty throws when writing to an exited process; guard each write.
     const writer = {
@@ -2191,7 +2195,7 @@ export class YuruService {
     };
     this.markTerminalRuntimeInput(pending.terminalRuntimeId);
     try {
-      const verified = await deliverInitialInput(writer, initialInput, { verify });
+      const verified = await deliverInitialInput(writer, initialPrompt, { verify });
       if (verified) {
         return;
       }
@@ -2202,15 +2206,9 @@ export class YuruService {
       });
       recordAppWarning({
         code: "unknown",
-        message:
-          kind === "context"
-            ? `The worktree instructions may not have been delivered to the ${agent.definition.label} session.`
-            : `The initial prompt may not have been delivered to the ${agent.definition.label} session.`,
+        message: `The initial prompt may not have been delivered to the ${agent.definition.label} session.`,
         detail:
-          kind === "context"
-            ? "The session started in the repository root without its task worktree context. " +
-              "Confirm where it is working before relying on it, or restart the session."
-            : "The session started without the requested first task. Confirm its conversation before relying on it, or send the prompt again.",
+          "The session started without the requested first task. Confirm its conversation before relying on it, or send the prompt again.",
       });
     } catch (error) {
       console.warn("[Yuru] failed to deliver initial input", {
@@ -2249,7 +2247,7 @@ export class YuruService {
       true,
       bookmarkTarget,
     );
-    this.deliverInitialMessages(agent, pending);
+    void this.deliverInitialPrompt(agent, pending);
     return terminalRuntimeId;
   }
 }

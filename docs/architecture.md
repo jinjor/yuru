@@ -189,6 +189,19 @@ GitHub の Issue / PR を参照するときは、現在の repository なら `#1
 - Codex: `-c developer_instructions=...`
 - Kimi: system prompt を起動ごとに追加する CLI option がないため、PTY に最初の user message として入力
 
+Kimi は最初の message を受け取るまで session を作らない（CLI 0.40.1 で確認）。
+そのため session id 未確定のまま runtime を開始し、editor が入力可能になってからこの message を送り、
+それで作られた session id を後から attach する。入力準備・context 送信・保存確認は
+provider の `waitForSessionId` 内で完了する。共通の service は返された ID の登録と監視開始を担当し、
+その後にユーザーの初期依頼を送る。
+
+初期化中の trust/login 画面を操作できるよう、Kimi の端末は ID 確定前に表示する。
+入力可能になるのを待つ間は期限を設けない。この待ちは人間の操作待ちでもあり、
+期限で打ち切ると trust/login に答えている最中の端末を消してしまう。
+context を送った後に保存を確認できなかったときだけ、エラー通知して起動プロセスを終了する。
+Kimi の起動 cwd は worktree ではなく repo root なので、context の届いていない session を
+生かしておくと repo root を作業対象だと思い込んだまま動いてしまう。
+
 resume 時には worktree context を再注入しない。
 Codex は repo root から保存済み session を再開するため、resume command に `--all` を付ける。
 

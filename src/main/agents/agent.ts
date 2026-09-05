@@ -30,11 +30,9 @@ export interface LaunchRequest {
   args: string[];
   worktreePath: string;
   existingAgentSessionIds?: ReadonlySet<string>;
-  // Message typed into the PTY as the first user prompt once the session is
-  // up. Used by providers without a launch-flag injection mechanism.
+  // Startup context delivered by the provider during waitForSessionId.
   initialInput?: string;
-  // Message typed after initialInput. Kimi uses this for the requested task
-  // because its worktree context already occupies the first user message.
+  // Requested task typed by the runtime after provider initialization.
   initialPrompt?: string;
 }
 
@@ -85,6 +83,8 @@ export interface Agent {
   loadPlanUsage(command: ResolvedAgentCommand): Promise<PlanUsage>;
   createResumeLaunch(session: ResumeSessionTarget): Promise<LaunchRequest>;
   createWorktreeLaunch(context: WorktreeContext): Promise<LaunchRequest>;
+  // Complete provider-specific initialization, including initialInput delivery,
+  // and return the session ID. The runtime owns registration and monitoring.
   waitForSessionId(pending: PendingSession): Promise<string>;
   // Agent TUIs can keep repainting while requiring user action. This only
   // detects an agent-specific signal; false does not determine the overall
@@ -94,8 +94,7 @@ export interface Agent {
   // rate limiting. Reads the agent's own record of the refusal; agents that do
   // not record one leave this out and never auto-continue.
   isStoppedByRateLimit?(agentSessionId: string): Promise<boolean>;
-  // Whether the agent recorded the injected initialInput into the session
-  // store. Only providers that launch with initialInput implement this; the
-  // runtime uses it to verify the injection did not get lost.
+  // Whether the agent recorded a terminal-submitted message into its session
+  // store. The runtime uses this to verify delivery of initialPrompt.
   hasRecordedInitialInput?(agentSessionId: string, initialInput: string): Promise<boolean>;
 }

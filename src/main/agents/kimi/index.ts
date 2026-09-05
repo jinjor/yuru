@@ -12,7 +12,7 @@ import {
   loadWorktreeContextPrompt,
   WORKTREE_CONTEXT_PROMPT_MARKER,
 } from "../worktree-context-prompt.js";
-import { assertValidTerminalInput } from "../../terminal/initial-input.js";
+import { assertValidTerminalInput, deliverInitialInput } from "../../terminal/initial-input.js";
 import {
   kimiSessionIndexPath,
   kimiSessionStatePath,
@@ -38,6 +38,12 @@ interface KimiSessionState {
 // Kimi has no model-facing initial-message input for its interactive TUI yet:
 // https://github.com/MoonshotAI/kimi-code/issues/2507
 const KIMI_USER_MESSAGE_PREFIX = "User request:\n\n";
+
+// Kimi prints "No session yet — one will be created on your first message."
+// once its session-less editor is ready. Only the opening words are matched so
+// the notice is still found when a narrow terminal wraps it.
+const KIMI_TUI_READY_MARKER = "No session yet";
+const TUI_READY_POLL_INTERVAL_MS = 300;
 
 function toKimiUserMessage(initialPrompt: string): string {
   assertValidTerminalInput(initialPrompt);
@@ -311,26 +317,82 @@ async function loadWorktreeSessionHints(
 }
 
 async function waitForSessionId(pending: PendingSession): Promise<string> {
+  const initialInput = pending.initialInput;
+  if (initialInput === null) {
+    throw new Error("Kimi session initialization requires worktree context");
+  }
+  await waitForInitialInputReady(pending);
+
+  // The first message is what creates the session, so sending the worktree
+  // context and finding the session it produced are one step. Delivery counts
+  // as done only once that context is recorded, which also lets the runtime
+  // send the requested task afterwards without resending the context.
+  let createdAgentSessionId: string | null = null;
+  const delivered = await deliverInitialInput(
+    {
+      write(data) {
+        if (pending.exited) {
+          throw new Error("Kimi exited before creating a session");
+        }
+        pending.proc.write(data);
+      },
+    },
+    initialInput,
+    {
+      verify: async () => {
+        if (pending.exited) {
+          throw new Error("Kimi exited before creating a session");
+        }
+        createdAgentSessionId = await findSessionRecordingInput(pending, initialInput);
+        return createdAgentSessionId !== null;
+      },
+    },
+  );
+  if (!delivered || createdAgentSessionId === null) {
+    throw new Error("Kimi did not record the worktree context sent as its first message");
+  }
+  return createdAgentSessionId;
+}
+
+// The session this launch created is the new one under its workDir that
+// recorded the context we sent. Every worktree of a repository launches Kimi in
+// the repository root, so two launches can create a session under the same
+// workDir at once; the recorded context is what tells them apart.
+async function findSessionRecordingInput(
+  pending: PendingSession,
+  initialInput: string,
+): Promise<string | null> {
   // The index records workDir realpath-resolved; compare normalized paths.
   const launchWorkDir = normalizeRealPath(pending.launchCwd);
-  // The index entry appears right at TUI startup (~1.6s measured), well
-  // before the first prompt, so polling for ~15s is ample.
-  for (let attempt = 0; attempt < 50; attempt++) {
-    const entries = await readKimiSessionIndex();
-    const match = entries.find(
-      (entry) =>
-        !pending.existingAgentSessionIds.has(entry.agentSessionId) &&
-        normalizeRealPath(entry.workDir) === launchWorkDir,
-    );
-    if (match) {
-      return match.agentSessionId;
+  for (const entry of await readKimiSessionIndex()) {
+    if (
+      pending.existingAgentSessionIds.has(entry.agentSessionId) ||
+      normalizeRealPath(entry.workDir) !== launchWorkDir
+    ) {
+      continue;
     }
-    if (pending.exited) {
-      throw new Error("Kimi exited before creating a session");
+    if (await hasRecordedInitialInput(entry.agentSessionId, initialInput)) {
+      return entry.agentSessionId;
     }
-    await setTimeout(300);
   }
-  throw new Error("Timeout waiting for Kimi session initialization");
+  return null;
+}
+
+// A workspace-trust or login screen is rendered before this notice and waits
+// for the user to answer it, so this wait has no deadline of its own; only the
+// process exiting ends it. Waiting for the notice also keeps the worktree
+// context out of those screens.
+async function waitForInitialInputReady(pending: PendingSession): Promise<void> {
+  for (;;) {
+    if (pending.exited) {
+      throw new Error("Kimi exited before accepting initial input");
+    }
+    const screen = await pending.screen.serialize();
+    if (screen.includes(KIMI_TUI_READY_MARKER)) {
+      return;
+    }
+    await setTimeout(TUI_READY_POLL_INTERVAL_MS);
+  }
 }
 
 async function hasRecordedInitialInput(
@@ -360,7 +422,7 @@ export const agent: Agent = {
     label: "Kimi",
   },
   command: "kimi",
-  resolvesSessionIdLazily: false,
+  resolvesSessionIdLazily: true,
   loadStoredSessions,
   loadStoredSessionPreview,
   watchSessionMessages,

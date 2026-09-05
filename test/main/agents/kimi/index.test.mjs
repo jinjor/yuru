@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { setTimeout } from "node:timers/promises";
 
 const previousHome = process.env.HOME;
 const previousKimiCodeHome = process.env.KIMI_CODE_HOME;
@@ -40,11 +41,25 @@ function writeKimiSession({ sessionId, workDir, state, wireMessages }) {
     fs.writeFileSync(path.join(sessionDir, "state.json"), JSON.stringify(state));
   }
   if (wireMessages) {
-    fs.writeFileSync(
-      path.join(sessionDir, "agents", "main", "wire.jsonl"),
-      `${wireMessages.map((message) => JSON.stringify(message)).join("\n")}\n`,
-    );
+    fs.writeFileSync(kimiWireLogPath(sessionId), toWireLines(wireMessages));
   }
+}
+
+function kimiWireLogPath(sessionId) {
+  return path.join(kimiDir, "sessions", "wd_fixture_000000000000", sessionId, "agents", "main", "wire.jsonl");
+}
+
+function toWireLines(wireMessages) {
+  return `${wireMessages.map((message) => JSON.stringify(message)).join("\n")}\n`;
+}
+
+function appendKimiUserMessage(sessionId, content) {
+  fs.appendFileSync(
+    kimiWireLogPath(sessionId),
+    toWireLines([
+      { type: "context.append_message", message: { role: "user", content, origin: { kind: "user" } } },
+    ]),
+  );
 }
 
 // このテストは fixture を書く他のテストより先に実行される必要がある
@@ -57,6 +72,165 @@ test("kimi store が無くても空を返し他 provider の一覧を壊さな�
 
   const suggestions = await loadSuggestedWorktreeSessions(["/nowhere"]);
   assert.equal(suggestions.size, 0);
+});
+
+test("新規 Kimi session は ID 未確定のまま起動する", () => {
+  assert.equal(kimiAgent.resolvesSessionIdLazily, true);
+});
+
+// trust / login の画面は答えるまで出たままになるので、入力準備待ちに期限はない。
+test("Kimi 初期化は入力可能になるまで何も書き込まず、待ち続ける", async () => {
+  const workDir = path.join(tempDir, "trust-prompt");
+  fs.mkdirSync(workDir);
+  const writes = [];
+  const pending = {
+    agentSessionId: null,
+    launchCwd: workDir,
+    existingAgentSessionIds: new Set(),
+    initialInput: "startup context",
+    initialPrompt: null,
+    exited: false,
+    proc: {
+      write(data) {
+        writes.push(data);
+      },
+    },
+    screen: {
+      async serialize() {
+        return "Trust this folder?";
+      },
+    },
+  };
+
+  const settled = await Promise.race([
+    kimiAgent.waitForSessionId(pending).then(
+      () => "resolved",
+      () => "rejected",
+    ),
+    setTimeout(2_000, "still waiting"),
+  ]);
+
+  assert.equal(settled, "still waiting");
+  assert.deepEqual(writes, []);
+  // 待ちを終わらせるのは process の終了だけ。
+  pending.exited = true;
+});
+
+test("Kimi 初期化は入力準備後に context を一度送り、その記録を確認して ID を返す", async () => {
+  const workDir = path.join(tempDir, "startup");
+  fs.mkdirSync(workDir);
+  const initialInput = "Yuru startup context\nUse the task worktree.";
+  const screens = ["Trust this folder?", "No session yet"];
+  let reads = 0;
+  const writes = [];
+
+  const sessionId = await kimiAgent.waitForSessionId({
+    agentSessionId: null,
+    launchCwd: workDir,
+    existingAgentSessionIds: new Set(),
+    initialInput,
+    initialPrompt: "Requested task sent by the runtime after initialization",
+    exited: false,
+    proc: {
+      write(data) {
+        assert.equal(reads, 2, "trust prompt 中には書き込まない");
+        writes.push(data);
+        if (data === "\r") {
+          writeKimiSession({ sessionId: "session_startup", workDir, wireMessages: [] });
+          // index は user message が保存されるより先に現れることがある。
+          setTimeout(100).then(() => appendKimiUserMessage("session_startup", initialInput));
+        }
+      },
+    },
+    screen: {
+      async serialize() {
+        return screens[Math.min(reads++, screens.length - 1)];
+      },
+    },
+  });
+
+  assert.equal(sessionId, "session_startup");
+  assert.equal(await kimiAgent.hasRecordedInitialInput(sessionId, initialInput), true);
+  assert.deepEqual(writes, [`\u001b[200~${initialInput}\u001b[201~`, "\r"]);
+});
+
+// 同じ repo の別 worktree はどちらも repo root で Kimi を起動するため、workDir だけでは
+// 自分の session を選べない。送った context が記録されているかで見分ける。
+test("Kimi 初期化は同じ workDir に他の新規 session があっても自分の session を返す", async () => {
+  const workDir = path.join(tempDir, "concurrent");
+  fs.mkdirSync(workDir);
+  const initialInput = "Yuru startup context for the second worktree";
+  writeKimiSession({
+    sessionId: "session_other_launch",
+    workDir,
+    wireMessages: [
+      {
+        type: "context.append_message",
+        message: {
+          role: "user",
+          content: "Yuru startup context for the first worktree",
+          origin: { kind: "user" },
+        },
+      },
+    ],
+  });
+
+  const sessionId = await kimiAgent.waitForSessionId({
+    agentSessionId: null,
+    launchCwd: workDir,
+    // 起動時点の snapshot なので、同時に走る別の起動が作った session は含まれない。
+    existingAgentSessionIds: new Set(),
+    initialInput,
+    initialPrompt: null,
+    exited: false,
+    proc: {
+      write(data) {
+        if (data === "\r") {
+          writeKimiSession({ sessionId: "session_mine", workDir, wireMessages: [] });
+          appendKimiUserMessage("session_mine", initialInput);
+        }
+      },
+    },
+    screen: {
+      async serialize() {
+        return "No session yet";
+      },
+    },
+  });
+
+  assert.equal(sessionId, "session_mine");
+});
+
+test("context が記録されなければ Kimi 初期化は失敗する", { timeout: 20_000 }, async () => {
+  const workDir = path.join(tempDir, "context-record");
+  fs.mkdirSync(workDir);
+  const writes = [];
+
+  await assert.rejects(
+    kimiAgent.waitForSessionId({
+      agentSessionId: null,
+      launchCwd: workDir,
+      existingAgentSessionIds: new Set(),
+      initialInput: "startup context that never gets recorded",
+      initialPrompt: null,
+      exited: false,
+      screen: {
+        async serialize() {
+          return "No session yet";
+        },
+      },
+      proc: {
+        write(data) {
+          writes.push(data);
+          if (data === "\r") {
+            writeKimiSession({ sessionId: "session_no_context", workDir, wireMessages: [] });
+          }
+        },
+      },
+    }),
+    { message: "Kimi did not record the worktree context sent as its first message" },
+  );
+  assert.equal(writes.length, 2);
 });
 
 test("workDir が一致する session をその worktree の suggested として返す", async () => {
