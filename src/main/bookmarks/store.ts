@@ -45,6 +45,12 @@ export function loadBookmarks(worktreePath: string): Bookmark[] {
   return loadStore().worktrees[path.resolve(worktreePath)] ?? [];
 }
 
+// 全 worktree のブックマーク。ステータスのポーリングが tick ごとに全体を見るので、
+// worktree ごとに読み直さずに 1 回で済ませる。キーは path.resolve 済みの worktree path。
+export function loadAllBookmarks(): Map<string, Bookmark[]> {
+  return new Map(Object.entries(loadStore().worktrees));
+}
+
 export function addBookmarks(worktreePath: string, urls: readonly string[]): Bookmark[] {
   const store = loadStore();
   const key = path.resolve(worktreePath);
@@ -84,15 +90,32 @@ export function removeBookmark(worktreePath: string, url: string): void {
 }
 
 export function updateBookmarkTitle(worktreePath: string, url: string, title: string): boolean {
-  const store = loadStore();
-  const key = path.resolve(worktreePath);
-  const bookmark = store.worktrees[key]?.find((entry) => entry.url === url);
-  if (!bookmark) {
+  return updateBookmarkTitles([{ worktreePath, url, title }]);
+}
+
+// まとめて書けるようにしてあるのは、ポーリングが 1 回の tick で複数の title を
+// 更新しうるため。1 度の読み書きで済ませる。
+export function updateBookmarkTitles(
+  updates: readonly { worktreePath: string; url: string; title: string }[],
+): boolean {
+  if (updates.length === 0) {
     return false;
   }
-  bookmark.title = title;
-  saveStore(store);
-  return true;
+  const store = loadStore();
+  let changed = false;
+  for (const { worktreePath, url, title } of updates) {
+    const bookmark = store.worktrees[path.resolve(worktreePath)]?.find(
+      (entry) => entry.url === url,
+    );
+    if (bookmark && bookmark.title !== title) {
+      bookmark.title = title;
+      changed = true;
+    }
+  }
+  if (changed) {
+    saveStore(store);
+  }
+  return changed;
 }
 
 export function removeBookmarks(worktreePath: string): void {

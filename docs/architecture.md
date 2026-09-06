@@ -86,6 +86,37 @@ Issue / PR 参照は、現在の GitHub repository の `#123` と、外部 repos
 自動追加は実験中の機能で、デフォルト OFF。`YURU_BOOKMARK_AUTO_CAPTURE=1` を付けて
 起動したときだけ session ログの watch を登録する。
 
+worktree の PR バッジとブックマークの Issue / PR のステータスは、同じ 1 つのポーリングで
+まとめて最新に保つ。仕組みは 2 段に分かれる。
+
+`GitHubStatusMonitor` (`src/main/github/status-monitor.ts`) は「監視対象の集合を新鮮に保つ」
+だけを行う。監視対象は「その branch の最新 PR」か「その番号の Issue / PR」のどちらかで、
+`owner/repository` と branch 名または番号でキーを作る。同じ対象を何か所が参照していても
+キーが同じなので 1 度しか取りに行かない。取得は全 repository を跨いで GraphQL 1 クエリで、
+repository をエイリアスで並べ、その中に対象 1 件を 1 エイリアスで入れる。何件載せても
+レート消費は 1 クエリ分なので、tick は repository の数にもブックマークの数にもよらず
+一律 10 秒。Yuru のウィンドウがフォーカスされている間だけ動く。tick の終わりに、値が
+変わった対象のキーを呼び出し側に知らせる。
+
+`gh api graphql` は GraphQL の errors が 1 件でもあると非ゼロで終了するが、解決できた
+分は stdout に返る。1 つの repository が解決不能でも他のステータスは出したいので、
+終了コードではなく stdout の中身で成否を判断し、解決できなかった repository の対象だけを
+前回値のままにする。この分岐は `src/main/github/github.ts` に閉じ込め、呼び出し側からは
+「対象ごとに結果が返るか、返らないか」だけに見えるようにしている。
+
+monitor を持つのは `YuruService` で、Yuru 側の事情を知る半分 (repo → worktree → branch と
+ブックマークを歩いて監視対象を集める `listGitHubTargets`、変化を worktree 単位の更新へ
+翻訳する `toGitHubStatusUpdates`) も service の private メソッドとして同じ場所にある。
+フォーカス連動の起動・停止も service のメソッド越しに行う (Electron の app イベントを
+受けるのは index.ts の仕事)。tick ごとに repo → worktree → branch とブックマークを歩いて
+監視対象を作り、変化した分を worktree 単位の更新へ翻訳する。この翻訳は直前に集めた表を
+読むだけで、git にも GitHub にも行かない。PR バッジは GitHub 側が同じでもローカルで
+commit して head が動くと見え方が変わる (merged PR がその branch の PR でなくなる) ので、
+毎 tick 可視性を計算し直し、renderer へ最後に push した値と違うときだけ push する。
+
+Issue と PR は GitHub 上で番号の名前空間が 1 つなので、`/issues/123` と `/pull/123` は
+同じ 1 件を指す。URL のパスからは種別を決められず、GraphQL の `__typename` で決まる。
+
 metadata は通常 `~/.yuru/metadata.json` に置く。
 テストや開発用に `YURU_METADATA_PATH` で保存先を差し替えられる。
 
@@ -126,7 +157,10 @@ Git 上には存在するが、まだ Yuru metadata に strong link を持たな
 この記録と Git の各層にある実際の blob OID を比較して毎回導出する。
 
 ブックマークも同じ理由で `~/.yuru/bookmarks.json` に分け、worktree の絶対 path ごとに
-URL と title の配列を追加順で保存する。
+URL と title の配列を追加順で保存する。GitHub の Issue / PR の title は GitHub が正で、
+ポーリングがリネームを検知したらここに書き戻す。ステータス (open / closed など) は
+GitHub から導出できる揮発値なので保存せず、ポーリングが持つメモリ上のキャッシュから
+一覧を返すたびに載せる。
 
 最近開いたファイルの履歴も同じ理由で `~/.yuru/recent-files.json` に分ける。
 こちらは worktree ではなく repo の絶対 path を key にし、値は開いたファイルの相対 path を

@@ -2,11 +2,30 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  buildGitHubPullRequestQuery,
+  buildGitHubItemsQuery,
+  gitHubTargetKey,
+  parseGitHubItemUrl,
+  parseGitHubItemsResponse,
   parseGitHubRepoSlug,
-  parseGitHubPullRequestsResponse,
   toVisiblePullRequest,
 } from "../../../src/main/github/github.ts";
+
+const branchTarget = (branch) => ({ kind: "branch", repoSlug: "jinjor/yuru", branch });
+const numberTarget = (number) => ({ kind: "number", repoSlug: "jinjor/yuru", number });
+
+function pullRequestNode(overrides) {
+  return {
+    __typename: "PullRequest",
+    number: 1,
+    state: "OPEN",
+    isDraft: false,
+    reviewDecision: null,
+    title: "Add a thing",
+    url: "https://example.com/1",
+    headRefOid: "sha-1",
+    ...overrides,
+  };
+}
 
 test("parseGitHubRepoSlug は GitHub の origin URL から owner/repository を取り出す", () => {
   for (const remoteUrl of [
@@ -19,178 +38,224 @@ test("parseGitHubRepoSlug は GitHub の origin URL から owner/repository を�
   assert.equal(parseGitHubRepoSlug("https://gitlab.com/jinjor/yuru.git"), null);
 });
 
-test("buildGitHubPullRequestQuery は branch ごとのエイリアスを 1 クエリに束ねる", () => {
-  const query = buildGitHubPullRequestQuery("jinjor/yuru", ["feature-a", "feature-b"]);
-  assert.match(query, /repository\(owner: "jinjor", name: "yuru"\)/);
-  assert.match(query, /b0: pullRequests\(headRefName: "feature-a", first: 1/);
-  assert.match(query, /b1: pullRequests\(headRefName: "feature-b", first: 1/);
-  assert.match(query, /orderBy: \{field: CREATED_AT, direction: DESC\}/);
-  assert.match(query, /nodes \{ number state isDraft reviewDecision headRefOid url \}/);
+test("parseGitHubItemUrl は issue / pull のどちらの URL も同じ番号の対象にする", () => {
+  assert.deepEqual(parseGitHubItemUrl("https://github.com/jinjor/yuru/issues/71"), {
+    kind: "number",
+    repoSlug: "jinjor/yuru",
+    number: 71,
+  });
+  assert.deepEqual(parseGitHubItemUrl("https://github.com/jinjor/yuru/pull/71/"), {
+    kind: "number",
+    repoSlug: "jinjor/yuru",
+    number: 71,
+  });
+  assert.deepEqual(parseGitHubItemUrl("https://github.com/jinjor/yuru/issues/71?x=1#y"), {
+    kind: "number",
+    repoSlug: "jinjor/yuru",
+    number: 71,
+  });
 });
 
-test("buildGitHubPullRequestQuery は branch 名の引用符をエスケープする", () => {
-  const query = buildGitHubPullRequestQuery("jinjor/yuru", ['a"b']);
+test("parseGitHubItemUrl は issue / pull 以外や GitHub 以外の URL を弾く", () => {
+  assert.equal(parseGitHubItemUrl("https://github.com/jinjor/yuru"), null);
+  assert.equal(parseGitHubItemUrl("https://github.com/jinjor/yuru/discussions/3"), null);
+  assert.equal(parseGitHubItemUrl("https://github.com/jinjor/yuru/blob/main/README.md"), null);
+  assert.equal(parseGitHubItemUrl("https://github.com/jinjor/yuru/pull/72/files?diff=split"), null);
+  assert.equal(parseGitHubItemUrl("https://example.com/jinjor/yuru/issues/71"), null);
+  assert.equal(parseGitHubItemUrl("https://github.com/jinjor/yuru/issues/abc"), null);
+  assert.equal(parseGitHubItemUrl("not a url"), null);
+});
+
+test("gitHubTargetKey は repository 名の大小を無視して同じ対象を同じキーにする", () => {
+  assert.equal(
+    gitHubTargetKey({ kind: "number", repoSlug: "Jinjor/Yuru", number: 7 }),
+    gitHubTargetKey(numberTarget(7)),
+  );
+  assert.notEqual(gitHubTargetKey(numberTarget(7)), gitHubTargetKey(branchTarget("7")));
+});
+
+test("buildGitHubItemsQuery は branch と番号のエイリアスを 1 クエリに束ねる", () => {
+  const query = buildGitHubItemsQuery(
+    new Map([["jinjor/yuru", [branchTarget("feature-a"), numberTarget(71)]]]),
+  );
+  assert.match(query, /r0: repository\(owner: "jinjor", name: "yuru"\)/);
+  assert.match(query, /t0: pullRequests\(headRefName: "feature-a", first: 1/);
+  assert.match(query, /orderBy: \{field: CREATED_AT, direction: DESC\}/);
+  assert.match(query, /t1: issueOrPullRequest\(number: 71\)/);
+  assert.match(query, /\.\.\. on Issue \{ __typename number state title url \}/);
+});
+
+test("buildGitHubItemsQuery は repository を跨いでも 1 クエリに束ねる", () => {
+  const query = buildGitHubItemsQuery(
+    new Map([
+      ["jinjor/yuru", [numberTarget(71)]],
+      ["cli/cli", [{ kind: "number", repoSlug: "cli/cli", number: 900 }]],
+    ]),
+  );
+  assert.match(query, /^query \{ r0: repository\(owner: "jinjor", name: "yuru"\) /);
+  assert.match(query, /r1: repository\(owner: "cli", name: "cli"\) \{ t0: issueOrPullRequest/);
+});
+
+test("buildGitHubItemsQuery は branch 名の引用符をエスケープする", () => {
+  const query = buildGitHubItemsQuery(new Map([["jinjor/yuru", [branchTarget('a"b')]]]));
   assert.match(query, /headRefName: "a\\"b"/);
 });
 
-test("parseGitHubPullRequestsResponse は state と isDraft を PR の状態へ写す", () => {
+test("parseGitHubItemsResponse は state と isDraft を PR の状態へ写す", () => {
+  const targets = [
+    branchTarget("a"),
+    branchTarget("b"),
+    branchTarget("c"),
+    branchTarget("d"),
+    branchTarget("e"),
+  ];
   const raw = JSON.stringify({
     data: {
-      repository: {
-        b0: {
+      r0: {
+        t0: { nodes: [pullRequestNode({ reviewDecision: "APPROVED" })] },
+        t1: { nodes: [pullRequestNode({ number: 2, isDraft: true, headRefOid: "sha-2" })] },
+        t2: {
           nodes: [
-            {
-              number: 1,
-              state: "OPEN",
-              isDraft: false,
-              reviewDecision: "APPROVED",
-              headRefOid: "sha-1",
-              url: "https://example.com/1",
-            },
-          ],
-        },
-        b1: {
-          nodes: [
-            {
-              number: 2,
-              state: "OPEN",
-              isDraft: true,
-              reviewDecision: null,
-              headRefOid: "sha-2",
-              url: "https://example.com/2",
-            },
-          ],
-        },
-        b2: {
-          nodes: [
-            {
+            pullRequestNode({
               number: 3,
               state: "MERGED",
-              isDraft: false,
               reviewDecision: "APPROVED",
               headRefOid: "sha-3",
-              url: "https://example.com/3",
-            },
+            }),
           ],
         },
-        b3: {
+        t3: {
           nodes: [
-            {
+            pullRequestNode({
               number: 4,
               state: "CLOSED",
-              isDraft: false,
               reviewDecision: "CHANGES_REQUESTED",
               headRefOid: "sha-4",
-              url: "https://example.com/4",
-            },
+            }),
           ],
         },
-        b4: { nodes: [] },
+        t4: { nodes: [] },
       },
     },
   });
-  const result = parseGitHubPullRequestsResponse(raw, ["a", "b", "c", "d", "e"]);
-  assert.deepEqual(result.get("a"), {
-    pullRequest: {
-      prNumber: 1,
-      state: "open",
-      isApproved: true,
-      url: "https://example.com/1",
-    },
+  const result = parseGitHubItemsResponse(raw, new Map([["jinjor/yuru", targets]]));
+  assert.deepEqual(result.get(gitHubTargetKey(targets[0])), {
+    status: { kind: "pr", number: 1, state: "open", isApproved: true, url: "https://example.com/1" },
+    title: "Add a thing",
     headRefOid: "sha-1",
   });
-  assert.deepEqual(result.get("b"), {
-    pullRequest: {
-      prNumber: 2,
-      state: "draft",
-      isApproved: false,
-      url: "https://example.com/2",
-    },
-    headRefOid: "sha-2",
-  });
-  assert.deepEqual(result.get("c"), {
-    pullRequest: {
-      prNumber: 3,
-      state: "merged",
-      isApproved: true,
-      url: "https://example.com/3",
-    },
-    headRefOid: "sha-3",
-  });
-  assert.deepEqual(result.get("d"), {
-    pullRequest: {
-      prNumber: 4,
-      state: "closed",
-      isApproved: false,
-      url: "https://example.com/4",
-    },
-    headRefOid: "sha-4",
-  });
-  assert.equal(result.get("e"), null);
+  assert.equal(result.get(gitHubTargetKey(targets[1])).status.state, "draft");
+  assert.equal(result.get(gitHubTargetKey(targets[2])).status.state, "merged");
+  assert.equal(result.get(gitHubTargetKey(targets[3])).status.state, "closed");
+  assert.equal(result.get(gitHubTargetKey(targets[3])).status.isApproved, false);
+  assert.equal(result.get(gitHubTargetKey(targets[4])), null);
 });
 
-test("parseGitHubPullRequestsResponse は想定外の形なら null を返す", () => {
-  assert.equal(parseGitHubPullRequestsResponse("not json", ["a"]), null);
-  assert.equal(parseGitHubPullRequestsResponse(JSON.stringify({ data: {} }), ["a"]), null);
-  assert.equal(
-    parseGitHubPullRequestsResponse(JSON.stringify({ data: { repository: null } }), ["a"]),
-    null,
-  );
-});
-
-test("parseGitHubPullRequestsResponse は必須フィールドが欠けた node を PR なし扱いにする", () => {
+test("parseGitHubItemsResponse は種別を __typename で決める", () => {
+  const targets = [numberTarget(71), numberTarget(72)];
   const raw = JSON.stringify({
     data: {
-      repository: {
-        b0: { nodes: [{ number: 1, state: "OPEN", isDraft: false, url: "https://example.com/1" }] },
+      r0: {
+        t0: {
+          __typename: "Issue",
+          number: 71,
+          state: "CLOSED",
+          title: "Something broke",
+          url: "https://github.com/jinjor/yuru/issues/71",
+        },
+        t1: pullRequestNode({ number: 72, url: "https://github.com/jinjor/yuru/pull/72" }),
       },
     },
   });
-  const result = parseGitHubPullRequestsResponse(raw, ["a"]);
-  assert.equal(result.get("a"), null);
+  const result = parseGitHubItemsResponse(raw, new Map([["jinjor/yuru", targets]]));
+  assert.deepEqual(result.get(gitHubTargetKey(targets[0])), {
+    status: {
+      kind: "issue",
+      number: 71,
+      state: "closed",
+      url: "https://github.com/jinjor/yuru/issues/71",
+    },
+    title: "Something broke",
+    headRefOid: null,
+  });
+  assert.equal(result.get(gitHubTargetKey(targets[1])).status.kind, "pr");
 });
 
-test("toVisiblePullRequest は open/draft を head の一致に関わらず表示する", () => {
-  const openPullRequest = {
-    prNumber: 1,
-    state: "open",
-    isApproved: true,
-    url: "https://example.com/1",
-  };
-  assert.deepEqual(
-    toVisiblePullRequest({ pullRequest: openPullRequest, headRefOid: "sha-x" }, "sha-y"),
-    openPullRequest,
+test("parseGitHubItemsResponse は解決できなかった repository の分だけを結果から落とす", () => {
+  const yuruTargets = [numberTarget(71)];
+  const cliTarget = { kind: "number", repoSlug: "cli/cli", number: 900 };
+  // gh は errors があると非ゼロで終わるが、解決できた repository の分は data に入っている。
+  const raw = JSON.stringify({
+    data: {
+      r0: { t0: pullRequestNode({ number: 71 }) },
+      r1: null,
+    },
+    errors: [{ type: "NOT_FOUND", path: ["r1"] }],
+  });
+  const result = parseGitHubItemsResponse(
+    raw,
+    new Map([
+      ["jinjor/yuru", yuruTargets],
+      ["cli/cli", [cliTarget]],
+    ]),
   );
+  assert.equal(result.get(gitHubTargetKey(yuruTargets[0])).status.number, 71);
+  assert.equal(result.has(gitHubTargetKey(cliTarget)), false, "取れなかった分は前回値を使う");
+});
+
+test("parseGitHubItemsResponse は想定外の形なら null を返す", () => {
+  const targetsByRepoSlug = new Map([["jinjor/yuru", [branchTarget("a")]]]);
+  assert.equal(parseGitHubItemsResponse("not json", targetsByRepoSlug), null);
+  assert.equal(parseGitHubItemsResponse(JSON.stringify({}), targetsByRepoSlug), null);
+  assert.equal(parseGitHubItemsResponse(JSON.stringify({ data: null }), targetsByRepoSlug), null);
+});
+
+test("parseGitHubItemsResponse は必須フィールドが欠けた node を対象なし扱いにする", () => {
+  const targets = [branchTarget("a"), numberTarget(71)];
+  const raw = JSON.stringify({
+    data: {
+      r0: {
+        t0: { nodes: [{ __typename: "PullRequest", number: 1, state: "OPEN", title: "x" }] },
+        t1: { __typename: "Issue", number: 71, state: "PLANNED", title: "x", url: "u" },
+      },
+    },
+  });
+  const result = parseGitHubItemsResponse(raw, new Map([["jinjor/yuru", targets]]));
+  assert.equal(result.get(gitHubTargetKey(targets[0])), null);
+  assert.equal(result.get(gitHubTargetKey(targets[1])), null);
+});
+
+function fetchedPullRequest(state, headRefOid) {
+  return {
+    status: { kind: "pr", number: 1, state, isApproved: false, url: "https://example.com/1" },
+    title: "Add a thing",
+    headRefOid,
+  };
+}
+
+test("toVisiblePullRequest は open/draft を head の一致に関わらず表示する", () => {
+  const fetched = fetchedPullRequest("open", "sha-x");
+  assert.deepEqual(toVisiblePullRequest(fetched, "sha-y"), fetched.status);
 });
 
 test("toVisiblePullRequest は merged/closed を head が一致するときだけ表示する", () => {
-  const mergedPullRequest = {
-    prNumber: 2,
-    state: "merged",
-    isApproved: true,
-    url: "https://example.com/2",
-  };
-  assert.deepEqual(
-    toVisiblePullRequest({ pullRequest: mergedPullRequest, headRefOid: "sha-a" }, "sha-a"),
-    mergedPullRequest,
-  );
-  assert.equal(
-    toVisiblePullRequest({ pullRequest: mergedPullRequest, headRefOid: "sha-a" }, "sha-b"),
-    null,
-  );
-
-  const closedPullRequest = {
-    prNumber: 3,
-    state: "closed",
-    isApproved: false,
-    url: "https://example.com/3",
-  };
-  assert.equal(
-    toVisiblePullRequest({ pullRequest: closedPullRequest, headRefOid: "sha-a" }, "sha-b"),
-    null,
-  );
+  const merged = fetchedPullRequest("merged", "sha-a");
+  assert.deepEqual(toVisiblePullRequest(merged, "sha-a"), merged.status);
+  assert.equal(toVisiblePullRequest(merged, "sha-b"), null);
+  assert.equal(toVisiblePullRequest(fetchedPullRequest("closed", "sha-a"), "sha-b"), null);
 });
 
-test("toVisiblePullRequest は PR なしを null のまま返す", () => {
+test("toVisiblePullRequest は PR なしと issue を null にする", () => {
   assert.equal(toVisiblePullRequest(null, "sha-a"), null);
+  assert.equal(
+    toVisiblePullRequest(
+      {
+        status: { kind: "issue", number: 71, state: "open", url: "https://example.com/71" },
+        title: "Something broke",
+        headRefOid: null,
+      },
+      "sha-a",
+    ),
+    null,
+  );
 });

@@ -7,8 +7,15 @@ import test from "node:test";
 const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-bookmarks-store-"));
 process.env.YURU_HOME = path.join(testRoot, "yuru-home");
 
-const { addBookmarks, loadBookmarks, removeBookmark, removeBookmarks, updateBookmarkTitle } =
-  await import("../../../src/main/bookmarks/store.ts");
+const {
+  addBookmarks,
+  loadAllBookmarks,
+  loadBookmarks,
+  removeBookmark,
+  removeBookmarks,
+  updateBookmarkTitle,
+  updateBookmarkTitles,
+} = await import("../../../src/main/bookmarks/store.ts");
 
 const worktreePath = path.join(testRoot, "worktree-a");
 const otherWorktreePath = path.join(testRoot, "worktree-b");
@@ -82,6 +89,43 @@ test("updateBookmarkTitle は title だけを置き換える", () => {
 
   // 既に消えた bookmark の更新は false
   assert.equal(updateBookmarkTitle(worktreePath, "https://example.com/missing", "x"), false);
+
+  // 同じ title への更新は書き込まない
+  assert.equal(updateBookmarkTitle(worktreePath, added[0].url, "Example A"), false);
+});
+
+test("updateBookmarkTitles は複数 worktree の title をまとめて置き換える", () => {
+  cleanBookmarks();
+  addBookmarks(worktreePath, ["https://example.com/a"]);
+  addBookmarks(otherWorktreePath, ["https://example.com/b"]);
+
+  assert.equal(
+    updateBookmarkTitles([
+      { worktreePath, url: "https://example.com/a", title: "Example A" },
+      { worktreePath: otherWorktreePath, url: "https://example.com/b", title: "Example B" },
+      { worktreePath, url: "https://example.com/missing", title: "x" },
+    ]),
+    true,
+  );
+  assert.equal(loadBookmarks(worktreePath)[0].title, "Example A");
+  assert.equal(loadBookmarks(otherWorktreePath)[0].title, "Example B");
+  assert.equal(updateBookmarkTitles([]), false);
+});
+
+test("loadAllBookmarks は全 worktree のブックマークを 1 度で返す", () => {
+  cleanBookmarks();
+  addBookmarks(worktreePath, ["https://example.com/a"]);
+  addBookmarks(otherWorktreePath, ["https://example.com/b"]);
+
+  const all = loadAllBookmarks();
+  assert.deepEqual(
+    all.get(path.resolve(worktreePath)).map(({ url }) => url),
+    ["https://example.com/a"],
+  );
+  assert.deepEqual(
+    all.get(path.resolve(otherWorktreePath)).map(({ url }) => url),
+    ["https://example.com/b"],
+  );
 });
 
 test("removeBookmarks は worktree のブックマークをすべて消す", () => {

@@ -207,9 +207,6 @@ export function samePullRequest(a: GitHubPullRequest | null, b: GitHubPullReques
     return a === b;
   }
   return (
-    a.prNumber === b.prNumber &&
-    a.state === b.state &&
-    a.isApproved === b.isApproved &&
-    a.url === b.url
+    a.number === b.number && a.state === b.state && a.isApproved === b.isApproved && a.url === b.url
   );
 }

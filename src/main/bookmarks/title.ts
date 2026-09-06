@@ -1,14 +1,6 @@
 import os from "os";
 import { exec } from "../exec.js";
-
-export function extractGitHubIssueOrPr(url: string) {
-  const parsed = URL.parse(url);
-  const match =
-    parsed?.hostname === "github.com"
-      ? parsed.pathname.match(/^\/([^/]+)\/([^/]+)\/(?:issues|pull)\/(\d+)\/?$/)
-      : null;
-  return match ? { owner: match[1], repo: match[2], number: match[3] } : null;
-}
+import { parseGitHubItemUrl } from "../github/github.js";
 
 export function parseHtmlTitle(html: string): string | null {
   const title = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1];
@@ -27,12 +19,12 @@ export function parseHtmlTitle(html: string): string | null {
 }
 
 export async function resolveUrlTitle(url: string): Promise<string | null> {
-  const github = extractGitHubIssueOrPr(url);
-  if (github) {
+  const github = parseGitHubItemUrl(url);
+  if (github?.kind === "number") {
     try {
       const title = await exec(
         "gh",
-        ["api", `repos/${github.owner}/${github.repo}/issues/${github.number}`, "--jq", ".title"],
+        ["api", `repos/${github.repoSlug}/issues/${github.number}`, "--jq", ".title"],
         os.homedir(),
       );
       if (title.trim()) {

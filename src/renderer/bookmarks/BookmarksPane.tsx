@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import type { AppError, Bookmark } from "../../shared/ipc";
 import { EmptyState } from "../ui/EmptyState";
+import { GitHubBadge } from "../pull-requests/GitHubBadge";
 import { IconButton } from "../ui/IconButton";
 import { resultDataOrNull } from "../utils/result";
 
@@ -59,8 +60,13 @@ export function BookmarksPane({ onError, worktreeId }: BookmarksPaneProps) {
             }}
           >
             <span className="bookmark-title">{bookmark.title}</span>
-            {bookmark.title !== bookmark.url && (
-              <span className="bookmark-url">{bookmark.url}</span>
+            {(bookmark.status || bookmark.title !== bookmark.url) && (
+              <span className="bookmark-meta">
+                {bookmark.status && <GitHubBadge item={bookmark.status} />}
+                {bookmark.title !== bookmark.url && (
+                  <span className="bookmark-url">{bookmark.url}</span>
+                )}
+              </span>
             )}
           </button>
           <IconButton

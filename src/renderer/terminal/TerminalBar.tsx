@@ -39,7 +39,7 @@ export function TerminalBar({
         )}
         {currentGitHub && (
           <GitHubBadge
-            github={currentGitHub}
+            item={currentGitHub}
             onClick={() => {
               void window.electronAPI.addBookmark(worktreeId, currentGitHub.url).catch((error) => {
                 console.error("Failed to bookmark pull request URL.", error);

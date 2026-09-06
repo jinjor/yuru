@@ -1,6 +1,7 @@
 import type { RepoListItem } from "./metadata.js";
 import type {
   AgentActivityState,
+  GitHubItem,
   GitHubPullRequest,
   ProviderPlanUsage,
   TerminalRuntimeId,
@@ -195,6 +196,9 @@ export interface PullRequestUpdate {
 export interface Bookmark {
   url: string;
   title: string;
+  // GitHub の Issue / PR のときだけ載る現在の状態。GitHub から導出できる揮発値なので
+  // 永続化はせず、main のポーリングが持つキャッシュから毎回組み立てる。
+  status?: GitHubItem;
 }
 
 export interface ElectronAPI {

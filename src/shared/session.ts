@@ -12,12 +12,25 @@ export interface SuggestedWorktreeSession {
   timestamp: number;
 }
 
-export interface GitHubPullRequest {
-  prNumber: number;
-  state: "open" | "draft" | "merged" | "closed";
-  isApproved: boolean;
-  url: string;
-}
+// バッジに出す GitHub の Issue / PR。issue と PR は番号の名前空間を共有するので、
+// URL のパス (/issues/ か /pull/) ではなく GitHub の応答で種別が決まる。
+export type GitHubItem =
+  | {
+      kind: "issue";
+      number: number;
+      state: "open" | "closed";
+      url: string;
+    }
+  | {
+      kind: "pr";
+      number: number;
+      state: "open" | "draft" | "merged" | "closed";
+      isApproved: boolean;
+      url: string;
+    };
+
+// worktree のバッジに出るのは常に PR。
+export type GitHubPullRequest = Extract<GitHubItem, { kind: "pr" }>;
 
 // プランのリミット 1 枠ぶんの使用状況。セッションが消費したトークン量ではなく、
 // provider 自身が「この枠を何 % 使ったか」として返してくる値。

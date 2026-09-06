@@ -1,36 +1,36 @@
 import { type MouseEvent as ReactMouseEvent } from "react";
-import { GitPullRequest } from "lucide-react";
-import type { GitHubPullRequest } from "../../shared/session";
+import { CircleDot, GitPullRequest } from "lucide-react";
+import type { GitHubItem } from "../../shared/session";
 import { gitHubBadgeLabel } from "./githubBadgeLabel";
 
 interface GitHubBadgeProps {
-  github: GitHubPullRequest;
+  item: GitHubItem;
   onClick?: (event: ReactMouseEvent<HTMLButtonElement>) => void;
 }
 
-export function GitHubBadge({ github, onClick }: GitHubBadgeProps) {
+// GitHub の Issue / PR の状態バッジ。アイコンが種別を、色とラベルが状態を表す。
+export function GitHubBadge({ item, onClick }: GitHubBadgeProps) {
+  const Icon = item.kind === "issue" ? CircleDot : GitPullRequest;
+  const className = `github-badge ${item.kind} ${item.state}`;
+
   if (onClick) {
     return (
       <button
         type="button"
-        className={`${gitHubBadgeClass(github)} interactive`}
+        className={`${className} interactive`}
         onClick={onClick}
-        title={github.url}
+        title={item.url}
       >
-        <GitPullRequest size={11} strokeWidth={2} aria-hidden="true" />
-        {gitHubBadgeLabel(github)}
+        <Icon size={11} strokeWidth={2} aria-hidden="true" />
+        {gitHubBadgeLabel(item)}
       </button>
     );
   }
 
   return (
-    <span className={gitHubBadgeClass(github)} title={github.url}>
-      <GitPullRequest size={11} strokeWidth={2} aria-hidden="true" />
-      {gitHubBadgeLabel(github)}
+    <span className={className} title={item.url}>
+      <Icon size={11} strokeWidth={2} aria-hidden="true" />
+      {gitHubBadgeLabel(item)}
     </span>
   );
-}
-
-function gitHubBadgeClass(github: GitHubPullRequest): string {
-  return `github-badge ${github.state}`;
 }

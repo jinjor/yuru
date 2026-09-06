@@ -232,7 +232,8 @@ test("Terminal ヘッダの PR をクリックすると Bookmarks に登録す�
       {
         worktreeId: toWorktreeId(repoId, worktreePath),
         pullRequest: {
-          prNumber: 74,
+          kind: "pr",
+          number: 74,
           state: "open",
           isApproved: false,
           url: pullRequestUrl,

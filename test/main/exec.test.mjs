@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { exec, execBuffer } from "../../src/main/exec.ts";
+import { exec, execAllowingFailure, execBuffer } from "../../src/main/exec.ts";
 
 const cwd = process.cwd();
 
@@ -52,4 +52,26 @@ test("exec は存在しない cwd をコマンド不在 (ENOENT) と区別する
       error.message === "Working directory does not exist: /nonexistent-yuru-exec-cwd" &&
       error.code === undefined,
   );
+});
+
+test("execAllowingFailure は失敗しても stdout と理由を返す", async () => {
+  const { stdout, error } = await execAllowingFailure(
+    process.execPath,
+    ["-e", 'process.stdout.write("partial"); process.stderr.write("failed detail"); process.exit(1)'],
+    cwd,
+  );
+
+  assert.equal(stdout, "partial");
+  assert.equal(error.message, "failed detail");
+});
+
+test("execAllowingFailure は成功なら error が null", async () => {
+  const { stdout, error } = await execAllowingFailure(
+    process.execPath,
+    ["-e", 'process.stdout.write("ok")'],
+    cwd,
+  );
+
+  assert.equal(stdout, "ok");
+  assert.equal(error, null);
 });

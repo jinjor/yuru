@@ -668,8 +668,10 @@ test("loadRepoList は worktree branch の GitHub PR を返す", async () => {
     ]),
   );
   const pullRequest = {
-    prNumber: 42,
+    kind: "pr",
+    number: 42,
     state: "open",
+    isApproved: false,
     url: "https://github.com/jinjor/yuru/pull/42",
   };
   const requestedLookups = [];
@@ -680,15 +682,19 @@ test("loadRepoList は worktree branch の GitHub PR を返す", async () => {
     undefined,
     undefined,
     undefined,
-    (requestedRepoPath, branch, headSha) => {
-      requestedLookups.push([requestedRepoPath, branch, headSha]);
+    (requestedRepoSlug, branch, headSha) => {
+      requestedLookups.push([requestedRepoSlug, branch, headSha]);
       return branch === "task-a" ? pullRequest : null;
     },
+    undefined,
+    undefined,
+    undefined,
+    async () => "jinjor/yuru",
   );
 
   assert.deepEqual(requestedLookups, [
-    [repoPath, "task-a", "abc1234abc1234abc1234abc1234abc12"],
-    [repoPath, "task-b", "abc1234abc1234abc1234abc1234abc12"],
+    ["jinjor/yuru", "task-a", "abc1234abc1234abc1234abc1234abc12"],
+    ["jinjor/yuru", "task-b", "abc1234abc1234abc1234abc1234abc12"],
   ]);
   assert.equal(result[0].mainWorktree.githubPullRequest, undefined);
   assert.deepEqual(result[0].taskWorktrees[0].githubPullRequest, pullRequest);

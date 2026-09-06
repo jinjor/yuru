@@ -19,10 +19,12 @@ import {
 import { removeFileReviews } from "./review/store.js";
 import {
   addBookmarks,
+  loadAllBookmarks,
   loadBookmarks,
   removeBookmark as removeStoredBookmark,
   removeBookmarks as removeStoredBookmarks,
   updateBookmarkTitle,
+  updateBookmarkTitles,
 } from "./bookmarks/store.js";
 import { resolveUrlTitle } from "./bookmarks/title.js";
 import { findHttpUrls } from "../shared/http-url.js";
@@ -36,7 +38,7 @@ import {
   loadStoredSessionPreviews,
   loadSuggestedWorktreeSessions,
 } from "./sessions/suggested.js";
-import { isPathWithin, toWorktreeId } from "./worktree-identity.js";
+import { toWorktreeId, toWorktreePathKey } from "./worktree-identity.js";
 import { getFileDocument, getGitDiffDocument as loadGitDiffDocument } from "./git/diff.js";
 import { getCurrentBranch, getHeadSha, isSupportedGitRepo } from "./git/repo.js";
 import { getGitPathStates as loadGitPathStates } from "./git/status.js";
@@ -50,13 +52,22 @@ import {
   removeWorktree as removeGitWorktree,
   removeWorktreeForce as removeGitWorktreeForce,
   unlockWorktree as unlockGitWorktree,
+  type WorktreeInfo,
 } from "./git/worktree.js";
 import {
   getImageDiffDocument as loadImageDiffDocument,
   getImageFileDocument,
 } from "./preview/image-diff.js";
 import { hasLiveProcessInWorktree, listLiveProcessesInWorktree } from "./repos/process-check.js";
-import { getGitHubRepoSlug, getLastKnownGitHubPullRequest } from "./github/github.js";
+import {
+  fetchGitHubItems,
+  getGitHubRepoSlug,
+  gitHubTargetKey,
+  parseGitHubItemUrl,
+  toVisiblePullRequest,
+  type GitHubTarget,
+} from "./github/github.js";
+import { GitHubStatusMonitor } from "./github/status-monitor.js";
 import {
   listAllFiles as listAllRepoFiles,
   listFiles as listRepoFiles,
@@ -97,6 +108,7 @@ import {
   type Bookmark,
   type CreatedTaskWorktree,
   type GitDiffScope,
+  type PullRequestUpdate,
   type Result,
   type SessionUpdate,
   type WorktreeProcessRef,
@@ -105,6 +117,7 @@ import {
 } from "../shared/ipc.js";
 import {
   type AgentActivityState,
+  type GitHubPullRequest,
   type SessionProvider,
   type SuggestedWorktreeSession,
   toSessionKey,
@@ -176,6 +189,48 @@ function resolveTaskWorktreePath(repoPath: string, branchName: string): string {
   return path.join(repoPath, ".yuru", "worktrees", branchName.replace(/\//g, "-"));
 }
 
+interface BookmarkTargetRef {
+  url: string;
+  title: string;
+  target: GitHubTarget;
+}
+
+interface BranchTarget {
+  target: GitHubTarget;
+  // その worktree の head。この branch の PR かどうかの判定に使う。
+  headSha: string;
+}
+
+interface WorktreeTargets {
+  worktreeId: string;
+  worktreePath: string;
+  // その worktree の branch の最新 PR。detached や GitHub リポジトリでない場合、
+  // および repo 直下 (PR バッジを出さない) は null。
+  branch: BranchTarget | null;
+  bookmarks: readonly BookmarkTargetRef[];
+}
+
+interface BookmarkTitleUpdate {
+  worktreePath: string;
+  url: string;
+  title: string;
+}
+
+interface GitHubStatusUpdates {
+  pullRequests: PullRequestUpdate[];
+  bookmarkTitles: BookmarkTitleUpdate[];
+  bookmarkWorktreeIds: string[];
+}
+
+function samePullRequest(a: GitHubPullRequest | null, b: GitHubPullRequest | null): boolean {
+  if (a === null || b === null) {
+    return a === b;
+  }
+  return (
+    a.number === b.number && a.state === b.state && a.isApproved === b.isApproved && a.url === b.url
+  );
+}
+
 export interface YuruServiceEvents {
   fileTreeChanged(worktreeId: string, relativePath: string): void;
   ptyData(terminalRuntimeId: string, data: string): void;
@@ -183,6 +238,7 @@ export interface YuruServiceEvents {
   sessionChanged(terminalRuntimeId: string, update: SessionUpdate): void;
   rateLimitStopsChanged(stops: RateLimitStop[]): void;
   bookmarksChanged(worktreeId: string): void;
+  pullRequestsChanged(updates: PullRequestUpdate[]): void;
   // 解除時刻になった後、サイドバーに出す利用状況も取り直す。
   refreshPlanUsage(): void;
   repoListChanged(): void;
@@ -348,6 +404,14 @@ export class YuruService {
   private readonly activatingSessionKeys = new Set<string>();
   private readonly activeCodeSearches = new Map<string, AbortController>();
   private readonly fileTreeWatcher: FileTreeWatcher;
+  // worktree の PR バッジとブックマークのステータスは、同じ監視対象の集合として
+  // 1 つのポーリングでまとめて最新に保つ。
+  private readonly githubStatusMonitor: GitHubStatusMonitor;
+  // 直前の tick で集めた「worktree と監視対象の対応」。listGitHubTargets が埋め、
+  // toGitHubStatusUpdates が読む。
+  private worktrees: readonly WorktreeTargets[] = [];
+  // renderer へ最後に push した PR バッジ。変わった分だけを push するために持つ。
+  private readonly pushedPullRequestByWorktreeId = new Map<string, GitHubPullRequest | null>();
 
   constructor(
     private readonly events: YuruServiceEvents,
@@ -356,6 +420,155 @@ export class YuruService {
     this.fileTreeWatcher = new FileTreeWatcher((worktreeId, relativePath) => {
       this.events.fileTreeChanged(worktreeId, relativePath);
     });
+    this.githubStatusMonitor = new GitHubStatusMonitor({
+      listTargets: () => this.listGitHubTargets(),
+      fetchItems: fetchGitHubItems,
+      tickCompleted: (changedKeys) => this.applyGitHubStatusChanges(changedKeys),
+    });
+  }
+
+  // ポーリングは Yuru のウィンドウがフォーカスされている間だけ動かす。
+  startGitHubStatusPolling(): void {
+    this.githubStatusMonitor.start();
+  }
+
+  stopGitHubStatusPolling(): void {
+    this.githubStatusMonitor.stop();
+  }
+
+  // GitHub に聞くべき対象を集める。同時に、どの worktree のどの branch /
+  // ブックマークがどの対象に対応するかの表を this.worktrees に残す。
+  private async listGitHubTargets(): Promise<GitHubTarget[]> {
+    const bookmarksByWorktreePath = loadAllBookmarks();
+    const worktrees: WorktreeTargets[] = [];
+    const targets: GitHubTarget[] = [];
+
+    const addWorktree = (repoId: string, worktreePath: string, branch: BranchTarget | null) => {
+      const bookmarks = (
+        bookmarksByWorktreePath.get(toWorktreePathKey(worktreePath)) ?? []
+      ).flatMap((bookmark): BookmarkTargetRef[] => {
+        const target = parseGitHubItemUrl(bookmark.url);
+        return target ? [{ url: bookmark.url, title: bookmark.title, target }] : [];
+      });
+      worktrees.push({
+        worktreeId: toWorktreeId(repoId, worktreePath),
+        worktreePath,
+        branch,
+        bookmarks,
+      });
+      if (branch) {
+        targets.push(branch.target);
+      }
+      for (const bookmark of bookmarks) {
+        targets.push(bookmark.target);
+      }
+    };
+
+    for (const repo of loadRepos()) {
+      // listWorktrees は repo 直下 (main worktree) を返さないので自分で足す。repo 一覧は
+      // main worktree に PR バッジを出さないため、branch は見ずブックマークだけを集める。
+      addWorktree(repo.id, repo.repoPath, null);
+
+      let repoWorktrees: readonly WorktreeInfo[];
+      try {
+        repoWorktrees = await listWorktrees(repo.repoPath);
+      } catch (error) {
+        // ある repo が読めなくても他の repo の取得は続ける。
+        recordAppWarning(toAppError(error, { command: "git" }));
+        continue;
+      }
+      const repoSlug = await getGitHubRepoSlug(repo.repoPath);
+
+      for (const worktree of repoWorktrees) {
+        const branch: BranchTarget | null =
+          repoSlug && worktree.branch
+            ? {
+                target: { kind: "branch", repoSlug, branch: worktree.branch },
+                headSha: worktree.headSha,
+              }
+            : null;
+        addWorktree(repo.id, worktree.path, branch);
+      }
+    }
+
+    this.worktrees = worktrees;
+    const worktreeIds = new Set(worktrees.map((worktree) => worktree.worktreeId));
+    for (const worktreeId of this.pushedPullRequestByWorktreeId.keys()) {
+      if (!worktreeIds.has(worktreeId)) {
+        this.pushedPullRequestByWorktreeId.delete(worktreeId);
+      }
+    }
+    return targets;
+  }
+
+  // 変わった Issue / PR を worktree 単位の更新に翻訳して renderer へ届ける。
+  // GitHub の title はブックマークにも書き戻す (GitHub 側のリネームに追従するため)。
+  private applyGitHubStatusChanges(changedKeys: ReadonlySet<string>): void {
+    const updates = this.toGitHubStatusUpdates(changedKeys);
+    try {
+      updateBookmarkTitles(updates.bookmarkTitles);
+    } catch (error) {
+      // bookmarks.json が読めなくても、ステータスの通知までは止めない。
+      recordAppWarning(toAppError(error));
+    }
+    if (updates.pullRequests.length > 0) {
+      this.events.pullRequestsChanged(updates.pullRequests);
+    }
+    for (const worktreeId of updates.bookmarkWorktreeIds) {
+      this.events.bookmarksChanged(worktreeId);
+    }
+  }
+
+  // 直前に集めた対応表を読むだけ。GitHub にも git にも行かない。
+  private toGitHubStatusUpdates(changedKeys: ReadonlySet<string>): GitHubStatusUpdates {
+    const updates: GitHubStatusUpdates = {
+      pullRequests: [],
+      bookmarkTitles: [],
+      bookmarkWorktreeIds: [],
+    };
+
+    for (const worktree of this.worktrees) {
+      // PR バッジは GitHub 側が同じでも、ローカルで commit して head が動くと
+      // 見え方が変わる (merged PR が「この branch の PR」でなくなるなど)。なので
+      // changedKeys ではなく、毎回可視性を計算し直して push 済みの値と比べる。
+      if (worktree.branch) {
+        const fetched = this.githubStatusMonitor.get(worktree.branch.target);
+        // undefined は「まだ取れていない」。分からないものでバッジを消さない。
+        if (fetched !== undefined) {
+          const pullRequest = toVisiblePullRequest(fetched, worktree.branch.headSha);
+          const pushed = this.pushedPullRequestByWorktreeId;
+          if (
+            !pushed.has(worktree.worktreeId) ||
+            !samePullRequest(pushed.get(worktree.worktreeId) ?? null, pullRequest)
+          ) {
+            pushed.set(worktree.worktreeId, pullRequest);
+            updates.pullRequests.push({ worktreeId: worktree.worktreeId, pullRequest });
+          }
+        }
+      }
+
+      let bookmarksChanged = false;
+      for (const bookmark of worktree.bookmarks) {
+        if (!changedKeys.has(gitHubTargetKey(bookmark.target))) {
+          continue;
+        }
+        bookmarksChanged = true;
+        // GitHub の Issue / PR の title は GitHub が正。リネームにも追従する。
+        const item = this.githubStatusMonitor.get(bookmark.target);
+        if (item && item.title !== bookmark.title) {
+          updates.bookmarkTitles.push({
+            worktreePath: worktree.worktreePath,
+            url: bookmark.url,
+            title: item.title,
+          });
+        }
+      }
+      if (bookmarksChanged) {
+        updates.bookmarkWorktreeIds.push(worktree.worktreeId);
+      }
+    }
+
+    return updates;
   }
 
   async getRepos() {
@@ -371,7 +584,10 @@ export class YuruService {
       previewsByKey,
       loadSuggestedWorktreeSessions,
       this.getUnresolvedTerminalRuntimesByLaunchWorktreePath(),
-      getLastKnownGitHubPullRequest,
+      (repoSlug, branch, headSha) => {
+        const fetched = this.githubStatusMonitor.get({ kind: "branch", repoSlug, branch });
+        return fetched === undefined ? undefined : toVisiblePullRequest(fetched, headSha);
+      },
       agentActivityStates,
       indexTerminalRuntimeIdsByTaskWorktreePath(
         this.terminalRuntimeMap,
@@ -920,10 +1136,18 @@ export class YuruService {
       return ok([]);
     }
     try {
-      return ok(loadBookmarks(workingRoot));
+      return ok(loadBookmarks(workingRoot).map((bookmark) => this.withGitHubStatus(bookmark)));
     } catch (error) {
       return this.failAndReport(toAppError(error));
     }
+  }
+
+  // GitHub の Issue / PR のブックマークに、ポーリングが最後に取れた状態を載せる。
+  // まだ取れていない (gh が無い・未認証・起動直後) ときは status を付けない。
+  private withGitHubStatus(bookmark: Bookmark): Bookmark {
+    const target = parseGitHubItemUrl(bookmark.url);
+    const fetched = target ? this.githubStatusMonitor.get(target) : null;
+    return fetched ? { ...bookmark, status: fetched.status } : bookmark;
   }
 
   async removeBookmark(worktreeId: string, url: string) {
@@ -970,6 +1194,7 @@ export class YuruService {
       return ok(undefined);
     }
     this.events.bookmarksChanged(worktreeId);
+    this.githubStatusMonitor.refresh();
     this.resolveBookmarkTitles({ worktreePath: workingRoot, worktreeId }, added);
     return ok(undefined);
   }
@@ -1015,6 +1240,7 @@ export class YuruService {
       return;
     }
     this.events.bookmarksChanged(target.worktreeId);
+    this.githubStatusMonitor.refresh();
     this.resolveBookmarkTitles(target, added);
   }
 
@@ -1430,6 +1656,7 @@ export class YuruService {
   }
 
   async stop(): Promise<void> {
+    this.githubStatusMonitor.stop();
     this.fileTreeWatcher.stop();
     await this.killAllPty();
   }
@@ -1461,17 +1688,6 @@ export class YuruService {
       }
     }
     return idsByKey;
-  }
-
-  // PullRequestMonitor がリポジトリごとのポーリング間隔を決めるのに使う。
-  // launch target worktree は必ず repo 配下にあるため、その位置で repo への所属を判定できる。
-  hasAliveTerminalRuntimeInRepo(repoPath: string): boolean {
-    for (const info of this.terminalRuntimeMap.values()) {
-      if (isPathWithin(repoPath, info.launchWorktreePath)) {
-        return true;
-      }
-    }
-    return false;
   }
 
   private getUnresolvedTerminalRuntimesByLaunchWorktreePath(): Map<

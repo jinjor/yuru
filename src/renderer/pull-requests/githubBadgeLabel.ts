@@ -1,14 +1,17 @@
-import type { GitHubPullRequest } from "../../shared/session";
+import type { GitHubItem } from "../../shared/session";
 
-export function gitHubBadgeLabel(github: GitHubPullRequest): string {
-  switch (github.state) {
+export function gitHubBadgeLabel(item: GitHubItem): string {
+  if (item.kind === "issue") {
+    return `${item.state === "open" ? "Open" : "Closed"} #${item.number}`;
+  }
+  switch (item.state) {
     case "open":
-      return `${github.isApproved ? "Approved" : "Open"} #${github.prNumber}`;
+      return `${item.isApproved ? "Approved" : "Open"} #${item.number}`;
     case "draft":
-      return `Draft #${github.prNumber}`;
+      return `Draft #${item.number}`;
     case "merged":
-      return `Merged #${github.prNumber}`;
+      return `Merged #${item.number}`;
     case "closed":
-      return `Closed #${github.prNumber}`;
+      return `Closed #${item.number}`;
   }
 }

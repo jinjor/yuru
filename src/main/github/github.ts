@@ -1,18 +1,26 @@
-import type { GitHubPullRequest } from "../../shared/session.js";
+import os from "os";
+import type { GitHubItem, GitHubPullRequest } from "../../shared/session.js";
 import { recordAppWarning } from "../errors/center.js";
 import { toAppError } from "../errors/app-error.js";
-import { exec } from "../exec.js";
+import { exec, execAllowingFailure } from "../exec.js";
 
 interface TimedValue<T> {
   expiresAt: number;
   value: T;
 }
 
-// PR に加えて、その head コミットを持ち回る。ブランチ名の一致だけでは
-// 「このブランチの PR」と確定できないため (toVisiblePullRequest を参照)。
-export interface FetchedPullRequest {
-  pullRequest: GitHubPullRequest;
-  headRefOid: string;
+// 監視する対象。branch は「その branch の最新 PR」、number は「その番号の Issue か PR」。
+export type GitHubTarget =
+  | { kind: "branch"; repoSlug: string; branch: string }
+  | { kind: "number"; repoSlug: string; number: number };
+
+// GitHub から取れた 1 件。status は renderer にそのまま渡す分で、残りは main だけが使う。
+export interface FetchedGitHubItem {
+  status: GitHubItem;
+  title: string;
+  // PR の head コミット。その branch の PR かどうかの判定に使う (toVisiblePullRequest を参照)。
+  // issue は null。
+  headRefOid: string | null;
 }
 
 // gh の存在・認証は滅多に変わらないので長めに覚える。gh auth status は
@@ -22,12 +30,6 @@ const GH_STATUS_TTL_MS = 5 * 60_000;
 let ghAvailableCache: TimedValue<boolean> | null = null;
 let ghAuthenticatedCache: TimedValue<boolean> | null = null;
 const repoSlugCache = new Map<string, string | null>();
-// 最後に GitHub から取得できた branch -> PR。取得は PullRequestMonitor だけが行い、
-// repo list の組み立てはここから読むだけ (GitHub へのリクエストは発生しない)。
-const lastKnownPullRequestsByRepoPath = new Map<
-  string,
-  ReadonlyMap<string, FetchedPullRequest | null>
->();
 
 function getCachedValue<T>(entry: TimedValue<T> | null): T | null {
   if (!entry || entry.expiresAt <= Date.now()) {
@@ -36,7 +38,7 @@ function getCachedValue<T>(entry: TimedValue<T> | null): T | null {
   return entry.value;
 }
 
-async function hasGhAvailable(cwd: string): Promise<boolean> {
+async function hasGhAvailable(): Promise<boolean> {
   const cached = getCachedValue(ghAvailableCache);
   if (cached !== null) {
     return cached;
@@ -44,7 +46,7 @@ async function hasGhAvailable(cwd: string): Promise<boolean> {
 
   let value = false;
   try {
-    await exec("gh", ["--version"], cwd);
+    await exec("gh", ["--version"], os.homedir());
     value = true;
   } catch {
     value = false;
@@ -57,13 +59,13 @@ async function hasGhAvailable(cwd: string): Promise<boolean> {
   return value;
 }
 
-async function hasGhAuthenticated(cwd: string): Promise<boolean> {
+async function hasGhAuthenticated(): Promise<boolean> {
   const cached = getCachedValue(ghAuthenticatedCache);
   if (cached !== null) {
     return cached;
   }
 
-  if (!(await hasGhAvailable(cwd))) {
+  if (!(await hasGhAvailable())) {
     ghAuthenticatedCache = {
       value: false,
       expiresAt: Date.now() + GH_STATUS_TTL_MS,
@@ -73,7 +75,7 @@ async function hasGhAuthenticated(cwd: string): Promise<boolean> {
 
   let value = false;
   try {
-    await exec("gh", ["auth", "status"], cwd);
+    await exec("gh", ["auth", "status"], os.homedir());
     value = true;
   } catch {
     value = false;
@@ -121,69 +123,131 @@ export async function getGitHubRepoSlug(repoPath: string): Promise<string | null
   return slug;
 }
 
-// branch ごとの「最新の PR を 1 件」をエイリアスで束ねて 1 クエリにする。
-// 何 branch 載せてもレート消費は 1 クエリ分 (実測でエイリアス 120 個まで cost 1)。
-export function buildGitHubPullRequestQuery(repoSlug: string, branches: readonly string[]): string {
-  const [owner, name] = repoSlug.split("/");
-  const aliases = branches.map(
-    (branch, index) =>
-      `b${index}: pullRequests(headRefName: ${JSON.stringify(branch)}, first: 1, ` +
+// GitHub の Issue / PR の URL を監視対象に変える。GitHub は issue と PR で番号の
+// 名前空間が 1 つなので、/issues/ と /pull/ のどちらの URL でも同じ 1 件を指す。
+// 種別は URL からは決められず、GitHub の応答で決まる。
+export function parseGitHubItemUrl(url: string): GitHubTarget | null {
+  const parsed = URL.parse(url);
+  if (parsed?.hostname !== "github.com") {
+    return null;
+  }
+  const match = parsed.pathname.match(/^\/([^/]+\/[^/]+)\/(?:issues|pull)\/(\d+)\/?$/);
+  return match ? { kind: "number", repoSlug: match[1], number: Number(match[2]) } : null;
+}
+
+// 同じ対象を 1 回だけ取るためのキー。repo 名の大小は GitHub 上で区別されないので揃える。
+export function gitHubTargetKey(target: GitHubTarget): string {
+  const repoSlug = target.repoSlug.toLowerCase();
+  return target.kind === "branch" ? `${repoSlug}@${target.branch}` : `${repoSlug}#${target.number}`;
+}
+
+const ISSUE_FIELDS = "__typename number state title url";
+const PULL_REQUEST_FIELDS = "__typename number state isDraft reviewDecision title url headRefOid";
+
+function targetAlias(alias: string, target: GitHubTarget): string {
+  if (target.kind === "branch") {
+    return (
+      `${alias}: pullRequests(headRefName: ${JSON.stringify(target.branch)}, first: 1, ` +
       `orderBy: {field: CREATED_AT, direction: DESC}) ` +
-      `{ nodes { number state isDraft reviewDecision headRefOid url } }`,
-  );
+      `{ nodes { ${PULL_REQUEST_FIELDS} } }`
+    );
+  }
   return (
-    `query { repository(owner: ${JSON.stringify(owner)}, name: ${JSON.stringify(name)}) ` +
-    `{ ${aliases.join(" ")} } }`
+    `${alias}: issueOrPullRequest(number: ${target.number}) ` +
+    `{ ... on Issue { ${ISSUE_FIELDS} } ... on PullRequest { ${PULL_REQUEST_FIELDS} } }`
   );
 }
 
-function toFetchedPullRequest(node: unknown): FetchedPullRequest | null {
+// 全 repository の全対象を 1 クエリに束ねる。repository をエイリアスで並べ、その中に
+// 対象 1 件を 1 エイリアスで入れる。何件載せてもレート消費は 1 クエリ分
+// (実測で 2 repository x 20 エイリアスでも cost 1)。
+export function buildGitHubItemsQuery(
+  targetsByRepoSlug: ReadonlyMap<string, readonly GitHubTarget[]>,
+): string {
+  const repositories = [...targetsByRepoSlug].map(([repoSlug, targets], repoIndex) => {
+    const [owner, name] = repoSlug.split("/");
+    const aliases = targets.map((target, index) => targetAlias(`t${index}`, target));
+    return (
+      `r${repoIndex}: repository(owner: ${JSON.stringify(owner)}, name: ${JSON.stringify(name)}) ` +
+      `{ ${aliases.join(" ")} }`
+    );
+  });
+  return `query { ${repositories.join(" ")} }`;
+}
+
+function toFetchedItem(node: unknown): FetchedGitHubItem | null {
   if (typeof node !== "object" || node === null) {
     return null;
   }
-  const pr = node as {
+  const item = node as {
+    __typename?: unknown;
     number?: unknown;
     state?: unknown;
     isDraft?: unknown;
     reviewDecision?: unknown;
-    headRefOid?: unknown;
+    title?: unknown;
     url?: unknown;
+    headRefOid?: unknown;
   };
   if (
-    typeof pr.number !== "number" ||
-    typeof pr.url !== "string" ||
-    typeof pr.headRefOid !== "string"
+    typeof item.number !== "number" ||
+    typeof item.title !== "string" ||
+    typeof item.url !== "string"
   ) {
     return null;
   }
 
-  let state: GitHubPullRequest["state"] | null = null;
-  if (pr.state === "MERGED") {
-    state = "merged";
-  } else if (pr.state === "CLOSED") {
-    state = "closed";
-  } else if (pr.state === "OPEN") {
-    state = pr.isDraft === true ? "draft" : "open";
+  if (item.__typename === "Issue") {
+    if (item.state !== "OPEN" && item.state !== "CLOSED") {
+      return null;
+    }
+    return {
+      status: {
+        kind: "issue",
+        number: item.number,
+        state: item.state === "OPEN" ? "open" : "closed",
+        url: item.url,
+      },
+      title: item.title,
+      headRefOid: null,
+    };
   }
-  if (!state) {
+
+  if (item.__typename !== "PullRequest" || typeof item.headRefOid !== "string") {
+    return null;
+  }
+  let state: GitHubPullRequest["state"];
+  if (item.state === "MERGED") {
+    state = "merged";
+  } else if (item.state === "CLOSED") {
+    state = "closed";
+  } else if (item.state === "OPEN") {
+    state = item.isDraft === true ? "draft" : "open";
+  } else {
     return null;
   }
 
   return {
-    pullRequest: {
-      prNumber: pr.number,
+    status: {
+      kind: "pr",
+      number: item.number,
       state,
-      isApproved: pr.reviewDecision === "APPROVED",
-      url: pr.url,
+      isApproved: item.reviewDecision === "APPROVED",
+      url: item.url,
     },
-    headRefOid: pr.headRefOid,
+    title: item.title,
+    headRefOid: item.headRefOid,
   };
 }
 
-export function parseGitHubPullRequestsResponse(
+// 解決できた対象だけを返す。ある repository が解決できなかった (削除された・権限が
+// 無くなったなど) 場合、その repository のエイリアスは null になるので、その分の対象は
+// 結果に入らない = 今回は取得しなかった扱いになる。クエリ全体が失敗して data すら
+// 取れないときは null。
+export function parseGitHubItemsResponse(
   raw: string,
-  branches: readonly string[],
-): Map<string, FetchedPullRequest | null> | null {
+  targetsByRepoSlug: ReadonlyMap<string, readonly GitHubTarget[]>,
+): Map<string, FetchedGitHubItem | null> | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -191,17 +255,66 @@ export function parseGitHubPullRequestsResponse(
     return null;
   }
 
-  const repository = (parsed as { data?: { repository?: unknown } })?.data?.repository;
-  if (typeof repository !== "object" || repository === null) {
+  const data = (parsed as { data?: unknown })?.data;
+  if (typeof data !== "object" || data === null) {
     return null;
   }
 
-  const result = new Map<string, FetchedPullRequest | null>();
-  for (const [index, branch] of branches.entries()) {
-    const alias = (repository as Record<string, unknown>)[`b${index}`];
-    const nodes = (alias as { nodes?: unknown })?.nodes;
-    const first = Array.isArray(nodes) ? nodes[0] : null;
-    result.set(branch, toFetchedPullRequest(first));
+  const result = new Map<string, FetchedGitHubItem | null>();
+  for (const [repoIndex, targets] of [...targetsByRepoSlug.values()].entries()) {
+    const repository = (data as Record<string, unknown>)[`r${repoIndex}`];
+    if (typeof repository !== "object" || repository === null) {
+      continue;
+    }
+    for (const [index, target] of targets.entries()) {
+      const alias = (repository as Record<string, unknown>)[`t${index}`];
+      // branch は「最新の 1 件」の配列で、number は対象そのものが返る。
+      const node =
+        target.kind === "branch"
+          ? ((alias as { nodes?: unknown })?.nodes as unknown[] | undefined)?.[0]
+          : alias;
+      result.set(gitHubTargetKey(target), toFetchedItem(node ?? null));
+    }
+  }
+  return result;
+}
+
+// 全 repository の対象をまとめて 1 回で取る。返るのは解決できた対象だけで、
+// 取れなかった分は前回値をそのまま使う。null は「今回は 1 件も取れなかった」
+// (gh が使えない・認証切れ・通信失敗・応答が想定外)。
+export async function fetchGitHubItems(
+  targetsByRepoSlug: ReadonlyMap<string, readonly GitHubTarget[]>,
+): Promise<ReadonlyMap<string, FetchedGitHubItem | null> | null> {
+  if (targetsByRepoSlug.size === 0 || !(await hasGhAuthenticated())) {
+    return null;
+  }
+
+  // gh api graphql は errors が 1 件でもあると非ゼロで終了するが、GraphQL は解決できた
+  // 分を stdout に返す。1 つの repository が解決不能でも他のステータスは出したいので、
+  // 終了コードではなく stdout の中身で成否を判断する。
+  const { stdout, error } = await execAllowingFailure(
+    "gh",
+    ["api", "graphql", "-f", `query=${buildGitHubItemsQuery(targetsByRepoSlug)}`],
+    os.homedir(),
+  );
+
+  const result = parseGitHubItemsResponse(stdout, targetsByRepoSlug);
+  if (!result) {
+    // 通信断や認証切れなど、クエリ全体の失敗。バッジは前回値のまま、記録は残す。
+    recordAppWarning(
+      error
+        ? toAppError(error, { command: "gh" })
+        : {
+            code: "command_failed",
+            message: "Could not read the GitHub response.",
+            detail: "gh api graphql returned an unexpected shape.",
+          },
+    );
+    return null;
+  }
+  if (error) {
+    // 一部の repository だけが解決できなかった。取れた分は使い、理由は記録に残す。
+    recordAppWarning(toAppError(error, { command: "gh" }));
   }
   return result;
 }
@@ -210,77 +323,15 @@ export function parseGitHubPullRequestsResponse(
 // open/draft は同名ブランチへの push で同じ PR が更新されるため名前一致で十分だが、
 // merged/closed は PR の head コミットが worktree の head と一致するときだけこのブランチの PR とみなす。
 export function toVisiblePullRequest(
-  fetched: FetchedPullRequest | null,
+  fetched: FetchedGitHubItem | null,
   headSha: string,
 ): GitHubPullRequest | null {
-  if (!fetched) {
+  if (!fetched || fetched.status.kind !== "pr") {
     return null;
   }
-  const { pullRequest, headRefOid } = fetched;
-  if (pullRequest.state === "merged" || pullRequest.state === "closed") {
-    return headRefOid === headSha ? pullRequest : null;
+  const { status, headRefOid } = fetched;
+  if (status.state === "merged" || status.state === "closed") {
+    return headRefOid === headSha ? status : null;
   }
-  return pullRequest;
-}
-
-// 指定 branch 群の PR を GitHub から取得し、成功したら最終取得値を更新して返す。
-// null は「取得しなかった/できなかった」(gh が使えない・GitHub リポジトリでない・通信失敗)。
-// その場合、最終取得値は前のまま残る。
-export async function fetchGitHubPullRequests(
-  repoPath: string,
-  branches: readonly string[],
-): Promise<ReadonlyMap<string, FetchedPullRequest | null> | null> {
-  const uniqueBranches = [...new Set(branches.filter((branch) => branch && branch !== "HEAD"))];
-  if (!(await hasGhAuthenticated(repoPath))) {
-    return null;
-  }
-  const repoSlug = await getGitHubRepoSlug(repoPath);
-  if (!repoSlug) {
-    return null;
-  }
-
-  if (uniqueBranches.length === 0) {
-    const empty = new Map<string, FetchedPullRequest | null>();
-    lastKnownPullRequestsByRepoPath.set(repoPath, empty);
-    return empty;
-  }
-
-  let output: string;
-  try {
-    output = await exec(
-      "gh",
-      ["api", "graphql", "-f", `query=${buildGitHubPullRequestQuery(repoSlug, uniqueBranches)}`],
-      repoPath,
-    );
-  } catch (error) {
-    // gh が使える前提での失敗 (ネットワーク断など)。PR バッジは前回値のまま、記録は残す。
-    recordAppWarning(toAppError(error, { command: "gh" }));
-    return null;
-  }
-
-  const result = parseGitHubPullRequestsResponse(output, uniqueBranches);
-  if (!result) {
-    recordAppWarning({
-      code: "command_failed",
-      message: "Could not read the GitHub pull request response.",
-      detail: `gh api graphql for ${repoSlug} returned an unexpected shape.`,
-    });
-    return null;
-  }
-
-  lastKnownPullRequestsByRepoPath.set(repoPath, result);
-  return result;
-}
-
-// undefined は「この branch をまだ取得していない」、null は「PR が無い (または隠す)」。
-export function getLastKnownGitHubPullRequest(
-  repoPath: string,
-  branch: string,
-  headSha: string,
-): GitHubPullRequest | null | undefined {
-  const fetched = lastKnownPullRequestsByRepoPath.get(repoPath)?.get(branch);
-  if (fetched === undefined) {
-    return undefined;
-  }
-  return toVisiblePullRequest(fetched, headSha);
+  return status;
 }

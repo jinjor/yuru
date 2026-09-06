@@ -30,9 +30,9 @@ type ListWorktrees = (repoPath: string) => Promise<readonly WorktreeInfo[]>;
 type LoadSuggestedSessions = (
   worktreePaths: readonly string[],
 ) => Promise<ReadonlyMap<string, readonly SuggestedWorktreeSession[]>>;
-// PullRequestMonitor が最後に取得した PR を読むだけ (GitHub へは行かない)。
+// GitHub のポーリングが最後に取得した PR を読むだけ (GitHub へは行かない)。
 type GetGitHubPullRequest = (
-  repoPath: string,
+  repoSlug: string,
   branch: string,
   headSha: string,
 ) => GitHubPullRequest | null | undefined;
@@ -113,8 +113,8 @@ export async function loadRepoList(
           unresolvedTerminalRuntimesByLaunchWorktreePath,
           primarySessionPreviewsByKey,
           suggestedSessionsByWorktreePath?.get(gitWorktree.path) ?? [],
-          gitWorktree.branch
-            ? getGitHubPullRequest?.(repo.repoPath, gitWorktree.branch, gitWorktree.headSha)
+          githubRepoSlug && gitWorktree.branch
+            ? getGitHubPullRequest?.(githubRepoSlug, gitWorktree.branch, gitWorktree.headSha)
             : undefined,
           agentActivityStatesByTerminalRuntimeId,
           terminalRuntimeIdsByTaskWorktreePath,

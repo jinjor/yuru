@@ -282,7 +282,7 @@ function WorktreeCard({
               {formatHeadCommittedAt(worktree.headCommittedAt)}
             </time>
           )}
-          {worktree.githubPullRequest && <GitHubBadge github={worktree.githubPullRequest} />}
+          {worktree.githubPullRequest && <GitHubBadge item={worktree.githubPullRequest} />}
         </span>
         {isRemoving ? (
           <span className="task-worktree-removing">

@@ -8,9 +8,6 @@ import { YuruService } from "./service.js";
 import { APP_NAME, getWindowTitleForAppPath } from "./app-title.js";
 import { recordAppError, recordAppWarning, setErrorNoticesListener } from "./errors/center.js";
 import { toAppError } from "./errors/app-error.js";
-import { fetchGitHubPullRequests } from "./github/github.js";
-import { listWorktrees } from "./git/worktree.js";
-import { PullRequestMonitor } from "./github/pull-request-monitor.js";
 import { PlanUsageMonitor } from "./agents/plan-usage-monitor.js";
 import { resolveCommandPaths } from "./agents/command.js";
 import { getAgent, agents } from "./agents/registry.js";
@@ -70,6 +67,7 @@ const service = new YuruService(
     repoListChanged: sendRepoListChanged,
     rateLimitStopsChanged: sendRateLimitStopsChanged,
     bookmarksChanged: sendBookmarksChanged,
+    pullRequestsChanged: sendPullRequestsChanged,
     refreshPlanUsage: () => {
       void planUsageMonitor.refreshOnce();
     },
@@ -83,16 +81,6 @@ const service = new YuruService(
 );
 
 setErrorNoticesListener(sendErrorNoticesChanged);
-
-// PR バッジの鮮度はこのポーリングが担う。ウィンドウのフォーカスに合わせて
-// 起動・停止するので、誰も見ていない間は GitHub へのリクエストが発生しない。
-const pullRequestMonitor = new PullRequestMonitor({
-  listRepos: loadRepos,
-  listWorktrees,
-  fetchPullRequests: fetchGitHubPullRequests,
-  hasAliveTerminalRuntimeInRepo: (repoPath) => service.hasAliveTerminalRuntimeInRepo(repoPath),
-  pullRequestsChanged: sendPullRequestsChanged,
-});
 
 // プランの利用状況のポーリング。PR と同じくフォーカス中だけ動く。この結果が
 // 「どの provider を出すか」も決めるので、起動直後にも 1 回走らせる。
@@ -337,7 +325,6 @@ async function stopApplicationServices(): Promise<void> {
     return;
   }
   servicesStopped = true;
-  pullRequestMonitor.stop();
   planUsageMonitor.stop();
   worktreeWatcher?.stop();
   try {
@@ -656,16 +643,16 @@ app.whenReady().then(async () => {
   registerIpcHandlers();
 
   app.on("browser-window-focus", () => {
-    pullRequestMonitor.start();
+    service.startGitHubStatusPolling();
     planUsageMonitor.start();
   });
   app.on("browser-window-blur", () => {
-    pullRequestMonitor.stop();
+    service.stopGitHubStatusPolling();
     planUsageMonitor.stop();
   });
   // 起動時にすでにフォーカスされていると focus イベントが来ないことがあるため。
   if (mainWindow?.isFocused()) {
-    pullRequestMonitor.start();
+    service.startGitHubStatusPolling();
     planUsageMonitor.start();
   } else {
     // 非フォーカスで起動した場合、blur イベントは来ないので start() すると

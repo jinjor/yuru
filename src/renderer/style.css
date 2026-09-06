@@ -1108,7 +1108,10 @@ button.github-badge {
   border-color: rgba(160, 170, 180, 0.26);
 }
 
-.github-badge.merged {
+/* PR の merged と issue の closed はどちらも「片付いた」。closed issue は
+   たいてい「直った」で、closed PR の「取り込まない」とは意味が逆なので色を分ける。 */
+.github-badge.merged,
+.github-badge.issue.closed {
   color: #bfc5ff;
   background: rgba(70, 78, 150, 0.22);
   border-color: rgba(144, 155, 255, 0.24);
@@ -1625,22 +1628,42 @@ button.github-badge {
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
-  padding: 6px 12px;
+  /* タイトルが折り返すぶん、行の境目が改行に紛れないよう縦の間隔を広げる。
+     横は Changes / Files / Search の行と左端をそろえて 12px のまま。 */
+  padding: 10px 12px;
 }
 
-.bookmark-title,
+/* タイトルは 2 行まで折り返し、超えた分を切る。 */
+.bookmark-title {
+  width: 100%;
+  font-size: 12px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+/* バッジと URL のメタ行。ステータスは後から届くので、届いた瞬間に行が伸びて
+   下の行がずれないよう、バッジぶんの高さを常に確保する。 */
+.bookmark-meta {
+  width: 100%;
+  min-height: 18px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bookmark-meta .github-badge {
+  flex-shrink: 0;
+}
+
 .bookmark-url {
+  min-width: 0;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.bookmark-title {
-  font-size: 12px;
-}
-
-.bookmark-url {
   color: var(--text-subtle);
   font-size: 11px;
 }
