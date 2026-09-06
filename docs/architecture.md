@@ -42,7 +42,7 @@ Yuru の中では、Claude Code / Codex CLI / Kimi CLI そのものを `agent` �
   - current branch / detached HEAD
   - status, diff, file content
 - agent store
-  - Claude / Codex の保存済み session
+  - 各 provider の保存済み session
   - agent session id
   - last message や timestamp
   - worktree session detection 用の path hint
@@ -165,7 +165,7 @@ worktree の外部 rename は自動追跡しない。
 
 ## Agent sessions
 
-対応 provider は Claude と Codex である。
+対応 provider は Claude と Codex と Kimi である。
 provider ごとの session store や resume command の違いは agent の実装 (`src/main/agents/`) に閉じ込める。
 
 Claude / Codex の session preview は、初回に JSONL の末尾から最新の assistant message までを
@@ -173,7 +173,7 @@ Claude / Codex の session preview は、初回に JSONL の末尾から最新�
 走査しないため、ログ全体のサイズは初回表示の読み取り量に影響しない。Kimi の preview は
 `state.json` の `lastPrompt` / `title` から読む。
 
-worktree session の create / resume は、Claude / Codex とも cwd = repo root で起動する。
+worktree session の create / resume は、どの provider も cwd = repo root で起動する。
 PTY 内で `cd` しても、`Files`, `Changes`, diff の作業ルートは runtime cwd ではなく選択中 task worktree の `worktreePath` で決まる。
 
 worktree の作成と agent session の開始は別の操作である (F43)。
@@ -236,7 +236,7 @@ Yuru の Terminal link 規則なので、custom template にかかわらず末�
     移行せず、そのまま Git worktree として扱う
 - start session for worktree
   - task worktree の Terminal ホームには、primary session 全件、既存 session (suggested)、
-    新規 session (Claude / Codex) の選択肢が常に出る
+    新規 session (Claude / Codex / Kimi) の選択肢が常に出る
   - 新規作成した worktree も既存の Git worktree も、この同じ flow で session を開始する
   - session の起動に失敗しても worktree は削除しない
 - resume primary session
@@ -288,7 +288,7 @@ session lifecycle の操作は選択中 worktree の Terminal が担う。Termin
 `[ホーム] [live terminal runtime...]` のタブ列で、runtime の生成・終了から一覧を導出する。
 ホームは常設で、session の一覧と開始操作を表示する。
 
-- task worktree: primary session 全件、suggested session 全件、新規 session (Claude / Codex)
+- task worktree: primary session 全件、suggested session 全件、新規 session (Claude / Codex / Kimi)
   を primary の有無に関わらず表示する
 - active な primary 行: 対応する runtime タブを選択する
 - inactive な primary 行: agent session を resume する。detach は行の副操作として表示し、
