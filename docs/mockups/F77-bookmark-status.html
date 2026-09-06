@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>F77 — ブックマークの GitHub ステータス表示のモックアップ</title>
+<style>
+/* copied from src/renderer/style.css */
+:root {
+  color-scheme: dark;
+
+  /* Base backgrounds */
+  --bg-app: #11151d;
+  --bg-panel: #181d27;
+  --bg-hover: #262f3f;
+  --bg-selected: #2f4058;
+
+  /* Borders */
+  --border: #2f394a;
+  --border-strong: #445068;
+
+  /* Text */
+  --text: #d8e1ef;
+  --text-muted: #91a0b8;
+  --text-subtle: #63718a;
+
+  /* Accents */
+  --accent: #7bc1ff;
+  --success: #7ad7a1;
+  --warning: #e2c08d;
+  --danger: #f08f86;
+
+  /* Mono font stack */
+  --font-mono: "SFMono-Regular", Menlo, Monaco, monospace;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+body {
+  background: var(--bg-app);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  padding: 28px;
+}
+
+/* --- copied: .icon-button --- */
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-subtle);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.icon-button.sm {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+}
+
+.icon-button:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--bg-hover);
+  border-color: var(--border);
+}
+
+/* --- copied: .github-badge --- */
+.github-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.github-badge.open {
+  color: #aee9c2;
+  background: rgba(59, 122, 81, 0.22);
+  border-color: rgba(122, 215, 161, 0.28);
+}
+
+.github-badge.draft {
+  color: #c2cad2;
+  background: rgba(110, 119, 129, 0.22);
+  border-color: rgba(160, 170, 180, 0.26);
+}
+
+.github-badge.merged {
+  color: #bfc5ff;
+  background: rgba(70, 78, 150, 0.22);
+  border-color: rgba(144, 155, 255, 0.24);
+}
+
+.github-badge.closed {
+  color: #f1b3aa;
+  background: rgba(128, 58, 49, 0.22);
+  border-color: rgba(240, 143, 134, 0.22);
+}
+
+/* --- NEW (F77): closed issue は「完了」なので merged と同じ紫にそろえる --- */
+.github-badge.issue.closed {
+  color: #bfc5ff;
+  background: rgba(70, 78, 150, 0.22);
+  border-color: rgba(144, 155, 255, 0.24);
+}
+
+/* --- copied: .file-tree / .code-search-match-row --- */
+.file-tree {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow: auto;
+}
+
+.code-search-match-row {
+  width: 100%;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+/* --- copied: bookmarks pane --- */
+.bookmarks-pane {
+  padding: 4px 0;
+}
+
+.bookmark-row {
+  display: flex;
+  align-items: center;
+  padding-right: 8px;
+}
+
+.bookmark-row:hover {
+  background: var(--bg-hover);
+}
+
+.bookmark-open {
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 6px 12px;
+}
+
+.bookmark-title,
+.bookmark-url {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookmark-title {
+  font-size: 12px;
+}
+
+.bookmark-url {
+  color: var(--text-subtle);
+  font-size: 11px;
+}
+
+/* --- NEW (F77): 2 行目をバッジ + URL の行にする --- */
+.bookmark-meta {
+  width: 100%;
+  min-height: 18px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bookmark-meta .github-badge {
+  flex-shrink: 0;
+}
+
+.bookmark-meta .bookmark-url {
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+/* --- 案B: バッジを独立した 1 行目に置く --- */
+.v-b .bookmark-badge-line {
+  width: 100%;
+  min-height: 18px;
+  display: flex;
+  align-items: center;
+}
+
+/* --- 案C: タイトルを 2 行まで折り返す --- */
+.v-c .bookmark-title {
+  width: 100%;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  white-space: normal;
+  line-height: 1.35;
+}
+
+/* ================= mockup chrome (本体には入れない) ================= */
+.sheet {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  align-items: flex-start;
+  margin-bottom: 34px;
+}
+
+h2.section {
+  font-size: 13px;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0;
+  margin: 6px 0 12px;
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+h1 {
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+h2 {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.note {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-subtle);
+  max-width: 375px;
+}
+
+.note b {
+  color: var(--text-muted);
+}
+
+.panel {
+  width: 375px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.panel-title {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.gallery {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 8px 14px;
+  align-items: center;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+.gallery .k {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
+.gallery .c {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.bad {
+  opacity: 0.85;
+}
+
+.bad .panel-title {
+  color: var(--danger);
+}
+
+.ruler {
+  position: relative;
+}
+
+.ruler::after {
+  content: "";
+  position: absolute;
+  inset: 0 8px 0 auto;
+  width: 1px;
+  background: rgba(123, 193, 255, 0.35);
+}
+
+/* --- 採用案の縦パディング --- */
+.v-pad .bookmark-open {
+  padding: 10px 12px;
+}
+</style>
+</head>
+<body>
+
+<h1>F77 — ブックマーク一覧の GitHub ステータス表示</h1>
+
+<h2 class="section">1. 採用案（幅 375px = Explorer パネルの既定幅）</h2>
+<div class="sheet">
+  <div class="block">
+    <h2>Bookmarks タブ</h2>
+    <div class="panel v-c v-pad">
+      <div class="panel-title">Bookmarks</div>
+      <div class="file-tree bookmarks-pane">
+        <div class="bookmark-row"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-title">Support nested worktrees in the file tree so that subdirectories stay collapsed</span><span class="bookmark-meta"><span class="github-badge issue open"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/></svg>Open #482</span><span class="bookmark-url">https://github.com/jinjor/yuru/issues/482</span></span></button><button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div class="bookmark-row"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-title">Terminal bar flickers when the PR badge appears</span><span class="bookmark-meta"><span class="github-badge issue closed"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/></svg>Closed #367</span><span class="bookmark-url">https://github.com/jinjor/yuru/issues/367</span></span></button><button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div class="bookmark-row"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-title">Split PullRequestMonitor into a monitor and two sources</span><span class="bookmark-meta"><span class="github-badge pr open"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/></svg>Approved #491</span><span class="bookmark-url">https://github.com/jinjor/yuru/pull/491</span></span></button><button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div class="bookmark-row"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-title">WIP: bookmark rename</span><span class="bookmark-meta"><span class="github-badge pr draft"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/></svg>Draft #503</span><span class="bookmark-url">https://github.com/jinjor/yuru/pull/503</span></span></button><button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div class="bookmark-row"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-title">Add --json flag to gh pr view</span><span class="bookmark-meta"><span class="github-badge pr merged"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/></svg>Merged #10218</span><span class="bookmark-url">https://github.com/cli/cli/pull/10218</span></span></button><button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div class="bookmark-row"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-title">Persist bookmark status in bookmarks.json</span><span class="bookmark-meta"><span class="github-badge pr closed"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/></svg>Closed #455</span><span class="bookmark-url">https://github.com/jinjor/yuru/pull/455</span></span></button><button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div class="bookmark-row"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-title">Electron BrowserWindow | Electron</span><span class="bookmark-meta"><span class="bookmark-url">https://www.electronjs.org/docs/latest/api/browser-window</span></span></button><button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div class="bookmark-row"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-title">Reveal file in tree from the terminal</span><span class="bookmark-meta"><span class="bookmark-url">https://github.com/jinjor/yuru/issues/510</span></span></button><button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+      </div>
+    </div>
+    <p class="note">タイトルは <b>2 行まで折り返し</b>、バッジは <b>2 行目の先頭</b>。行の縦パディングは <b>10px</b>（現状 6px）で、行の境がタイトルの折り返しに紛れないようにする。行の高さはタイトル 1 行で約 56px、2 行で約 72px。</p>
+  </div>
+
+  <div class="block">
+    <h2>バッジ 7 種</h2>
+    <div class="gallery">
+      <span class="k">issue / open</span>
+      <span class="github-badge issue open"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/></svg>Open #482</span>
+      <span class="c">.github-badge.issue.open</span>
+      <span class="k">issue / closed</span>
+      <span class="github-badge issue closed"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/></svg>Closed #367</span>
+      <span class="c">.github-badge.issue.closed</span>
+      <span class="k">pr / open</span>
+      <span class="github-badge pr open"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/></svg>Open #491</span>
+      <span class="c">.github-badge.pr.open</span>
+      <span class="k">pr / open + approved</span>
+      <span class="github-badge pr open"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/></svg>Approved #491</span>
+      <span class="c">.github-badge.pr.open（色は同じ、語だけ変わる）</span>
+      <span class="k">pr / draft</span>
+      <span class="github-badge pr draft"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/></svg>Draft #503</span>
+      <span class="c">.github-badge.pr.draft</span>
+      <span class="k">pr / merged</span>
+      <span class="github-badge pr merged"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/></svg>Merged #10218</span>
+      <span class="c">.github-badge.pr.merged</span>
+      <span class="k">pr / closed</span>
+      <span class="github-badge pr closed"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/></svg>Closed #455</span>
+      <span class="c">.github-badge.pr.closed</span>
+    </div>
+    <p class="note">
+      色は「その仕事がどうなったか」に対応する。
+      <b>緑 = まだ生きている</b>（open issue / open PR、approved も同じ緑）、
+      <b>灰 = まだ本番向けではない</b>（draft PR）、
+      <b>紫 = 片付いた</b>（merged PR / closed issue）、
+      <b>赤 = 打ち切られた</b>（closed PR）。
+      新しい色は 1 つも増やさない。closed issue は merged の紫を共有する。
+      アイコンは<b>種別だけ</b>を表し、状態では変えない（issue = CircleDot、PR = GitPullRequest）。
+    </p>
+  </div>
+</div>
+
+<h2 class="section">2. 却下案</h2>
+<div class="sheet">
+  <div class="block">
+    <h2>タイトル 1 行 / パディング 6px</h2>
+    <div class="panel v-c bad">
+      <div class="panel-title">Bookmarks</div>
+      <div class="file-tree bookmarks-pane">
+        <div class="bookmark-row"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-title">Support nested worktrees in the file tree so that subdirectories stay collapsed</span><span class="bookmark-meta"><span class="github-badge issue open"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/></svg>Open #482</span><span class="bookmark-url">https://github.com/jinjor/yuru/issues/482</span></span></button><button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div class="bookmark-row"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-title">Terminal bar flickers when the PR badge appears</span><span class="bookmark-meta"><span class="github-badge issue closed"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/></svg>Closed #367</span><span class="bookmark-url">https://github.com/jinjor/yuru/issues/367</span></span></button><button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div class="bookmark-row"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-title">Split PullRequestMonitor into a monitor and two sources</span><span class="bookmark-meta"><span class="github-badge pr open"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/></svg>Approved #491</span><span class="bookmark-url">https://github.com/jinjor/yuru/pull/491</span></span></button><button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div class="bookmark-row"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-title">WIP: bookmark rename</span><span class="bookmark-meta"><span class="github-badge pr draft"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/></svg>Draft #503</span><span class="bookmark-url">https://github.com/jinjor/yuru/pull/503</span></span></button><button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div class="bookmark-row"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-title">Add --json flag to gh pr view</span><span class="bookmark-meta"><span class="github-badge pr merged"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/></svg>Merged #10218</span><span class="bookmark-url">https://github.com/cli/cli/pull/10218</span></span></button><button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div class="bookmark-row"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-title">Persist bookmark status in bookmarks.json</span><span class="bookmark-meta"><span class="github-badge pr closed"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/></svg>Closed #455</span><span class="bookmark-url">https://github.com/jinjor/yuru/pull/455</span></span></button><button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div class="bookmark-row"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-title">Electron BrowserWindow | Electron</span><span class="bookmark-meta"><span class="bookmark-url">https://www.electronjs.org/docs/latest/api/browser-window</span></span></button><button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div class="bookmark-row"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-title">Reveal file in tree from the terminal</span><span class="bookmark-meta"><span class="bookmark-url">https://github.com/jinjor/yuru/issues/510</span></span></button><button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+      </div>
+    </div>
+    <p class="note">タイトルが 1 行 <code>…</code> 切り、縦パディング 6px。<b>2 行になった行同士がくっついて見え</b>、長いタイトルは何の件か読めない。</p>
+  </div>
+
+  <div class="block">
+    <h2>バッジ専用の行を作る</h2>
+    <div class="panel v-b bad">
+      <div class="panel-title">Bookmarks</div>
+      <div class="file-tree bookmarks-pane">
+        <div class="bookmark-row"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-badge-line"><span class="github-badge issue open"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/></svg>Open #482</span></span><span class="bookmark-title">Support nested worktrees in the file tree so that subdirectories stay collapsed</span><span class="bookmark-url">https://github.com/jinjor/yuru/issues/482</span></button><button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div class="bookmark-row"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-badge-line"><span class="github-badge issue closed"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/></svg>Closed #367</span></span><span class="bookmark-title">Terminal bar flickers when the PR badge appears</span><span class="bookmark-url">https://github.com/jinjor/yuru/issues/367</span></button><button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div class="bookmark-row"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-badge-line"><span class="github-badge pr open"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/></svg>Approved #491</span></span><span class="bookmark-title">Split PullRequestMonitor into a monitor and two sources</span><span class="bookmark-url">https://github.com/jinjor/yuru/pull/491</span></button><button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div class="bookmark-row"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-badge-line"><span class="github-badge pr draft"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/></svg>Draft #503</span></span><span class="bookmark-title">WIP: bookmark rename</span><span class="bookmark-url">https://github.com/jinjor/yuru/pull/503</span></button><button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div class="bookmark-row"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-badge-line"><span class="github-badge pr merged"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/></svg>Merged #10218</span></span><span class="bookmark-title">Add --json flag to gh pr view</span><span class="bookmark-url">https://github.com/cli/cli/pull/10218</span></button><button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div class="bookmark-row"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-badge-line"><span class="github-badge pr closed"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/></svg>Closed #455</span></span><span class="bookmark-title">Persist bookmark status in bookmarks.json</span><span class="bookmark-url">https://github.com/jinjor/yuru/pull/455</span></button><button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div class="bookmark-row"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-title">Electron BrowserWindow | Electron</span><span class="bookmark-url">https://www.electronjs.org/docs/latest/api/browser-window</span></button><button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div class="bookmark-row"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-title">Reveal file in tree from the terminal</span><span class="bookmark-url">https://github.com/jinjor/yuru/issues/510</span></button><button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+      </div>
+    </div>
+    <p class="note">バッジだけの行を最初に足した案。<b>タイトルは 1 行のままで何も改善しない</b>うえ、色つきのピルが行の頭に来るとそこが区切りに見えて、<b>どこで 1 件が終わるのか読めなくなる</b>。</p>
+  </div>
+
+  <div class="block">
+    <h2>タイトル行の右端に置く</h2>
+    <div class="panel bad">
+      <div class="panel-title">Bookmarks</div>
+      <div class="file-tree bookmarks-pane">
+        <div class="bookmark-row ruler"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-meta"><span class="bookmark-title" style="flex:1">Support nested worktrees in the file tree so that subdirectories stay collapsed</span><span class="github-badge issue open"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/></svg>Open #482</span></span><span class="bookmark-url">https://github.com/jinjor/yuru/issues/482</span></button><button type="button" class="icon-button sm"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div class="bookmark-row ruler"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-meta"><span class="bookmark-title" style="flex:1">Terminal bar flickers when the PR badge appears</span><span class="github-badge issue closed"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/></svg>Closed #367</span></span><span class="bookmark-url">https://github.com/jinjor/yuru/issues/367</span></button><button type="button" class="icon-button sm"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div class="bookmark-row ruler"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-meta"><span class="bookmark-title" style="flex:1">Split PullRequestMonitor into a monitor and two sources</span><span class="github-badge pr open"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/></svg>Approved #491</span></span><span class="bookmark-url">https://github.com/jinjor/yuru/pull/491</span></button><button type="button" class="icon-button sm"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div class="bookmark-row ruler"><button type="button" class="code-search-match-row bookmark-open"><span class="bookmark-meta"><span class="bookmark-title" style="flex:1">Electron BrowserWindow | Electron</span></span><span class="bookmark-url">https://www.electronjs.org/docs/latest/api/browser-window</span></button><button type="button" class="icon-button sm"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+      </div>
+    </div>
+    <p class="note">RepoList / ターミナルバーと同じ末尾配置。(1) バッジが後から届いた瞬間にタイトルが縮んで <b>折り返し位置が動く</b>。(2) 削除ボタン (×) の真横に色つきの丸ピルが並び、<b>ボタンの仲間に見える</b>。(3) アイコンが右端でそろわないので、状態を縦に追えない。</p>
+  </div>
+</div>
+
+</body>
+</html>
