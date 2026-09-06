@@ -8,6 +8,33 @@ import type { ResolvedAgentCommand } from "./command.js";
 // 「応答が来るか時間切れになるまで待ち、どちらでも必ず後片付けする」が要るので、
 // 起動と後片付けはここに集約する。特に kimi はサーバとして起動するため、
 // kill し損ねると常駐し続ける。
+
+// 起動中の子プロセス。取得を終えたときの kill (下の finally) は、その前にアプリが
+// 終了してしまうと走らず、親だけが消えて子が残る。終了時にまとめて止められるよう、
+// 起動中のものを控えておく。
+const runningProcesses = new Set<ChildProcessWithoutNullStreams>();
+// SIGTERM で終わらない子がいても quit が止まらないよう、この猶予の後に SIGKILL する。
+const SHUTDOWN_GRACE_MS = 2_000;
+
+// アプリ終了時に呼ぶ。子プロセスが実際に終わるまで待つので、これを待ってから
+// 終了すれば子は残らない。
+export async function stopPlanUsageProcesses(): Promise<void> {
+  await Promise.all(Array.from(runningProcesses, killAndWait));
+}
+
+function killAndWait(child: ChildProcessWithoutNullStreams): Promise<void> {
+  return new Promise((resolve) => {
+    const killTimer = setTimeout(() => {
+      child.kill("SIGKILL");
+    }, SHUTDOWN_GRACE_MS);
+    child.on("exit", () => {
+      clearTimeout(killTimer);
+      resolve();
+    });
+    child.kill();
+  });
+}
+
 export async function withPlanUsageProcess<T>(
   command: ResolvedAgentCommand,
   args: readonly string[],
@@ -92,7 +119,7 @@ function spawnAgentCommand(
   command: ResolvedAgentCommand,
   args: readonly string[],
 ): ChildProcessWithoutNullStreams {
-  return spawn(command.path, [...args], {
+  const child = spawn(command.path, [...args], {
     // agent の CLI は cwd を見て挙動を変える (Claude の CLAUDE.md 探索、kimi の
     // workspace 判定)。利用状況はアカウント全体の話で worktree とは無関係なので、
     // どの worktree にも紐づかない一時ディレクトリで起動する。
@@ -102,6 +129,16 @@ function spawnAgentCommand(
     env: { ...process.env, PATH: command.pathEnv },
     stdio: ["pipe", "pipe", "pipe"],
   });
+  // kill した後に stdin への書き込みが残っていると EPIPE が上がる。stdin の error を
+  // 誰も受けないと main プロセスの uncaughtException になり、Electron がモーダルの
+  // エラーダイアログを出してアプリ全体が固まる。書けなかったこと自体は、続いて起きる
+  // close が「応答前に終了した」として呼び出し元に伝える。
+  child.stdin.on("error", () => {});
+  runningProcesses.add(child);
+  child.on("exit", () => {
+    runningProcesses.delete(child);
+  });
+  return child;
 }
 
 // 1 行 1 JSON のストリームを読む。行の途中で chunk が切れても組み立て直す。

@@ -148,3 +148,32 @@ test("refreshOnce は 1 回取得するだけで定期取得を始めない", as
   // 定期取得が始まっていないので stop() は不要。始まっていれば以降も動き続ける。
   monitor.stop();
 });
+
+test("終了処理に入った後の tick は CLI を起動しない", async () => {
+  clearErrorNotices();
+  let resolvePaths;
+  let loaded = 0;
+  const { monitor, pushed } = createMonitor({
+    // パスの解決中に終了が始まる状況を作る。
+    resolveCommandPaths: (commands) =>
+      new Promise((resolve) => {
+        resolvePaths = () =>
+          resolve(
+            new Map(commands.map((command) => [command, { path: `/bin/${command}`, pathEnv: "/bin" }])),
+          );
+      }),
+    loadPlanUsage: async () => {
+      loaded += 1;
+      return { state: "ok", fiveHour: null, weekly: null };
+    },
+  });
+
+  monitor.start();
+  await flush();
+  await monitor.stopForShutdown();
+  resolvePaths();
+  await flush();
+
+  assert.equal(loaded, 0);
+  assert.equal(pushed.length, 0);
+});

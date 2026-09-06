@@ -3,6 +3,7 @@ import type { PlanUsage } from "./agent.js";
 import { recordAppWarning } from "../errors/center.js";
 import { toAppError } from "../errors/app-error.js";
 import type { ResolvedAgentCommand } from "./command.js";
+import { stopPlanUsageProcesses } from "./plan-usage-io.js";
 
 // ウィンドウがフォーカスされている間だけ動くプラン利用状況のポーリング。
 // 1 tick で「ログインシェルに 3 provider のパスを解決させる → 見つかった provider を
@@ -20,6 +21,7 @@ export class PlanUsageMonitor {
   private readonly deps: PlanUsageMonitorDeps;
   private timer: ReturnType<typeof setInterval> | null = null;
   private ticking = false;
+  private shuttingDown = false;
 
   constructor(deps: PlanUsageMonitorDeps) {
     this.deps = deps;
@@ -48,6 +50,14 @@ export class PlanUsageMonitor {
     }
   }
 
+  // アプリ終了時に呼ぶ。取得中の CLI が終わるまで待ってから返るので、これを待ってから
+  // 終了すれば CLI は残らない。特に kimi はサーバとして起動するため、残ると常駐し続ける。
+  async stopForShutdown(): Promise<void> {
+    this.stop();
+    this.shuttingDown = true;
+    await stopPlanUsageProcesses();
+  }
+
   private async tick(): Promise<void> {
     if (this.ticking) {
       return;
@@ -65,6 +75,10 @@ export class PlanUsageMonitor {
         // 「どの provider も入っていない」ことになり、セッションを開始できなくなる。
         // 前回の一覧を残したいので、この tick は何も push せずに終える。
         recordAppWarning(toAppError(error, { command: "login shell" }));
+        return;
+      }
+      // 終了処理に入った後に取得を始めると、起動した CLI を止める人がいなくなる。
+      if (this.shuttingDown) {
         return;
       }
       // 見つからなかった provider は結果に入れない。「一覧に居ない = 入っていない」

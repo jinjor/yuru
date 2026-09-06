@@ -325,7 +325,7 @@ async function stopApplicationServices(): Promise<void> {
     return;
   }
   servicesStopped = true;
-  planUsageMonitor.stop();
+  await planUsageMonitor.stopForShutdown();
   worktreeWatcher?.stop();
   try {
     await apiServer?.stop();
