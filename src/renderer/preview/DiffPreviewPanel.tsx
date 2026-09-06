@@ -3,7 +3,7 @@ import { diffArrays } from "diff";
 import type { GitDiffDocument, GitDiffScope } from "../../shared/ipc";
 import { imageMediaType } from "../../shared/image-preview";
 import type { FileViewMode } from "./fileViewMode";
-import { computeLineChanges } from "./editor/lineChanges";
+import { computeDiffHunks } from "./diffHunks";
 import { SourceViewer, type SourceLine } from "./SourceViewer";
 import { tokenizeCode, type TokenizedLine } from "./highlight";
 import { PreviewHeader } from "./PreviewHeader";
@@ -126,29 +126,28 @@ export function DiffPreviewPanel({
   const activeReviewed = reviewable ? (reviewed ?? false) : undefined;
   // ヘッダの +/- と、プレビューで変更ブロックに印を付けるための変更行を 1 回の計算から導く。
   // (編集中の数値は autosave 後に追従する)。
-  const lineChanges = useMemo(
-    () =>
-      computeLineChanges((originalContent ?? "").split("\n"), (currentContent ?? "").split("\n")),
+  const diff = useMemo(
+    () => computeDiffHunks((originalContent ?? "").split("\n"), (currentContent ?? "").split("\n")),
     [originalContent, currentContent],
   );
-  const headerLineStat = lineChanges.stat;
+  const headerLineStat = diff.stat;
   // プレビューは現在の内容を描画するので、追加 (緑) 側は行に印を付けられる。削除は中身を出せない
-  // ので、純粋な削除箇所だけ位置マーカーとして渡す。
+  // ので、位置マーカーとして渡す。書き換え (削除 + 追加) は両方に出す。
   const changedLines = useMemo(() => {
     const set = new Set<number>();
-    for (const mark of lineChanges.marks) {
-      if (mark.kind === "added") {
-        set.add(mark.line);
+    for (const hunk of diff.hunks) {
+      for (let offset = 0; offset < hunk.addedCount; offset++) {
+        set.add(hunk.line + offset);
       }
     }
     return set;
-  }, [lineChanges]);
+  }, [diff]);
   const deletions = useMemo(
     () =>
-      lineChanges.marks
-        .filter((mark) => mark.kind === "deleted" || mark.kind === "deleted-end")
-        .map((mark) => ({ line: mark.line, atEnd: mark.kind === "deleted-end" })),
-    [lineChanges],
+      diff.hunks
+        .filter((hunk) => hunk.removedCount > 0)
+        .map((hunk) => ({ line: hunk.line, atEnd: hunk.atEnd })),
+    [diff],
   );
 
   useEffect(() => {

@@ -14,7 +14,8 @@ import {
   type EditorView,
   type ViewUpdate,
 } from "@codemirror/view";
-import { computeLineChanges, type ChangeKind, type ChangeMark } from "./lineChanges";
+import { computeDiffHunks } from "../diffHunks";
+import { toChangeMarks, type ChangeKind, type ChangeMark } from "./changeMarks";
 
 // Git base (元内容) が stage / commit などで変わったときに変更行表示へ伝える effect。
 export const setOriginalEffect = StateEffect.define<string>();
@@ -106,7 +107,7 @@ function computeMarks(original: string, doc: Text): ChangeMark[] {
   for (let lineNumber = 1; lineNumber <= doc.lines; lineNumber++) {
     currentLines.push(doc.line(lineNumber).text);
   }
-  return computeLineChanges(originalLines, currentLines).marks;
+  return toChangeMarks(computeDiffHunks(originalLines, currentLines).hunks);
 }
 
 class ChangeMarker extends GutterMarker {

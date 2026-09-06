@@ -2201,24 +2201,38 @@ button.github-badge {
 }
 
 /* 削除箇所のマーカー。VSCode 風に、左の余白へ小さな赤い三角だけを出す (中身は出せない)。
-   緑の変更バーと同じガター位置に揃える。 */
+   同じ場所で追加もあったときに重ならないよう、緑の変更バーより左の列に置く。 */
 .markdown-preview-body .md-removed {
   position: relative;
   height: 0;
   margin: 0.5em 0;
 }
 
-.markdown-preview-body .md-removed::before {
+.markdown-preview-body .md-removed::before,
+.markdown-preview-body .md-removed-inside::after {
   content: "";
   position: absolute;
-  left: -20px;
-  top: 50%;
-  transform: translateY(-50%);
+  left: -27px;
   width: 0;
   height: 0;
   border-style: solid;
   border-width: 5px 0 5px 7px;
   border-color: transparent transparent transparent var(--danger);
+}
+
+.markdown-preview-body .md-removed::before {
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* ブロックの途中で行が消えた場合。位置を割り込ませられないので、ブロック先頭の行に印を出す。 */
+.markdown-preview-body .md-removed-inside {
+  position: relative;
+}
+
+.markdown-preview-body .md-removed-inside::after {
+  top: 0.85em;
+  transform: translateY(-50%);
 }
 
 /* Code editor (CodeMirror, edit mode) */
