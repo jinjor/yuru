@@ -294,7 +294,12 @@ function parsePrimarySession(value: unknown): PrimarySessionMetadata {
 export function saveMetadata(metadata: YuruMetadata): void {
   const metadataPath = getMetadataPath();
   fs.mkdirSync(path.dirname(metadataPath), { recursive: true });
-  fs.writeFileSync(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`);
+  // 直接書くと、書いている最中のファイルを読んだ側が途中までの JSON を受け取る
+  // (Yuru は同時に複数起動できる)。同じディレクトリに書いてから rename すると、
+  // 読み手には差し替え前か後のどちらかしか見えない。
+  const writingPath = `${metadataPath}.${process.pid}.writing`;
+  fs.writeFileSync(writingPath, `${JSON.stringify(metadata, null, 2)}\n`);
+  fs.renameSync(writingPath, metadataPath);
 }
 
 function getMetadataPath(): string {
