@@ -1,0 +1,3 @@
+interface:
+  display_name: "実装の構造を見直す"
+  short_description: "構造上の複雑さをレビューする"
