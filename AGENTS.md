@@ -15,6 +15,8 @@ Electron/Playwright e2e launches a real macOS GUI app. In Codex, do not run it i
 
 E2E runs hide the BrowserWindow by default (`YURU_E2E_HIDE_WINDOW=1`). Use `YURU_E2E_SHOW_WINDOW=1 npm run test:e2e -- ...` only when visible debugging is needed.
 
+A failing e2e test is retried once (`retries: 1`), and one that passes on the retry is reported as flaky rather than failing the run. While working on a feature, do not investigate a flaky test: report its name and move on. Chase flakes separately, by rerunning the suite with `--repeat-each` and tracking each failure down to its cause.
+
 Real-Claude E2E borrows the user's current Claude Code login from macOS Keychain. On `Login expired` or `401 OAuth access token has been revoked`, ask the user to run `/login` in a normal Claude Code session and rerun once they confirm. Do not automate the login or change the Keychain credentials on the user's behalf. A macOS Keychain access dialog during credential seeding is a separate permission prompt, not an expired login.
 
 ## Docs
