@@ -31,7 +31,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | B15 | bug | Terminal | ターミナルにフォーカスできないことがある | キーボード入力を始められないことがある |
 | B16 | bug | Changes / Diff | Committed の diff を正確にする | commit 済みの変更を正しい差分でレビューしたい |
 | F72 | feature | Files / Blame | GitLens みたいな blame 表示機能 | コードの各行が変更された経緯をファイル表示から確認したい |
-| F77 | feature | Worktrees / Bookmarks | ブックマークが GitHub の Issue / PR ならステータスも表示する | 関連する Issue / PR の状態をブックマーク一覧で把握したい |
 
 ## Next
 
@@ -45,11 +44,9 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F69 | feature | API / Sessions | API でセッション作成時に effort レベルを設定できるようにする | セッションの用途に応じて推論量を指定したい |
 | F68 | feature | Sessions / Rate Limits | もうすぐ 100% になる時にあらかじめ rate limit 解除を予約したい | rate limit に達した後の待ち時間を減らしたい |
 | F54 | feature | Changes | ショートカットキーでレビュー済みにできるようにする | ファイルレビューを素早く進めたい |
-| F55 | feature | Mobile | モバイル連携 | モバイルから Yuru を使えるようにしたい |
 | F49 | feature | Updates | UI から `yuru latest` を実行できるようにする | ターミナルを開かずに Yuru を最新版へ更新したい |
 | F50 | feature | Files | 変更ファイルだけをツリー表示できるようにする | 変更箇所に絞ってファイルを確認したい |
 | F46 | feature | Repos | リポジトリを管理対象から削除できるようにする | `yuru add` と対になる機能として欲しい |
-| P9 | polish | New Session | 長い repo path の省略ルールを見直す | 折りたたみが不自然 |
 | P16 | polish | Worktrees / Changes | 左ペインで worktree の Git 変更状態を分かるようにする | いま選択していない worktree に unstaged/staged/untracked 変更があることに気づけない |
 | F9 | feature | Terminal | ウィンドウを広げた時に 1 行の文字数を増やす | xterm fit を調整 |
 | F25 | feature | Updates | Yuru の更新通知を出す | ローカル build 運用だと更新に気づきにくい |
@@ -71,6 +68,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F10 | feature | Terminal | ターミナル内文字列検索 | 独立機能として実装したい |
 | F13 | feature | Files / Code | 選択範囲をターミナルに貼り付ける | editor と terminal の連携が必要 |
 | F39 | feature | Search | 検索結果を streaming 表示する | F15 初期実装では検索完了後にまとめて表示する。巨大 repo で初回結果の待ち時間が気になったら欲しい |
+| F55 | feature | Mobile | モバイル連携 | モバイルから Yuru を使えるようにしたい |
 | P23 | polish | Files / Preview | diff パネルが表示している内容を 1 つの取得経路にまとめる | 差分テキストと画像で loader も state も別々にあり、表示中の内容を指す共通の識別子がない。今は取得契機と間隔をそろえて実害を消しているだけなので、片方だけ追従が漏れると「見ていない内容を Reviewed にできる」形の不整合が再発しうる |
 | P24 | polish | Sessions / Providers | Codex CLI 0.147 未満のログ形式 (exec_command function_call / patch_apply_end) 向けの後方互換パーサを削除する | 2026-09-11 以降に `~/.codex/sessions` を再確認し、旧形式が1ヶ月出現していなければ削除可。確認方法込みで詳細: docs/backlog-details/P24-remove-legacy-codex-exec-format.md |
 | F62 | feature | Worktrees / Terminal | worktree でターミナルを使えるようにする | エージェントのセッションとは別にコマンドを実行したい |
