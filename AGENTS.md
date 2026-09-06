@@ -2,16 +2,12 @@
 
 ## Development
 
-After editing files on macOS, run verification relevant to the change.
-
-When the change affects behavior observable in the running Yuru app, rebuild and restart it:
+When a change affects behavior observable in the running Yuru app, rebuild and restart it from the active task worktree, not from the repository root:
 
 ```sh
 npm run build
 npm run app:restart
 ```
-
-Run these from the active task worktree, not from the repository root. Changes with no running app behavior to verify, such as documentation, tests, developer tooling, or package-manager-only metadata, need no app restart. Run a build only when the changed files can affect compilation or bundling.
 
 ## E2E
 
@@ -19,7 +15,7 @@ Electron/Playwright e2e launches a real macOS GUI app. In Codex, do not run it i
 
 E2E runs hide the BrowserWindow by default (`YURU_E2E_HIDE_WINDOW=1`). Use `YURU_E2E_SHOW_WINDOW=1 npm run test:e2e -- ...` only when visible debugging is needed.
 
-Real-Claude E2E borrows the user's current Claude Code login from macOS Keychain. If it fails with `Login expired` or `401 OAuth access token has been revoked`, ask the user to run `/login` in a normal Claude Code session. After the user confirms `Login successful`, rerun the requested Claude E2E scope. Do not automate the login or change the Keychain credentials on the user's behalf. A macOS Keychain access dialog during credential seeding is a separate permission prompt and does not by itself mean that the Claude login has expired.
+Real-Claude E2E borrows the user's current Claude Code login from macOS Keychain. On `Login expired` or `401 OAuth access token has been revoked`, ask the user to run `/login` in a normal Claude Code session and rerun once they confirm. Do not automate the login or change the Keychain credentials on the user's behalf. A macOS Keychain access dialog during credential seeding is a separate permission prompt, not an expired login.
 
 ## Docs
 
@@ -44,7 +40,6 @@ Real-Claude E2E borrows the user's current Claude Code login from macOS Keychain
 - 現在確認できている要件を満たす、最もシンプルな設計を選ぶ。将来の可能性のためのコードや抽象化は書かない（YAGNI）。
 - 問題は根本原因から直す。ただし、無関係なリファクタリングへ変更を広げない。機能を実装しづらいときは既存設計の問題を疑い、問題があれば指摘する。
 - 失敗時の挙動は重要な設計判断。フォールバック（リトライ、空値での代替、エラーの握りつぶし、防御目的の nullable 化）を勝手に追加しない。
-- 状態は single source of truth を保つ。他の状態から導出できる値を state に持たない。選択状態はオブジェクトではなく ID で持つ。
-- コンポーネントは性質の違う状態が同居しない粒度で切り分け、単一コンポーネント専用のロジックはその近くに置く。
+- 状態は single source of truth を保つ。他の状態から導出できる値を state に持たない。
 - ライブラリの挙動を推測して防御的なコードを書かない。ドキュメント・コード・実際の挙動で確かめる。
 - 次の場合は実装前に相談する: 既存設計の大幅な変更、避けられない複雑さや汚さの導入、現実的に起こりうる失敗のハンドリング方針の決定。
