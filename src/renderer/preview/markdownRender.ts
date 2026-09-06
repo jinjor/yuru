@@ -1,4 +1,5 @@
 import MarkdownIt from "markdown-it";
+import type { DiffHunk } from "./diffHunks";
 import { extendMarkdownItWithFrontmatter } from "./markdownFrontmatter";
 
 // html: false で生 HTML を埋め込ませない (エスケープする)。出力タグは markdown-it が生成する
@@ -7,26 +8,6 @@ const md = new MarkdownIt({ html: false, linkify: true });
 extendMarkdownItWithFrontmatter(md);
 
 type MdToken = ReturnType<typeof md.parse>[number];
-
-export interface Deletion {
-  // 削除直後の現在行 (1-based)。atEnd は文末での削除。
-  line: number;
-  atEnd: boolean;
-}
-
-// markdown-it の token.map は [開始, 終了] の 0-based・終了排他。1-based の行範囲に直して、
-// その範囲に変更行が 1 つでも含まれるかを見る。
-function rangeHasChange(
-  map: readonly [number, number],
-  changedLines: ReadonlySet<number>,
-): boolean {
-  for (let line = map[0] + 1; line <= map[1]; line++) {
-    if (changedLines.has(line)) {
-      return true;
-    }
-  }
-  return false;
-}
 
 interface TopLevelBlock {
   // ブロックの現在行の範囲 (1-based, 両端含む)。
@@ -47,7 +28,8 @@ function splitTopLevelBlocks(tokens: MdToken[]): TopLevelBlock[] {
   for (const token of tokens) {
     if (current === null) {
       current = [];
-      // 開始トークンの map はブロック全体 (入れ子を含む) を覆う。
+      // 開始トークンの map はブロック全体 (入れ子を含む) を覆う。0-based・終了排他なので
+      // 1-based の両端含む範囲に直す。
       startLine = token.map ? token.map[0] + 1 : 0;
       endLine = token.map ? token.map[1] : 0;
     }
@@ -68,45 +50,52 @@ function splitTopLevelBlocks(tokens: MdToken[]): TopLevelBlock[] {
   return blocks;
 }
 
+// hunk が現在の内容に残した行 (追加された行) が、このブロックに掛かっているか。
+function hasAddedLinesIn(hunk: DiffHunk, block: TopLevelBlock): boolean {
+  return (
+    hunk.addedCount > 0 &&
+    hunk.line <= block.endLine &&
+    hunk.line + hunk.addedCount - 1 >= block.startLine
+  );
+}
+
 const removedMarkerHtml = '<div class="md-removed" aria-label="lines removed"></div>';
 
 // 現在の内容を HTML にしつつ、追加された行を含むブロックと削除された箇所に印を付ける。
-export function renderMarkdown(
-  content: string,
-  changedLines: ReadonlySet<number>,
-  deletions: readonly Deletion[],
-): string {
+export function renderMarkdown(content: string, hunks: readonly DiffHunk[]): string {
   const env = {};
   const blocks = splitTopLevelBlocks(md.parse(content, env));
 
-  // ブロックの間で起きた削除は「直後のブロックの直前」に印を入れる。文末の削除は最後にまとめて置く。
-  const beforeBlock = deletions.filter((d) => !d.atEnd).sort((a, b) => a.line - b.line);
-  const atEndCount = deletions.length - beforeBlock.length;
+  // 削除された行は現在の内容に残らないので、位置だけを示す。hunk は現在行の昇順に並んでいる。
+  const removals = hunks.filter((hunk) => hunk.removedCount > 0 && !hunk.atEnd);
+  // 文末の削除は指す行が無いので、最後にまとめて置く。
+  const atEndCount = hunks.filter((hunk) => hunk.removedCount > 0 && hunk.atEnd).length;
 
   let html = "";
-  let di = 0;
+  let ri = 0;
   for (const block of blocks) {
     const open = block.tokens[0];
-    while (di < beforeBlock.length && beforeBlock[di].line <= block.startLine) {
+    // ブロックの間で起きた削除は、直後のブロックの前にマーカーを置く。
+    while (ri < removals.length && removals[ri].line <= block.startLine) {
       html += removedMarkerHtml;
-      di += 1;
+      ri += 1;
     }
-    // ブロックの途中で起きた削除は、印を割り込ませると HTML が壊れる (リストや表の中になる) ので、
-    // ブロック自体に印を付ける。追加もあるブロックには緑と赤の両方が付く。
+    // ブロックの途中で起きた削除は、マーカーを割り込ませると HTML が壊れる (リストや表の中に
+    // なる) ので、ブロック自体に印を付ける。追加もあるブロックには緑と赤の両方が付く。
     let removedInside = false;
-    while (di < beforeBlock.length && beforeBlock[di].line <= block.endLine) {
+    while (ri < removals.length && removals[ri].line <= block.endLine) {
       removedInside = true;
-      di += 1;
+      ri += 1;
     }
     if (removedInside) {
       open.attrJoin("class", "md-removed-inside");
     }
-    if (open.map && rangeHasChange(open.map, changedLines)) {
+    if (hunks.some((hunk) => hasAddedLinesIn(hunk, block))) {
       open.attrJoin("class", "md-changed");
     }
     html += md.renderer.render(block.tokens, md.options, env);
   }
-  for (; di < beforeBlock.length; di += 1) {
+  for (; ri < removals.length; ri += 1) {
     html += removedMarkerHtml;
   }
   for (let i = 0; i < atEndCount; i += 1) {

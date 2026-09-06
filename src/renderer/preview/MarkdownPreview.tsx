@@ -1,27 +1,22 @@
 import { type MouseEvent, useMemo, useRef } from "react";
 import { useMarkdownFind } from "./MarkdownFind";
-import { renderMarkdown, type Deletion } from "./markdownRender";
+import type { DiffHunk } from "./diffHunks";
+import { renderMarkdown } from "./markdownRender";
 
 interface MarkdownPreviewProps {
   content: string;
-  // 現在の内容で追加・変更された行 (1-based)。空なら変更マークを出さない。
-  changedLines: ReadonlySet<number>;
-  // 削除箇所。位置だけを示す (中身はプレビューに出せない)。行の書き換えは追加と削除の両方に出る。
-  deletions: readonly Deletion[];
+  // 現在の内容と元の内容の差分。追加された行を含むブロックと削除箇所に印を付けるのに使う。
+  hunks: readonly DiffHunk[];
 }
 
-export default function MarkdownPreview({
-  content,
-  changedLines,
-  deletions,
-}: MarkdownPreviewProps) {
+export default function MarkdownPreview({ content, hunks }: MarkdownPreviewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   // 内容が同じ間は同じオブジェクトを渡す。React は渡されたオブジェクトが変わるたびに innerHTML を
   // 入れ直すので、毎回作ると検索が作った Range (テキストノードを指す) が毎描画で壊れる。
   const renderedHtml = useMemo(
-    () => ({ __html: renderMarkdown(content, changedLines, deletions) }),
-    [content, changedLines, deletions],
+    () => ({ __html: renderMarkdown(content, hunks) }),
+    [content, hunks],
   );
   const findBar = useMarkdownFind(scrollRef, bodyRef, renderedHtml.__html);
 

@@ -124,31 +124,13 @@ export function DiffPreviewPanel({
   // reviewable は「この path に選択中 scope の差分があるか」を親が Git state から判定した値。
   // review state / snapshot の取得中もガワを維持し、差分のない Files 表示では出さない。
   const activeReviewed = reviewable ? (reviewed ?? false) : undefined;
-  // ヘッダの +/- と、プレビューで変更ブロックに印を付けるための変更行を 1 回の計算から導く。
+  // ヘッダの +/- と、プレビューの変更マークを同じ差分から導く。
   // (編集中の数値は autosave 後に追従する)。
   const diff = useMemo(
     () => computeDiffHunks((originalContent ?? "").split("\n"), (currentContent ?? "").split("\n")),
     [originalContent, currentContent],
   );
   const headerLineStat = diff.stat;
-  // プレビューは現在の内容を描画するので、追加 (緑) 側は行に印を付けられる。削除は中身を出せない
-  // ので、位置マーカーとして渡す。書き換え (削除 + 追加) は両方に出す。
-  const changedLines = useMemo(() => {
-    const set = new Set<number>();
-    for (const hunk of diff.hunks) {
-      for (let offset = 0; offset < hunk.addedCount; offset++) {
-        set.add(hunk.line + offset);
-      }
-    }
-    return set;
-  }, [diff]);
-  const deletions = useMemo(
-    () =>
-      diff.hunks
-        .filter((hunk) => hunk.removedCount > 0)
-        .map((hunk) => ({ line: hunk.line, atEnd: hunk.atEnd })),
-    [diff],
-  );
 
   useEffect(() => {
     let cancelled = false;
@@ -256,11 +238,7 @@ export function DiffPreviewPanel({
                 poll={shouldPollContent}
               />
             ) : (
-              <MarkdownPreview
-                content={currentContent ?? ""}
-                changedLines={changedLines}
-                deletions={deletions}
-              />
+              <MarkdownPreview content={currentContent ?? ""} hunks={diff.hunks} />
             )}
           </Suspense>
         ) : isBinary ? (
