@@ -1,5 +1,7 @@
 import type { BundledLanguage, Highlighter, ThemedToken } from "shiki";
 
+const theme = "dark-plus";
+
 let highlighterPromise: Promise<Highlighter> | null = null;
 
 const defaultLangs: BundledLanguage[] = [
@@ -22,13 +24,14 @@ const defaultLangs: BundledLanguage[] = [
   "proto",
   "sql",
   "terraform",
+  "diff",
 ];
 
-function getHighlighter(): Promise<Highlighter> {
+export function getHighlighter(): Promise<Highlighter> {
   if (!highlighterPromise) {
     highlighterPromise = import("shiki").then(({ createHighlighter }) =>
       createHighlighter({
-        themes: ["dark-plus"],
+        themes: [theme],
         langs: defaultLangs,
       }),
     );
@@ -107,10 +110,7 @@ export async function tokenizeCode(
       }
     }
 
-    const result = highlighter.codeToTokens(code, {
-      lang,
-      theme: "dark-plus",
-    });
+    const result = highlighter.codeToTokens(code, { lang, theme });
 
     return result.tokens.map((lineTokens) => ({ tokens: lineTokens }));
   } catch {
@@ -122,4 +122,20 @@ function plainTokenize(code: string): TokenizedLine[] {
   return code.split("\n").map((line) => ({
     tokens: [{ content: line, color: "#d4d4d4", offset: 0 }],
   }));
+}
+
+// Markdown のコードフェンスをハイライトする。言語は ```lang に書かれた名前をそのまま受け取り、
+// highlighter が読み込んでいるものだけを扱う。言語指定が無い・対応していない場合は null を返す
+// ので、呼び出し側は色を付けずにそのまま出す。
+export function tokenizeFence(
+  highlighter: Highlighter,
+  code: string,
+  lang: string,
+): ThemedToken[][] | null {
+  const id = lang.toLowerCase();
+  if (!highlighter.getLoadedLanguages().includes(id)) {
+    return null;
+  }
+  // 読み込み済みであることを確かめた後なので、shiki の言語名として渡してよい。
+  return highlighter.codeToTokens(code, { lang: id as BundledLanguage, theme }).tokens;
 }

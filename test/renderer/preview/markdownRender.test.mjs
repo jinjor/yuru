@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { getHighlighter } from "../../../src/renderer/preview/highlight.ts";
 import { renderMarkdown } from "../../../src/renderer/preview/markdownRender.ts";
 
 const removedMarker = '<div class="md-removed" aria-label="lines removed"></div>';
@@ -56,3 +57,41 @@ test("文末の削除は最後にマーカーを置く", () => {
   const html = renderMarkdown("first\n", [{ line: 1, addedCount: 0, removedCount: 1, atEnd: true }]);
   assert.equal(html, `<p>first</p>\n${removedMarker}`);
 });
+
+test("highlighter を渡すとコードフェンスに色が付く", async () => {
+  const highlighter = await getHighlighter();
+  const html = renderMarkdown("```ts\nconst a = 1;\n```\n", [], highlighter);
+  assert.match(html, /^<pre><code class="language-ts"><span style="color:#[0-9A-Fa-f]{6}">const<\/span>/);
+  // 色を付けても中身のテキストは変わらない。
+  assert.equal(stripTags(html), stripTags(renderMarkdown("```ts\nconst a = 1;\n```\n", [])));
+});
+
+test("diff のコードフェンスは追加行と削除行が別の色になる", async () => {
+  const highlighter = await getHighlighter();
+  const html = renderMarkdown("```diff\n-old\n+new\n```\n", [], highlighter);
+  const colors = [...html.matchAll(/color:(#[0-9A-Fa-f]{6})/g)].map((match) => match[1]);
+  assert.equal(colors.length, 2);
+  assert.notEqual(colors[0], colors[1]);
+});
+
+test("対応していない言語と言語指定なしのフェンスはそのまま出す", async () => {
+  const highlighter = await getHighlighter();
+  assert.equal(
+    renderMarkdown("```brainfuck\n+[-]\n```\n", [], highlighter),
+    '<pre><code class="language-brainfuck">+[-]\n</code></pre>\n',
+  );
+  assert.equal(
+    renderMarkdown("```\na < b\n```\n", [], highlighter),
+    "<pre><code>a &lt; b\n</code></pre>\n",
+  );
+});
+
+test("ハイライトしてもコードフェンスの変更マークは残る", async () => {
+  const highlighter = await getHighlighter();
+  const html = renderMarkdown("```ts\nconst a = 1;\n```\n", [added(1, 3)], highlighter);
+  assert.match(html, /^<pre><code class="md-changed language-ts">/);
+});
+
+function stripTags(html) {
+  return html.replace(/<[^>]*>/g, "");
+}

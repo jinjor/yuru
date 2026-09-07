@@ -1,5 +1,7 @@
 import MarkdownIt from "markdown-it";
+import type { Highlighter, ThemedToken } from "shiki";
 import type { DiffHunk } from "./diffHunks";
+import { tokenizeFence } from "./highlight";
 import { extendMarkdownItWithFrontmatter } from "./markdownFrontmatter";
 
 // html: false で生 HTML を埋め込ませない (エスケープする)。出力タグは markdown-it が生成する
@@ -59,11 +61,36 @@ function hasAddedLinesIn(hunk: DiffHunk, block: TopLevelBlock): boolean {
   );
 }
 
+// コードフェンスの中身を色付きの HTML にする markdown-it の highlight オプション。
+// 空文字を返すと markdown-it が既定のエスケープだけの出力に戻す。
+function highlightFence(highlighter: Highlighter) {
+  return (code: string, lang: string): string => {
+    const lines = tokenizeFence(highlighter, code, lang);
+    if (lines === null) {
+      return "";
+    }
+    // shiki は行ごとのトークン列を返すので、改行を挟み直して元のテキストに戻す。
+    return lines.map((tokens) => tokens.map(tokenToHtml).join("")).join("\n");
+  };
+}
+
+function tokenToHtml(token: ThemedToken): string {
+  const content = md.utils.escapeHtml(token.content);
+  return token.color ? `<span style="color:${token.color}">${content}</span>` : content;
+}
+
 const removedMarkerHtml = '<div class="md-removed" aria-label="lines removed"></div>';
 
 // 現在の内容を HTML にしつつ、追加された行を含むブロックと削除された箇所に印を付ける。
-export function renderMarkdown(content: string, hunks: readonly DiffHunk[]): string {
+// highlighter を渡すとコードフェンスに色が付く (読み込みが終わるまでは null)。
+export function renderMarkdown(
+  content: string,
+  hunks: readonly DiffHunk[],
+  highlighter: Highlighter | null = null,
+): string {
   const env = {};
+  const options =
+    highlighter === null ? md.options : { ...md.options, highlight: highlightFence(highlighter) };
   const blocks = splitTopLevelBlocks(md.parse(content, env));
 
   // 削除された行は現在の内容に残らないので、位置だけを示す。hunk は現在行の昇順に並んでいる。
@@ -93,7 +120,7 @@ export function renderMarkdown(content: string, hunks: readonly DiffHunk[]): str
     if (hunks.some((hunk) => hasAddedLinesIn(hunk, block))) {
       open.attrJoin("class", "md-changed");
     }
-    html += md.renderer.render(block.tokens, md.options, env);
+    html += md.renderer.render(block.tokens, options, env);
   }
   for (; ri < removals.length; ri += 1) {
     html += removedMarkerHtml;
