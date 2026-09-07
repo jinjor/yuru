@@ -41,3 +41,9 @@ test(".tfvars を拡張子で判定してハイライトする", async () => {
   assert.equal(line.tokens[0]?.content, "region ");
   assert.notEqual(line.tokens[0]?.color, "#d4d4d4");
 });
+
+test(".json5 を拡張子で判定してハイライトする", async () => {
+  const [line] = await tokenizeCode("{ key: 1 } // c", "config/app.json5", 15);
+  assert.equal(line.tokens[0]?.content, "{ ");
+  assert.notEqual(line.tokens[0]?.color, "#d4d4d4");
+});

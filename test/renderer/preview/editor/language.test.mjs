@@ -104,3 +104,25 @@ test(".tf / .tfvars の編集時にハイライトする", async () => {
     classes: "tok-propertyName tok-definition",
   });
 });
+
+test(".json5 の編集時にコメント・引用符なしキーをハイライトする", async () => {
+  const language = loadLanguageExtension("config/app.json5");
+  assert.ok(language);
+
+  const state = EditorState.create({
+    doc: "{ // c\n  key: 1,\n  'a': [2,],\n}",
+    extensions: [await language],
+  });
+  const highlighted = [];
+  highlightTree(syntaxTree(state), classHighlighter, (from, to, classes) => {
+    highlighted.push({ text: state.sliceDoc(from, to), classes });
+  });
+
+  assert.deepEqual(highlighted, [
+    { text: "// c", classes: "tok-comment" },
+    { text: "key", classes: "tok-propertyName" },
+    { text: "1", classes: "tok-number" },
+    { text: "'a'", classes: "tok-string tok-propertyName" },
+    { text: "2", classes: "tok-number" },
+  ]);
+});

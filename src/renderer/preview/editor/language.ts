@@ -23,6 +23,18 @@ export function loadLanguageExtension(filePath: string): Promise<Extension> | nu
       return import("@codemirror/lang-javascript").then((m) => m.javascript({ jsx: true }));
     case "json":
       return import("@codemirror/lang-json").then((m) => m.json());
+    // JSON5 は ES5 の値リテラルの部分集合 (コメント・引用符なしキー・シングルクォート・
+    // 末尾カンマ) なので、それらを解釈できる JavaScript の JSON モードを使う。
+    // @codemirror/lang-json は JSON5 固有の記法を構文エラーとして扱ってしまう。
+    // tokenTable: このモードは引用符付きキーに "string property" を返すが、
+    // StreamLanguage は複合スタイルを既定のタグ表で解決できないため対応付けを補う。
+    case "json5":
+      return Promise.all([
+        import("@codemirror/legacy-modes/mode/javascript"),
+        import("@lezer/highlight"),
+      ]).then(([mode, { tags }]) =>
+        StreamLanguage.define({ ...mode.json, tokenTable: { property: tags.propertyName } }),
+      );
     case "html":
     case "htm":
       return import("@codemirror/lang-html").then((m) => m.html());
