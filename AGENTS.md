@@ -2,6 +2,8 @@
 
 ## Development
 
+Agents must not execute the `yuru` command or any of its subcommands, including `yuru latest`. The installed command is for the user's everyday Yuru app. Agents must also not run `install.sh` or `npm run package:local`, which install or replace that app. Use the task worktree's build and restart commands below for development verification.
+
 When a change affects behavior observable in the running Yuru app, rebuild and restart it from the active task worktree, not from the repository root:
 
 ```sh
