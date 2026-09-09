@@ -5,7 +5,13 @@ import { StreamLanguage } from "@codemirror/language";
 // 該当が無ければ null (ハイライト無しで編集)。
 export function loadLanguageExtension(filePath: string): Promise<Extension> | null {
   const fileName = filePath.split("/").pop()?.toLowerCase();
-  const ext = fileName?.startsWith("dockerfile.") ? "dockerfile" : fileName?.split(".").pop();
+  let ext = fileName?.split(".").pop();
+  if (fileName?.startsWith("dockerfile.")) {
+    ext = "dockerfile";
+  } else if (fileName === "cmakelists.txt") {
+    // CMake のトップレベルは常にこの固定ファイル名。拡張子は .txt なので名前で判定する。
+    ext = "cmake";
+  }
   switch (ext) {
     case "ts":
     case "mts":
@@ -83,6 +89,11 @@ export function loadLanguageExtension(filePath: string): Promise<Extension> | nu
     case "dockerfile":
       return import("@codemirror/legacy-modes/mode/dockerfile").then((m) =>
         StreamLanguage.define(m.dockerFile),
+      );
+    // .cmake はモジュール・ツールチェーンファイル。CMakeLists.txt は上で拡張子を cmake に寄せている。
+    case "cmake":
+      return import("@codemirror/legacy-modes/mode/cmake").then((m) =>
+        StreamLanguage.define(m.cmake),
       );
     case "proto":
       return import("@codemirror/legacy-modes/mode/protobuf").then((m) =>

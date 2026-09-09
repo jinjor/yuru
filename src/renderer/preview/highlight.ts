@@ -22,6 +22,7 @@ const defaultLangs: BundledLanguage[] = [
   "go",
   "c",
   "cpp",
+  "cmake",
   "dockerfile",
   "proto",
   "sql",
@@ -79,6 +80,7 @@ const extensionToLang: Record<string, BundledLanguage> = {
   tpp: "cpp",
   ixx: "cpp",
   cppm: "cpp",
+  cmake: "cmake",
   dockerfile: "dockerfile",
   proto: "proto",
   sql: "sql",
@@ -90,6 +92,10 @@ function detectLanguage(filePath: string): BundledLanguage | null {
   const fileName = filePath.split("/").pop()?.toLowerCase();
   if (fileName?.startsWith("dockerfile.")) {
     return "dockerfile";
+  }
+  // CMake のトップレベルは常にこの固定ファイル名で、拡張子は .txt。名前で判定する。
+  if (fileName === "cmakelists.txt") {
+    return "cmake";
   }
 
   const ext = fileName?.split(".").pop();

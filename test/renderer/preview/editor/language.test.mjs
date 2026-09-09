@@ -132,6 +132,35 @@ test("C / C++ の拡張子 (.c .cpp .cc .hpp .h など) を lang-cpp でハイ�
   }
 });
 
+test("CMakeLists.txt / .cmake の編集時にコマンド・コメントをハイライトする", async () => {
+  const paths = ["CMakeLists.txt", "src/CMakeLists.txt", "cmake/toolchain.cmake"];
+
+  for (const path of paths) {
+    const language = loadLanguageExtension(path);
+    assert.ok(language, path);
+
+    const state = EditorState.create({
+      doc: "project(Foo)\n# a comment",
+      extensions: [await language],
+    });
+    const highlighted = [];
+    highlightTree(syntaxTree(state), classHighlighter, (from, to, classes) => {
+      highlighted.push({ text: state.sliceDoc(from, to), classes });
+    });
+
+    assert.deepEqual(
+      highlighted,
+      [
+        { text: "project", classes: "tok-variableName tok-definition" },
+        { text: "(", classes: "tok-punctuation" },
+        { text: ")", classes: "tok-punctuation" },
+        { text: "# a comment", classes: "tok-comment" },
+      ],
+      path,
+    );
+  }
+});
+
 test(".json5 の編集時にコメント・引用符なしキーをハイライトする", async () => {
   const language = loadLanguageExtension("config/app.json5");
   assert.ok(language);

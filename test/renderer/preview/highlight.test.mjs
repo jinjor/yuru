@@ -18,6 +18,16 @@ test("Dockerfile をファイル名で判定してハイライトする", async 
   }
 });
 
+test("CMakeLists.txt をファイル名で、.cmake を拡張子で判定してハイライトする", async () => {
+  const paths = ["CMakeLists.txt", "src/CMakeLists.txt", "cmake/toolchain.cmake"];
+
+  for (const path of paths) {
+    const [line] = await tokenizeCode("project(Foo)", path, 12);
+    assert.equal(line.tokens[0]?.content, "project", path);
+    assert.notEqual(line.tokens[0]?.color, "#d4d4d4", path);
+  }
+});
+
 test(".proto を拡張子で判定してハイライトする", async () => {
   const [line] = await tokenizeCode("message Foo {}", "api/service.proto", 14);
   assert.equal(line.tokens[0]?.content, "message");
