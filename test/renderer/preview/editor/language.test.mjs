@@ -105,6 +105,33 @@ test(".tf / .tfvars の編集時にハイライトする", async () => {
   });
 });
 
+test("C / C++ の拡張子 (.c .cpp .cc .hpp .h など) を lang-cpp でハイライトする", async () => {
+  const paths = ["main.c", "app.cpp", "util.cc", "widget.hpp", "legacy.h", "mod.ixx"];
+
+  for (const path of paths) {
+    const language = loadLanguageExtension(path);
+    assert.ok(language, path);
+
+    const state = EditorState.create({
+      doc: "int main() { return 0; }",
+      extensions: [await language],
+    });
+    const highlighted = [];
+    highlightTree(syntaxTree(state), classHighlighter, (from, to, classes) => {
+      highlighted.push({ text: state.sliceDoc(from, to), classes });
+    });
+
+    assert.deepEqual(
+      highlighted.slice(0, 2),
+      [
+        { text: "int", classes: "tok-typeName" },
+        { text: "main", classes: "tok-variableName tok-definition" },
+      ],
+      path,
+    );
+  }
+});
+
 test(".json5 の編集時にコメント・引用符なしキーをハイライトする", async () => {
   const language = loadLanguageExtension("config/app.json5");
   assert.ok(language);

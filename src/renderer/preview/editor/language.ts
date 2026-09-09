@@ -52,6 +52,24 @@ export function loadLanguageExtension(filePath: string): Promise<Extension> | nu
       return import("@codemirror/lang-rust").then((m) => m.rust());
     case "go":
       return import("@codemirror/lang-go").then((m) => m.go());
+    // lang-cpp は C と C++ を同じ文法で扱う。C 固有の拡張子 (.c) と、C/C++ で共用の
+    // ヘッダ (.h) もここに含める。
+    case "c":
+    case "cpp":
+    case "cc":
+    case "cxx":
+    case "c++":
+    case "h":
+    case "hpp":
+    case "hh":
+    case "hxx":
+    case "h++":
+    case "inl":
+    case "ipp":
+    case "tpp":
+    case "ixx":
+    case "cppm":
+      return import("@codemirror/lang-cpp").then((m) => m.cpp());
     case "sh":
     case "bash":
     case "zsh":
