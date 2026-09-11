@@ -27,6 +27,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | ID | Type | Area | Item | Why now |
 |---|---|---|---|---|
 | P31 | polish | Changes / Files | Changes からファイルを開くときは preview を開かないようにする | 変更内容を確認したい |
+| P32 | polish | Worktrees | worktree を切った直後のセットアップを最適化する | worktree 作成後に作業を始めるまでの手間を減らしたい |
 | P28 | polish | Files | ignore されているファイルを薄く表示する | gitignore されているファイルと通常のファイルを区別して表示したい |
 | P29 | polish | Bookmarks | ブックマーク数をタブに表示する | ブックマークの数を一目で把握したい |
 | P30 | polish | App | 右ペインの幅を縮めても崩れないようにする | レスポンシブ対応で UI の堅牢性を上げたい |
