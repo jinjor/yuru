@@ -47,6 +47,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F78 | feature | Changes / Review | コミット単位でレビュー | |
 | F79 | feature | Skills / Sessions | 作業終了を明示的に通知するスキル | |
 | F80 | feature | Changes / Git | git reset ボタン | |
+| F81 | feature | Changes / Diff | 差分以外を折りたたんで表示 | |
 | B17 | bug | Files / Preview | Markdown プレビューで追加と削除が混ざっていても緑で表示されてしまう | Markdown の差分で追加と削除を正しく見分けたい |
 | B18 | bug | Files / Edit | 編集モードで閲覧中に更新された内容が反映されない | 外部で更新されたファイルの最新内容を編集モードでも確認したい |
 | F73 | investigate | Worktrees / Bookmarks | 自動ブックマーク（会話ログからの URL 自動追加）を残すか消すか判断する | URL クリック登録の体験を見て判断。`YURU_BOOKMARK_AUTO_CAPTURE=1` で有効化できる。詳細: docs/backlog-details/F71-bookmarks.md |
