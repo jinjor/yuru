@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import type { ReactNode, Ref } from "react";
 import type { ThemedToken } from "shiki";
 import { useFind } from "./Find";
@@ -21,13 +21,11 @@ interface SourceFind {
 }
 
 export function useSourceFind(lines: readonly SearchableSourceLine[]): SourceFind {
-  const [matches, setMatches] = useState<FindMatch[]>([]);
-  const { query, activeIndex, findBar } = useFind(matches.length);
+  const { query, activeIndex, findBar } = useFind(
+    (query) => computeFindMatches(lines, query).length,
+  );
+  const matches = useMemo(() => computeFindMatches(lines, query), [lines, query]);
   const activeMatch = matches[activeIndex] ?? null;
-
-  useLayoutEffect(() => {
-    setMatches(computeFindMatches(lines, query));
-  }, [lines, query]);
 
   const matchesByLine = useMemo(() => {
     const byLine = new Map<number, FindMatch[]>();

@@ -86,19 +86,8 @@ export function SearchPane({
   }, [focusRequest]);
 
   useEffect(() => {
-    setSelectedIndex(0);
-  }, [result]);
-
-  useEffect(() => {
-    setSelectedIndex((prev) => Math.min(prev, Math.max(flatMatches.length - 1, 0)));
-  }, [flatMatches.length]);
-
-  useEffect(() => {
     if (query.trim().length === 0) {
       lastCompletedQueryRef.current = null;
-      setResult(null);
-      setError(null);
-      setIsSearching(false);
       return;
     }
 
@@ -107,8 +96,6 @@ export function SearchPane({
     }
 
     const requestId = ++requestIdRef.current;
-    setIsSearching(true);
-    setError(null);
     const timeout = window.setTimeout(() => {
       void window.electronAPI
         .searchCode(worktreeId, query)
@@ -118,6 +105,7 @@ export function SearchPane({
           }
           lastCompletedQueryRef.current = query;
           setIsSearching(false);
+          setSelectedIndex(0);
           if (searchResult.ok) {
             setResult(searchResult.data);
             setError(null);
@@ -132,6 +120,7 @@ export function SearchPane({
           }
           lastCompletedQueryRef.current = query;
           setIsSearching(false);
+          setSelectedIndex(0);
           setResult(null);
           setError({
             code: "unknown",
@@ -183,6 +172,7 @@ export function SearchPane({
     // 誤判定しないよう完了記録も一緒に捨てる (打ち直して同じ文字列に戻るケースの対策)。
     lastCompletedQueryRef.current = null;
     setQuery(nextQuery);
+    setSelectedIndex(0);
     setResult(null);
     setError(null);
     setIsSearching(nextQuery.trim().length > 0);

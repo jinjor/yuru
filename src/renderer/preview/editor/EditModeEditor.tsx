@@ -26,6 +26,8 @@ export default function EditModeEditor({ worktreeId, path }: EditModeEditorProps
 
   useEffect(() => {
     let cancelled = false;
+    // Activity の再表示でも seed を取り直し、古い内容のエディタを再利用しない。
+    // oxlint-disable-next-line react/set-state-in-effect
     setState({ status: "loading" });
 
     void Promise.all([

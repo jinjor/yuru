@@ -94,6 +94,8 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    // IPC の初期取得。state の更新は応答を await した後に行う。
+    // oxlint-disable-next-line react/set-state-in-effect
     void refreshRepos();
     const disposeRepoListChanged = window.electronAPI.onRepoListChanged(() => {
       void refreshRepos();

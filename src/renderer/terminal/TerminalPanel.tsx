@@ -1,6 +1,6 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal, type ILink, type ILinkProvider } from "@xterm/xterm";
-import { type DragEvent, useCallback, useEffect, useRef, useState } from "react";
+import { type DragEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { hasWorktreeFileDrag, readWorktreeFileDrag } from "../utils/fileDrag";
 import { findTerminalLinksInBufferLine } from "./terminalBufferLinks";
 
@@ -48,9 +48,11 @@ export function TerminalPanel({
     term.paste(relativePath);
   });
   const onFileLinkActivateRef = useRef(onFileLinkActivate);
-  onFileLinkActivateRef.current = onFileLinkActivate;
   const worktreeIdRef = useRef(worktreeId);
-  worktreeIdRef.current = worktreeId;
+  useLayoutEffect(() => {
+    onFileLinkActivateRef.current = onFileLinkActivate;
+    worktreeIdRef.current = worktreeId;
+  }, [onFileLinkActivate, worktreeId]);
 
   // URL リンクをクリックしたら開くだけでなくブックマークにも登録する。
   // 重複は main 側で除外される。失敗は Error Center に記録されるのでここでは握らない。

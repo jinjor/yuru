@@ -93,7 +93,9 @@ const WorktreeViewContent = memo(function WorktreeViewContent({
   const { worktreeId } = worktree;
   // memo の実効性を E2E で固定するための、計測専用の意図的な render 副作用。
   // hidden 中は effect が動かないため、Step 3 の複数 instance 計測でも effect では代替できない。
+  // oxlint-disable-next-line react/immutability
   window.__yuruWorktreeViewRenderCounts ??= {};
+  // oxlint-disable-next-line react/immutability
   window.__yuruWorktreeViewRenderCounts[worktreeId] =
     (window.__yuruWorktreeViewRenderCounts[worktreeId] ?? 0) + 1;
 

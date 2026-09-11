@@ -6,12 +6,15 @@ import {
   closeYuru,
   createCommittedRepo,
   createE2eContext,
+  createGitWorktree,
   expectPreviewPath,
   git,
   launchWindow,
   openMainTerminal,
   registerRepo,
   writeFiles,
+  visibleWorktreeView,
+  worktreeCard,
 } from "./helpers";
 
 // 編集アイコン (モードセグメントの右側 = 編集)。
@@ -192,6 +195,38 @@ test("削除済みファイルは編集に入れず、保存でも復活しな�
 
     // 削除済みファイルを保存で復活させていない
     expect(existsSync(path.join(repoDir, "gone.txt"))).toBe(false);
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+
+test("編集モードは worktree の再表示時に非表示中のファイル更新を読み直す", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context, {
+      "app.ts": "export const value = 'before';\n",
+    });
+    const otherWorktree = await createGitWorktree(context, repoDir, "edit-hidden");
+    await registerRepo(context, repoDir, [{ worktreePath: otherWorktree }]);
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+    await openMainTerminal(window);
+    const sessionView = visibleWorktreeView(window);
+    await sessionView.locator(".panel-tabs .tab", { hasText: "Files" }).click();
+    await sessionView.locator(".file-tree-row", { hasText: "app.ts" }).click();
+    await editButton(window).click();
+    await expect(sessionView.locator(".cm-content")).toContainText("'before'");
+
+    await worktreeCard(window, "edit-hidden").click();
+    await expect(sessionView.locator(".cm-content")).toHaveCount(0);
+    writeFileSync(path.join(repoDir, "app.ts"), "export const value = 'after';\n");
+    await openMainTerminal(window);
+    await expect(sessionView.locator(".cm-content")).toContainText("'after'");
+    expect(readFileSync(path.join(repoDir, "app.ts"), "utf8")).toContain("'after'");
   } finally {
     await closeYuru(app);
     await context.cleanup();

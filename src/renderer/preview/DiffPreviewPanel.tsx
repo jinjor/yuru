@@ -72,9 +72,9 @@ export function DiffPreviewPanel({
     document: GitDiffDocument;
     scope?: GitDiffScope;
   } | null>(null);
-  const [isLoadingDiff, setIsLoadingDiff] = useState(false);
+  const [isLoadingDiff, setIsLoadingDiff] = useState(true);
   const [isSettingReviewed, setIsSettingReviewed] = useState(false);
-  const [lines, setLines] = useState<SourceLine[]>([]);
+  const [tokenizedLines, setLines] = useState<SourceLine[]>([]);
   // 描画できるファイルはプレビューを既定にし、それ以外は閲覧を既定にする。
   const hasRenderedPreview = renderedPreviewKind(path) !== null;
   const [mode, setMode] = useState<FileViewMode>(hasRenderedPreview ? "preview" : "view");
@@ -95,6 +95,7 @@ export function DiffPreviewPanel({
   const displayPreviewKind = renderedPreviewKind(displayPath);
   const originalContent = diffDocument?.originalContent ?? null;
   const currentContent = diffDocument?.currentContent ?? null;
+  const lines = originalContent === null && currentContent === null ? [] : tokenizedLines;
   const fileSize = diffDocument?.size ?? null;
   const isBinary = diffDocument?.isBinary ?? false;
   const hasChanges = originalContent !== currentContent;
@@ -134,6 +135,8 @@ export function DiffPreviewPanel({
 
   useEffect(() => {
     let cancelled = false;
+    // Activity の再表示を含め、最初の取得が完了するまでは loading とする。
+    // oxlint-disable-next-line react/set-state-in-effect
     setIsLoadingDiff(true);
     let showLoader = true;
 
@@ -170,7 +173,6 @@ export function DiffPreviewPanel({
     let cancelled = false;
 
     if (originalContent === null && currentContent === null) {
-      setLines([]);
       return;
     }
 

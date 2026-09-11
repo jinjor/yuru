@@ -16,13 +16,15 @@ interface Find {
 
 /**
  * Cmd+F で開くファイル内検索のバー。何をマッチとするかは表示の作り (行のトークンか、
- * 描画後の DOM か) で違うので、呼び出し側が query からマッチを求めて件数だけを渡す。
+ * 描画後の DOM か) で違うので、呼び出し側が件数、または query から件数を計算する関数を渡す。
  * 件数表示と前後移動はこの hook が受け持つ。
  */
-export function useFind(matchCount: number): Find {
+export function useFind(countMatches: number | ((query: string) => number)): Find {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const matchCount =
+    typeof countMatches === "number" ? countMatches : countMatches(isOpen ? query : "");
   // Cmd+F を押すたびに増やす。開いたままでも入力を選び直せるようにするため。
   const [focusRequest, setFocusRequest] = useState(0);
   // 何番目のマッチを選んでいるか。件数は入力より遅れて減ることがあるので、表示に使う前に丸める。

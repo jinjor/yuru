@@ -24,9 +24,15 @@ export function BookmarksPane({ onError, worktreeId }: BookmarksPaneProps) {
   // 保存が走ってしまわないようにするための一時的なフラグ。
   const cancellingRef = useRef(false);
 
+  const [previousWorktreeId, setPreviousWorktreeId] = useState(worktreeId);
+  if (previousWorktreeId !== worktreeId) {
+    setPreviousWorktreeId(worktreeId);
+    setEditingUrl(null);
+    setBookmarks([]);
+  }
+
   useEffect(() => {
     let active = true;
-    setEditingUrl(null);
     const load = (): void => {
       void window.electronAPI.getBookmarks(worktreeId).then((result) => {
         if (active) {

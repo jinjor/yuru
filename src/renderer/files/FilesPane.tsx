@@ -64,7 +64,9 @@ export function FilesPane({
   const directoryLoadsRef = useRef<Map<string, DirectoryLoad>>(new Map());
   const fileTreeRef = useRef<HTMLDivElement>(null);
   const lastRevealedPathRef = useRef<string | null>(null);
-  const [pendingRevealPath, setPendingRevealPath] = useState<string | null>(null);
+  // 同じファイルの再表示でも、ツリー取得後に新しい要求としてスクロールする。
+  const [revealRequest, setRevealRequest] = useState<{ path: string } | null>(null);
+  const lastScrolledRequestRef = useRef<typeof revealRequest>(null);
   const treeStatusByPath = buildTreeStatusMap(gitPathStates);
   const treeIgnoredPaths = buildIgnoredPathSet(gitPathStates);
   const { loadingDirectories, treeData } = filesCache;
@@ -106,7 +108,7 @@ export function FilesPane({
   );
 
   const loadDirectory = useCallback(
-    async (relativePath = ROOT_DIRECTORY_PATH, force = false): Promise<void> => {
+    async function loadDirectory(relativePath = ROOT_DIRECTORY_PATH, force = false): Promise<void> {
       if (!force && filesCacheRef.current.loadedDirectories.has(relativePath)) {
         return;
       }
@@ -265,7 +267,7 @@ export function FilesPane({
       if (didExpandDirectory) {
         commitExpandedDirectories(nextExpandedDirectories);
       }
-      setPendingRevealPath(relativePath);
+      setRevealRequest({ path: relativePath });
     },
     [commitExpandedDirectories, refreshDirectoryForReveal],
   );
@@ -289,7 +291,6 @@ export function FilesPane({
     const selectedPath = previewSelection?.path ?? null;
     if (!selectedPath || selectedPath.startsWith("/")) {
       lastRevealedPathRef.current = selectedPath;
-      setPendingRevealPath(null);
       return;
     }
     if (lastRevealedPathRef.current === selectedPath) {
@@ -304,17 +305,17 @@ export function FilesPane({
   }, [previewSelection?.path, revealFile]);
 
   useEffect(() => {
-    if (!pendingRevealPath) {
+    if (!revealRequest || lastScrolledRequestRef.current === revealRequest) {
       return;
     }
-    if (previewSelection?.path === pendingRevealPath) {
+    lastScrolledRequestRef.current = revealRequest;
+    if (previewSelection?.path === revealRequest.path) {
       const selectedRow = Array.from(
         fileTreeRef.current?.querySelectorAll<HTMLElement>(".file-tree-row") ?? [],
-      ).find((row) => row.dataset.path === pendingRevealPath);
+      ).find((row) => row.dataset.path === revealRequest.path);
       selectedRow?.scrollIntoView({ block: "nearest" });
     }
-    setPendingRevealPath(null);
-  }, [pendingRevealPath, previewSelection?.path]);
+  }, [revealRequest, previewSelection?.path]);
 
   useEffect(() => {
     const dispose = window.electronAPI.onFileTreeChanged((changedWorktreeId, relativePath) => {

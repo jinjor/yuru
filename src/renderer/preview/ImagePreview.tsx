@@ -70,6 +70,8 @@ export default function ImagePreview({ path, scope, worktreeId, poll }: ImagePre
     // ファイルや scope が変わったら前の画像を残さない。ヘッダのファイル名と Reviewed は
     // 差分テキストが届いた時点で新しい選択に進むので、古い画像を出したままにすると
     // 「別のファイルを見ながらこのファイルを Reviewed にする」ことができてしまう。
+    // Activity の再表示でも取得が終わるまでは古い画像を表示しない。
+    // oxlint-disable-next-line react/set-state-in-effect
     setState({ status: "loading" });
 
     if (!poll) {

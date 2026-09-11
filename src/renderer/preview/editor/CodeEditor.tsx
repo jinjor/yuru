@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Compartment, EditorState } from "@codemirror/state";
 import {
   EditorView,
@@ -39,12 +39,14 @@ export default function CodeEditor({
   const [findMatchCount, setFindMatchCount] = useState(0);
   const { isOpen: isFindOpen, query, activeIndex, findBar } = useFind(findMatchCount);
   const hasFindQueryRef = useRef(query.length > 0);
-  hasFindQueryRef.current = query.length > 0;
   const previousFindTargetRef = useRef({ query: "", activeIndex: 0 });
   const wasFindOpenRef = useRef(false);
   // seed 値とコールバックは「最新を読むが再マウントの引き金にはしない」ので ref に逃がす。
   const latestRef = useRef({ initialContent, originalContent, onSave });
-  latestRef.current = { initialContent, originalContent, onSave };
+  useLayoutEffect(() => {
+    hasFindQueryRef.current = query.length > 0;
+    latestRef.current = { initialContent, originalContent, onSave };
+  }, [query, initialContent, originalContent, onSave]);
 
   useEffect(() => {
     const host = hostRef.current;

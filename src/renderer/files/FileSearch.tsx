@@ -100,10 +100,6 @@ function FileSearchPalette({ onClose, onSelectFile, worktreeId }: FileSearchPale
   }, [candidates, query, recentPaths]);
 
   useEffect(() => {
-    setSelectedIndex(0);
-  }, [query]);
-
-  useEffect(() => {
     const list = listRef.current;
     if (!list) {
       return;
@@ -144,7 +140,10 @@ function FileSearchPalette({ onClose, onSelectFile, worktreeId }: FileSearchPale
         <div className="file-search-input-wrap">
           <TextInput
             autoFocus
-            onChange={setQuery}
+            onChange={(value) => {
+              setQuery(value);
+              setSelectedIndex(0);
+            }}
             onKeyDown={handleKeyDown}
             placeholder="Search files by name"
             value={query}

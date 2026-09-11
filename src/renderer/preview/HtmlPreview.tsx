@@ -19,6 +19,8 @@ export default function HtmlPreview({ content, path, worktreeId }: HtmlPreviewPr
   useEffect(() => {
     let cancelled = false;
     let grantId: string | null = null;
+    // Activity の再表示では解放済みの grant を使わず、取得中の表示に戻す。
+    // oxlint-disable-next-line react/set-state-in-effect
     setState({ status: "loading" });
 
     void window.electronAPI.createHtmlPreview(worktreeId, path, content).then((result) => {
