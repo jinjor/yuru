@@ -30,9 +30,9 @@ UI 改善も機能追加も同じ土俵で扱う。
 | P28 | polish | Files | ignore されているファイルを薄く表示する | gitignore されているファイルと通常のファイルを区別して表示したい |
 | P29 | polish | Bookmarks | ブックマーク数をタブに表示する | ブックマークの数を一目で把握したい |
 | P30 | polish | App | 右ペインの幅を縮めても崩れないようにする | レスポンシブ対応で UI の堅牢性を上げたい |
-| F75 | feature | Bookmarks | ブックマーク名の編集 | ブックマークをより自分向けに整理・管理したい |
 | F76 | feature | Bookmarks | ローカルファイルのブックマーク | ファイルやフォルダ、よく確認する実装をブックマークしたい |
 | F77 | feature | Bookmarks | 画像のブックマーク | 参考資料の画像をブックマークしたい |
+| F82 | feature | Bookmarks | URL を入力してブックマークを追加 | 任意の URL を直接入力して登録したい |
 | P22 | polish | App / Sessions | worktree の表示データを App の一括配布から worktreeId 単位の取得・購読に変える | WorktreeView が worktree オブジェクトを props で受け取っており、session の push 1 件で無関係な表示まで再描画が波及する。F51 の keep-alive で instance が増えると影響が拡大する。詳細: docs/backlog-details/P22-worktree-data-subscription.md |
 | B12 | bug | Sessions / Worktree Context | Claude の resume で worktree の作業指示が引き継がれない | `--append-system-prompt` の指示が保存されないため、resume すると Claude が repo root で作業してしまう。詳細: docs/backlog-details/B12-resume-worktree-context.md |
 | B15 | bug | Terminal | ターミナルにフォーカスできないことがある | キーボード入力を始められないことがある |
