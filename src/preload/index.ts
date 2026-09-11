@@ -86,6 +86,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke("bookmarks:add", worktreeId, url),
   removeBookmark: (worktreeId: string, url: string) =>
     ipcRenderer.invoke("bookmarks:remove", worktreeId, url),
+  renameBookmark: (worktreeId: string, url: string, title: string) =>
+    ipcRenderer.invoke("bookmarks:rename", worktreeId, url, title),
   onErrorNoticesChanged: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, notices: AppErrorNotice[]) =>
       callback(notices);

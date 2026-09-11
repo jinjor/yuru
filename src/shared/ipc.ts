@@ -199,6 +199,11 @@ export interface Bookmark {
   // GitHub の Issue / PR のときだけ載る現在の状態。GitHub から導出できる揮発値なので
   // 永続化はせず、main のポーリングが持つキャッシュから毎回組み立てる。
   status?: GitHubItem;
+  // GitHub の Issue / PR は title も GitHub が正で、ポーリングのたびに追従する
+  // (applyGitHubStatusChanges 参照)。手動リネームすると即座に上書きされて
+  // 意味がなくなるため、そのときだけ false。URL から機械的に決まる値なので、
+  // status と同じく永続化せず main 側で組み立てて渡す。
+  renamable?: boolean;
 }
 
 export interface ElectronAPI {
@@ -291,6 +296,7 @@ export interface ElectronAPI {
   getBookmarks: (worktreeId: string) => Promise<Result<Bookmark[]>>;
   addBookmark: (worktreeId: string, url: string) => Promise<Result<void>>;
   removeBookmark: (worktreeId: string, url: string) => Promise<Result<void>>;
+  renameBookmark: (worktreeId: string, url: string, title: string) => Promise<Result<void>>;
   onErrorNoticesChanged: (callback: (notices: AppErrorNotice[]) => void) => () => void;
   onRepoListChanged: (callback: () => void) => () => void;
   onTerminalRuntimeExited: (callback: (terminalRuntimeId: TerminalRuntimeId) => void) => () => void;

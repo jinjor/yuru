@@ -1615,11 +1615,16 @@ button.github-badge {
 .bookmark-row {
   display: flex;
   align-items: center;
+  gap: 4px;
   padding-right: 8px;
 }
 
 .bookmark-row:hover {
   background: var(--bg-hover);
+}
+
+.bookmark-row-editing {
+  padding: 5px 12px;
 }
 
 .bookmark-open {

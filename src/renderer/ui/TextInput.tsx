@@ -3,6 +3,7 @@ import type { KeyboardEvent, Ref } from "react";
 interface TextInputProps {
   autoFocus?: boolean;
   disabled?: boolean;
+  onBlur?: () => void;
   onChange: (value: string) => void;
   onKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void;
   placeholder?: string;
@@ -14,6 +15,7 @@ interface TextInputProps {
 export function TextInput({
   autoFocus,
   disabled,
+  onBlur,
   onChange,
   onKeyDown,
   placeholder,
@@ -27,6 +29,7 @@ export function TextInput({
       className="text-input"
       autoFocus={autoFocus}
       disabled={disabled}
+      onBlur={onBlur}
       onChange={(event) => onChange(event.target.value)}
       onKeyDown={onKeyDown}
       placeholder={placeholder}

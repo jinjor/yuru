@@ -472,6 +472,10 @@ function registerIpcHandlers(): void {
     return service.removeBookmark(worktreeId, url);
   });
 
+  handleIpc("bookmarks:rename", (_event, worktreeId: string, url: string, title: string) => {
+    return service.renameBookmark(worktreeId, url, title);
+  });
+
   handleIpc("git:pathStates", (_event, worktreeId: string) => {
     return service.getGitPathStates(worktreeId);
   });

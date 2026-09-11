@@ -1136,18 +1136,22 @@ export class YuruService {
       return ok([]);
     }
     try {
-      return ok(loadBookmarks(workingRoot).map((bookmark) => this.withGitHubStatus(bookmark)));
+      return ok(loadBookmarks(workingRoot).map((bookmark) => this.toBookmarkView(bookmark)));
     } catch (error) {
       return this.failAndReport(toAppError(error));
     }
   }
 
-  // GitHub の Issue / PR のブックマークに、ポーリングが最後に取れた状態を載せる。
-  // まだ取れていない (gh が無い・未認証・起動直後) ときは status を付けない。
-  private withGitHubStatus(bookmark: Bookmark): Bookmark {
+  // 保存されている Bookmark に、main 側だけで分かる揮発値 (GitHub の状態と、
+  // リネーム可否) を載せて renderer に渡す形にする。
+  private toBookmarkView(bookmark: Bookmark): Bookmark {
     const target = parseGitHubItemUrl(bookmark.url);
     const fetched = target ? this.githubStatusMonitor.get(target) : null;
-    return fetched ? { ...bookmark, status: fetched.status } : bookmark;
+    return {
+      ...bookmark,
+      ...(fetched ? { status: fetched.status } : {}),
+      renamable: !target,
+    };
   }
 
   async removeBookmark(worktreeId: string, url: string) {
@@ -1164,6 +1168,40 @@ export class YuruService {
       return this.failAndReport<void>(toAppError(error));
     }
     this.events.bookmarksChanged(worktreeId);
+    return ok(undefined);
+  }
+
+  async renameBookmark(worktreeId: string, url: string, title: string) {
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      return this.failAndReport<void>({
+        code: "invalid_path",
+        message: "Bookmark title can't be empty.",
+      });
+    }
+    if (parseGitHubItemUrl(url)) {
+      return this.failAndReport<void>({
+        code: "invalid_path",
+        message: "GitHub bookmarks follow the GitHub title and can't be renamed.",
+        detail: url,
+      });
+    }
+    const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
+    if (!workingRoot) {
+      return this.failAndReport<void>({
+        code: "invalid_path",
+        message: "Selected worktree is no longer available.",
+      });
+    }
+    let changed: boolean;
+    try {
+      changed = updateBookmarkTitle(workingRoot, url, trimmedTitle);
+    } catch (error) {
+      return this.failAndReport<void>(toAppError(error));
+    }
+    if (changed) {
+      this.events.bookmarksChanged(worktreeId);
+    }
     return ok(undefined);
   }
 
