@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-09-12
+Last updated: 2026-09-13
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -32,8 +32,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | P29 | polish | Bookmarks | ブックマーク数をタブに表示する | ブックマークの数を一目で把握したい |
 | P30 | polish | App | 右ペインの幅を縮めても崩れないようにする | レスポンシブ対応で UI の堅牢性を上げたい |
 | F76 | feature | Bookmarks | ローカルファイルのブックマーク | ファイルやフォルダ、よく確認する実装をブックマークしたい |
-| F77 | feature | Bookmarks | 画像のブックマーク | 参考資料の画像をブックマークしたい。詳細: docs/backlog-details/F77-image-bookmarks.md |
-| F82 | feature | Bookmarks | URL を入力してブックマークを追加 | 任意の URL を直接入力して登録したい。詳細: docs/backlog-details/F82-input-bookmark.md |
 | P22 | polish | App / Sessions | worktree の表示データを App の一括配布から worktreeId 単位の取得・購読に変える | WorktreeView が worktree オブジェクトを props で受け取っており、session の push 1 件で無関係な表示まで再描画が波及する。F51 の keep-alive で instance が増えると影響が拡大する。詳細: docs/backlog-details/P22-worktree-data-subscription.md |
 | B12 | bug | Sessions / Worktree Context | Claude の resume で worktree の作業指示が引き継がれない | `--append-system-prompt` の指示が保存されないため、resume すると Claude が repo root で作業してしまう。詳細: docs/backlog-details/B12-resume-worktree-context.md |
 | B15 | bug | Terminal | ターミナルにフォーカスできないことがある | キーボード入力を始められないことがある |
@@ -49,7 +47,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F79 | feature | Skills / Sessions | 作業終了を明示的に通知するスキル | |
 | F80 | feature | Changes / Git | git reset ボタン | |
 | F81 | feature | Changes / Diff | 差分以外を折りたたんで表示 | |
-| B17 | bug | Files / Preview | Markdown プレビューで追加と削除が混ざっていても緑で表示されてしまう | Markdown の差分で追加と削除を正しく見分けたい |
 | B18 | bug | Files / Edit | 編集モードで閲覧中に更新された内容が反映されない | 外部で更新されたファイルの最新内容を編集モードでも確認したい |
 | F73 | investigate | Worktrees / Bookmarks | 自動ブックマーク（会話ログからの URL 自動追加）を残すか消すか判断する | URL クリック登録の体験を見て判断。`YURU_BOOKMARK_AUTO_CAPTURE=1` で有効化できる。詳細: docs/backlog-details/F71-bookmarks.md |
 | P18 | polish | Changes | Changes のファイル表示順を最適化する | 確認したい変更へ素早くたどり着けるようにしたい |
