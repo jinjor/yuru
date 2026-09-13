@@ -1,4 +1,4 @@
-import type { PlanUsageWindow, SessionProvider } from "../../shared/session.js";
+import type { AgentActivityState, PlanUsageWindow, SessionProvider } from "../../shared/session.js";
 import type { AgentDefinition } from "../../shared/agent.js";
 import type { PendingTerminal } from "../terminal/runtime.js";
 import type { ResolvedAgentCommand } from "./command.js";
@@ -86,10 +86,9 @@ export interface Agent {
   // Complete provider-specific initialization, including initialInput delivery,
   // and return the session ID. The runtime owns registration and monitoring.
   waitForSessionId(pending: PendingSession): Promise<string>;
-  // Agent TUIs can keep repainting while requiring user action. This only
-  // detects an agent-specific signal; false does not determine the overall
-  // activity state.
-  detectUserActionRequired?(terminalTitle: string): boolean;
+  // Prefer the agent's explicit state over terminal output, which can include
+  // idle animations. null means the title does not expose a recognized state.
+  detectActivityState?(terminalTitle: string): AgentActivityState | null;
   // Whether the session is stopped where the provider refused a request for
   // rate limiting. Reads the agent's own record of the refusal; agents that do
   // not record one leave this out and never auto-continue.

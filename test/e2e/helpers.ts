@@ -248,14 +248,18 @@ export async function seedClaudeHome(home: string, trustedRepoPath: string): Pro
   );
 }
 
-export async function seedCodexHome(home: string, trustedRepoPath: string): Promise<void> {
+export async function seedCodexHome(
+  home: string,
+  trustedRepoPath: string,
+  model = "gpt-5.5",
+): Promise<void> {
   const codexDir = path.join(home, ".codex");
   await mkdir(codexDir, { recursive: true });
   await copyFile(path.join(homedir(), ".codex", "auth.json"), path.join(codexDir, "auth.json"));
   await writeFile(
     path.join(codexDir, "config.toml"),
     [
-      `model = "gpt-5.5"`,
+      `model = ${JSON.stringify(model)}`,
       "",
       "[notice]",
       "hide_rate_limit_model_nudge = true",

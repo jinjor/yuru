@@ -330,10 +330,8 @@ test("Claude/Codex は user・assistant の会話本文だけを増分で返す"
   );
 
   const claudeMessages = [];
-  const stopClaudeMessages = await claudeAgent.watchSessionMessages(
-    "claude-1",
-    true,
-    (messages) => claudeMessages.push(...messages),
+  const stopClaudeMessages = await claudeAgent.watchSessionMessages("claude-1", true, (messages) =>
+    claudeMessages.push(...messages),
   );
   const claudePreview = await claudeAgent.loadStoredSessionPreview("claude-1");
   assert.deepEqual(claudeMessages, [
@@ -369,15 +367,29 @@ test("Claude/Codex は user・assistant の会話本文だけを増分で返す"
 
 test("Codex は Action Required の terminal title を識別する", () => {
   assert.equal(
-    codexAgent.detectUserActionRequired?.("[ ! ] Action Required | codex-permission-dot"),
-    true,
+    codexAgent.detectActivityState?.("[ ! ] Action Required | codex-permission-dot"),
+    "waiting",
   );
   assert.equal(
-    codexAgent.detectUserActionRequired?.("[ . ] Action Required | codex-permission-dot"),
-    true,
+    codexAgent.detectActivityState?.("[ . ] Action Required | codex-permission-dot"),
+    "waiting",
   );
-  assert.equal(codexAgent.detectUserActionRequired?.("codex-permission-dot"), false);
-  assert.equal(codexAgent.detectUserActionRequired?.("⠹ codex-permission-dot"), false);
+  assert.equal(codexAgent.detectActivityState?.("[ ! ] Action Required"), "waiting");
+  assert.equal(codexAgent.detectActivityState?.("codex-permission-dot"), null);
+  assert.equal(codexAgent.detectActivityState?.("⠹ codex-permission-dot"), null);
+});
+
+test("Codex は Ready と実行中の terminal title を区別する", () => {
+  for (const title of ["Ready", "Ready | task", "Ready | Working on task"]) {
+    assert.equal(codexAgent.detectActivityState?.(title), "waiting");
+  }
+  for (const status of ["Starting", "Working", "Thinking", "Waiting"]) {
+    assert.equal(codexAgent.detectActivityState?.(status), "working");
+    assert.equal(codexAgent.detectActivityState?.(`${status} ⠹ | task`), "working");
+  }
+  for (const title of ["", "Unrecognized | task", "Ready-made"]) {
+    assert.equal(codexAgent.detectActivityState?.(title), null);
+  }
 });
 
 test("loadStoredSessionPreview は Claude/Codex session への追記を反映する", async () => {
@@ -447,7 +459,13 @@ test("provider resume launch は session の記録場所 (target.cwd) で起動�
     }),
     {
       cwd: worktreePath,
-      args: ["resume", "--all", "codex-resume"],
+      args: [
+        "resume",
+        "--all",
+        "codex-resume",
+        "-c",
+        'tui.terminal_title=["status","activity","thread-name","project-name"]',
+      ],
       worktreePath,
     },
   );
@@ -492,7 +510,12 @@ test("provider worktree launch は repo root で起動して hidden context を�
 
   const codexLaunch = await codexAgent.createWorktreeLaunch(context);
   assert.equal(codexLaunch.cwd, repoPath);
-  assert.deepEqual(codexLaunch.args, ["-c", `developer_instructions=${JSON.stringify(prompt)}`]);
+  assert.deepEqual(codexLaunch.args, [
+    "-c",
+    `developer_instructions=${JSON.stringify(prompt)}`,
+    "-c",
+    'tui.terminal_title=["status","activity","thread-name","project-name"]',
+  ]);
   assert.equal(codexLaunch.worktreePath, worktreePath);
   assert.ok(codexLaunch.existingAgentSessionIds instanceof Set);
 
@@ -548,6 +571,8 @@ test("provider worktree launch は initial prompt を最初の依頼として渡
     "selected-model",
     "-c",
     `developer_instructions=${JSON.stringify(worktreePrompt)}`,
+    "-c",
+    'tui.terminal_title=["status","activity","thread-name","project-name"]',
     "--",
     initialPrompt,
   ]);

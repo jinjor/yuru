@@ -417,6 +417,12 @@ PTY の出力は main process 側でも headless の xterm.js (`TerminalScreen`)
 セッションを切り替えて戻ってきた時は、この状態を serialize addon で復元用シーケンスに変換して renderer の端末に書き込む (VS Code のターミナル復元と同じ方式)。
 生の出力ストリームを溜めて再生する方式は、容量制限で先頭を切り落とした時にエスケープシーケンスや TUI の再描画フレームの途中から再生されて表示が壊れるため使わない。
 
+セッションの活動状態は、agent が端末タイトルに出す明示的な状態を優先する。
+Codex の新規起動・再開では `tui.terminal_title` に `status` と `activity` を指定し、
+`Ready` と `Action Required` を待機、`Starting`・`Thinking`・`Working`・`Waiting`
+(バックグラウンド端末待ち) を作業中として扱う。入力待ちの再描画だけでは点滅させない。
+タイトルから状態を判定できない場合は、従来どおり直近の PTY 出力から判定する。
+
 ## Appendix
 
 2026-05-16 までアーキテクチャ刷新を行なっていたため、このドキュメントに沿わない古い実装が残っている可能性がある。

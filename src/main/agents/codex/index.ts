@@ -13,6 +13,12 @@ import { detectCodexWorktreeSessionLines } from "./session-detection.js";
 import { isStoppedAtRateLimit } from "../rate-limit-stop.js";
 import { classifyCodexRolloutLine } from "./rate-limit-stop.js";
 import { loadCodexPlanUsage } from "./plan-usage.js";
+import type { AgentActivityState } from "../../../shared/session.js";
+
+// Codex's status item reports Ready even when its idle UI keeps repainting.
+// Keep activity too: it exposes approval/input prompts as Action Required.
+const TERMINAL_TITLE_CONFIG =
+  'tui.terminal_title=["status","activity","thread-name","project-name"]';
 
 interface CodexSessionMeta {
   agentSessionId: string;
@@ -121,8 +127,13 @@ function parseCodexConversationMessageEntry(entry: unknown): ConversationMessage
 
 const sessionLogWatcher = new SessionLogWatcher(parseCodexConversationMessageEntry);
 
-function detectUserActionRequired(terminalTitle: string): boolean {
-  return terminalTitle.includes("Action Required |");
+function detectActivityState(terminalTitle: string): AgentActivityState | null {
+  if (/^\[ [!.] \] Action Required(?: \||$)/.test(terminalTitle)) {
+    return "waiting";
+  }
+  const status = /^(Ready|Working|Thinking|Waiting|Starting)(?:\s|$)/.exec(terminalTitle)?.[1];
+  // Waiting is Codex waiting for a background terminal, not for user input.
+  return status === undefined ? null : status === "Ready" ? "waiting" : "working";
 }
 
 function parseCodexHistoryEntry(entry: unknown): CodexHistoryEntry | null {
@@ -391,7 +402,7 @@ export const agent: Agent = {
     // resumed from a different directory, stops to ask which one to use.
     return {
       cwd: session.cwd,
-      args: ["resume", "--all", session.agentSessionId],
+      args: ["resume", "--all", session.agentSessionId, "-c", TERMINAL_TITLE_CONFIG],
       worktreePath: session.project,
     };
   },
@@ -402,6 +413,7 @@ export const agent: Agent = {
       args.push("--model", context.model);
     }
     args.push("-c", `developer_instructions=${JSON.stringify(prompt)}`);
+    args.push("-c", TERMINAL_TITLE_CONFIG);
     if (context.initialPrompt !== undefined) {
       args.push("--", context.initialPrompt);
     }
@@ -413,6 +425,6 @@ export const agent: Agent = {
     };
   },
   waitForSessionId,
-  detectUserActionRequired,
+  detectActivityState,
   isStoppedByRateLimit,
 };

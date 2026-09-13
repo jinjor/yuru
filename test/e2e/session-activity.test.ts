@@ -45,7 +45,7 @@ const providers: ProviderActivityE2e[] = [
     label: "Codex",
     branchName: "activity-codex",
     modelCommandCompleteText: "Model changed to",
-    seedHome: seedCodexHome,
+    seedHome: (home, repoPath) => seedCodexHome(home, repoPath, "gpt-6-astra"),
     hasAssistantReply: (home) => codexHasAssistantReply(home),
     async waitForReady(window) {
       await expect(visibleWorktreeView(window).locator(".xterm")).toContainText("OpenAI Codex", {
@@ -58,7 +58,7 @@ const providers: ProviderActivityE2e[] = [
 
 for (const provider of providers) {
   test(`${provider.label}: active session の activity 表示を実 provider の状態から更新する`, async () => {
-    test.setTimeout(120_000);
+    test.setTimeout(provider.id === "codex" ? 180_000 : 120_000);
     const context = await createE2eContext();
     let app: ElectronApplication | null = null;
     try {
@@ -72,6 +72,9 @@ for (const provider of providers) {
 
       await startWorktreeSession(window, provider);
       await expectActivity(window, provider, "waiting");
+      if (provider.id === "codex") {
+        await runIdleRedraw(app, window, provider);
+      }
 
       await runNormalConversation(context, window, provider, repoDir);
       if (provider.id === "codex") {
@@ -84,6 +87,34 @@ for (const provider of providers) {
       await context.cleanup();
     }
   });
+}
+
+async function runIdleRedraw(
+  app: ElectronApplication,
+  window: Page,
+  provider: ProviderActivityE2e,
+): Promise<void> {
+  // ウィンドウをリサイズし、入力待ちの実 Codex に継続的な再描画を発生させる。
+  // 出力が続く場合も、待機表示は点滅へ戻ってはいけない。
+  const bounds = await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0].getBounds(),
+  );
+  try {
+    for (let index = 0; index < 30; index += 1) {
+      await app.evaluate(
+        ({ BrowserWindow }, { width, height }) => {
+          BrowserWindow.getAllWindows()[0].setSize(width, height);
+        },
+        { width: bounds.width + (index % 2) * 40, height: bounds.height },
+      );
+      await window.waitForTimeout(200);
+      expect(await sessionDot(window, provider, "waiting").isVisible()).toBe(true);
+    }
+  } finally {
+    await app.evaluate(({ BrowserWindow }, bounds) => {
+      BrowserWindow.getAllWindows()[0].setBounds(bounds);
+    }, bounds);
+  }
 }
 
 async function startWorktreeSession(window: Page, provider: ProviderActivityE2e): Promise<void> {
@@ -200,6 +231,17 @@ async function expectActivity(
 ): Promise<void> {
   try {
     await expect(sessionDot(window, provider, activity)).toBeVisible({ timeout });
+    if (provider.id === "codex" && activity === "waiting") {
+      // 起動・キャンセル直後の出力が落ち着いてから、5 秒連続で待機することを確認する。
+      // 一瞬 waiting になるだけでは通さず、入力待ち中の再描画による点滅も検出する。
+      await expect(async () => {
+        const deadline = Date.now() + 5000;
+        while (Date.now() < deadline) {
+          expect(await sessionDot(window, provider, activity).isVisible()).toBe(true);
+          await window.waitForTimeout(100);
+        }
+      }).toPass({ timeout });
+    }
   } catch (error) {
     throw new Error(
       [
