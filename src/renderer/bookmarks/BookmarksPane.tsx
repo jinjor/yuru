@@ -6,9 +6,10 @@ import { EmptyState } from "../ui/EmptyState";
 import { GitHubBadge } from "../pull-requests/GitHubBadge";
 import { IconButton } from "../ui/IconButton";
 import { TextInput } from "../ui/TextInput";
-import { resultDataOrNull } from "../utils/result";
 
 interface BookmarksPaneProps {
+  // 一覧はタブのカウントにも要るので、取得と購読は ExplorerPanel が持つ。
+  bookmarks: readonly Bookmark[];
   onError: (error: AppError) => void;
   onPreviewSelectionChange: (selection: PreviewSelection | null) => void;
   worktreeId: string;
@@ -61,11 +62,11 @@ function BookmarkRow({ bookmark, onOpen, onRemove, onStartRename }: BookmarkRowP
 // YURU_BOOKMARK_AUTO_CAPTURE=1 時の会話からの自動追加がある。
 // クリックすると、リンクは既定ブラウザ、画像はプレビューで開く。
 export function BookmarksPane({
+  bookmarks,
   onError,
   onPreviewSelectionChange,
   worktreeId,
 }: BookmarksPaneProps) {
-  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [editingUrl, setEditingUrl] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [composeUrl, setComposeUrl] = useState("");
@@ -84,29 +85,7 @@ export function BookmarksPane({
     setEditingUrl(null);
     setComposeUrl("");
     setAttachedImage(null);
-    setBookmarks([]);
   }
-
-  useEffect(() => {
-    let active = true;
-    const load = (): void => {
-      void window.electronAPI.getBookmarks(worktreeId).then((result) => {
-        if (active) {
-          setBookmarks(resultDataOrNull(result) ?? []);
-        }
-      });
-    };
-    load();
-    const unsubscribe = window.electronAPI.onBookmarksChanged((changedWorktreeId) => {
-      if (changedWorktreeId === worktreeId) {
-        load();
-      }
-    });
-    return () => {
-      active = false;
-      unsubscribe();
-    };
-  }, [worktreeId]);
 
   useEffect(() => {
     if (!scrollToEndRef.current) {

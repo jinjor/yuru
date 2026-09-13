@@ -577,7 +577,10 @@ test("Changes タブは変更が無いと No changes を表示する", async () 
     // FilesPane の "No files" 空状態と .empty-state クラスが衝突する。ChangesPane 側
     // (.changes-list 配下) に絞って一致させる。
     await expect(window.locator(".changes-list .empty-state")).toHaveText("No changes");
-    await expect(window.locator(".panel-tabs .tab.selected", { hasText: "Changes" })).toContainText("0");
+    // 0 件のときはカウントのバッジを出さない。
+    await expect(
+      window.locator(".panel-tabs .tab.selected", { hasText: "Changes" }).locator(".panel-tab-count"),
+    ).toHaveCount(0);
   } finally {
     await closeYuru(app);
     await context.cleanup();

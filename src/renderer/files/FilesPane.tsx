@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronsDownUp, FolderGit2 } from "lucide-react";
 import type { FileTreeNode, GitFileStatus, GitPathState } from "../../shared/ipc";
 import { isTestFile } from "../../shared/test-file";
 import type { PreviewSelection } from "../previewSelection";
@@ -337,8 +337,10 @@ export function FilesPane({
 
   return (
     <>
+      {/* パネルが狭いときは、CSS がラベルを隠してアイコンだけにする。
+          何のボタンかは title の tooltip に残る。 */}
       <div className="panel-subactions">
-        <span className="panel-subactions-label">Files</span>
+        <span className="panel-subactions-label panel-wide-only">Files</span>
         <div className="panel-header-actions">
           <Button
             onClick={() => {
@@ -347,14 +349,20 @@ export function FilesPane({
             disabled={changedFiles.length === 0}
             title="Expand only the directories that contain changed files"
           >
-            Changed dirs
+            <span className="panel-narrow-only">
+              <FolderGit2 size={14} />
+            </span>
+            <span className="panel-wide-only">Changed dirs</span>
           </Button>
           <Button
             onClick={collapseAllDirectories}
             disabled={treeData.length === 0}
             title="Collapse all directories"
           >
-            Collapse all
+            <span className="panel-narrow-only">
+              <ChevronsDownUp size={14} />
+            </span>
+            <span className="panel-wide-only">Collapse all</span>
           </Button>
         </div>
       </div>

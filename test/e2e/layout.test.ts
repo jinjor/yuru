@@ -115,6 +115,101 @@ test("Changes パネルのリサイズで幅が変わる", async () => {
   }
 });
 
+test("右ペインを最小まで縮めるとタブがアイコンになり、はみ出さない", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context);
+    await registerRepo(context, repoDir);
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+    await openMainTerminal(window);
+
+    const changesPanel = window.locator(".changes-panel");
+    const tabs = window.locator(".panel-tabs .tab");
+    await expect(tabs.filter({ hasText: "Bookmarks" })).toHaveCount(1);
+
+    // ハンドルを右へ動かすと右ペインが縮む。下限の 220px まで送る。
+    await dragHandle(
+      window,
+      window.locator(".worktree-view-column + .pane-resize-handle.vertical"),
+      300,
+      0,
+    );
+    expect(await elementWidth(changesPanel)).toBe(220);
+
+    // ラベルがアイコンに替わり、4 つのタブがパネルの中に収まっている。
+    await expect(tabs).toHaveCount(4);
+    await expect(tabs.locator(".panel-tab-icon")).toHaveCount(4);
+    await expect(window.locator(".panel-tabs")).not.toContainText("Bookmarks");
+    const panelRight = await elementRight(changesPanel);
+    const lastTabRight = await elementRight(tabs.last());
+    expect(lastTabRight).toBeLessThanOrEqual(panelRight);
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+test("ラベルは本当に入らなくなるまで残る", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context);
+    await registerRepo(context, repoDir);
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+    await openMainTerminal(window);
+
+    // 件数が 1 つも出ていないとき、ラベル付きのタブ列に要るのは 294px。
+    // 340px はまだ余裕があるので、ラベルは残る。
+    await dragHandle(
+      window,
+      window.locator(".worktree-view-column + .pane-resize-handle.vertical"),
+      35,
+      0,
+    );
+    expect(await elementWidth(window.locator(".changes-panel"))).toBe(340);
+    await expect(window.locator(".panel-tabs")).toContainText("Bookmarks");
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+test("ラベルを落としても件数は残り、入らなくなって初めて件数も落ちる", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context, { "README.md": "# original\n" });
+    await writeFiles(repoDir, { "README.md": "# changed\n" });
+    await registerRepo(context, repoDir);
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+    await openMainTerminal(window);
+
+    const changesTab = window.locator(".panel-tabs .tab", { hasText: "Changes" });
+    await expect(changesTab.locator(".panel-tab-count")).toHaveText("1");
+
+    // 最小の 220px ではラベルは入らないが、アイコンと件数なら入る。
+    await dragHandle(
+      window,
+      window.locator(".worktree-view-column + .pane-resize-handle.vertical"),
+      300,
+      0,
+    );
+    expect(await elementWidth(window.locator(".changes-panel"))).toBe(220);
+    await expect(window.locator(".panel-tabs")).not.toContainText("Changes");
+    await expect(window.locator(".panel-tabs .panel-tab-count")).toHaveText("1");
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
 test("プレビュー分割のリサイズで preview の高さが変わる", async () => {
   const context = await createE2eContext();
   let app: ElectronApplication | null = null;
@@ -201,6 +296,10 @@ async function dragHandle(window: Page, handle: Locator, deltaX: number, deltaY:
 
 async function elementWidth(locator: Locator): Promise<number> {
   return locator.evaluate((element) => element.getBoundingClientRect().width);
+}
+
+async function elementRight(locator: Locator): Promise<number> {
+  return locator.evaluate((element) => element.getBoundingClientRect().right);
 }
 
 async function elementHeight(locator: Locator): Promise<number> {

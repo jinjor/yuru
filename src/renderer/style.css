@@ -930,6 +930,7 @@ body,
 }
 
 .panel-header {
+  position: relative;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
@@ -1256,7 +1257,16 @@ button.github-badge {
   color: var(--text-subtle);
 }
 
+.change-section-label {
+  flex-shrink: 0;
+}
+
+/* ブランチ名は長くなりうる。右端の行数を押し出さないよう、ここで省略する。 */
 .change-section-base {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--text-subtle);
   font-family: var(--font-mono);
   font-weight: 500;
@@ -1356,10 +1366,19 @@ button.github-badge {
 }
 
 /* Panel tabs */
-.panel-tabs {
+/* タブ 4 つに件数が 2 つ付くと、ラベルのままでは既定の幅をほぼ埋めてしまう。
+   このタブ列だけ、間とピルの内側を詰めてラベルを出せる幅を広げる
+   (.tab は session のタブ列とも共有しているので、そちらには効かせない)。 */
+.panel-tabs,
+.panel-tabs-probe {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+}
+
+.panel-tabs .tab-select,
+.panel-tabs-probe .tab-select {
+  padding: 0 8px;
 }
 
 .panel-tab-count {
@@ -1380,6 +1399,49 @@ button.github-badge {
   background: rgba(123, 193, 255, 0.22);
 }
 
+/* タブ列の段階 (ラベル / アイコンと件数 / アイコンだけ) は ExplorerPanel が幅を測って決める。
+   要る幅は件数の桁数で変わるため、固定の閾値では余裕があるうちから畳むことになる。 */
+.panel-tab-icon {
+  display: inline-flex;
+}
+
+/* 段階を決めるための控えのタブ列。実物と違って縮まないので、実物が畳まれても
+   幅が動かない。動くと「畳む → 収まる → 戻す」の往復になる。 */
+.panel-tabs-probes {
+  position: absolute;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.panel-tabs-probe {
+  width: max-content;
+}
+
+/* タブ列がラベルを出せない幅になったら、パネルの中のほかのラベルも同じように畳む。 */
+.panel-narrow-only {
+  display: none;
+}
+
+.changes-panel.narrow .panel-wide-only {
+  display: none;
+}
+
+.changes-panel.narrow .panel-narrow-only {
+  display: inline-flex;
+}
+
+.changes-panel.narrow .panel-subactions .button {
+  padding: 0 8px;
+}
+
+/* ここまで狭いとディレクトリは省略記号しか出せないので、まるごと落とす
+   (フルパスは行の tooltip に残る)。 */
+.changes-panel.narrow .code-search-file-dir {
+  display: none;
+}
+
 .panel-header-stack {
   align-items: stretch;
   flex-direction: column;
@@ -1389,6 +1451,7 @@ button.github-badge {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  margin-left: auto;
 }
 
 .panel-subactions {

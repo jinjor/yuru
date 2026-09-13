@@ -66,6 +66,37 @@ test("入力欄に URL を入れて Enter でブックマークが増える", as
   }
 });
 
+test("Bookmarks タブは件数を出し、0 件では出さない", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context);
+    await registerRepo(context, repoDir);
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+    await openMainTerminal(window);
+
+    const tab = window.locator(".panel-tabs .tab", { hasText: "Bookmarks" });
+    await expect(tab.locator(".panel-tab-count")).toHaveCount(0);
+
+    const pane = await openBookmarks(window);
+    const input = pane.locator(".bookmark-compose .text-input");
+    await input.fill("http://example.com/one");
+    await input.press("Enter");
+    await expect(tab.locator(".panel-tab-count")).toHaveText("1");
+
+    await input.fill("http://example.com/two");
+    await input.press("Enter");
+    await expect(tab.locator(".panel-tab-count")).toHaveText("2");
+
+    await pane.locator(".bookmark-row").first().getByLabel("Remove bookmark").click();
+    await expect(tab.locator(".panel-tab-count")).toHaveText("1");
+  } finally {
+    await closeYuru(app);
+  }
+});
+
 test("貼り付けた画像は × で破棄でき、打ちかけの URL は消えない", async () => {
   const context = await createE2eContext();
   let app: ElectronApplication | null = null;

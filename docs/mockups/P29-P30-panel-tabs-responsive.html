@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>P29 + P30 — 右ペインのタブ（ブックマーク数の表示 / 幅を縮めたときの畳み方）</title>
+<style>
+/* copied from src/renderer/style.css */
+:root {
+  color-scheme: dark;
+
+  --bg-app: #11151d;
+  --bg-panel: #181d27;
+  --bg-hover: #262f3f;
+  --bg-selected: #2f4058;
+
+  --border: #2f394a;
+  --border-strong: #445068;
+
+  --text: #d8e1ef;
+  --text-muted: #91a0b8;
+  --text-subtle: #63718a;
+
+  --accent: #7bc1ff;
+  --success: #7ad7a1;
+  --warning: #e2c08d;
+  --danger: #f08f86;
+
+  --tab-pill-height: 30px;
+  --tab-pill-badge-height: 18px;
+
+  --font-mono: "SFMono-Regular", Menlo, Monaco, monospace;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+body {
+  background: var(--bg-app);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  padding: 28px;
+}
+
+/* --- copied: .button / .icon-button --- */
+.button {
+  height: 30px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-subtle);
+  cursor: pointer;
+}
+
+/* --- copied: .tab --- */
+.tab {
+  height: var(--tab-pill-height);
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+}
+
+.tab-select {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: inherit;
+  cursor: pointer;
+  outline: none;
+}
+
+.tab.selected {
+  color: var(--text);
+  background: rgba(123, 193, 255, 0.14);
+  border-color: rgba(123, 193, 255, 0.3);
+}
+
+/* --- copied: .panel-header / .panel-tabs / .panel-subactions --- */
+.panel-header {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.panel-header-stack {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.panel-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.panel-tab-count {
+  min-width: 18px;
+  height: var(--tab-pill-badge-height);
+  padding: 0 5px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.panel-tabs .tab.selected .panel-tab-count {
+  background: rgba(123, 193, 255, 0.22);
+}
+
+.panel-subactions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.panel-subactions-label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.panel-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* --- copied: .change-section / .change-item --- */
+.change-section-header {
+  width: 100%;
+  padding: 12px 16px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.change-section-base {
+  color: var(--text-subtle);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.change-item {
+  padding: 5px 16px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.change-status {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  min-width: 14px;
+  text-align: center;
+}
+
+.change-path {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.change-filename { color: var(--text); }
+.change-dir { color: var(--text-subtle); font-size: 11px; margin-left: 8px; }
+
+.line-stat {
+  display: inline-flex;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.line-stat-added { color: #73c991; }
+.line-stat-deleted { color: #c74e39; }
+.change-section-header .line-stat { margin-left: auto; }
+
+/* --- copied: search / bookmarks --- */
+.code-search-file-header {
+  min-height: 30px;
+  padding: 7px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-panel);
+}
+.code-search-file-name {
+  min-width: 0;
+  max-width: 58%;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.code-search-file-dir {
+  min-width: 0;
+  flex: 1;
+  color: var(--text-subtle);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.code-search-file-count {
+  flex-shrink: 0;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  background: #222b39;
+}
+
+.bookmark-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 8px;
+}
+.bookmark-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.bookmark-title {
+  width: 100%;
+  font-size: 12px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.bookmark-meta {
+  width: 100%;
+  min-height: 18px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.bookmark-url {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-subtle);
+  font-size: 11px;
+}
+.github-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #0d1117;
+  background: var(--success);
+}
+.bookmark-open.has-thumbnail {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.bookmark-open.has-thumbnail .bookmark-title {
+  flex: 1;
+  min-width: 0;
+  -webkit-line-clamp: 1;
+}
+.bookmark-thumbnail {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: linear-gradient(135deg, #3c5d86, #7bc1ff);
+}
+
+/* ===================================================================== */
+/* 提案する追加ぶん                                                       */
+/* ===================================================================== */
+
+/* パネル自身を container にして、パネルの幅だけで中身の出し方を決める。
+   ペインの幅は React の state だが、この判断に props は要らない。 */
+.panel.responsive {
+  container-type: inline-size;
+}
+
+/* 幅の狭いパネルでだけ出すもの (タブと操作のアイコン)。 */
+.panel-narrow-only {
+  display: none;
+}
+
+/* P29 でバッジが 2 つになると、ラベル付きのタブ列は既定の 375px をほぼ埋めてしまう。
+   このタブ列だけ間と内側を詰めて、既定の幅に余裕を戻す。
+   (.tab は session のタブ列とも共有しているので、.panel-tabs の中だけに効かせる)
+   ※ 実装では .panel-tabs に直接書く。このモックでは §1 の「現状」と並べて見せるため
+     .panel.responsive の中だけに限っている。 */
+.panel.responsive .panel-tabs {
+  gap: 4px;
+}
+
+.panel.responsive .panel-tabs .tab-select {
+  padding: 0 8px;
+}
+
+/* カウントのバッジは桁数で幅が変わるので、必要なパネル幅は件数によって 294〜378px の間で動く。
+   境界は固定値しか置けないため、現実的に起きうる最大 (変更 1000 ファイル超 = Changes 4 桁 と
+   ブックマーク 2 桁で 366px) が収まる 366px を境にする。
+   これを下回ったらラベルをアイコンに差し替える。 */
+@container (max-width: 366px) {
+  .panel-wide-only {
+    display: none;
+  }
+
+  .panel-narrow-only {
+    display: inline-flex;
+  }
+
+  /* 文字が消えたぶん左右も詰める。アイコン 4 つ + カウント 2 つはこのとき 192px、
+     カウントが両方 0 なら 140px で、220px のパネル (左右 10px で残り 200px) に収まる。 */
+  .panel-header,
+  .panel-subactions {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .panel-subactions .button {
+    padding: 0 8px;
+  }
+
+  /* 見出しのディレクトリは省略記号だけになるので、まるごと落とす。 */
+  .code-search-file-dir {
+    display: none;
+  }
+}
+
+/* ラベルが消えても操作は右端のまま。 */
+.panel-header-actions {
+  margin-left: auto;
+}
+
+/* ブランチ名は長くなりうるので、行数の右寄せを押し出さないよう省略する。 */
+.change-section-base.fixed {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.change-section-header .change-section-label {
+  flex-shrink: 0;
+}
+
+/* ===================================================================== */
+/* モック用の枠組み                                                       */
+/* ===================================================================== */
+
+h1 {
+  font-size: 20px;
+  margin-bottom: 8px;
+}
+
+.lead {
+  max-width: 860px;
+  font-size: 13px;
+  line-height: 1.9;
+  color: var(--text-muted);
+  margin-bottom: 28px;
+}
+
+h2.section {
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  margin: 36px 0 6px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.sheet {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+  align-items: flex-start;
+  margin-top: 16px;
+}
+
+.block h3 {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  margin-bottom: 8px;
+}
+
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.note {
+  max-width: 420px;
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--text-muted);
+}
+
+.note b { color: var(--text); font-weight: 600; }
+.note code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+}
+
+.bad {
+  outline: 1px solid var(--danger);
+  outline-offset: 2px;
+}
+
+.tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  vertical-align: 2px;
+}
+.tag.ng { color: #0d1117; background: var(--danger); }
+.tag.ok { color: #0d1117; background: var(--success); }
+
+.spacer { height: 10px; }
+
+table.digits {
+  border-collapse: collapse;
+  margin-top: 16px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+}
+
+table.digits th,
+table.digits td {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  text-align: right;
+  color: var(--text-muted);
+}
+
+table.digits thead th,
+table.digits tbody th {
+  text-align: left;
+  color: var(--text-subtle);
+  font-weight: 600;
+  background: var(--bg-panel);
+}
+
+table.digits td.edge {
+  color: var(--text);
+  background: rgba(123, 193, 255, 0.14);
+}
+
+table.digits td.over {
+  color: var(--text);
+  background: rgba(240, 143, 134, 0.16);
+}
+
+.sw {
+  display: inline-block;
+  width: 22px;
+  height: 11px;
+  border-radius: 3px;
+  vertical-align: -1px;
+}
+.sw.edge { background: rgba(123, 193, 255, 0.3); }
+.sw.over { background: rgba(240, 143, 134, 0.32); }
+</style>
+</head>
+<body>
+
+<h1>P29 + P30 — 右ペインのタブ</h1>
+<p class="lead">
+  P29（ブックマーク数をタブに表示）と P30（右ペインの幅を縮めても崩れないようにする）は、
+  同じ 1 本のタブ列の話なので合わせて考える。P29 でバッジがもう 1 つ増えるぶん、
+  タブ列はいまより約 <b>24px 広く</b>なり、幅の問題が一段きつくなる。
+  右ペインはドラッグで <b>220px</b> まで縮められる（<code>usePaneLayout</code> の下限）ので、
+  <b>220px で成立すること</b>を設計の目標にする。
+</p>
+
+<h2 class="section">1. いまの壊れ方<span class="tag ng">現状</span></h2>
+<p class="note" style="max-width: 860px">
+  下は <b>いまの CSS のまま</b>、パネルの幅だけを変えたもの。
+  ラベル付きのタブ 4 つには<b>パネル幅 340px</b> 要る（タブ列そのものが 308px + 左右 16px）ので、
+  既定の 375px から少し縮めただけで足りなくなる。
+  P29 で Bookmarks のバッジが増えると、これが <b>368px</b> まで上がり、
+  既定の 375px に <b>7px</b> しか余らなくなる。
+  <code>.tab-select</code> は <code>flex: 1; min-width: 0</code> なので、足りなくなるとピルのほうが先に縮み、
+  文字が<b>ピルからはみ出して隣と重なる</b>。Files タブの操作ボタンは <code>flex-shrink: 0</code> なので、
+  縮まずに<b>パネルの外へ押し出されて消える</b>。
+</p>
+<div class="sheet">
+  <div class="block">
+    <h3>375px（既定）— 足りている</h3>
+    <div class="panel" style="width: 375px">
+      <div class="panel-header panel-header-stack">
+        <div class="panel-tabs">
+          <div class="tab selected"><button class="tab-select">Changes<span class="panel-tab-count">3</span></button></div>
+          <div class="tab"><button class="tab-select">Files</button></div>
+          <div class="tab"><button class="tab-select">Search</button></div>
+          <div class="tab"><button class="tab-select">Bookmarks</button></div>
+        </div>
+      </div>
+      <div class="spacer"></div>
+    </div>
+  </div>
+
+  <div class="block">
+    <h3>250px — ラベルがピルからはみ出す</h3>
+    <div class="panel bad" style="width: 250px">
+      <div class="panel-header panel-header-stack">
+        <div class="panel-tabs">
+          <div class="tab selected"><button class="tab-select">Changes<span class="panel-tab-count">3</span></button></div>
+          <div class="tab"><button class="tab-select">Files</button></div>
+          <div class="tab"><button class="tab-select">Search</button></div>
+          <div class="tab"><button class="tab-select">Bookmarks</button></div>
+        </div>
+      </div>
+      <div class="spacer"></div>
+    </div>
+  </div>
+
+  <div class="block">
+    <h3>220px（最小）— 読めない</h3>
+    <div class="panel bad" style="width: 220px">
+      <div class="panel-header panel-header-stack">
+        <div class="panel-tabs">
+          <div class="tab selected"><button class="tab-select">Changes<span class="panel-tab-count">3</span></button></div>
+          <div class="tab"><button class="tab-select">Files</button></div>
+          <div class="tab"><button class="tab-select">Search</button></div>
+          <div class="tab"><button class="tab-select">Bookmarks</button></div>
+        </div>
+      </div>
+      <div class="spacer"></div>
+    </div>
+    <p class="note">
+      タブの区切りが分からなくなり、文字も重なる。
+      P29 のバッジを Bookmarks にも足すと、この状態がさらに <b>24px ぶん</b>悪くなる。
+    </p>
+  </div>
+</div>
+
+<div class="sheet">
+  <div class="block">
+    <h3>220px — Files の操作が外へ出る</h3>
+    <div class="panel bad" style="width: 220px">
+      <div class="panel-subactions" style="border-top: 0">
+        <span class="panel-subactions-label">Files</span>
+        <div class="panel-header-actions">
+          <button class="button">Changed dirs</button>
+          <button class="button">Collapse all</button>
+        </div>
+      </div>
+    </div>
+    <p class="note">
+      ラベルとボタン 2 つで約 290px 要る。<code>.changes-panel</code> が <code>overflow: hidden</code> なので、
+      <b>Collapse all が押せなくなる</b>。
+    </p>
+  </div>
+
+  <div class="block">
+    <h3>220px — ブランチ名が行数を押し出す</h3>
+    <div class="panel bad" style="width: 220px">
+      <div class="change-section-header">
+        <span class="change-section-label">Committed</span>
+        <span class="change-section-base">origin/main</span>
+        <span class="line-stat"><span class="line-stat-added">+128</span><span class="line-stat-deleted">-64</span></span>
+      </div>
+    </div>
+    <p class="note">
+      <code>.change-section-base</code>（比較元のブランチ名）に省略指定が無いので、
+      名前が長いと右端の増減行数を<b>枠の外へ押し出す</b>。幅と関係なく直しておくべき箇所。
+    </p>
+  </div>
+</div>
+
+<h2 class="section">2. P29 — Bookmarks にカウントを出す<span class="tag ok">提案</span></h2>
+<p class="note" style="max-width: 860px">
+  見た目は Changes のカウント（<code>.panel-tab-count</code>）をそのまま使う。新しい書き方は足さない。
+  <b>0 件のときはバッジごと出さない</b>——ここは Changes の<b>いまの挙動も変える</b>（現状は <code>0</code> を出している）。
+  バッジは「向けるべき量がある」という合図で、<code>0</code> はその合図を出さないために場所を取っている状態になる。
+  機能ごとの分岐ではなく、カウント 1 本の規則を変えるだけ。
+</p>
+<div class="sheet">
+  <div class="block">
+    <h3>375px — 件数がある</h3>
+    <div class="panel responsive" style="width: 375px">
+      <div class="panel-header panel-header-stack">
+        <div class="panel-tabs">
+          <div class="tab"><button class="tab-select" title="Changes"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 13V7"/><path d="M9 10h6"/><path d="M9 17h6"/><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg></span><span class="panel-wide-only">Changes</span><span class="panel-tab-count">3</span></button></div>
+          <div class="tab"><button class="tab-select" title="Files"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></span><span class="panel-wide-only">Files</span></button></div>
+          <div class="tab"><button class="tab-select" title="Search"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span><span class="panel-wide-only">Search</span></button></div>
+          <div class="tab selected"><button class="tab-select" title="Bookmarks"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg></span><span class="panel-wide-only">Bookmarks</span><span class="panel-tab-count">12</span></button></div>
+        </div>
+      </div>
+      <div class="spacer"></div>
+    </div>
+  </div>
+  <div class="block">
+    <h3>375px — 両方 0 件</h3>
+    <div class="panel responsive" style="width: 375px">
+      <div class="panel-header panel-header-stack">
+        <div class="panel-tabs">
+          <div class="tab"><button class="tab-select" title="Changes"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 13V7"/><path d="M9 10h6"/><path d="M9 17h6"/><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg></span><span class="panel-wide-only">Changes</span></button></div>
+          <div class="tab"><button class="tab-select" title="Files"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></span><span class="panel-wide-only">Files</span></button></div>
+          <div class="tab"><button class="tab-select" title="Search"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span><span class="panel-wide-only">Search</span></button></div>
+          <div class="tab selected"><button class="tab-select" title="Bookmarks"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg></span><span class="panel-wide-only">Bookmarks</span></button></div>
+        </div>
+      </div>
+      <div class="spacer"></div>
+    </div>
+    <p class="note">
+      差分もブックマークも無いときは、タブが 4 つ並んでいるだけになる。
+      「0 件であること」はバッジが無いことで伝わる。
+    </p>
+  </div>
+</div>
+<div class="sheet">
+  <div class="block">
+    <h3>220px — 件数がある（192px）</h3>
+    <div class="panel responsive" style="width: 220px">
+      <div class="panel-header panel-header-stack">
+        <div class="panel-tabs">
+          <div class="tab"><button class="tab-select" title="Changes"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 13V7"/><path d="M9 10h6"/><path d="M9 17h6"/><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg></span><span class="panel-wide-only">Changes</span><span class="panel-tab-count">3</span></button></div>
+          <div class="tab"><button class="tab-select" title="Files"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></span><span class="panel-wide-only">Files</span></button></div>
+          <div class="tab"><button class="tab-select" title="Search"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span><span class="panel-wide-only">Search</span></button></div>
+          <div class="tab selected"><button class="tab-select" title="Bookmarks"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg></span><span class="panel-wide-only">Bookmarks</span><span class="panel-tab-count">12</span></button></div>
+        </div>
+      </div>
+      <div class="spacer"></div>
+    </div>
+  </div>
+  <div class="block">
+    <h3>220px — 両方 0 件（140px）</h3>
+    <div class="panel responsive" style="width: 220px">
+      <div class="panel-header panel-header-stack">
+        <div class="panel-tabs">
+          <div class="tab"><button class="tab-select" title="Changes"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 13V7"/><path d="M9 10h6"/><path d="M9 17h6"/><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg></span><span class="panel-wide-only">Changes</span></button></div>
+          <div class="tab"><button class="tab-select" title="Files"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></span><span class="panel-wide-only">Files</span></button></div>
+          <div class="tab"><button class="tab-select" title="Search"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span><span class="panel-wide-only">Search</span></button></div>
+          <div class="tab selected"><button class="tab-select" title="Bookmarks"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg></span><span class="panel-wide-only">Bookmarks</span></button></div>
+        </div>
+      </div>
+      <div class="spacer"></div>
+    </div>
+    <p class="note">
+      畳んだときにバッジ 1 つが約 24px を占めるので、0 で消す規則は<b>狭いときの余裕にも効く</b>。
+    </p>
+  </div>
+  <div class="block">
+    <p class="note" style="max-width: 460px">
+      <b>ちらつきも消える</b>：Changes のカウントは <code>gitPathStates</code> から出ていて、
+      これは最初の polling が返るまで空。いまはマウント直後に一瞬 <code>0</code> が出てから実数に変わる。
+      0 で消す規則なら、この一瞬の <code>0</code> も出なくなる。
+    </p>
+    <p class="note" style="max-width: 460px">
+      <b>数の出どころ</b>：いまブックマークの取得と購読は <code>BookmarksPane</code> の中にある。
+      タブにも数が要るので、<b>取得と購読を <code>ExplorerPanel</code> に上げて</b>、
+      一覧は props で <code>BookmarksPane</code> に渡す。
+      <code>Changes</code> のカウントが <code>gitPathStates</code> から出ているのと同じ形になり、
+      情報源は 1 つのまま（表示専用の件数を別に持たない）。
+      追加・削除・リネームの IPC 呼び出しは <code>BookmarksPane</code> に残す。
+    </p>
+  </div>
+</div>
+
+<h2 class="section">3. P30 — 幅で「ラベルを畳む」<span class="tag ok">提案</span></h2>
+<p class="note" style="max-width: 860px">
+  タブを 4 つとも残したまま 220px に収める方法は、実質<b>ラベルをアイコンに替える</b>しかない
+  （ラベル付きのタブ列は詰めても 314px までしか縮まない。アイコンなら <b>192px</b>、カウントが両方 0 なら <b>140px</b>）。
+  あわせて、<b>このタブ列だけ</b>間を 6px → 4px、ピルの内側を 10px → 8px に詰める。
+  P29 のバッジぶんで既定の 375px がほぼ埋まってしまうのを戻すためで、幅に関わらず効かせる
+  （<code>.tab</code> は session のタブ列とも共有しているので <code>.panel-tabs</code> の中だけに限る）。
+  切り替えの境界は <b>366px</b>（次の §4 参照）。
+  切り替えの判断は <b>CSS の container query</b> で行う：<code>.changes-panel</code> を
+  <code>container-type: inline-size</code> にすると、パネル自身の幅で中の表示を切り替えられる。
+  幅を JS で測って props で配って回る必要がなく、再描画も起きない。
+</p>
+<p class="note" style="max-width: 860px">
+  仕組みは <b>ユーティリティ 2 つ</b>だけ：<code>.panel-wide-only</code>（狭いと消える）と
+  <code>.panel-narrow-only</code>（狭いときだけ出る）。
+  タブのラベル／アイコンも、Files の操作ボタンのラベル／アイコンも、同じ 2 つで説明できる。
+  タブ側の <code>title</code> / <code>aria-label</code> は<b>幅に関わらず常に</b>付けるので、
+  アイコンだけになっても読み上げとツールチップは変わらない（<code>Tab</code> の <code>label</code> は既にある）。
+</p>
+
+<div class="sheet">
+  <div class="block">
+    <h3>375px（既定）— 今までどおり</h3>
+    <div class="panel responsive" style="width: 375px">
+      <div class="panel-header panel-header-stack">
+        <div class="panel-tabs">
+          <div class="tab selected"><button class="tab-select" title="Changes"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 13V7"/><path d="M9 10h6"/><path d="M9 17h6"/><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg></span><span class="panel-wide-only">Changes</span><span class="panel-tab-count">3</span></button></div>
+          <div class="tab"><button class="tab-select" title="Files"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></span><span class="panel-wide-only">Files</span></button></div>
+          <div class="tab"><button class="tab-select" title="Search"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span><span class="panel-wide-only">Search</span></button></div>
+          <div class="tab"><button class="tab-select" title="Bookmarks"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg></span><span class="panel-wide-only">Bookmarks</span><span class="panel-tab-count">12</span></button></div>
+        </div>
+      </div>
+      <div class="change-section-header">
+        <span class="change-section-label">Committed</span>
+        <span class="change-section-base fixed">f29-30-bookmark-ui</span>
+        <span class="line-stat"><span class="line-stat-added">+128</span><span class="line-stat-deleted">-64</span></span>
+      </div>
+      <div class="change-item"><span class="change-status" style="color:#e2c08d">M</span><span class="change-path"><span class="change-filename">ExplorerPanel.tsx</span><span class="change-dir">src/renderer/explorer</span></span><span class="line-stat"><span class="line-stat-added">+24</span><span class="line-stat-deleted">-6</span></span></div>
+      <div class="change-item"><span class="change-status" style="color:#e2c08d">M</span><span class="change-path"><span class="change-filename">style.css</span><span class="change-dir">src/renderer</span></span><span class="line-stat"><span class="line-stat-added">+41</span><span class="line-stat-deleted">-2</span></span></div>
+      <div class="panel-subactions">
+        <span class="panel-subactions-label panel-wide-only">Files</span>
+        <div class="panel-header-actions">
+          <button class="button" title="Expand only the directories that contain changed files"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v3"/><circle cx="13" cy="12" r="2"/><path d="M18 19c-2.8 0-5-2.2-5-5v8"/><circle cx="20" cy="19" r="2"/></svg></span><span class="panel-wide-only">Changed dirs</span></button>
+          <button class="button" title="Collapse all directories"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 20 5-5 5 5"/><path d="m7 4 5 5 5-5"/></svg></span><span class="panel-wide-only">Collapse all</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="block">
+    <h3>300px — アイコンに畳まれている</h3>
+    <div class="panel responsive" style="width: 300px">
+      <div class="panel-header panel-header-stack">
+        <div class="panel-tabs">
+          <div class="tab selected"><button class="tab-select" title="Changes"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 13V7"/><path d="M9 10h6"/><path d="M9 17h6"/><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg></span><span class="panel-wide-only">Changes</span><span class="panel-tab-count">3</span></button></div>
+          <div class="tab"><button class="tab-select" title="Files"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></span><span class="panel-wide-only">Files</span></button></div>
+          <div class="tab"><button class="tab-select" title="Search"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span><span class="panel-wide-only">Search</span></button></div>
+          <div class="tab"><button class="tab-select" title="Bookmarks"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg></span><span class="panel-wide-only">Bookmarks</span><span class="panel-tab-count">12</span></button></div>
+        </div>
+      </div>
+      <div class="change-section-header">
+        <span class="change-section-label">Committed</span>
+        <span class="change-section-base fixed">f29-30-bookmark-ui</span>
+        <span class="line-stat"><span class="line-stat-added">+128</span><span class="line-stat-deleted">-64</span></span>
+      </div>
+      <div class="change-item"><span class="change-status" style="color:#e2c08d">M</span><span class="change-path"><span class="change-filename">ExplorerPanel.tsx</span><span class="change-dir">src/renderer/explorer</span></span><span class="line-stat"><span class="line-stat-added">+24</span><span class="line-stat-deleted">-6</span></span></div>
+      <div class="change-item"><span class="change-status" style="color:#e2c08d">M</span><span class="change-path"><span class="change-filename">style.css</span><span class="change-dir">src/renderer</span></span><span class="line-stat"><span class="line-stat-added">+41</span><span class="line-stat-deleted">-2</span></span></div>
+      <div class="panel-subactions">
+        <span class="panel-subactions-label panel-wide-only">Files</span>
+        <div class="panel-header-actions">
+          <button class="button" title="Expand only the directories that contain changed files"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v3"/><circle cx="13" cy="12" r="2"/><path d="M18 19c-2.8 0-5-2.2-5-5v8"/><circle cx="20" cy="19" r="2"/></svg></span><span class="panel-wide-only">Changed dirs</span></button>
+          <button class="button" title="Collapse all directories"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 20 5-5 5 5"/><path d="m7 4 5 5 5-5"/></svg></span><span class="panel-wide-only">Collapse all</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="block">
+    <h3>220px（最小）— 収まる</h3>
+    <div class="panel responsive" style="width: 220px">
+      <div class="panel-header panel-header-stack">
+        <div class="panel-tabs">
+          <div class="tab selected"><button class="tab-select" title="Changes"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 13V7"/><path d="M9 10h6"/><path d="M9 17h6"/><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg></span><span class="panel-wide-only">Changes</span><span class="panel-tab-count">3</span></button></div>
+          <div class="tab"><button class="tab-select" title="Files"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></span><span class="panel-wide-only">Files</span></button></div>
+          <div class="tab"><button class="tab-select" title="Search"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span><span class="panel-wide-only">Search</span></button></div>
+          <div class="tab"><button class="tab-select" title="Bookmarks"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg></span><span class="panel-wide-only">Bookmarks</span><span class="panel-tab-count">12</span></button></div>
+        </div>
+      </div>
+      <div class="change-section-header">
+        <span class="change-section-label">Committed</span>
+        <span class="change-section-base fixed">f29-30-bookmark-ui</span>
+        <span class="line-stat"><span class="line-stat-added">+128</span><span class="line-stat-deleted">-64</span></span>
+      </div>
+      <div class="change-item"><span class="change-status" style="color:#e2c08d">M</span><span class="change-path"><span class="change-filename">ExplorerPanel.tsx</span><span class="change-dir">src/renderer/explorer</span></span><span class="line-stat"><span class="line-stat-added">+24</span><span class="line-stat-deleted">-6</span></span></div>
+      <div class="change-item"><span class="change-status" style="color:#e2c08d">M</span><span class="change-path"><span class="change-filename">style.css</span><span class="change-dir">src/renderer</span></span><span class="line-stat"><span class="line-stat-added">+41</span><span class="line-stat-deleted">-2</span></span></div>
+      <div class="panel-subactions">
+        <span class="panel-subactions-label panel-wide-only">Files</span>
+        <div class="panel-header-actions">
+          <button class="button" title="Expand only the directories that contain changed files"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v3"/><circle cx="13" cy="12" r="2"/><path d="M18 19c-2.8 0-5-2.2-5-5v8"/><circle cx="20" cy="19" r="2"/></svg></span><span class="panel-wide-only">Changed dirs</span></button>
+          <button class="button" title="Collapse all directories"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 20 5-5 5 5"/><path d="m7 4 5 5 5-5"/></svg></span><span class="panel-wide-only">Collapse all</span></button>
+        </div>
+      </div>
+    </div>
+    <p class="note">
+      アイコン 4 つ + カウント 2 つで <b>192px</b>、カウントが無ければ <b>140px</b>。
+      220px のときに使えるのは左右 10px を引いた 200px なので、両方出ていても収まる。
+      カウントは畳んでも<b>残す</b>——「数を一目で」が P29 の目的なので、狭いときこそ残す価値がある。
+    </p>
+  </div>
+</div>
+
+<h2 class="section">4. カウントの桁数と、切り替えが起きる幅</h2>
+<p class="note" style="max-width: 860px">
+  バッジの幅は桁数で変わるので、ラベル付きのタブ列に必要なパネル幅も件数で動く。
+  下は詰めたあとの実測値（単位 px）＝ ラベルを出したままにできる最小のパネル幅。
+  <b>既定の 375px では、4 桁どうし以外はすべてラベルのまま</b>で、リサイズしない限りアイコンにはならない。
+</p>
+<table class="digits">
+  <thead>
+    <tr><th>Changes \ Bookmarks</th><th>なし</th><th>1 桁</th><th>2 桁</th><th>3 桁</th><th>4 桁</th></tr>
+  </thead>
+  <tbody>
+    <tr><th>なし</th><td>294</td><td>318</td><td>324</td><td>329</td><td>336</td></tr>
+    <tr><th>1 桁</th><td>318</td><td>342</td><td>348</td><td>353</td><td>360</td></tr>
+    <tr><th>2 桁</th><td>324</td><td>348</td><td>354</td><td>359</td><td class="edge">366</td></tr>
+    <tr><th>3 桁</th><td>329</td><td>353</td><td>359</td><td class="edge">364</td><td class="over">371</td></tr>
+    <tr><th>4 桁</th><td>336</td><td>360</td><td class="edge">366</td><td class="over">371</td><td class="over">378</td></tr>
+  </tbody>
+</table>
+<p class="note" style="max-width: 860px">
+  境界は固定値しか置けないので、<b>現実的に起きうる最大に合わせて 366px</b> にする。
+  ラベルが出るのは 367px 以上なので、<b>必要幅が 367px 以下の組み合わせは、どの幅でも溢れない</b>
+  （表の <span class="sw edge"></span> まで）。大きな変更中に起きる
+  <b>Changes 4 桁 / Bookmarks 1 桁は 360px</b> で、ここに 7px 収まっている。
+</p>
+<p class="note" style="max-width: 860px">
+  残る <span class="sw over"></span> の 3 つは、<b>片方が 4 桁で、もう片方も 3 桁以上</b>という組み合わせ
+  （変更 1000 ファイル超 かつ ブックマーク 100 件超）。溢れるのは 367〜370px のような数 px 幅の帯だけで、
+  そこでも文字がピルから少しはみ出す程度。
+  ここまで境界を上げると既定の 375px との差が無くなるので、<b>合わせない</b>ことを選ぶ。
+</p>
+<p class="note" style="max-width: 860px">
+  <b>副作用</b>：境界が 366px なので、既定の 375px から <b>10px ほど</b>縮めるとアイコンに切り替わる。
+  ここを厚くしたいなら、右ペインの初期幅（<code>usePaneLayout</code> の <code>useState(375)</code>）を
+  400px にすると 34px の余裕になり、4 桁どうしも収まる。ただし端末側が 25px 狭くなる。
+</p>
+
+<h2 class="section">5. 他のタブも 220px で確かめる</h2>
+<div class="sheet">
+  <div class="block">
+    <h3>Bookmarks / 220px</h3>
+    <div class="panel responsive" style="width: 220px">
+      <div class="panel-header panel-header-stack">
+        <div class="panel-tabs">
+          <div class="tab"><button class="tab-select" title="Changes"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 13V7"/><path d="M9 10h6"/><path d="M9 17h6"/><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg></span><span class="panel-wide-only">Changes</span><span class="panel-tab-count">3</span></button></div>
+          <div class="tab"><button class="tab-select" title="Files"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></span><span class="panel-wide-only">Files</span></button></div>
+          <div class="tab"><button class="tab-select" title="Search"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span><span class="panel-wide-only">Search</span></button></div>
+          <div class="tab selected"><button class="tab-select" title="Bookmarks"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg></span><span class="panel-wide-only">Bookmarks</span><span class="panel-tab-count">12</span></button></div>
+        </div>
+      </div>
+      <div class="bookmark-row">
+        <button class="bookmark-open">
+          <span class="bookmark-title">Support container queries in the renderer</span>
+          <span class="bookmark-meta">
+            <span class="github-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>#812</span>
+            <span class="bookmark-url">github.com/vercel/next.js/pull/812</span>
+          </span>
+        </button>
+        <button class="icon-button" aria-label="Rename bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg></button>
+        <button class="icon-button" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+      </div>
+      <div class="bookmark-row">
+        <button class="bookmark-open has-thumbnail">
+          <span class="bookmark-thumbnail"></span>
+          <span class="bookmark-title">Pasted image</span>
+        </button>
+        <button class="icon-button" aria-label="Rename bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg></button>
+        <button class="icon-button" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+      </div>
+    </div>
+    <p class="note">
+      一覧の行は<b>直さなくて成立する</b>。タイトルは 2 行で切り、URL は省略記号、
+      バッジとサムネイルは縮まない——もともと全部指定済み。
+      サムネイル付きの行だけタイトルが約 90px と窮屈だが、切れずに読める。
+    </p>
+  </div>
+
+  <div class="block">
+    <h3>Search / 220px</h3>
+    <div class="panel responsive" style="width: 220px">
+      <div class="panel-header panel-header-stack">
+        <div class="panel-tabs">
+          <div class="tab"><button class="tab-select" title="Changes"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 13V7"/><path d="M9 10h6"/><path d="M9 17h6"/><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg></span><span class="panel-wide-only">Changes</span><span class="panel-tab-count">3</span></button></div>
+          <div class="tab"><button class="tab-select" title="Files"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></span><span class="panel-wide-only">Files</span></button></div>
+          <div class="tab selected"><button class="tab-select" title="Search"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span><span class="panel-wide-only">Search</span></button></div>
+          <div class="tab"><button class="tab-select" title="Bookmarks"><span class="panel-narrow-only"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg></span><span class="panel-wide-only">Bookmarks</span><span class="panel-tab-count">12</span></button></div>
+        </div>
+      </div>
+      <div class="code-search-file-header" title="src/renderer/explorer/ExplorerPanel.tsx">
+        <span class="code-search-file-name">ExplorerPanel.tsx</span>
+        <span class="code-search-file-dir">src/renderer/explorer</span>
+        <span class="code-search-file-count">4</span>
+      </div>
+      <div class="change-item" style="font-family: var(--font-mono); padding: 5px 12px"><span class="change-path">const [activeTab, setActiveTab]</span></div>
+      <div class="change-item" style="font-family: var(--font-mono); padding: 5px 12px"><span class="change-path">&lt;Tab selected={activeTab === "files"}</span></div>
+    </div>
+    <p class="note">
+      ファイル見出しのディレクトリは 220px だと <code>…</code> しか出せないので、
+      狭いときは<b>落とす</b>（同じ container query の中で 1 行）。
+      ファイル名と件数は残るし、<code>title</code> にフルパスが出る。
+    </p>
+  </div>
+</div>
+
+<h2 class="section">6. 検討した代替案</h2>
+<div class="sheet">
+  <div class="block">
+    <h3>案 B — 選択中のタブだけラベルを残す</h3>
+    <div class="panel" style="width: 300px">
+      <div class="panel-header panel-header-stack">
+        <div class="panel-tabs">
+          <div class="tab"><button class="tab-select" title="Changes"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 13V7"/><path d="M9 10h6"/><path d="M9 17h6"/><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg><span class="panel-tab-count">3</span></button></div>
+          <div class="tab"><button class="tab-select" title="Files"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></button></div>
+          <div class="tab"><button class="tab-select" title="Search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></button></div>
+          <div class="tab selected"><button class="tab-select" title="Bookmarks"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>Bookmarks<span class="panel-tab-count">12</span></button></div>
+        </div>
+      </div>
+      <div class="spacer"></div>
+    </div>
+    <p class="note">
+      中間段階をもう 1 つ作る案（366px 以上は全ラベル / 250〜366px は選択中だけ / それ未満は全アイコン）。
+      既定の 375px から 10px ほど縮めるだけでアイコンだけになるのが気になるなら、container query を 1 つ足すだけで作れる。
+      <b>採らなかった理由</b>：220px で成立させるという要件は案 A で満たせる。段階が増えるぶん、
+      ドラッグ中に見た目が 2 回変わる。まず案 A を入れて、実際に縮めて使ってみて足りなければ足す。
+    </p>
+  </div>
+
+  <div class="block">
+    <h3>案 C — タブ列を横スクロールさせる</h3>
+    <div class="panel" style="width: 220px">
+      <div class="panel-header panel-header-stack" style="padding-right: 0">
+        <div class="panel-tabs" style="overflow-x: auto; padding-bottom: 6px">
+          <div class="tab selected" style="flex-shrink: 0"><button class="tab-select">Changes<span class="panel-tab-count">3</span></button></div>
+          <div class="tab" style="flex-shrink: 0"><button class="tab-select">Files</button></div>
+          <div class="tab" style="flex-shrink: 0"><button class="tab-select">Search</button></div>
+          <div class="tab" style="flex-shrink: 0"><button class="tab-select">Bookmarks</button></div>
+        </div>
+      </div>
+      <div class="spacer"></div>
+    </div>
+    <p class="note">
+      CSS 3 行で済み、ラベルも消えない。
+      <b>採らなかった理由</b>：タブが 4 つしか無いのに、<b>見えていないタブがある</b>状態が常態になる。
+      P29 のカウントも、スクロールしないと見えないなら「一目で把握したい」が満たせない。
+    </p>
+  </div>
+
+  <div class="block">
+    <h3>案 D — 幅を JS で測って分岐する</h3>
+    <p class="note">
+      <code>ExplorerPanel</code> には既に <code>useElementSize</code> があるので、
+      <code>panelSize.width</code> で分岐することはできる。
+      <b>採らなかった理由</b>：幅が変わるたびに React の再描画が走る。
+      いま P22（再描画の波及を減らす）を控えていることもあり、
+      見た目だけの分岐を state に持ち込む理由が無い。CSS で足りる。
+    </p>
+  </div>
+</div>
+
+<h2 class="section">7. 変更点まとめ</h2>
+<p class="note" style="max-width: 860px">
+  <b>P29</b>
+</p>
+<ul class="note" style="max-width: 860px; padding-left: 20px">
+  <li><code>ExplorerPanel</code> がブックマークの取得と購読を持ち、一覧を <code>BookmarksPane</code> に props で渡す。</li>
+  <li>Bookmarks タブに <code>.panel-tab-count</code> を足す（Changes と同じ見た目）。</li>
+  <li>カウントは <b>0 件のとき出さない</b>。Changes の現状（常に <code>0</code> を出す）もこれに合わせる。</li>
+</ul>
+<p class="note" style="max-width: 860px">
+  <b>P30</b>
+</p>
+<ul class="note" style="max-width: 860px; padding-left: 20px">
+  <li><code>.changes-panel</code> を <code>container-type: inline-size</code> にする。</li>
+  <li><code>.panel-tabs</code> の <code>gap</code> を 4px、その中の <code>.tab-select</code> の内側を 8px に詰める（幅に関わらず）。</li>
+  <li><code>.panel-wide-only</code> / <code>.panel-narrow-only</code> の 2 つと、<code>@container (max-width: 366px)</code> の 1 ブロックを足す（ブロックの中で左右の余白も詰める）。</li>
+  <li>4 つのタブにアイコンを足す（<code>FileDiff</code> / <code>Folder</code> / <code>Search</code> / <code>Bookmark</code>）。<code>Tab</code> の <code>label</code> は 4 つとも常に渡す。</li>
+  <li>Files の <code>Changed dirs</code> / <code>Collapse all</code> にもアイコンを足し、ラベルを畳めるようにする。<code>Files</code> ラベルは狭いときに落とす。</li>
+  <li>幅と無関係な直し：<code>.change-section-base</code>（ブランチ名）に省略指定を入れ、セクション名を <code>flex-shrink: 0</code> にする。</li>
+</ul>
+<p class="note" style="max-width: 860px">
+  <code>Tab</code> と <code>Button</code> の中身には手を入れない。どちらも「中身は呼び出し側が決める」作りなので、
+  アイコンとラベルを並べて渡すだけで済む。
+</p>
+
+</body>
+</html>

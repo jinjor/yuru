@@ -115,7 +115,7 @@ function ChangeSectionView({
           {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         </span>
       )}
-      <span>{section.label}</span>
+      <span className="change-section-label">{section.label}</span>
       {section.key === "base" && baseBranch && (
         <span className="change-section-base">{baseBranch}</span>
       )}
