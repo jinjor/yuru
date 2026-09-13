@@ -27,7 +27,8 @@ function loadStore(): BookmarkStore {
           !bookmark ||
           typeof bookmark !== "object" ||
           typeof bookmark.url !== "string" ||
-          typeof bookmark.title !== "string",
+          typeof bookmark.title !== "string" ||
+          (bookmark.kind !== undefined && bookmark.kind !== "image"),
       )
     ) {
       throw new Error("Bookmarks must contain URL and title strings.");
@@ -70,23 +71,31 @@ export function addBookmarks(worktreePath: string, urls: readonly string[]): Boo
   return added;
 }
 
-export function removeBookmark(worktreePath: string, url: string): void {
+// 貼り付けた画像。URL 由来のリンクと違って実体が 1 件ずつ別ファイルなので、重複判定はしない。
+export function addImageBookmark(worktreePath: string, url: string, title: string): void {
+  const store = loadStore();
+  const key = path.resolve(worktreePath);
+  store.worktrees[key] = [...(store.worktrees[key] ?? []), { url, title, kind: "image" }];
+  saveStore(store);
+}
+
+// 消した Bookmark を返す。画像が抱えている実体ファイルの後始末は呼び出し側が行う。
+export function removeBookmark(worktreePath: string, url: string): Bookmark | null {
   const store = loadStore();
   const key = path.resolve(worktreePath);
   const existing = store.worktrees[key];
-  if (!existing) {
-    return;
+  const removed = existing?.find((bookmark) => bookmark.url === url);
+  if (!existing || !removed) {
+    return null;
   }
   const bookmarks = existing.filter((bookmark) => bookmark.url !== url);
-  if (bookmarks.length === existing.length) {
-    return;
-  }
   if (bookmarks.length > 0) {
     store.worktrees[key] = bookmarks;
   } else {
     delete store.worktrees[key];
   }
   saveStore(store);
+  return removed;
 }
 
 export function updateBookmarkTitle(worktreePath: string, url: string, title: string): boolean {
@@ -118,11 +127,14 @@ export function updateBookmarkTitles(
   return changed;
 }
 
-export function removeBookmarks(worktreePath: string): void {
+export function removeBookmarks(worktreePath: string): Bookmark[] {
   const store = loadStore();
   const key = path.resolve(worktreePath);
-  if (key in store.worktrees) {
-    delete store.worktrees[key];
-    saveStore(store);
+  const removed = store.worktrees[key];
+  if (!removed) {
+    return [];
   }
+  delete store.worktrees[key];
+  saveStore(store);
+  return removed;
 }

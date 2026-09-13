@@ -19,6 +19,7 @@ import {
 import { removeFileReviews } from "./review/store.js";
 import {
   addBookmarks,
+  addImageBookmark as addStoredImageBookmark,
   loadAllBookmarks,
   loadBookmarks,
   removeBookmark as removeStoredBookmark,
@@ -26,6 +27,12 @@ import {
   updateBookmarkTitle,
   updateBookmarkTitles,
 } from "./bookmarks/store.js";
+import {
+  bookmarkImagePath,
+  deleteBookmarkImage,
+  saveBookmarkImage,
+  unsupportedImageMessage,
+} from "./bookmarks/image.js";
 import { resolveUrlTitle } from "./bookmarks/title.js";
 import { findHttpUrls } from "../shared/http-url.js";
 import {
@@ -1071,7 +1078,7 @@ export class YuruService {
 
     removeTaskWorktreeByPath(worktree.worktreePath);
     removeFileReviews(worktree.worktreePath);
-    removeStoredBookmarks(worktree.worktreePath);
+    this.deleteRemovedBookmarkImages(removeStoredBookmarks(worktree.worktreePath));
     return ok(undefined);
   }
 
@@ -1142,14 +1149,16 @@ export class YuruService {
     }
   }
 
-  // 保存されている Bookmark に、main 側だけで分かる揮発値 (GitHub の状態と、
-  // リネーム可否) を載せて renderer に渡す形にする。
+  // 保存されている Bookmark に、main 側だけで分かる揮発値 (GitHub の状態、リネーム可否、
+  // 画像の実体パス) を載せて renderer に渡す形にする。
   private toBookmarkView(bookmark: Bookmark): Bookmark {
     const target = parseGitHubItemUrl(bookmark.url);
     const fetched = target ? this.githubStatusMonitor.get(target) : null;
+    const imagePath = bookmark.kind === "image" ? bookmarkImagePath(bookmark.url) : null;
     return {
       ...bookmark,
       ...(fetched ? { status: fetched.status } : {}),
+      ...(imagePath ? { imagePath } : {}),
       renamable: !target,
     };
   }
@@ -1163,12 +1172,22 @@ export class YuruService {
       });
     }
     try {
-      removeStoredBookmark(workingRoot, url);
+      const removed = removeStoredBookmark(workingRoot, url);
+      this.deleteRemovedBookmarkImages(removed ? [removed] : []);
     } catch (error) {
       return this.failAndReport<void>(toAppError(error));
     }
     this.events.bookmarksChanged(worktreeId);
     return ok(undefined);
+  }
+
+  // ブックマークが一覧から消えたら、それが抱えていた実体ファイルも残さない。
+  private deleteRemovedBookmarkImages(removed: readonly Bookmark[]): void {
+    for (const bookmark of removed) {
+      if (bookmark.kind === "image") {
+        deleteBookmarkImage(bookmark.url);
+      }
+    }
   }
 
   async renameBookmark(worktreeId: string, url: string, title: string) {
@@ -1234,6 +1253,38 @@ export class YuruService {
     this.events.bookmarksChanged(worktreeId);
     this.githubStatusMonitor.refresh();
     this.resolveBookmarkTitles({ worktreePath: workingRoot, worktreeId }, added);
+    return ok(undefined);
+  }
+
+  // ブックマークの入力欄に貼り付けられた画像。実体をファイルに保存し、その file:// URL で登録する。
+  async addImageBookmark(worktreeId: string, dataUrl: string) {
+    const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
+    if (!workingRoot) {
+      return this.failAndReport<void>({
+        code: "invalid_path",
+        message: "Selected worktree is no longer available.",
+      });
+    }
+    let url: string | null;
+    try {
+      url = saveBookmarkImage(dataUrl);
+    } catch (error) {
+      return this.failAndReport<void>(toAppError(error));
+    }
+    if (!url) {
+      return this.failAndReport<void>({
+        code: "invalid_path",
+        message: unsupportedImageMessage,
+      });
+    }
+    try {
+      addStoredImageBookmark(workingRoot, url, "Pasted image");
+    } catch (error) {
+      // 一覧に載らなかった画像をファイルだけ残さない。
+      deleteBookmarkImage(url);
+      return this.failAndReport<void>(toAppError(error));
+    }
+    this.events.bookmarksChanged(worktreeId);
     return ok(undefined);
   }
 

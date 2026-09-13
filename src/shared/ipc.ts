@@ -196,6 +196,12 @@ export interface PullRequestUpdate {
 export interface Bookmark {
   url: string;
   title: string;
+  // 貼り付けた画像のブックマーク。省略はリンク。画像の url は保存先の file:// URL で、
+  // リンクと同じく一覧の識別子 (重複判定・削除・リネームのキー) になる。
+  kind?: "image";
+  // 画像の実体ファイルの絶対パス。url から導出できるので永続化はせず、main で組み立てる。
+  // プレビューは worktree 外の絶対パスを開けるので、これをそのまま渡せば画像が出る。
+  imagePath?: string;
   // GitHub の Issue / PR のときだけ載る現在の状態。GitHub から導出できる揮発値なので
   // 永続化はせず、main のポーリングが持つキャッシュから毎回組み立てる。
   status?: GitHubItem;
@@ -295,6 +301,8 @@ export interface ElectronAPI {
   cancelCodeSearch: (worktreeId: string) => Promise<void>;
   getBookmarks: (worktreeId: string) => Promise<Result<Bookmark[]>>;
   addBookmark: (worktreeId: string, url: string) => Promise<Result<void>>;
+  // クリップボードから貼り付けた画像。dataUrl は FileReader が作る data:image/…;base64,… 形式。
+  addImageBookmark: (worktreeId: string, dataUrl: string) => Promise<Result<void>>;
   removeBookmark: (worktreeId: string, url: string) => Promise<Result<void>>;
   renameBookmark: (worktreeId: string, url: string, title: string) => Promise<Result<void>>;
   onErrorNoticesChanged: (callback: (notices: AppErrorNotice[]) => void) => () => void;

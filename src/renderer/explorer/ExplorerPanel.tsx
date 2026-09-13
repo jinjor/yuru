@@ -96,7 +96,11 @@ export function ExplorerPanel({
         />
       </Activity>
       <Activity mode={activeTab === "bookmarks" ? "visible" : "hidden"}>
-        <BookmarksPane onError={onError} worktreeId={worktreeId} />
+        <BookmarksPane
+          onError={onError}
+          onPreviewSelectionChange={onPreviewSelectionChange}
+          worktreeId={worktreeId}
+        />
       </Activity>
       <Activity mode={activeTab === "files" ? "visible" : "hidden"}>
         <FilesPane

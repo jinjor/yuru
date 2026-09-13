@@ -1608,8 +1608,71 @@ button.github-badge {
 }
 
 /* Bookmarks pane */
+/* 上が一覧、下が追加用の入力欄。入力欄はスクロールさせずに固定する。 */
 .bookmarks-pane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.bookmarks-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
   padding: 4px 0;
+}
+
+.bookmark-compose {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* 貼り付けている間は、チップを入力欄の上に重ねて同じ 1 行に収める。入力欄は外さずに
+   透明にすることで、フォーカスとキー操作 (Enter で登録、Escape で破棄) をそのまま受ける。 */
+.bookmark-compose.attached {
+  display: grid;
+}
+
+.bookmark-compose.attached > * {
+  grid-area: 1 / 1;
+}
+
+.bookmark-compose.attached .text-input {
+  opacity: 0;
+  /* 透明な入力欄がチップの上に乗るので、× を押せるようにクリックは通す。 */
+  pointer-events: none;
+}
+
+/* 貼り付けた画像は、登録するまでここに出す。 */
+.bookmark-compose-attachment {
+  width: 100%;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+  background: var(--bg-app);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+}
+
+.bookmark-compose-thumbnail {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.bookmark-compose-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
 }
 
 .bookmark-row {
@@ -1671,6 +1734,29 @@ button.github-badge {
   white-space: nowrap;
   color: var(--text-subtle);
   font-size: 11px;
+}
+
+/* 画像の行はサムネイルとタイトルの横並び。メタ行が無いぶんタイトルは 1 行に収める。 */
+.bookmark-open.has-thumbnail {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.bookmark-open.has-thumbnail .bookmark-title {
+  flex: 1;
+  min-width: 0;
+  -webkit-line-clamp: 1;
+}
+
+.bookmark-thumbnail {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  background: var(--bg-app);
 }
 
 /* Preview panel */

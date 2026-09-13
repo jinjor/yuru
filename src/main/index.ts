@@ -465,6 +465,10 @@ function registerIpcHandlers(): void {
     return service.addBookmark(worktreeId, url);
   });
 
+  handleIpc("bookmarks:addImage", (_event, worktreeId: string, dataUrl: string) => {
+    return service.addImageBookmark(worktreeId, dataUrl);
+  });
+
   handleIpc("bookmarks:remove", (_event, worktreeId: string, url: string) => {
     return service.removeBookmark(worktreeId, url);
   });

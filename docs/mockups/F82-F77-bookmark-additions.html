@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>F82 + F77 — ブックマークの compose 欄（URL 入力 / 画像の貼り付け）</title>
+<style>
+/* copied from src/renderer/style.css */
+:root {
+  color-scheme: dark;
+
+  --bg-app: #11151d;
+  --bg-panel: #181d27;
+  --bg-hover: #262f3f;
+  --bg-selected: #2f4058;
+
+  --border: #2f394a;
+  --border-strong: #445068;
+
+  --text: #d8e1ef;
+  --text-muted: #91a0b8;
+  --text-subtle: #63718a;
+
+  --accent: #7bc1ff;
+  --success: #7ad7a1;
+  --warning: #e2c08d;
+  --danger: #f08f86;
+
+  --tab-pill-height: 30px;
+
+  --font-mono: "SFMono-Regular", Menlo, Monaco, monospace;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+body {
+  background: var(--bg-app);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  padding: 28px;
+}
+
+/* --- copied: .tab / .panel-header --- */
+.tab {
+  height: var(--tab-pill-height);
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+}
+
+.tab-select {
+  height: 100%;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.tab.selected {
+  color: var(--text);
+  background: rgba(123, 193, 255, 0.14);
+  border-color: rgba(123, 193, 255, 0.3);
+}
+
+.panel-header {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.panel-header-stack {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.panel-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* --- copied: .icon-button --- */
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-subtle);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.icon-button.sm {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+}
+
+.icon-button:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--bg-hover);
+  border-color: var(--border);
+}
+
+/* --- copied: .text-input --- */
+.text-input {
+  width: 100%;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg-app);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  outline: none;
+}
+
+.text-input.focused {
+  border-color: var(--accent);
+}
+
+/* --- copied: .empty-state --- */
+.empty-state {
+  flex: 1;
+  min-height: 88px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-subtle);
+}
+
+/* --- copied: .github-badge --- */
+.github-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.github-badge.open {
+  color: #aee9c2;
+  background: rgba(59, 122, 81, 0.22);
+  border-color: rgba(122, 215, 161, 0.28);
+}
+
+.github-badge.merged,
+.github-badge.issue.closed {
+  color: #bfc5ff;
+  background: rgba(70, 78, 150, 0.22);
+  border-color: rgba(144, 155, 255, 0.24);
+}
+
+/* --- copied: .file-tree / .code-search-match-row --- */
+.file-tree {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow: auto;
+}
+
+.code-search-match-row {
+  width: 100%;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+/* --- copied: bookmarks pane（行まわりは現行の style.css のまま） --- */
+.bookmark-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 8px;
+}
+
+.bookmark-row:hover {
+  background: var(--bg-hover);
+}
+
+.bookmark-open {
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 12px;
+}
+
+.bookmark-title {
+  width: 100%;
+  font-size: 12px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.bookmark-meta {
+  width: 100%;
+  min-height: 18px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bookmark-meta .github-badge {
+  flex-shrink: 0;
+}
+
+.bookmark-url {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-subtle);
+  font-size: 11px;
+}
+
+/* --- NEW (F82): ペインを「一覧 + 下の compose 欄」に分ける --- */
+.bookmarks-pane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.bookmarks-list {
+  padding: 4px 0;
+}
+
+.bookmark-compose {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* --- NEW (F77): 画像を貼り付けた状態の添付チップ --- */
+.bookmark-compose-attachment {
+  width: 100%;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px 0 4px;
+  background: var(--bg-app);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+}
+
+.bookmark-compose-thumbnail {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.bookmark-compose-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- NEW (F77): 画像行はサムネイルを左に置いた横並び --- */
+.bookmark-open.has-thumbnail {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.bookmark-open.has-thumbnail .bookmark-title {
+  flex: 1;
+  min-width: 0;
+  -webkit-line-clamp: 1;
+}
+
+.bookmark-thumbnail {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--bg-app);
+}
+
+.bookmark-thumbnail-fill {
+  width: 100%;
+  height: 100%;
+}
+
+/* モック用の「画像っぽい」中身。実物は <img src="file://…"> が入る */
+.thumb-a {
+  background: linear-gradient(135deg, #2c3d5c, #6f97cf);
+}
+.thumb-a::after {
+  content: "";
+  display: block;
+  margin: 8px 6px 0;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow:
+    0 6px 0 rgba(255, 255, 255, 0.32),
+    0 12px 0 rgba(255, 255, 255, 0.2);
+}
+
+.thumb-b {
+  background: linear-gradient(160deg, #1a1d29, #2e3348);
+  position: relative;
+}
+.thumb-b::before {
+  content: "";
+  position: absolute;
+  inset: 20% 18% auto 18%;
+  height: 2px;
+  background: #7bc1ff;
+  box-shadow:
+    0 5px 0 #e2c08d,
+    0 10px 0 #7ad7a1,
+    0 15px 0 #91a0b8;
+  opacity: 0.85;
+}
+
+.thumb-c {
+  background: linear-gradient(135deg, #4a3a1f, #c99a4a);
+}
+
+/* --- 案 B: 添付を入力欄の上に積む --- */
+.bookmark-compose.stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bookmark-compose.stacked .bookmark-compose-attachment {
+  width: auto;
+  align-self: flex-start;
+  max-width: 100%;
+  padding-left: 4px;
+  padding-right: 2px;
+  border-color: var(--border-strong);
+}
+
+.bookmark-compose.stacked .bookmark-compose-label {
+  flex: 0 1 auto;
+}
+
+/* ================= mockup chrome (本体には入れない) ================= */
+.sheet {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  align-items: flex-start;
+  margin-bottom: 34px;
+}
+
+h2.section {
+  font-size: 13px;
+  color: var(--text);
+  margin: 6px 0 12px;
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+h1 {
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+h1 + p {
+  font-size: 12px;
+  color: var(--text-muted);
+  max-width: 660px;
+  line-height: 1.7;
+  margin-bottom: 26px;
+}
+
+h2 {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.note {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-subtle);
+  max-width: 375px;
+}
+
+.note b {
+  color: var(--text-muted);
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.panel {
+  width: 375px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel.tall {
+  height: 470px;
+}
+
+.panel.short {
+  height: 250px;
+}
+
+.new-row::before {
+  content: "追加直後";
+  position: absolute;
+  right: 10px;
+  top: 3px;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  opacity: 0.85;
+}
+
+.new-row {
+  position: relative;
+}
+</style>
+</head>
+<body>
+
+<h1>F82 + F77 — ブックマークの compose 欄</h1>
+<p>
+  Bookmarks タブを「上＝スクロールする一覧、下＝常設の 1 行入力」に変える。
+  <b>F82</b> はその欄に URL を入れて Enter、<b>F77</b> はその欄に画像を貼り付けて Enter。
+  入口を 1 か所にまとめたので、「+」ボタンも、ペイン全体で貼り付けを拾う仕組みも要らない。
+  下に置くのは、追加したものが一覧の末尾に増えるから（並び替えを将来入れても、追加が末尾に入ることは変わらない）。
+</p>
+
+<h2 class="section">1. 通常時 — リンクと画像が同じ一覧に並ぶ</h2>
+<div class="sheet">
+  <div class="block">
+    <div class="panel tall">
+      <div class="panel-header panel-header-stack">
+        <div class="panel-tabs">
+          <div class="tab"><button class="tab-select" type="button">Changes</button></div>
+          <div class="tab"><button class="tab-select" type="button">Files</button></div>
+          <div class="tab"><button class="tab-select" type="button">Search</button></div>
+          <div class="tab selected"><button class="tab-select" type="button">Bookmarks</button></div>
+        </div>
+      </div>
+      <div class="bookmarks-pane">
+        <div class="file-tree bookmarks-list">
+          <div class="bookmark-row">
+            <button type="button" class="code-search-match-row bookmark-open">
+              <span class="bookmark-title">Support nested worktrees in the file tree so that subdirectories stay collapsed</span>
+              <span class="bookmark-meta">
+                <span class="github-badge issue open"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/></svg>Open #482</span>
+                <span class="bookmark-url">https://github.com/jinjor/yuru/issues/482</span>
+              </span>
+            </button>
+            <button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+          </div>
+
+          <div class="bookmark-row">
+            <button type="button" class="code-search-match-row bookmark-open has-thumbnail">
+              <span class="bookmark-thumbnail"><span class="bookmark-thumbnail-fill thumb-a"></span></span>
+              <span class="bookmark-title">Bookmarks pane — layout options</span>
+            </button>
+            <button type="button" class="icon-button sm" aria-label="Rename bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></button>
+            <button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+          </div>
+
+          <div class="bookmark-row">
+            <button type="button" class="code-search-match-row bookmark-open">
+              <span class="bookmark-title">Add --json flag to gh pr view</span>
+              <span class="bookmark-meta">
+                <span class="github-badge merged"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/></svg>Merged #10218</span>
+                <span class="bookmark-url">https://github.com/cli/cli/pull/10218</span>
+              </span>
+            </button>
+            <button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+          </div>
+
+          <div class="bookmark-row">
+            <button type="button" class="code-search-match-row bookmark-open">
+              <span class="bookmark-title">Electron BrowserWindow | Electron</span>
+              <span class="bookmark-meta">
+                <span class="bookmark-url">https://www.electronjs.org/docs/latest/api/browser-window</span>
+              </span>
+            </button>
+            <button type="button" class="icon-button sm" aria-label="Rename bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></button>
+            <button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+          </div>
+
+          <div class="bookmark-row">
+            <button type="button" class="code-search-match-row bookmark-open has-thumbnail">
+              <span class="bookmark-thumbnail"><span class="bookmark-thumbnail-fill thumb-b"></span></span>
+              <span class="bookmark-title">Pasted image</span>
+            </button>
+            <button type="button" class="icon-button sm" aria-label="Rename bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></button>
+            <button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+          </div>
+
+          <div class="bookmark-row">
+            <button type="button" class="code-search-match-row bookmark-open">
+              <span class="bookmark-title">Terminal bar flickers when the PR badge appears</span>
+              <span class="bookmark-meta">
+                <span class="github-badge issue closed"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/></svg>Closed #367</span>
+                <span class="bookmark-url">https://github.com/jinjor/yuru/issues/367</span>
+              </span>
+            </button>
+            <button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+          </div>
+
+          <div class="bookmark-row new-row">
+            <button type="button" class="code-search-match-row bookmark-open has-thumbnail">
+              <span class="bookmark-thumbnail"><span class="bookmark-thumbnail-fill thumb-c"></span></span>
+              <span class="bookmark-title">Pasted image</span>
+            </button>
+            <button type="button" class="icon-button sm" aria-label="Rename bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></button>
+            <button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+          </div>
+        </div>
+        <div class="bookmark-compose">
+          <input class="text-input" placeholder="Paste a URL or image" value="" />
+        </div>
+      </div>
+    </div>
+    <p class="note">
+      一覧はスクロールし、compose 欄は下に固定される。画像行はサムネイル（36×36）+ タイトル 1 行で、
+      <code>file://…</code> のメタ行は出さない。サムネイルは <b><code>&lt;img src={bookmark.url}&gt;</code> で直接読む</b>
+      （実ファイルなので取得用の IPC は要らない）。一番下の画像は貼り付け直後 — 追加は常に末尾。
+    </p>
+    <p class="note">
+      クリックしたときに開く先は種類で変わる。リンクは今まで通り既定ブラウザ、画像は
+      <b>既存のプレビュー</b>（ファイルをプレビューで開くのと同じ）。プレビューは worktree 外の
+      絶対パスを既に開けるので、画像用の「開く」IPC は足さない。既定タイトルは <b>Pasted image</b> で、
+      画像は GitHub URL ではないので鉛筆（リネーム）はリンクと同じ条件でそのまま出る。
+    </p>
+  </div>
+</div>
+
+<h2 class="section">2. compose 欄の 3 状態</h2>
+<div class="sheet">
+  <div class="block">
+    <h2>空（既定）</h2>
+    <div class="panel" style="width: 320px">
+      <div class="bookmark-compose" style="border-top: 0">
+        <input class="text-input" placeholder="Paste a URL or image" value="" />
+      </div>
+    </div>
+    <p class="note">placeholder で受け取れるものを 2 つとも示す。</p>
+  </div>
+
+  <div class="block">
+    <h2>URL を入力・貼り付け</h2>
+    <div class="panel" style="width: 320px">
+      <div class="bookmark-compose" style="border-top: 0">
+        <input class="text-input focused" placeholder="Paste a URL or image" value="https://github.com/vercel/next.js/pull/812" />
+      </div>
+    </div>
+    <p class="note">
+      <b>Enter</b> で <code>addBookmark</code>。検証・重複判定・title 解決は既存の IPC のまま。
+      <b>成功したときだけ</b>空にするので、http/https 以外で弾かれても入力は残って直せる。
+      <b>Escape</b> は入力を空にするだけ（閉じるものが無い）。
+    </p>
+  </div>
+
+  <div class="block">
+    <h2>画像を貼り付けた状態</h2>
+    <div class="panel" style="width: 320px">
+      <div class="bookmark-compose" style="border-top: 0">
+        <div class="bookmark-compose-attachment">
+          <span class="bookmark-compose-thumbnail"><span class="bookmark-thumbnail-fill thumb-c"></span></span>
+          <span class="bookmark-compose-label">Pasted image</span>
+          <button type="button" class="icon-button sm" aria-label="Discard image"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+      </div>
+    </div>
+    <p class="note">
+      テキスト入力は添付チップに置き換わる（1 件のブックマークはリンクか画像のどちらか）。
+      <b>Enter</b> で <code>addImageBookmark</code>、<b>Escape</b> か <b>×</b> で破棄。
+      貼った瞬間に登録しないのは、チャットの添付と同じく確定を 1 手挟むため。
+    </p>
+  </div>
+</div>
+
+<h2 class="section">3. 0 件のとき</h2>
+<div class="sheet">
+  <div class="block">
+    <div class="panel short">
+      <div class="bookmarks-pane">
+        <div class="file-tree bookmarks-list">
+          <div class="empty-state">No bookmarks</div>
+        </div>
+        <div class="bookmark-compose">
+          <input class="text-input" placeholder="Paste a URL or image" value="" />
+        </div>
+      </div>
+    </div>
+    <p class="note">
+      現状の実装は 0 件のとき <code>EmptyState</code> だけを返すので、この早期 return をやめる。
+      最初の 1 件を入れる場所が常に見えている状態にする。
+    </p>
+  </div>
+</div>
+
+<h2 class="section">4. 検討中: 添付を入力欄の「上」に積む案</h2>
+<p class="note" style="max-width: 760px; margin-bottom: 16px">
+  実装済みの案 A は、画像を貼ると入力欄が添付チップ<b>に置き換わる</b>。input が居なくなるのでフォーカスが外れ、
+  Enter を受けるために compose 欄を <code>tabIndex={-1}</code> にして明示的にフォーカスを移している。
+  案 B はチップを入力欄の<b>上に積む</b>ので input が残り、その仕掛けが全部要らなくなる。
+  代わりに<b>入力欄が生きたまま</b>になるので、そこに打った文字をどう扱うかを決める必要がある。
+</p>
+<div class="sheet">
+  <div class="block">
+    <h2>案 A（実装済み）— 置き換える</h2>
+    <div class="panel" style="width: 320px">
+      <div class="bookmark-compose" style="border-top: 0">
+        <div class="bookmark-compose-attachment">
+          <span class="bookmark-compose-thumbnail"><span class="bookmark-thumbnail-fill thumb-c"></span></span>
+          <span class="bookmark-compose-label">Pasted image</span>
+          <button type="button" class="icon-button sm" aria-label="Discard image"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+      </div>
+    </div>
+    <p class="note">
+      貼り付けている間は文字を打てない。ブックマークはリンクか画像のどちらか、という切り分けが
+      見た目に出る。タイトルは登録後に鉛筆でリネームする。高さは 1 行のまま変わらない。
+    </p>
+  </div>
+
+  <div class="block">
+    <h2>案 B — 上に積む（貼った直後）</h2>
+    <div class="panel" style="width: 320px">
+      <div class="bookmark-compose stacked" style="border-top: 0">
+        <div class="bookmark-compose-attachment">
+          <span class="bookmark-compose-thumbnail"><span class="bookmark-thumbnail-fill thumb-c"></span></span>
+          <span class="bookmark-compose-label">Pasted image</span>
+          <button type="button" class="icon-button sm" aria-label="Discard image"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+        <input class="text-input focused" placeholder="Add a title (optional)" value="" />
+      </div>
+    </div>
+    <p class="note">
+      チップが 1 段増えて compose 欄が 2 行になり、そのぶん一覧が上に詰まる。カーソルは入力欄に残るので、
+      貼った直後からそのまま打てる・Enter も効く。placeholder は<b>役割が変わる</b>（URL → タイトル）。
+    </p>
+  </div>
+
+  <div class="block">
+    <h2>案 B — タイトルを打った状態</h2>
+    <div class="panel" style="width: 320px">
+      <div class="bookmark-compose stacked" style="border-top: 0">
+        <div class="bookmark-compose-attachment">
+          <span class="bookmark-compose-thumbnail"><span class="bookmark-thumbnail-fill thumb-c"></span></span>
+          <span class="bookmark-compose-label">Pasted image</span>
+          <button type="button" class="icon-button sm" aria-label="Discard image"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+        <input class="text-input focused" placeholder="Add a title (optional)" value="Login screen — error state" />
+      </div>
+    </div>
+    <p class="note">
+      入力欄が生きている以上、<b>打った文字は無視できない</b>。素直なのは「添付中に打った文字はその画像の
+      タイトルになる」。チャットのキャプションと同じで、以前スコープ外にした案がここで戻ってくる。
+    </p>
+  </div>
+</div>
+
+<h2 class="section">案 B を実寸で見る（貼り付け中）</h2>
+<div class="sheet">
+  <div class="block">
+    <div class="panel" style="height: 330px">
+      <div class="bookmarks-pane">
+        <div class="bookmarks-list">
+          <div class="bookmark-row">
+            <button type="button" class="code-search-match-row bookmark-open" style="pointer-events: none">
+              <span class="bookmark-title">Support nested worktrees in the file tree so that subdirectories stay collapsed</span>
+              <span class="bookmark-meta">
+                <span class="github-badge issue open"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/></svg>Open #482</span>
+                <span class="bookmark-url">https://github.com/jinjor/yuru/issues/482</span>
+              </span>
+            </button>
+            <button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+          </div>
+          <div class="bookmark-row">
+            <button type="button" class="code-search-match-row bookmark-open has-thumbnail" style="pointer-events: none">
+              <span class="bookmark-thumbnail"><span class="bookmark-thumbnail-fill thumb-a"></span></span>
+              <span class="bookmark-title">Bookmarks pane — layout options</span>
+            </button>
+            <button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+          </div>
+          <div class="bookmark-row">
+            <button type="button" class="code-search-match-row bookmark-open" style="pointer-events: none">
+              <span class="bookmark-title">Electron BrowserWindow | Electron</span>
+              <span class="bookmark-meta">
+                <span class="bookmark-url">https://www.electronjs.org/docs/latest/api/browser-window</span>
+              </span>
+            </button>
+            <button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+          </div>
+        </div>
+        <div class="bookmark-compose stacked">
+          <div class="bookmark-compose-attachment">
+            <span class="bookmark-compose-thumbnail"><span class="bookmark-thumbnail-fill thumb-c"></span></span>
+            <span class="bookmark-compose-label">Pasted image</span>
+            <button type="button" class="icon-button sm" aria-label="Discard image"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+          </div>
+          <input class="text-input focused" placeholder="Add a title (optional)" value="Login screen — error state" />
+        </div>
+      </div>
+    </div>
+    <p class="note">
+      貼っている間だけ下が 2 段になり、一覧の見える範囲が 1 行分ぶん縮む。Enter で登録すると
+      チップが消えて 1 行に戻り、一覧は元の高さに戻る。
+    </p>
+  </div>
+</div>
+
+<h2 class="section">案 B だと登録結果が変わる</h2>
+<div class="sheet">
+  <div class="block">
+    <h2>Enter を押した後の行</h2>
+    <div class="panel" style="width: 340px">
+      <div class="bookmarks-list" style="padding: 6px 0">
+        <div class="bookmark-row">
+          <button type="button" class="code-search-match-row bookmark-open has-thumbnail" style="pointer-events: none">
+            <span class="bookmark-thumbnail"><span class="bookmark-thumbnail-fill thumb-c"></span></span>
+            <span class="bookmark-title">Login screen — error state</span>
+          </button>
+          <button type="button" class="icon-button sm" aria-label="Rename bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></button>
+          <button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+        <div class="bookmark-row">
+          <button type="button" class="code-search-match-row bookmark-open has-thumbnail" style="pointer-events: none">
+            <span class="bookmark-thumbnail"><span class="bookmark-thumbnail-fill thumb-b"></span></span>
+            <span class="bookmark-title">Pasted image</span>
+          </button>
+          <button type="button" class="icon-button sm" aria-label="Rename bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></button>
+          <button type="button" class="icon-button sm" aria-label="Remove bookmark"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+      </div>
+    </div>
+    <p class="note">
+      上は案 B でタイトルを打って登録した行。下は打たずに Enter した行（案 A と同じ <b>Pasted image</b>）。
+      案 B は「貼る → 名前を打つ → Enter」が 1 続きの操作になり、案 A の「貼る → Enter → 鉛筆 → 打つ → Enter」より短い。
+    </p>
+  </div>
+
+  <div class="block">
+    <h2>迷いどころ</h2>
+    <p class="note" style="max-width: 340px">
+      案 B は入力欄の意味が状態で変わる。<b>添付が無ければ URL、あればタイトル</b>。
+      チップが出ているかどうかで見分けられるとはいえ、同じ 1 つの欄が 2 つの意味を持つ。
+      <br /><br />
+      間違えたときの挙動も変わる。案 A は URL を打った状態で画像を貼ると打った内容が隠れる
+      （破棄すれば戻る）。案 B は打った URL がそのままタイトルとして登録される。
+      <br /><br />
+      高さも変わる。compose 欄が 1 行 ↔ 2 行で伸縮するので、貼るたびに一覧が上下する。
+    </p>
+  </div>
+</div>
+
+</body>
+</html>

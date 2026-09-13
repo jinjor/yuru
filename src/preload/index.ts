@@ -84,6 +84,8 @@ const electronAPI: ElectronAPI = {
   getBookmarks: (worktreeId: string) => ipcRenderer.invoke("bookmarks:list", worktreeId),
   addBookmark: (worktreeId: string, url: string) =>
     ipcRenderer.invoke("bookmarks:add", worktreeId, url),
+  addImageBookmark: (worktreeId: string, dataUrl: string) =>
+    ipcRenderer.invoke("bookmarks:addImage", worktreeId, dataUrl),
   removeBookmark: (worktreeId: string, url: string) =>
     ipcRenderer.invoke("bookmarks:remove", worktreeId, url),
   renameBookmark: (worktreeId: string, url: string, title: string) =>

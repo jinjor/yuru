@@ -3,12 +3,14 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-bookmarks-store-"));
 process.env.YURU_HOME = path.join(testRoot, "yuru-home");
 
 const {
   addBookmarks,
+  addImageBookmark,
   loadAllBookmarks,
   loadBookmarks,
   removeBookmark,
@@ -16,9 +18,11 @@ const {
   updateBookmarkTitle,
   updateBookmarkTitles,
 } = await import("../../../src/main/bookmarks/store.ts");
+const { saveBookmarkImage } = await import("../../../src/main/bookmarks/image.ts");
 
 const worktreePath = path.join(testRoot, "worktree-a");
 const otherWorktreePath = path.join(testRoot, "worktree-b");
+const pngBase64 = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).toString("base64");
 
 function cleanBookmarks() {
   removeBookmarks(worktreePath);
@@ -126,6 +130,52 @@ test("loadAllBookmarks は全 worktree のブックマークを 1 度で返す",
     all.get(path.resolve(otherWorktreePath)).map(({ url }) => url),
     ["https://example.com/b"],
   );
+});
+
+test("addImageBookmark は kind: image で末尾に足し、同じ画像でも別の件にする", () => {
+  cleanBookmarks();
+  addBookmarks(worktreePath, ["https://example.com/a"]);
+  const imageUrl = saveBookmarkImage(`data:image/png;base64,${pngBase64}`);
+  const sameImageUrl = saveBookmarkImage(`data:image/png;base64,${pngBase64}`);
+  addImageBookmark(worktreePath, imageUrl, "Pasted image");
+  addImageBookmark(worktreePath, sameImageUrl, "Pasted image");
+
+  const bookmarks = loadBookmarks(worktreePath);
+  assert.deepEqual(
+    bookmarks.map((bookmark) => bookmark.kind),
+    [undefined, "image", "image"],
+  );
+  assert.equal(bookmarks[1].title, "Pasted image");
+});
+
+// 実体ファイルの後始末は呼び出し側 (service) が行うので、store は消した Bookmark を返すだけ。
+test("removeBookmark は消した Bookmark を返す", () => {
+  cleanBookmarks();
+  const imageUrl = saveBookmarkImage(`data:image/png;base64,${pngBase64}`);
+  addImageBookmark(worktreePath, imageUrl, "Pasted image");
+
+  const removed = removeBookmark(worktreePath, imageUrl);
+  assert.equal(removed.kind, "image");
+  assert.equal(removed.url, imageUrl);
+  assert.deepEqual(loadBookmarks(worktreePath), []);
+  // store はファイルに触らない
+  assert.equal(fs.existsSync(fileURLToPath(imageUrl)), true);
+
+  assert.equal(removeBookmark(worktreePath, "https://example.com/missing"), null);
+});
+
+test("removeBookmarks は消した Bookmark をすべて返す", () => {
+  cleanBookmarks();
+  const imageUrl = saveBookmarkImage(`data:image/png;base64,${pngBase64}`);
+  addBookmarks(worktreePath, ["https://example.com/a"]);
+  addImageBookmark(worktreePath, imageUrl, "Pasted image");
+
+  const removed = removeBookmarks(worktreePath);
+  assert.deepEqual(
+    removed.map((bookmark) => bookmark.url),
+    ["https://example.com/a", imageUrl],
+  );
+  assert.deepEqual(removeBookmarks(path.join(testRoot, "never-registered")), []);
 });
 
 test("removeBookmarks は worktree のブックマークをすべて消す", () => {
