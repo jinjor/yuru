@@ -23,15 +23,23 @@ export async function stopPlanUsageProcesses(): Promise<void> {
 }
 
 function killAndWait(child: ChildProcessWithoutNullStreams): Promise<void> {
+  if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null) {
+    return Promise.resolve();
+  }
   return new Promise((resolve) => {
     const killTimer = setTimeout(() => {
       child.kill("SIGKILL");
     }, SHUTDOWN_GRACE_MS);
-    child.on("exit", () => {
+    const finish = () => {
       clearTimeout(killTimer);
+      child.off("exit", finish);
+      child.off("error", finish);
       resolve();
-    });
-    child.kill();
+    };
+    child.once("exit", finish);
+    child.once("error", finish);
+    // 取得の finally とアプリ終了が重なっても SIGTERM は一度だけ送る。
+    if (!child.killed) child.kill();
   });
 }
 
@@ -65,7 +73,7 @@ export async function withPlanUsageProcess<T>(
     ]);
   } finally {
     clearTimeout(timer);
-    child.kill();
+    await killAndWait(child);
   }
 }
 
@@ -111,7 +119,7 @@ export async function runPlanUsageCommand(
     });
   } finally {
     clearTimeout(timer);
-    child.kill();
+    await killAndWait(child);
   }
 }
 
@@ -135,9 +143,11 @@ function spawnAgentCommand(
   // close が「応答前に終了した」として呼び出し元に伝える。
   child.stdin.on("error", () => {});
   runningProcesses.add(child);
-  child.on("exit", () => {
+  const forget = () => {
     runningProcesses.delete(child);
-  });
+  };
+  child.once("exit", forget);
+  child.once("error", forget);
   return child;
 }
 

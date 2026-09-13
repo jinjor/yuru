@@ -36,6 +36,7 @@ let mainWindow: BrowserWindow | null = null;
 let worktreeWatcher: WorktreeWatcher | null = null;
 let apiServer: ApiServer | null = null;
 let servicesStopped = false;
+let servicesStopping: Promise<void> | null = null;
 
 const HIDE_WINDOW_FOR_E2E = process.env.YURU_E2E_HIDE_WINDOW === "1";
 const apiSocketPath = getApiSocketPath();
@@ -321,10 +322,6 @@ async function refreshWorktreeWatcher(): Promise<void> {
 }
 
 async function stopApplicationServices(): Promise<void> {
-  if (servicesStopped) {
-    return;
-  }
-  servicesStopped = true;
   await planUsageMonitor.stopForShutdown();
   worktreeWatcher?.stop();
   try {
@@ -669,9 +666,10 @@ app.on("before-quit", (event) => {
   if (servicesStopped) {
     return;
   }
-  // Hold off the quit until every PTY has been reaped, then quit for real.
+  // 終了要求が重なっても、利用量取得の子プロセスと PTY の終了を待つ。
   event.preventDefault();
-  void stopApplicationServices().then(() => {
+  servicesStopping ??= stopApplicationServices().then(() => {
+    servicesStopped = true;
     app.quit();
   });
 });
