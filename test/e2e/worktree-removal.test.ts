@@ -359,6 +359,41 @@ test("dirty な worktree は事前確認で force 確認へ切り替わり削除
   }
 });
 
+test("初期化済み submodule がある clean な worktree は force 確認後に削除できる", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const submoduleDir = await createCommittedRepo(context, { "sub.txt": "submodule\n" });
+    const repoDir = await createCommittedRepo(context);
+    git(["-c", "protocol.file.allow=always", "submodule", "add", submoduleDir, "deps/sub"], repoDir);
+    git(["commit", "-m", "add submodule"], repoDir);
+    const worktreePath = await createGitWorktree(context, repoDir, "feature/submodule");
+    git(["-c", "protocol.file.allow=always", "submodule", "update", "--init"], worktreePath);
+    expect(gitOutput(["status", "--porcelain"], worktreePath)).toBe("");
+    await registerRepo(context, repoDir, [{ worktreePath }]);
+
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+
+    await openRemovalDialog(window, "feature/submodule");
+    await window.locator(".removal-foot .button.danger").click();
+    await expect(window.locator(".removal-dialog-head")).toContainText("Force remove worktree");
+    await expect(window.locator(".removal-note.force")).toContainText("initialized submodule");
+    await expect(window.locator(".removal-text")).toContainText("local changes in it will be discarded");
+    expect(worktreePaths(context, repoDir)).toContain(worktreePath);
+
+    await window.locator(".removal-foot .button.danger").click();
+    await expect(worktreeCard(window, "feature/submodule")).toHaveCount(0);
+    expect(worktreePaths(context, repoDir)).not.toContain(worktreePath);
+    const metadata = await readMetadata(context);
+    expect(metadata.taskWorktrees).toHaveLength(0);
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
 test("実削除中に dirty になったら warning を記録してカードを再操作可能に戻す", async () => {
   const context = await createE2eContext();
   let app: ElectronApplication | null = null;

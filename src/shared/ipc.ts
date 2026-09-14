@@ -175,7 +175,9 @@ export type WorktreeRemovalPreparationOutcome =
   // 生きたプロセスがあり削除しなかった (先に止める必要がある)
   | { status: "process_alive"; processes: WorktreeProcessInfo[] }
   // dirty の事前確認で通常削除を止めた (force 確認が必要。force=false のときだけ返る)
-  | { status: "dirty" };
+  | { status: "dirty" }
+  // 初期化済み submodule の事前確認で通常削除を止めた
+  | { status: "submodule" };
 
 // メインプロセスが検知した、動作中セッションの変化 (活動状態・最新メッセージ)。
 // 変わったフィールドだけが載る部分更新。

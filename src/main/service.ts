@@ -55,6 +55,7 @@ import {
   createWorktreeFromOriginBranch,
   fetchOriginBranch,
   isWorktreeDirty,
+  hasInitializedSubmodules,
   listWorktrees,
   removeWorktree as removeGitWorktree,
   removeWorktreeForce as removeGitWorktreeForce,
@@ -943,7 +944,7 @@ export class YuruService {
     return ok({ worktreeId: toWorktreeId(repo.id, worktreePath) });
   }
 
-  // 確認ダイアログを閉じる前の削除準備。通常削除の初回だけ dirty を先に確認し、
+  // 確認ダイアログを閉じる前の削除準備。通常削除の初回だけ force が必要か先に確認し、
   // force が必要ならセッションを止める前に renderer へ返す。削除が承認された後は Yuru が
   // 起動したセッションを止め、それでも残ったプロセスに明示確認を取る。確認済みプロセスは
   // PID と command を照合してから SIGTERM を送り、全件の終了を確認して ready を返す。
@@ -961,10 +962,15 @@ export class YuruService {
     }
 
     try {
-      // process_alive からの再実行では dirty を再検査しない。準備中や実削除中に状態が
+      // process_alive からの再実行では force の要否を再検査しない。準備中や実削除中に状態が
       // 変わった場合は executeWorktreeRemoval の失敗として記録し、次の操作で再確認する。
-      if (!force && !processesToStop && (await isWorktreeDirty(worktree.worktreePath))) {
-        return ok({ status: "dirty" });
+      if (!force && !processesToStop) {
+        if (await isWorktreeDirty(worktree.worktreePath)) {
+          return ok({ status: "dirty" });
+        }
+        if (await hasInitializedSubmodules(worktree.worktreePath)) {
+          return ok({ status: "submodule" });
+        }
       }
 
       await this.stopTerminalRuntimesForWorktree(worktree.worktreePath);

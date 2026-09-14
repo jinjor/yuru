@@ -287,7 +287,7 @@ Yuru の Terminal link 規則なので、custom template にかかわらず末�
   - 外した session は agent store の path hint があれば suggested として再発見される
 - remove worktree
   - 確認ダイアログ内の準備と、その後のバックグラウンド削除を分ける
-  - 準備の最初に dirty を確認し、dirty ならセッションを止める前に force remove の明示確認へ切り替える
+  - 準備の最初に dirty と初期化済み submodule を確認し、通常削除に `--force` が必要ならセッションを止める前に理由を示して明示確認へ切り替える
   - 削除が承認されたら、その worktree の primary session に対応する provider runtime、
     ID 未確定中にその worktree 向けに起動した provider runtime、standalone terminal を停止する。
     primary session に対応する provider runtime は、その PTY の実際の cwd にかかわらず停止対象になる

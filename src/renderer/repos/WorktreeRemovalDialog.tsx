@@ -14,7 +14,7 @@ interface WorktreeRemovalDialogProps {
 }
 
 // 削除準備の確認ダイアログ。通常 (A) / open PR 警告付き (B) / force (C) を出し分ける。
-// dirty、Yuru セッションの停止、残存プロセスの停止確認をこの中で完結させ、ready に
+// dirty / submodule、Yuru セッションの停止、残存プロセスの停止確認をこの中で完結させ、ready に
 // なった時だけ閉じる。時間のかかる Git 削除は onReady 後にカード側で表示する。
 export function WorktreeRemovalDialog({
   worktree,
@@ -22,7 +22,7 @@ export function WorktreeRemovalDialog({
   onClose,
   onReady,
 }: WorktreeRemovalDialogProps) {
-  const [mode, setMode] = useState<"confirm" | "force">("confirm");
+  const [forceReason, setForceReason] = useState<"dirty" | "submodule" | null>(null);
   const [blockingProcesses, setBlockingProcesses] = useState<WorktreeProcessInfo[] | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -46,8 +46,9 @@ export function WorktreeRemovalDialog({
           onReady(worktree.worktreeId, force);
           return;
         case "dirty":
+        case "submodule":
           setBlockingProcesses(null);
-          setMode("force");
+          setForceReason(result.data.status);
           return;
         case "process_alive":
           setBlockingProcesses(result.data.processes);
@@ -59,7 +60,7 @@ export function WorktreeRemovalDialog({
     }
   };
 
-  const isForce = mode === "force";
+  const isForce = forceReason !== null;
   const hasOpenPullRequest =
     worktree.githubPullRequest?.state === "open" || worktree.githubPullRequest?.state === "draft";
 
@@ -112,14 +113,29 @@ export function WorktreeRemovalDialog({
             </>
           ) : isForce ? (
             <>
-              <div className="removal-note force">
-                This worktree has <b>uncommitted work</b>, so it can&apos;t be removed normally.
-                Forcing will throw it away.
-              </div>
-              <p className="removal-text">
-                <b>Uncommitted changes and untracked files will be discarded.</b> The <b>branch</b>{" "}
-                and <b>session history</b> are kept.
-              </p>
+              {forceReason === "dirty" ? (
+                <>
+                  <div className="removal-note force">
+                    This worktree has <b>uncommitted work</b>, so it can&apos;t be removed normally.
+                    Forcing will throw it away.
+                  </div>
+                  <p className="removal-text">
+                    <b>Uncommitted changes and untracked files will be discarded.</b> The{" "}
+                    <b>branch</b> and <b>session history</b> are kept.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="removal-note force">
+                    This worktree has an <b>initialized submodule</b>, so Git requires force to
+                    remove it.
+                  </div>
+                  <p className="removal-text">
+                    <b>The submodule checkout and any local changes in it will be discarded.</b> The{" "}
+                    <b>branch</b> and <b>session history</b> are kept.
+                  </p>
+                </>
+              )}
             </>
           ) : hasOpenPullRequest ? (
             <>

@@ -9,8 +9,12 @@ import {
   branchExists,
   createWorktreeFromOriginBranch,
   fetchOriginBranch,
+  hasInitializedSubmodules,
+  isWorktreeDirty,
   listWorktrees,
   parseWorktreeListPorcelain,
+  removeWorktree,
+  removeWorktreeForce,
 } from "../../../src/main/git/worktree.ts";
 
 function runGit(args, cwd) {
@@ -164,6 +168,31 @@ test("branchExists は local branch だけを見て同名の tag に反応しな
 
     runGit(["branch", "release-note"], repoPath);
     assert.equal(await branchExists(repoPath, "release-note"), true);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("初期化済み submodule は clean でも通常削除を妨げ、force なら削除できる", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-submodule-worktree-test-"));
+  const submodulePath = path.join(root, "submodule");
+  const repoPath = path.join(root, "repo");
+  const worktreePath = path.join(root, "worktree");
+
+  try {
+    createCommittedRepo(submodulePath, { "sub.txt": "submodule\n" });
+    createCommittedRepo(repoPath, { "README.md": "# main\n" });
+    runGit(["-c", "protocol.file.allow=always", "submodule", "add", submodulePath, "deps/sub"], repoPath);
+    runGit(["commit", "-m", "add submodule"], repoPath);
+    runGit(["worktree", "add", "-b", "feature", worktreePath], repoPath);
+
+    assert.equal(await hasInitializedSubmodules(worktreePath), false);
+    runGit(["-c", "protocol.file.allow=always", "submodule", "update", "--init"], worktreePath);
+    assert.equal(await isWorktreeDirty(worktreePath), false);
+    assert.equal(await hasInitializedSubmodules(worktreePath), true);
+    await assert.rejects(removeWorktree(repoPath, worktreePath), /submodules cannot be moved or removed/);
+    await removeWorktreeForce(repoPath, worktreePath);
+    assert.equal(fs.existsSync(worktreePath), false);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

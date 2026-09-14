@@ -163,3 +163,10 @@ export async function isWorktreeDirty(worktreePath: string): Promise<boolean> {
   const output = await exec("git", ["status", "--porcelain", "-uall"], worktreePath);
   return output.trim().length > 0;
 }
+
+// `git worktree remove` は clean でも初期化済み submodule があると --force を要求する。
+// submodule status の先頭が '-' の行は未初期化で、通常削除を妨げない。
+export async function hasInitializedSubmodules(worktreePath: string): Promise<boolean> {
+  const output = await exec("git", ["submodule", "status"], worktreePath);
+  return output.split("\n").some((line) => line.length > 0 && !line.startsWith("-"));
+}
