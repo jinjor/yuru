@@ -369,6 +369,15 @@ visible に戻ると effect は再実行され、大半の state (git status、d
   (一般的なエディタの検索結果と同じ挙動に合わせた設計判断)。query 自体はユーザー
   操作でしか変わらない state として保持する
 
+polling (`startPollingLoop`) の間隔は実行のたびに 2 倍ずつ伸ばし、60 秒で頭打ちにする。
+ウィンドウのフォーカス・再表示で間隔を初期値に戻して即座に 1 回実行する。git status /
+review state のようにリポジトリの大きさに比例して重くなる polling は、さらにウィンドウの
+フォーカス中だけに絞る (`isWindowFocusedAndVisible`)。polling の結果は前回と内容が同じなら
+state を更新せず、再レンダーを発生させない。
+この省エネ方針は `YURU_SAVE_ENERGY=0` を付けて起動すると無効になり、polling は従来の
+固定間隔 (フォーカス非考慮) に戻る。画面の鮮度への影響を比較するためのスイッチであり、
+値は preload が `window.__yuruSaveEnergy` に公開する。
+
 ホームは複数 primary をすべて表示し、active 行は既存 runtime タブの選択、inactive 行は
 resume を行う。fresh mount はホームを表示し、session 操作 (resume / promote / 新規 session /
 standalone terminal 開始) が成功した時だけ、その runtime タブを選択する。API など外部から
@@ -395,7 +404,7 @@ blob OID が同じならレビュー済み表示もその内容について移�
 `Changes` の各 scope だけでなく、`Files` / `Search` から開く scope なしの
 `HEAD ↔ worktree` 合算 diff でも、変更があれば worktree 内容をレビューできる。
 `Reviewed` を押すと、押した時点でその層にある内容の blob OID を記録する。表示していた内容とは
-照合しない。diff の polling 間隔 (3 秒) の内に agent が書き換えていた場合は、画面に出ていた内容
+照合しない。diff の polling 間隔 (最短 3 秒、バックオフで伸びる) の内に agent が書き換えていた場合は、画面に出ていた内容
 ではなく最新の内容が記録される。この窓を狭めるより、押した操作が必ず結果に反映されることを取る。
 
 diff パネルは Markdown / HTML / 画像をプレビューとして描画でき、それ以外は差分テキストとして見せる。

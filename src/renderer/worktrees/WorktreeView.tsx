@@ -25,7 +25,11 @@ import { RateLimitStopBar } from "../terminal/RateLimitStopBar";
 import { TerminalHome } from "../terminal/TerminalHome";
 import { usePaneLayout } from "./usePaneLayout";
 import type { PreviewSelection } from "../previewSelection";
-import { startPollingLoop } from "../utils/polling";
+import {
+  isEnergySavingPollingEnabled,
+  isWindowFocusedAndVisible,
+  startPollingLoop,
+} from "../utils/polling";
 import { resultDataOrNull } from "../utils/result";
 
 interface WorktreeViewProps {
@@ -73,6 +77,11 @@ function isPathChangedInScope(
     return Boolean(entry.worktreeStatus);
   }
   return Boolean(entry.indexStatus || entry.worktreeStatus);
+}
+
+// ポーリングの結果が前回と同じ内容なら前の参照を返し、再レンダーを省く。
+function keepIfUnchanged<T>(prev: T, next: T): T {
+  return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
 }
 
 export function WorktreeView({ repo, ...props }: WorktreeViewProps) {
@@ -264,13 +273,17 @@ const WorktreeViewContent = memo(function WorktreeViewContent({
         return;
       }
 
-      setGitPathStates(resultDataOrNull(pathStatesResult) ?? []);
+      setGitPathStates((prev) => keepIfUnchanged(prev, resultDataOrNull(pathStatesResult) ?? []));
       if (reviewMutationVersion === reviewMutationVersionRef.current) {
-        setReviewState(resultDataOrNull(reviewStateResult));
+        setReviewState((prev) => keepIfUnchanged(prev, resultDataOrNull(reviewStateResult)));
       }
     };
 
-    const stopPolling = startPollingLoop(fetchGitState, 3000);
+    const stopPolling = startPollingLoop(
+      fetchGitState,
+      3000,
+      isEnergySavingPollingEnabled() ? isWindowFocusedAndVisible : undefined,
+    );
 
     return () => {
       cancelled = true;

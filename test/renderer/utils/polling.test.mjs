@@ -8,22 +8,60 @@ function drain() {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
-function setupPage(t, visibilityState) {
-  globalThis.document = { visibilityState };
-  t.after(() => {
+// document / window の最小限のスタブ。イベントリスナは発火させず、登録の記録だけする。
+function setupPage(t, visibilityState, { focused = true, saveEnergy = true } = {}) {
+  const listeners = { window: new Map(), document: new Map() };
+  const addTo = (target) => (type, fn) => {
+    const list = target.get(type) ?? [];
+    list.push(fn);
+    target.set(type, list);
+  };
+  const removeFrom = (target) => (type, fn) => {
+    target.set(type, (target.get(type) ?? []).filter((f) => f !== fn));
+  };
+  globalThis.document = {
+    visibilityState,
+    hasFocus: () => focused,
+    addEventListener: addTo(listeners.document),
+    removeEventListener: removeFrom(listeners.document),
+  };
+  globalThis.window = {
+    __yuruSaveEnergy: saveEnergy,
+    addEventListener: addTo(listeners.window),
+    removeEventListener: removeFrom(listeners.window),
+  };
+  const cleanup = () => {
     delete globalThis.document;
-  });
+    delete globalThis.window;
+  };
+  return {
+    fire(target, type) {
+      for (const fn of listeners[target].get(type) ?? []) {
+        fn();
+      }
+    },
+    setFocused(value) {
+      focused = value;
+    },
+    // stop をグローバルの後始末より先に呼ぶため、1 つの after にまとめる
+    teardown(stop) {
+      t.after(() => {
+        stop();
+        cleanup();
+      });
+    },
+  };
 }
 
-test("実行完了から interval 後に次を実行する", async (t) => {
+test("実行完了から interval 後に次を実行し、以降は間隔を倍々に伸ばす", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
-  setupPage(t, "visible");
+  const page = setupPage(t, "visible");
 
   let calls = 0;
   const stop = startPollingLoop(async () => {
     calls++;
   }, 3000);
-  t.after(stop);
+  page.teardown(stop);
 
   await drain();
   assert.equal(calls, 1);
@@ -35,11 +73,58 @@ test("実行完了から interval 後に次を実行する", async (t) => {
   t.mock.timers.tick(1);
   await drain();
   assert.equal(calls, 2);
+
+  // 2 回目以降は 3 秒 → 6 秒 → 12 秒と伸びる
+  t.mock.timers.tick(5999);
+  await drain();
+  assert.equal(calls, 2);
+
+  t.mock.timers.tick(1);
+  await drain();
+  assert.equal(calls, 3);
+
+  t.mock.timers.tick(12000);
+  await drain();
+  assert.equal(calls, 4);
+});
+
+test("間隔は最長 60 秒で頭打ちになる", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const page = setupPage(t, "visible");
+
+  let calls = 0;
+  const stop = startPollingLoop(async () => {
+    calls++;
+  }, 3000);
+  page.teardown(stop);
+
+  await drain();
+  assert.equal(calls, 1);
+
+  // 3 + 6 + 12 + 24 + 48 秒で 5 回追加され、次からは 60 秒間隔。
+  // 実行のたびに次が予約されるので、区間ごとに進めて microtask を回す。
+  for (const interval of [3000, 6000, 12000, 24000, 48000]) {
+    t.mock.timers.tick(interval);
+    await drain();
+  }
+  assert.equal(calls, 6);
+
+  t.mock.timers.tick(59999);
+  await drain();
+  assert.equal(calls, 6);
+
+  t.mock.timers.tick(1);
+  await drain();
+  assert.equal(calls, 7);
+
+  t.mock.timers.tick(60000);
+  await drain();
+  assert.equal(calls, 8);
 });
 
 test("実行が interval を超えた時は所要時間と同じだけ待ってから次を実行する", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
-  setupPage(t, "visible");
+  const page = setupPage(t, "visible");
 
   let calls = 0;
   let finishRun;
@@ -49,7 +134,7 @@ test("実行が interval を超えた時は所要時間と同じだけ待って�
       finishRun = resolve;
     });
   }, 3000);
-  t.after(stop);
+  page.teardown(stop);
 
   assert.equal(calls, 1);
 
@@ -58,7 +143,7 @@ test("実行が interval を超えた時は所要時間と同じだけ待って�
   finishRun();
   await drain();
 
-  // interval の 3 秒ではなく、所要時間と同じ 12 秒待ってから次が動く
+  // バックオフ後の 6 秒ではなく、所要時間と同じ 12 秒待ってから次が動く
   t.mock.timers.tick(11999);
   await drain();
   assert.equal(calls, 1);
@@ -68,15 +153,15 @@ test("実行が interval を超えた時は所要時間と同じだけ待って�
   assert.equal(calls, 2);
 });
 
-test("非表示の間は実行を省き、表示に戻ってから再開する", async (t) => {
+test("非表示の間は実行を省き、表示に戻ったら間隔を戻して即座に再開する", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
-  setupPage(t, "hidden");
+  const page = setupPage(t, "hidden");
 
   let calls = 0;
   const stop = startPollingLoop(async () => {
     calls++;
   }, 3000);
-  t.after(stop);
+  page.teardown(stop);
 
   // 初回は非表示でも実行して初期表示のデータを作る
   await drain();
@@ -84,19 +169,56 @@ test("非表示の間は実行を省き、表示に戻ってから再開する",
 
   t.mock.timers.tick(3000);
   await drain();
-  t.mock.timers.tick(3000);
+  t.mock.timers.tick(6000);
   await drain();
   assert.equal(calls, 1);
 
+  // 表示に戻ると即座に実行され、間隔も初期値に戻る
   globalThis.document.visibilityState = "visible";
-  t.mock.timers.tick(3000);
+  page.fire("document", "visibilitychange");
   await drain();
   assert.equal(calls, 2);
+
+  t.mock.timers.tick(3000);
+  await drain();
+  assert.equal(calls, 3);
+});
+
+test("フォーカスが戻ったら間隔を戻して即座に実行する", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const page = setupPage(t, "visible", { focused: false });
+
+  let calls = 0;
+  const stop = startPollingLoop(
+    async () => {
+      calls++;
+    },
+    3000,
+    () => document.visibilityState === "visible" && document.hasFocus(),
+  );
+  page.teardown(stop);
+
+  // 初回はフォーカスがなくても実行する
+  await drain();
+  assert.equal(calls, 1);
+
+  t.mock.timers.tick(30000);
+  await drain();
+  assert.equal(calls, 1);
+
+  page.setFocused(true);
+  page.fire("window", "focus");
+  await drain();
+  assert.equal(calls, 2);
+
+  t.mock.timers.tick(3000);
+  await drain();
+  assert.equal(calls, 3);
 });
 
 test("実行が失敗しても次の実行を予約する", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
-  setupPage(t, "visible");
+  const page = setupPage(t, "visible");
   const consoleError = t.mock.method(console, "error", () => {});
 
   let calls = 0;
@@ -106,7 +228,7 @@ test("実行が失敗しても次の実行を予約する", async (t) => {
       throw new Error("boom");
     }
   }, 3000);
-  t.after(stop);
+  page.teardown(stop);
 
   await drain();
   assert.equal(calls, 1);
@@ -119,7 +241,7 @@ test("実行が失敗しても次の実行を予約する", async (t) => {
 
 test("停止後は実行されない", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
-  setupPage(t, "visible");
+  const page = setupPage(t, "visible");
 
   let calls = 0;
   const stop = startPollingLoop(async () => {
@@ -133,4 +255,32 @@ test("停止後は実行されない", async (t) => {
   t.mock.timers.tick(10000);
   await drain();
   assert.equal(calls, 1);
+});
+
+test("YURU_SAVE_ENERGY=0 では固定間隔のままで、focus / visibilitychange でも即時実行しない", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const page = setupPage(t, "visible", { saveEnergy: false });
+
+  let calls = 0;
+  const stop = startPollingLoop(async () => {
+    calls++;
+  }, 3000);
+  page.teardown(stop);
+
+  await drain();
+  assert.equal(calls, 1);
+
+  // 間隔は伸びず 3 秒固定
+  t.mock.timers.tick(3000);
+  await drain();
+  assert.equal(calls, 2);
+  t.mock.timers.tick(3000);
+  await drain();
+  assert.equal(calls, 3);
+
+  // リスナを登録していないので、イベントを発火させても即時実行されない
+  page.fire("window", "focus");
+  page.fire("document", "visibilitychange");
+  await drain();
+  assert.equal(calls, 3);
 });

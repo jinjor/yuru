@@ -187,4 +187,7 @@ const electronAPI: ElectronAPI = {
 // filesystem や PTY の IPC を渡さないよう、bridge は Yuru 本体の frame だけに公開する。
 if (process.isMainFrame) {
   contextBridge.exposeInMainWorld("electronAPI", electronAPI);
+  // YURU_SAVE_ENERGY=0 で起動したときだけ polling を従来の固定間隔に戻すスイッチ。
+  // 省エネ方針で画面の鮮度がどう変わるか比較できるようにするためのもの。
+  contextBridge.exposeInMainWorld("__yuruSaveEnergy", process.env.YURU_SAVE_ENERGY !== "0");
 }
