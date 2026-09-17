@@ -416,13 +416,11 @@ function FileTreeRow({
     <div
       className={`file-tree-row ${isSelected ? "selected" : ""}`}
       data-path={node.path}
-      draggable={!isDirectory}
+      draggable
       onDragEnd={(event) => endWorktreeFileDrag(event.currentTarget)}
-      onDragStart={(event) => {
-        if (!isDirectory) {
-          beginWorktreeFileDrag(event.dataTransfer, event.currentTarget, node.path);
-        }
-      }}
+      onDragStart={(event) =>
+        beginWorktreeFileDrag(event.dataTransfer, event.currentTarget, node.path)
+      }
       onClick={() => {
         if (isDirectory) {
           onDirectoryToggle(node.path);

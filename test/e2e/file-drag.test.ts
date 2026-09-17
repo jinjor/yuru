@@ -10,7 +10,7 @@ import {
   writeFiles,
 } from "./helpers";
 
-test("Files と Changes のファイルを Terminal にドロップすると相対パスを貼り付ける", async () => {
+test("Files のファイルとディレクトリ、Changes のファイルを Terminal にドロップすると相対パスを貼り付ける", async () => {
   const context = await createE2eContext();
   let app: ElectronApplication | null = null;
   try {
@@ -38,7 +38,8 @@ test("Files と Changes のファイルを Terminal にドロップすると相�
 
     await sessionView.locator(".panel-tabs .tab", { hasText: "Files" }).click();
     const docsDirectory = sessionView.locator(".file-tree-row", { hasText: "docs" });
-    await expect(docsDirectory).toHaveAttribute("draggable", "false");
+    await expect(docsDirectory).toHaveAttribute("draggable", "true");
+    await expectDroppedRelativePath(window, docsDirectory, terminalHost, "docs");
     await docsDirectory.click();
     const guideFile = sessionView.locator(".file-tree-row", { hasText: "guide.md" });
     await expect(guideFile).toHaveAttribute("draggable", "true");
