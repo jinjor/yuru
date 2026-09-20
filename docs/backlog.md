@@ -52,7 +52,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F69 | feature | API / Sessions | API でセッション作成時に effort レベルを設定できるようにする | セッションの用途に応じて推論量を指定したい |
 | F68 | feature | Sessions / Rate Limits | もうすぐ 100% になる時にあらかじめ rate limit 解除を予約したい | rate limit に達した後の待ち時間を減らしたい |
 | F54 | feature | Changes | ショートカットキーでレビュー済みにできるようにする | ファイルレビューを素早く進めたい |
-| F49 | feature | Updates | UI から `yuru latest` を実行できるようにする | ターミナルを開かずに Yuru を最新版へ更新したい |
 | F50 | feature | Files | 変更ファイルだけをツリー表示できるようにする | 変更箇所に絞ってファイルを確認したい |
 | F46 | feature | Repos | リポジトリを管理対象から削除できるようにする | `yuru add` と対になる機能として欲しい |
 | P16 | polish | Worktrees / Changes | 左ペインで worktree の Git 変更状態を分かるようにする | いま選択していない worktree に unstaged/staged/untracked 変更があることに気づけない |
