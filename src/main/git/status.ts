@@ -70,7 +70,7 @@ export function parsePorcelainLine(line: string): GitPathState | null {
 
 export async function getGitPathStates(cwd: string): Promise<GitPathState[]> {
   const [statusOutput, stagedNumstat, unstagedNumstat] = await Promise.all([
-    exec("git", ["status", "--porcelain", "-uall"], cwd),
+    exec("git", ["status", "--porcelain", "-uall", "--ignored=matching"], cwd),
     exec("git", ["diff", "--numstat", "-z", "--cached"], cwd),
     exec("git", ["diff", "--numstat", "-z"], cwd),
   ]);

@@ -4,9 +4,11 @@ import test from "node:test";
 import {
   buildChangedFiles,
   buildConflictedFiles,
+  buildIgnoredPathSet,
   buildStagedFiles,
   buildTreeStatusMap,
   buildUnstagedFiles,
+  isIgnoredPath,
 } from "../../../src/renderer/changes/gitStatus.ts";
 
 test("buildStagedFiles と buildUnstagedFiles は staged/unstaged を分けて行数を引き継ぐ", () => {
@@ -160,4 +162,29 @@ test("buildTreeStatusMap は conflicted を最優先で directory に伝播す�
   assert.equal(statuses.get("src"), "!");
   assert.equal(statuses.get("src/conflict.ts"), "!");
   assert.equal(statuses.get("src/a.ts"), "A");
+});
+
+test("ignore された directory の配下だけを薄く表示する", () => {
+  const ignoredPaths = buildIgnoredPathSet([
+    {
+      path: "node_modules",
+      indexStatus: "",
+      worktreeStatus: "",
+      conflicted: false,
+      ignored: true,
+    },
+    {
+      path: "src/generated.log",
+      indexStatus: "",
+      worktreeStatus: "",
+      conflicted: false,
+      ignored: true,
+    },
+  ]);
+
+  assert.equal(isIgnoredPath("node_modules", ignoredPaths), true);
+  assert.equal(isIgnoredPath("node_modules/react/index.js", ignoredPaths), true);
+  assert.equal(isIgnoredPath("src/generated.log", ignoredPaths), true);
+  assert.equal(isIgnoredPath("src", ignoredPaths), false);
+  assert.equal(isIgnoredPath("src/other.ts", ignoredPaths), false);
 });

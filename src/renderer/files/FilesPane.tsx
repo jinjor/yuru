@@ -3,7 +3,12 @@ import { ChevronDown, ChevronRight, ChevronsDownUp, FolderGit2 } from "lucide-re
 import type { FileTreeNode, GitFileStatus, GitPathState } from "../../shared/ipc";
 import { isTestFile } from "../../shared/test-file";
 import type { PreviewSelection } from "../previewSelection";
-import { buildIgnoredPathSet, buildTreeStatusMap, treeStatusClass } from "../changes/gitStatus";
+import {
+  buildIgnoredPathSet,
+  buildTreeStatusMap,
+  isIgnoredPath,
+  treeStatusClass,
+} from "../changes/gitStatus";
 import { resultDataOrNull } from "../utils/result";
 import {
   applyDirectoryListing,
@@ -409,7 +414,7 @@ function FileTreeRow({
 }) {
   const { depth, isOpen, node } = row;
   const isDirectory = node.kind === "directory";
-  const isIgnored = ignoredPaths.has(node.path);
+  const isIgnored = isIgnoredPath(node.path, ignoredPaths);
   const statusClass = treeStatusClass(statusByPath.get(node.path));
 
   return (

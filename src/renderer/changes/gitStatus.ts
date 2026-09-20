@@ -141,18 +141,20 @@ export function buildTreeStatusMap(pathStates: readonly GitPathState[]): Map<str
 }
 
 export function buildIgnoredPathSet(pathStates: readonly GitPathState[]): Set<string> {
-  const ignoredPaths = new Set<string>();
+  return new Set(pathStates.filter((entry) => entry.ignored).map((entry) => entry.path));
+}
 
-  for (const entry of pathStates) {
-    if (!entry.ignored) {
-      continue;
+export function isIgnoredPath(path: string, ignoredPaths: ReadonlySet<string>): boolean {
+  let currentPath = path;
+  while (currentPath) {
+    if (ignoredPaths.has(currentPath)) {
+      return true;
     }
-
-    const segments = entry.path.split("/");
-    for (let i = 1; i <= segments.length; i++) {
-      ignoredPaths.add(segments.slice(0, i).join("/"));
+    const separatorIndex = currentPath.lastIndexOf("/");
+    if (separatorIndex === -1) {
+      break;
     }
+    currentPath = currentPath.slice(0, separatorIndex);
   }
-
-  return ignoredPaths;
+  return false;
 }
