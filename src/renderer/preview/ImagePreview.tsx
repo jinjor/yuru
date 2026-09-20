@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import type { GitDiffScope, ImageDiffDocument, ImageDiffSide } from "../../shared/ipc";
+import type { GitDiffScope, PreviewDiffDocument, PreviewSide } from "../../shared/ipc";
+import { formatBytes } from "../utils/format";
 import { startPollingLoop } from "../utils/polling";
 import { resultDataOrNull } from "../utils/result";
 import { EmptyState } from "../ui/EmptyState";
@@ -20,7 +21,7 @@ interface ImageSize {
 }
 
 interface ImageLayer {
-  image: ImageDiffSide;
+  image: PreviewSide;
   size: ImageSize | null;
 }
 
@@ -34,11 +35,12 @@ export default function ImagePreview({ path, scope, worktreeId, poll }: ImagePre
 
   useEffect(() => {
     let cancelled = false;
-    // この effect が表示に反映済みの内容。同じ内容を取り直した時は測り直しも描き直しもしない。
+    // この effect が表示に反映済みの内容。URL は中身ごとに変わるので、同じ URL を取り直した
+    // 時は測り直しも描き直しもしない。
     let shown: { original: string | null; current: string | null } | null = null;
 
     const fetchImage = async (): Promise<void> => {
-      const result = await window.electronAPI.getImageDiffDocument(worktreeId, path, scope);
+      const result = await window.electronAPI.getPreviewDiffDocument(worktreeId, path, scope);
       if (cancelled) {
         return;
       }
@@ -61,8 +63,8 @@ export default function ImagePreview({ path, scope, worktreeId, poll }: ImagePre
         return;
       }
       shown = {
-        original: document.original?.dataUrl ?? null,
-        current: document.current?.dataUrl ?? null,
+        original: document.original?.url ?? null,
+        current: document.current?.url ?? null,
       };
       setState({ status: "ready", original, current });
     };
@@ -100,7 +102,7 @@ export default function ImagePreview({ path, scope, worktreeId, poll }: ImagePre
   const { original, current } = state;
 
   // 片側だけ = 追加または削除。中身が同じなら差分ではない。どちらも 1 枚で見せる。
-  if (original === null || current === null || original.image.dataUrl === current.image.dataUrl) {
+  if (original === null || current === null || original.image.url === current.image.url) {
     const layer = current ?? original;
     if (layer === null) {
       return <EmptyState>Image preview is not available</EmptyState>;
@@ -119,7 +121,7 @@ export default function ImagePreview({ path, scope, worktreeId, poll }: ImagePre
   const box = combinedSize(original, current);
   return (
     <div className="image-preview">
-      <div className="image-diff-columns">
+      <div className="diff-side-columns">
         <ImageSideView layer={original} box={box} label="Before" />
         <ImageSideView layer={current} box={box} label="After" />
       </div>
@@ -138,8 +140,8 @@ function ImageSideView({
   label: string | null;
 }) {
   return (
-    <div className="image-side">
-      {label && <div className={`image-side-label ${label.toLowerCase()}`}>{label}</div>}
+    <div className="diff-side">
+      {label && <div className={`diff-side-label ${label.toLowerCase()}`}>{label}</div>}
       {box && layer.size ? (
         <div
           className="image-stage"
@@ -152,7 +154,7 @@ function ImageSideView({
           {/* box に対する相対サイズで左上に置く。寸法が違っても倍率がそろい、差がそのまま見える。 */}
           <img
             className="image-layer"
-            src={layer.image.dataUrl}
+            src={layer.image.url}
             alt=""
             style={{
               width: `${(layer.size.width / box.width) * 100}%`,
@@ -162,33 +164,33 @@ function ImageSideView({
         </div>
       ) : (
         <div className="image-stage auto">
-          <img className="image-auto" src={layer.image.dataUrl} alt="" />
+          <img className="image-auto" src={layer.image.url} alt="" />
         </div>
       )}
-      <div className="image-side-meta">{describeLayer(layer)}</div>
+      <div className="diff-side-meta">{describeLayer(layer)}</div>
     </div>
   );
 }
 
 function isSameContent(
   shown: { original: string | null; current: string | null },
-  document: ImageDiffDocument,
+  document: PreviewDiffDocument,
 ): boolean {
   return (
-    shown.original === (document.original?.dataUrl ?? null) &&
-    shown.current === (document.current?.dataUrl ?? null)
+    shown.original === (document.original?.url ?? null) &&
+    shown.current === (document.current?.url ?? null)
   );
 }
 
-async function toLayer(image: ImageDiffSide | null): Promise<ImageLayer | null> {
+async function toLayer(image: PreviewSide | null): Promise<ImageLayer | null> {
   if (image === null) {
     return null;
   }
-  return { image, size: await loadImageSize(image.dataUrl) };
+  return { image, size: await loadImageSize(image.url) };
 }
 
 // デコードできない画像と、幅・高さを持たない画像は null (寸法を出さず、倍率もそろえない)。
-function loadImageSize(dataUrl: string): Promise<ImageSize | null> {
+function loadImageSize(url: string): Promise<ImageSize | null> {
   return new Promise((resolve) => {
     const image = new Image();
     image.onload = () => {
@@ -199,7 +201,7 @@ function loadImageSize(dataUrl: string): Promise<ImageSize | null> {
       );
     };
     image.onerror = () => resolve(null);
-    image.src = dataUrl;
+    image.src = url;
   });
 }
 
@@ -216,14 +218,4 @@ function combinedSize(original: ImageLayer, current: ImageLayer): ImageSize | nu
 function describeLayer(layer: ImageLayer): string {
   const bytes = formatBytes(layer.image.byteLength);
   return layer.size ? `${layer.size.width} × ${layer.size.height} · ${bytes}` : bytes;
-}
-
-function formatBytes(byteLength: number): string {
-  if (byteLength < 1024) {
-    return `${byteLength} B`;
-  }
-  if (byteLength < 1024 * 1024) {
-    return `${(byteLength / 1024).toFixed(1)} KB`;
-  }
-  return `${(byteLength / 1024 / 1024).toFixed(1)} MB`;
 }

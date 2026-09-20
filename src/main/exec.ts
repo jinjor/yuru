@@ -1,5 +1,6 @@
 import { spawn } from "child_process";
 import fs from "fs";
+import { pipeline } from "stream/promises";
 
 interface RunResult {
   stdout: Buffer;
@@ -17,6 +18,45 @@ export async function execBuffer(cmd: string, args: string[], cwd: string): Prom
     throw error;
   }
   return stdout;
+}
+
+// stdout をメモリに溜めず、そのままファイルへ書き出す。大きな出力の取り出し用。
+export async function execToFile(
+  cmd: string,
+  args: string[],
+  cwd: string,
+  destPath: string,
+): Promise<void> {
+  const child = spawn(cmd, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
+  const stderrChunks: Buffer[] = [];
+  let spawnError: NodeJS.ErrnoException | null = null;
+  child.stderr.on("data", (chunk: Buffer) => {
+    stderrChunks.push(chunk);
+  });
+  child.on("error", (error: NodeJS.ErrnoException) => {
+    spawnError = error;
+  });
+
+  const closed = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
+    child.on("close", (code, signal) => resolve({ code, signal }));
+  });
+  const [, exit] = await Promise.all([
+    pipeline(child.stdout, fs.createWriteStream(destPath)),
+    closed,
+  ]);
+
+  if (spawnError || exit.code !== 0) {
+    const detail = Buffer.concat(stderrChunks).toString("utf-8").trim();
+    const commandFailure = exit.signal
+      ? `${cmd} was terminated by ${exit.signal}`
+      : `${cmd} exited with code ${exit.code ?? "unknown"}`;
+    const error = new Error(detail || (spawnError as Error | null)?.message || commandFailure);
+    Object.assign(error, {
+      code: (spawnError as NodeJS.ErrnoException | null)?.code ?? exit.code,
+      cause: spawnError ?? undefined,
+    });
+    throw error;
+  }
 }
 
 // 失敗しても投げず、そこまでに出た stdout と失敗の理由を両方返す。エラーを報告しつつ

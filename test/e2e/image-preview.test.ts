@@ -35,10 +35,10 @@ test("変更した画像は前後を同じ倍率で並べてプレビューす�
 
     // 両側が寸法とファイルサイズ付きで並ぶ
     const sessionView = visibleWorktreeView(window);
-    await expect(sessionView.locator(".image-side", { hasText: "Before" })).toContainText(
+    await expect(sessionView.locator(".diff-side", { hasText: "Before" })).toContainText(
       "40 × 20",
     );
-    await expect(sessionView.locator(".image-side", { hasText: "After" })).toContainText("60 × 20");
+    await expect(sessionView.locator(".diff-side", { hasText: "After" })).toContainText("60 × 20");
 
     // 寸法が違っても両側を同じ倍率で置く (描画幅の比が元の幅の比と一致する)
     const layers = sessionView.locator(".image-layer");
@@ -73,12 +73,12 @@ test("開いている間に画像が書き換わったら表示も追従する",
 
     await window.locator(".change-item", { hasText: "live.png" }).click();
     const sessionView = visibleWorktreeView(window);
-    await expect(sessionView.locator(".image-side", { hasText: "After" })).toContainText("60 × 20");
+    await expect(sessionView.locator(".diff-side", { hasText: "After" })).toContainText("60 × 20");
 
     // 表示中に別の内容へ書き換える。Reviewed は押した時点の内容を記録するので、
     // 画面が古い画像のまま取り残されると、見ていない内容を承認できてしまう。
     await writeFile(path.join(repoDir, "live.png"), makePng(80, 20, [120, 200, 140]));
-    await expect(sessionView.locator(".image-side", { hasText: "After" })).toContainText(
+    await expect(sessionView.locator(".diff-side", { hasText: "After" })).toContainText(
       "80 × 20",
       {
         timeout: 10_000,
@@ -106,16 +106,16 @@ test("追加された画像と worktree の画像は 1 枚で表示する", asyn
     // 未追跡ファイル = 追加なので、比較する元がない
     await window.locator(".change-item", { hasText: "shot.png" }).click();
     await expectPreviewPath(window, "shot.png");
-    await expect(sessionView.locator(".image-side-label")).toHaveText("Added");
-    await expect(sessionView.locator(".image-side-meta")).toContainText("30 × 30");
+    await expect(sessionView.locator(".diff-side-label")).toHaveText("Added");
+    await expect(sessionView.locator(".diff-side-meta")).toContainText("30 × 30");
 
     // Files から開いた変更なしの画像も 1 枚のまま
     git(["add", "shot.png"], repoDir);
     git(["commit", "-m", "add shot"], repoDir);
     await sessionView.locator(".panel-tabs .tab", { hasText: "Files" }).click();
     await sessionView.locator(".file-tree-row", { hasText: "shot.png" }).click();
-    await expect(sessionView.locator(".image-side-label")).toBeHidden();
-    await expect(sessionView.locator(".image-side-meta")).toContainText("30 × 30");
+    await expect(sessionView.locator(".diff-side-label")).toBeHidden();
+    await expect(sessionView.locator(".diff-side-meta")).toContainText("30 × 30");
   } finally {
     await closeYuru(app);
     await context.cleanup();

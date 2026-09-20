@@ -2,13 +2,31 @@ import fs from "fs";
 import path from "path";
 import type { GitDiffDocument, GitDiffScope, GitLineStat } from "../../shared/ipc.js";
 import { exec, execBuffer } from "../exec.js";
-import { readRegularFile } from "../files/files.js";
+import { readRegularFile, statRegularFile } from "../files/files.js";
 import { resolveGitReviewBase, type GitReviewBase } from "./repo.js";
 
 export interface NameStatusEntry {
   status: string;
   path: string;
   srcPath?: string;
+}
+
+// 差分の片側がどこにあるか。scope の解釈はこのモジュールだけが持ち、
+// 「読む」側と「大きさだけ見る」側はこの記述を受け取る。
+export type DiffSource =
+  | { kind: "worktree"; path: string }
+  | { kind: "index"; path: string }
+  | { kind: "blob"; rev: string; path: string };
+
+export interface DiffSources {
+  // null はその側にファイルが無いこと。
+  original: DiffSource | null;
+  current: DiffSource | null;
+}
+
+export interface DiffSourceStat {
+  byteLength: number;
+  contentId: string;
 }
 
 export interface RawDiffEntry {
@@ -208,63 +226,151 @@ async function isPathChanged(cwd: string, filePath: string): Promise<boolean> {
   return output.trim().length > 0;
 }
 
-// rename 元まで遡って元側の内容を読む。rangeArgs が rename 検出に使う diff の範囲、
-// originalRef が元側の blob を読む ref。
-async function loadOriginalBuffer(
-  cwd: string,
-  filePath: string,
-  rangeArgs: readonly string[],
-  originalRef: string,
-): Promise<Buffer | null> {
-  const originalPath = await resolveOriginalPath(cwd, filePath, rangeArgs);
-  return originalPath ? await readGitBlobAt(cwd, originalRef, originalPath) : null;
-}
-
 async function readWorktreeFile(cwd: string, filePath: string): Promise<Buffer | null> {
   const currentPath = path.join(cwd, filePath);
   return fs.existsSync(currentPath) ? await fs.promises.readFile(currentPath) : null;
 }
 
+// rename 元まで遡った元側の path を、blob の場所として返す。HEAD が無ければ元側は存在しない。
+async function resolveOriginalBlob(
+  cwd: string,
+  filePath: string,
+  rangeArgs: readonly string[],
+  originalRef: string,
+): Promise<DiffSource | null> {
+  const originalPath = await resolveOriginalPath(cwd, filePath, rangeArgs);
+  return originalPath ? { kind: "blob", rev: originalRef, path: originalPath } : null;
+}
+
 // scope なし: HEAD ↔ 作業ツリー (staged + unstaged の合算)
 // base: merge-base ↔ HEAD / staged: HEAD ↔ index / unstaged: index ↔ 作業ツリー
+export async function resolveDiffSources(
+  cwd: string,
+  filePath: string,
+  scope: GitDiffScope | undefined,
+  reviewBase: GitReviewBase | null,
+): Promise<DiffSources> {
+  if (scope === "base") {
+    if (!reviewBase) {
+      throw new Error("Base branch is unknown.");
+    }
+    return {
+      original: await resolveOriginalBlob(
+        cwd,
+        filePath,
+        [reviewBase.mergeBase, "HEAD"],
+        reviewBase.mergeBase,
+      ),
+      current: { kind: "blob", rev: "HEAD", path: filePath },
+    };
+  }
+
+  if (scope === "staged") {
+    return {
+      original: await resolveOriginalBlob(cwd, filePath, ["--cached"], "HEAD"),
+      current: { kind: "index", path: filePath },
+    };
+  }
+
+  if (scope === "unstaged") {
+    return {
+      original: { kind: "index", path: filePath },
+      current: { kind: "worktree", path: filePath },
+    };
+  }
+
+  const current: DiffSource = { kind: "worktree", path: filePath };
+  if (!(await isPathChanged(cwd, filePath))) {
+    return { original: current, current };
+  }
+  return {
+    original: await resolveOriginalBlob(cwd, filePath, ["HEAD"], "HEAD"),
+    current,
+  };
+}
+
+// 片側の中身。その側にファイルが無ければ null。
+export async function readDiffSource(
+  cwd: string,
+  source: DiffSource | null,
+): Promise<Buffer | null> {
+  if (source === null) {
+    return null;
+  }
+  if (source.kind === "worktree") {
+    return readWorktreeFile(cwd, source.path);
+  }
+  if (source.kind === "index") {
+    return readIndexBlob(cwd, source.path);
+  }
+  return readGitBlobAt(cwd, source.rev, source.path);
+}
+
+// 片側の大きさと識別子。中身は読まない。その側にファイルが無ければ null。
+export async function statDiffSource(
+  cwd: string,
+  source: DiffSource | null,
+): Promise<DiffSourceStat | null> {
+  if (source === null) {
+    return null;
+  }
+  if (source.kind === "worktree") {
+    const stat = await statRegularFile(path.join(cwd, source.path));
+    // git 自身が index で使っているのと同じ stat ベースの判定。
+    return stat && { byteLength: stat.size, contentId: `${stat.size}:${stat.mtimeMs}` };
+  }
+  // index は stage 0、それ以外は rev 指定の blob。
+  const objectName = source.kind === "index" ? `:0:${source.path}` : `${source.rev}:${source.path}`;
+  return statGitObject(cwd, objectName);
+}
+
+async function statGitObject(cwd: string, objectName: string): Promise<DiffSourceStat | null> {
+  let oid: string;
+  let size: string;
+  try {
+    [oid, size] = await Promise.all([
+      exec("git", ["rev-parse", "--verify", `${objectName}`], cwd),
+      exec("git", ["cat-file", "-s", objectName], cwd),
+    ]);
+  } catch {
+    // その名前の object が無い = その側にファイルが無い (readGitBlobAt と同じ扱い)。
+    return null;
+  }
+
+  const byteLength = Number.parseInt(size.trim(), 10);
+  if (!Number.isFinite(byteLength)) {
+    throw new Error(`Unexpected git cat-file output: ${JSON.stringify(size)}`);
+  }
+  return { byteLength, contentId: oid.trim() };
+}
+
 export async function loadDiffBuffers(
   cwd: string,
   filePath: string,
   scope: GitDiffScope | undefined,
   reviewBase: GitReviewBase | null,
 ): Promise<{ originalBuffer: Buffer | null; currentBuffer: Buffer | null }> {
-  if (scope === "base") {
-    if (!reviewBase) {
-      throw new Error("Base branch is unknown.");
-    }
-    const [originalBuffer, currentBuffer] = await Promise.all([
-      loadOriginalBuffer(cwd, filePath, [reviewBase.mergeBase, "HEAD"], reviewBase.mergeBase),
-      readGitBlobAt(cwd, "HEAD", filePath),
-    ]);
-    return { originalBuffer, currentBuffer };
+  const { original, current } = await resolveDiffSources(cwd, filePath, scope, reviewBase);
+  // 両側が同じ場所 (変更なし) なら 1 回だけ読む。
+  if (sameDiffSource(original, current)) {
+    const buffer = await readDiffSource(cwd, current);
+    return { originalBuffer: buffer, currentBuffer: buffer };
   }
-
-  if (scope === "staged") {
-    const [originalBuffer, currentBuffer] = await Promise.all([
-      loadOriginalBuffer(cwd, filePath, ["--cached"], "HEAD"),
-      readIndexBlob(cwd, filePath),
-    ]);
-    return { originalBuffer, currentBuffer };
-  }
-
-  if (scope === "unstaged") {
-    const [originalBuffer, currentBuffer] = await Promise.all([
-      readIndexBlob(cwd, filePath),
-      readWorktreeFile(cwd, filePath),
-    ]);
-    return { originalBuffer, currentBuffer };
-  }
-
-  const currentBuffer = await readWorktreeFile(cwd, filePath);
-  const originalBuffer = (await isPathChanged(cwd, filePath))
-    ? await loadOriginalBuffer(cwd, filePath, ["HEAD"], "HEAD")
-    : currentBuffer;
+  const [originalBuffer, currentBuffer] = await Promise.all([
+    readDiffSource(cwd, original),
+    readDiffSource(cwd, current),
+  ]);
   return { originalBuffer, currentBuffer };
+}
+
+function sameDiffSource(a: DiffSource | null, b: DiffSource | null): boolean {
+  if (a === null || b === null) {
+    return a === b;
+  }
+  if (a.kind === "blob") {
+    return b.kind === "blob" && a.rev === b.rev && a.path === b.path;
+  }
+  return a.kind === b.kind && a.path === b.path;
 }
 
 export async function getGitDiffDocument(

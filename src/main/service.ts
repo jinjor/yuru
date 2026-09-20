@@ -63,9 +63,9 @@ import {
   type WorktreeInfo,
 } from "./git/worktree.js";
 import {
-  getImageDiffDocument as loadImageDiffDocument,
-  getImageFileDocument,
-} from "./preview/image-diff.js";
+  getPreviewDiffDocument as loadPreviewDiffDocument,
+  getPreviewFileDocument,
+} from "./preview/binary-preview.js";
 import { hasLiveProcessInWorktree, listLiveProcessesInWorktree } from "./repos/process-check.js";
 import {
   fetchGitHubItems,
@@ -1384,16 +1384,16 @@ export class YuruService {
     }
   }
 
-  async getImageDiffDocument(worktreeId: string, filePath: string, scope?: GitDiffScope) {
+  async getPreviewDiffDocument(worktreeId: string, filePath: string, scope?: GitDiffScope) {
     const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
     if (!workingRoot) {
       return ok(null);
     }
     try {
       if (path.isAbsolute(filePath)) {
-        return ok(await getImageFileDocument(filePath));
+        return ok(await getPreviewFileDocument(filePath));
       }
-      return ok(await loadImageDiffDocument(workingRoot, filePath, scope));
+      return ok(await loadPreviewDiffDocument(workingRoot, filePath, scope));
     } catch (error) {
       return this.failAndReport(
         toAppError(error, path.isAbsolute(filePath) ? undefined : { command: "git" }),

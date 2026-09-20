@@ -506,9 +506,9 @@ function registerIpcHandlers(): void {
   );
 
   handleIpc(
-    "git:imageDiffDocument",
+    "git:previewDiffDocument",
     (_event, worktreeId: string, filePath: string, scope?: GitDiffScope) => {
-      return service.getImageDiffDocument(worktreeId, filePath, scope);
+      return service.getPreviewDiffDocument(worktreeId, filePath, scope);
     },
   );
 

@@ -105,19 +105,20 @@ export interface GitDiffDocument {
   size: number;
 }
 
-export interface ImageDiffSide {
-  // <img> の src にそのまま渡せる data URL。寸法は renderer が読み込んだ img から取る。
-  dataUrl: string;
+// 画像・音声・動画は中身を文字列にできないので、テキストの GitDiffDocument とは別に取得する。
+// 中身は要素が URL から直接読むので、ここに載るのは大きさと URL だけ。
+export interface PreviewSide {
   byteLength: number;
+  // <img> / <audio> / <video> の src に渡す URL。中身が変われば URL も変わる。
+  url: string;
 }
 
-// 画像は文字列にできないので、テキストの GitDiffDocument とは別に取得する。
-export interface ImageDiffDocument {
+export interface PreviewDiffDocument {
   path: string;
   // null は元側にファイルが無いこと (例: 新規追加された画像)。
-  original: ImageDiffSide | null;
+  original: PreviewSide | null;
   // null は現在側にファイルが無いこと (例: 削除された画像)。
-  current: ImageDiffSide | null;
+  current: PreviewSide | null;
 }
 
 export interface HtmlPreviewGrant {
@@ -277,12 +278,12 @@ export interface ElectronAPI {
     filePath: string,
     scope?: GitDiffScope,
   ) => Promise<Result<GitDiffDocument | null>>;
-  // 画像でない path、開けない path は null。
-  getImageDiffDocument: (
+  // 画像・音声・動画のプレビュー用。開けない path は null。中身は含まない。
+  getPreviewDiffDocument: (
     worktreeId: string,
     filePath: string,
     scope?: GitDiffScope,
-  ) => Promise<Result<ImageDiffDocument | null>>;
+  ) => Promise<Result<PreviewDiffDocument | null>>;
   createHtmlPreview: (
     worktreeId: string,
     filePath: string,

@@ -87,12 +87,17 @@ export function resolveHtmlPreviewEntry(
 
 // 絶対パス指定の読み取り。不在・通常ファイルでない場合は null (呼び出し側で範囲を確認済みの前提)。
 export async function readRegularFile(absolutePath: string): Promise<Buffer | null> {
+  if ((await statRegularFile(absolutePath)) === null) {
+    return null;
+  }
+  return await fs.promises.readFile(absolutePath);
+}
+
+// 中身を読まずに大きさと更新時刻だけ見る。不在・通常ファイルでない場合は null。
+export async function statRegularFile(absolutePath: string): Promise<fs.Stats | null> {
   try {
     const stat = await fs.promises.stat(absolutePath);
-    if (!stat.isFile()) {
-      return null;
-    }
-    return await fs.promises.readFile(absolutePath);
+    return stat.isFile() ? stat : null;
   } catch (error) {
     // ENOTDIR はパス途中のコンポーネントがファイルだった場合。どちらも「開けない」ので null。
     if (isFileNotFoundError(error) || (error as { code?: unknown }).code === "ENOTDIR") {

@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { diffArrays } from "diff";
 import type { GitDiffDocument, GitDiffScope } from "../../shared/ipc";
-import { imageMediaType } from "../../shared/image-preview";
+import { isImagePath } from "../../shared/image-preview";
+import { mediaPreviewKind } from "../../shared/media-preview";
 import type { FileViewMode } from "./fileViewMode";
 import { computeDiffHunks } from "./diffHunks";
 import { SourceViewer, type SourceLine } from "./SourceViewer";
@@ -14,12 +15,13 @@ import { EmptyState } from "../ui/EmptyState";
 const EditModeEditor = lazy(() => import("./editor/EditModeEditor"));
 const HtmlPreview = lazy(() => import("./HtmlPreview"));
 const ImagePreview = lazy(() => import("./ImagePreview"));
+const MediaPreview = lazy(() => import("./MediaPreview"));
 const MarkdownPreview = lazy(() => import("./MarkdownPreview"));
 
 const markdownExtensions = new Set(["md", "markdown"]);
 const htmlExtensions = new Set(["htm", "html"]);
 
-type RenderedPreviewKind = "html" | "image" | "markdown";
+type RenderedPreviewKind = "html" | "image" | "markdown" | "media";
 
 function renderedPreviewKind(path: string): RenderedPreviewKind | null {
   const ext = path.split(".").pop()?.toLowerCase();
@@ -33,8 +35,11 @@ function renderedPreviewKind(path: string): RenderedPreviewKind | null {
     return "html";
   }
   // SVG は画像として描画できるテキストなので、閲覧モードではそのまま差分も読める。
-  if (imageMediaType(path) !== null) {
+  if (isImagePath(path)) {
     return "image";
+  }
+  if (mediaPreviewKind(path) !== null) {
+    return "media";
   }
   return null;
 }
@@ -234,6 +239,14 @@ export function DiffPreviewPanel({
             ) : displayPreviewKind === "image" ? (
               // 画像は中身を diff document に載せられないので、パネルとは別に自分で取得する。
               <ImagePreview
+                path={displayPath}
+                scope={scope}
+                worktreeId={worktreeId}
+                poll={shouldPollContent}
+              />
+            ) : displayPreviewKind === "media" ? (
+              // 音声・動画も画像と同じく、中身はパネルとは別に自分で取得する。
+              <MediaPreview
                 path={displayPath}
                 scope={scope}
                 worktreeId={worktreeId}

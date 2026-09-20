@@ -2083,6 +2083,43 @@ button.github-badge {
   background: var(--bg-app);
 }
 
+/* before/after の枠。画像・音声・動画で共有し、違うのは枠の中身の描き方だけ */
+.diff-side-columns {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.diff-side {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.diff-side-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.diff-side-label.added {
+  color: var(--success);
+}
+
+.diff-side-label.deleted {
+  color: var(--danger);
+}
+
+.diff-side-meta {
+  color: var(--text-subtle);
+  font-size: 12px;
+  font-family: var(--font-mono);
+}
+
 /* Image preview */
 .image-preview {
   flex: 1;
@@ -2093,42 +2130,6 @@ button.github-badge {
   display: flex;
   flex-direction: column;
   background: var(--viewer-bg);
-}
-
-.image-diff-columns {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-}
-
-.image-side {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-
-.image-side-label {
-  color: var(--text-muted);
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.image-side-label.added {
-  color: var(--success);
-}
-
-.image-side-label.deleted {
-  color: var(--danger);
-}
-
-.image-side-meta {
-  color: var(--text-subtle);
-  font-size: 12px;
-  font-family: var(--font-mono);
 }
 
 /* 透過部分が背景と区別できるようにチェッカー柄を敷く */
@@ -2165,6 +2166,51 @@ button.github-badge {
   top: 0;
   left: 0;
   display: block;
+}
+
+/* Media preview (音声・動画。再生はブラウザのコントロールに任せる) */
+.media-preview {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  background: var(--viewer-bg);
+}
+
+.media-preview audio {
+  width: 100%;
+  /* Chromium の音声コントロールの高さ。読み込みの前後で枠の高さが動かないように固定する */
+  height: 40px;
+}
+
+/*
+ * 音声コントロールは既定でグレーのピルになり、アプリの中で明るく浮く。地の色だけ寄せる。
+ * 標準外の疑似要素なので、将来効かなくなっても既定のグレーに戻るだけで再生は壊れない。
+ * 動画のコントロールは映像の上の黒帯なので、こちらは触らない。
+ */
+.media-preview audio::-webkit-media-controls-panel {
+  background-color: var(--bg-panel);
+}
+
+.media-preview video {
+  width: 100%;
+  max-height: 420px;
+  background: #000;
+  border: 1px solid var(--border);
+}
+
+/* 再生できない側に出す。大きすぎる・コーデック非対応・取得できない */
+.media-placeholder {
+  width: 100%;
+  padding: 24px 16px;
+  border: 1px solid var(--border);
+  background: var(--viewer-gutter);
+  color: var(--text-subtle);
+  font-size: 13px;
+  text-align: center;
 }
 
 /* Markdown preview */

@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>F83 — 音声・動画プレビューのモックアップ</title>
+<style>
+/* copied from src/renderer/style.css */
+:root {
+  color-scheme: dark;
+
+  --bg-app: #11151d;
+  --bg-panel: #181d27;
+  --bg-hover: #262f3f;
+  --bg-selected: #2f4058;
+
+  --border: #2f394a;
+  --border-strong: #445068;
+
+  --text: #d8e1ef;
+  --text-muted: #91a0b8;
+  --text-subtle: #63718a;
+
+  --accent: #7bc1ff;
+  --success: #7ad7a1;
+  --warning: #e2c08d;
+  --danger: #f08f86;
+
+  --viewer-bg: #0f141c;
+  --viewer-gutter: #131a24;
+
+  --font-mono: "SFMono-Regular", Menlo, Monaco, monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+button { font: inherit; }
+
+body {
+  background: var(--bg-app);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", sans-serif;
+  font-size: 13px;
+  padding: 32px 40px 96px;
+}
+
+h1 { font-size: 18px; font-weight: 600; margin: 0 0 8px; }
+h2 { font-size: 13px; font-weight: 600; margin: 44px 0 10px; }
+h2 .num { color: var(--text-subtle); margin-right: 8px; font-family: var(--font-mono); }
+.lead { color: var(--text-muted); max-width: 900px; line-height: 1.8; }
+.note { color: var(--text-muted); max-width: 900px; line-height: 1.8; margin: 0 0 12px; }
+.note b { color: var(--text); font-weight: 600; }
+code {
+  background: rgba(255,255,255,0.06);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+}
+
+.spec-box {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  background: rgba(123,193,255,0.06);
+  border-radius: 8px;
+  padding: 14px 18px;
+  max-width: 900px;
+  margin: 18px 0 8px;
+  line-height: 1.8;
+}
+.spec-box h3 { font-size: 12px; margin: 0 0 6px; letter-spacing: 0.06em; color: var(--accent); text-transform: uppercase; }
+.spec-box ul { margin: 0; padding-left: 20px; color: var(--text-muted); }
+.spec-box b { color: var(--text); font-weight: 600; }
+
+/* --- copied: preview panel header --- */
+.preview-panel {
+  max-width: 760px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-app);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.panel-header {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.preview-header { gap: 10px; }
+.preview-filemeta { min-width: 0; flex: 1; display: flex; align-items: baseline; gap: 8px; }
+.preview-filename { color: var(--text); font-size: 13px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+.preview-dir {
+  min-width: 0; flex: 1;
+  font-size: 11px; font-family: var(--font-mono); color: var(--text-subtle);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.preview-mode-segment {
+  display: inline-flex; flex-shrink: 0; gap: 2px; padding: 2px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--viewer-gutter);
+}
+.preview-mode-btn {
+  width: 30px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer;
+}
+.preview-mode-btn.active { background: var(--bg-selected); color: var(--text); }
+.preview-mode-btn:disabled { opacity: 0.38; cursor: not-allowed; }
+.reviewed-toggle {
+  height: 24px; padding: 0 10px;
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+  color: var(--text-muted); background: transparent;
+  border: 1px solid var(--border-strong); border-radius: 999px;
+  font-size: 12px; line-height: 1; white-space: nowrap; cursor: pointer;
+}
+.reviewed-toggle-dot {
+  width: 12px; height: 12px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1.5px solid currentColor; border-radius: 999px;
+}
+.icon-button {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 24px; height: 24px;
+  color: var(--text-subtle); background: transparent; border: 0; border-radius: 6px; cursor: pointer;
+}
+.empty-state {
+  flex: 1; min-height: 132px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  padding: 16px; text-align: center; font-size: 13px; color: var(--text-subtle);
+}
+.empty-state .sub { font-size: 12px; font-family: var(--font-mono); opacity: 0.8; }
+.preview-body { flex: 1; min-height: 0; display: flex; }
+
+/*
+ * before/after の枠。今は .image-diff-columns / .image-side / .image-side-label /
+ * .image-side-meta という名前で画像プレビューだけが使っている。音声・動画も同じ枠に乗せるので、
+ * 画像に限らない名前に変える。違うのは枠の中身の描き方だけ。
+ */
+.diff-side-columns { display: flex; align-items: flex-start; gap: 16px; }
+.diff-side {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+.diff-side-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.diff-side-label.added { color: var(--success); }
+.diff-side-label.deleted { color: var(--danger); }
+.diff-side-meta { color: var(--text-subtle); font-size: 12px; font-family: var(--font-mono); }
+
+/* --- copied: 画像プレビューの中身 --- */
+.image-preview, .media-preview {
+  flex: 1; min-width: 0; min-height: 0;
+  overflow: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  background: var(--viewer-bg);
+}
+.image-stage {
+  position: relative;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  background-color: #1b1f27;
+  background-image:
+    linear-gradient(45deg, #262c37 25%, transparent 25%),
+    linear-gradient(-45deg, #262c37 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #262c37 75%),
+    linear-gradient(-45deg, transparent 75%, #262c37 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+.image-layer { display: block; }
+
+/* --- new: 音声・動画は要素を置くだけ。コントロールはブラウザのものを使う --- */
+.media-preview audio {
+  width: 100%;
+  /* Chromium の音声コントロールの高さ。読み込みの前後で枠の高さが動かないように固定する。 */
+  height: 40px;
+}
+
+/*
+ * 音声コントロールは既定でグレーのピルになり、アプリの中で明るく浮く。地の色だけ寄せる。
+ * 標準外の疑似要素なので、将来効かなくなっても既定のグレーに戻るだけで再生は壊れない。
+ * 動画のコントロールは映像の上の黒帯なので、こちらは触らない。
+ */
+.media-preview audio::-webkit-media-controls-panel {
+  background-color: var(--bg-panel);
+}
+.media-preview video {
+  width: 100%;
+  max-height: 260px;
+  background: #000;
+  border: 1px solid var(--border);
+}
+
+.variant { display: flex; flex-direction: column; gap: 6px; }
+.variant-label { font-size: 11px; color: var(--text-muted); }
+.variant-label code { font-size: 11px; }
+/* A: 上の既定を打ち消して、何もしない状態に戻す */
+.variant-default audio::-webkit-media-controls-panel { background-color: revert; }
+/* C: 外枠の角と枠線まで寄せる */
+.variant-framed audio::-webkit-media-controls-enclosure {
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+.variant-framed audio::-webkit-media-controls-panel { background-color: var(--viewer-gutter); }
+/* D: 音量まわりを消す */
+.variant-trimmed audio::-webkit-media-controls-mute-button,
+.variant-trimmed audio::-webkit-media-controls-volume-slider { display: none; }
+
+.alt-grid { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+.alt-grid .preview-panel { max-width: 372px; flex: 1 1 360px; }
+</style>
+</head>
+<body>
+
+<h1>F83 — 音声・動画プレビュー</h1>
+<p class="lead">
+  preview パネルで音声・動画を再生する。設計は
+  <a style="color: var(--accent)" href="../backlog-details/F83-media-preview.md">F83-media-preview.md</a>。
+  <b>このページのプレイヤーは本物</b>（<code>&lt;audio&gt;</code> / <code>&lt;video&gt;</code> の
+  ネイティブコントロール。素材は <code>F83-media/</code>）なので、押すと実際に鳴る・動く。
+  メタ情報の長さと寸法も、本番と同じく要素から読んだ値を出している。
+</p>
+
+<div class="spec-box">
+  <h3>この mock で決めたいこと</h3>
+  <ul>
+    <li><b>プレイヤーは作らない。</b><code>controls</code> を付けるだけ。再生・シーク・音量・速度・全画面はブラウザのもの</li>
+    <li><b>diff は画像とまったく同じ枠。</b>片側だけなら 1 面、両側あるなら Before / After の 2 カラム</li>
+    <li><b>比べるのはメタ情報。</b>画像が <code>1920 × 1080 · 2.4 MB</code> を並べているのと同じ位置に、長さ（動画は寸法も）とサイズを並べる</li>
+    <li>時間軸の共有・波形・A/B 切り替えは<b>作らない</b></li>
+  </ul>
+</div>
+
+<h2><span class="num">0</span>参考: 今ある画像の diff</h2>
+<p class="note">
+  これに揃える。ラベル、中身、<b>その下のメタ情報</b>という 3 段の並び。
+</p>
+<div class="preview-panel">
+  <div class="panel-header preview-header">
+    <div class="preview-filemeta">
+      <span class="preview-filename">app-icon.png</span>
+      <span class="preview-dir">assets</span>
+    </div>
+    <span style="font-size:11px;color:var(--text-subtle);font-family:var(--font-mono)">既存</span>
+  </div>
+  <div class="preview-body">
+    <div class="image-preview">
+      <div class="diff-side-columns">
+        <div class="diff-side">
+          <div class="diff-side-label">Before</div>
+          <div class="image-stage" style="width: 128px; height: 128px;">
+            <svg class="image-layer" width="128" height="128" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#2f4058"/><circle cx="32" cy="32" r="16" fill="#7bc1ff"/></svg>
+          </div>
+          <div class="diff-side-meta">128 × 128 · 3.1 KB</div>
+        </div>
+        <div class="diff-side">
+          <div class="diff-side-label">After</div>
+          <div class="image-stage" style="width: 160px; height: 160px;">
+            <svg class="image-layer" width="160" height="160" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#2f4058"/><circle cx="32" cy="32" r="16" fill="#7ad7a1"/><rect x="28" y="6" width="8" height="14" rx="4" fill="#e2c08d"/></svg>
+          </div>
+          <div class="diff-side-meta">160 × 160 · 4.4 KB</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2><span class="num">1</span>音声 — 差分なし（Files から開いた / 変更されていない）</h2>
+<p class="note">
+  1 面。<code>&lt;audio controls&gt;</code> を置いて、下にメタ情報。長さは要素が読み込んだ値、サイズは git から分かる値。
+</p>
+<div class="preview-panel">
+  <div class="panel-header preview-header">
+    <div class="preview-filemeta">
+      <span class="preview-filename">theme-loop.wav</span>
+      <span class="preview-dir">assets/audio</span>
+    </div>
+    <div class="preview-mode-segment">
+      <button class="preview-mode-btn active" title="Preview">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+      </button>
+      <button class="preview-mode-btn" title="View">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+      <button class="preview-mode-btn" disabled title="Binary files cannot be edited">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/></svg>
+      </button>
+    </div>
+    <button class="icon-button" title="Close code panel">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    </button>
+  </div>
+  <div class="preview-body">
+    <div class="media-preview">
+      <div class="diff-side-columns">
+        <div class="diff-side">
+          <audio controls controlsList="nodownload" preload="metadata" src="F83-media/theme-loop-after.wav"></audio>
+          <div class="diff-side-meta" data-bytes="52962"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2><span class="num">2</span>音声 — Before / After（Changes から開いた）</h2>
+<p class="note">
+  画像と同じ 2 カラム。<b>並んだメタ情報が diff の中身</b>で、ここでは長さが伸びたこととサイズが増えたことが読める。
+  聴き比べたければ両方を自分で再生する。
+</p>
+<div class="preview-panel">
+  <div class="panel-header preview-header">
+    <div class="preview-filemeta">
+      <span class="preview-filename">theme-loop.wav</span>
+      <span class="preview-dir">assets/audio</span>
+    </div>
+    <div class="preview-mode-segment">
+      <button class="preview-mode-btn active" title="Preview">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+      </button>
+      <button class="preview-mode-btn" title="View">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+      <button class="preview-mode-btn" disabled title="Binary files cannot be edited">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/></svg>
+      </button>
+    </div>
+    <button class="reviewed-toggle">
+      <span class="reviewed-toggle-dot"></span>
+      Reviewed
+    </button>
+    <button class="icon-button" title="Close code panel">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    </button>
+  </div>
+  <div class="preview-body">
+    <div class="media-preview">
+      <div class="diff-side-columns">
+        <div class="diff-side">
+          <div class="diff-side-label">Before</div>
+          <audio controls controlsList="nodownload" preload="metadata" src="F83-media/theme-loop-before.wav"></audio>
+          <div class="diff-side-meta" data-bytes="41938"></div>
+        </div>
+        <div class="diff-side">
+          <div class="diff-side-label">After</div>
+          <audio controls controlsList="nodownload" preload="metadata" src="F83-media/theme-loop-after.wav"></audio>
+          <div class="diff-side-meta" data-bytes="52962"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2><span class="num">3</span>動画 — 差分なし</h2>
+<p class="note">
+  1 面。メタ情報は画像と同じ <code>幅 × 高さ · サイズ</code> に長さを足した形。
+</p>
+<div class="preview-panel">
+  <div class="panel-header preview-header">
+    <div class="preview-filemeta">
+      <span class="preview-filename">onboarding.webm</span>
+      <span class="preview-dir">docs/media</span>
+    </div>
+    <div class="preview-mode-segment">
+      <button class="preview-mode-btn active" title="Preview">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+      </button>
+      <button class="preview-mode-btn" title="View">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+      <button class="preview-mode-btn" disabled title="Binary files cannot be edited">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/></svg>
+      </button>
+    </div>
+    <button class="icon-button" title="Close code panel">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    </button>
+  </div>
+  <div class="preview-body">
+    <div class="media-preview">
+      <div class="diff-side-columns">
+        <div class="diff-side">
+          <video controls controlsList="nodownload" preload="metadata" src="F83-media/onboarding-before.webm"></video>
+          <div class="diff-side-meta" data-bytes="51557"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2><span class="num">4</span>動画 — Before / After</h2>
+<p class="note">
+  こちらも画像と同じ 2 カラム。寸法が変わったことはメタ情報で読める。
+  <b>同じ時刻のフレームを見比べたければ、両方を自分で止める。</b>時刻を合わせる仕掛けは作らない。
+</p>
+<div class="preview-panel">
+  <div class="panel-header preview-header">
+    <div class="preview-filemeta">
+      <span class="preview-filename">onboarding.webm</span>
+      <span class="preview-dir">docs/media</span>
+    </div>
+    <button class="reviewed-toggle">
+      <span class="reviewed-toggle-dot"></span>
+      Reviewed
+    </button>
+    <button class="icon-button" title="Close code panel">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    </button>
+  </div>
+  <div class="preview-body">
+    <div class="media-preview">
+      <div class="diff-side-columns">
+        <div class="diff-side">
+          <div class="diff-side-label">Before</div>
+          <video controls controlsList="nodownload" preload="metadata" src="F83-media/onboarding-before.webm"></video>
+          <div class="diff-side-meta" data-bytes="51557"></div>
+        </div>
+        <div class="diff-side">
+          <div class="diff-side-label">After</div>
+          <video controls controlsList="nodownload" preload="metadata" src="F83-media/onboarding-after.webm"></video>
+          <div class="diff-side-meta" data-bytes="94751"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2><span class="num">5</span>追加 / 削除</h2>
+<p class="note">
+  片側だけのときは 1 面。ラベルの色は画像と同じ（Added は緑、Deleted は赤）。
+</p>
+<div class="alt-grid">
+  <div class="preview-panel">
+    <div class="panel-header preview-header">
+      <div class="preview-filemeta">
+        <span class="preview-filename">intro-sting.wav</span>
+        <span class="preview-dir">assets/audio</span>
+      </div>
+      <button class="icon-button" title="Close code panel">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+    <div class="preview-body">
+      <div class="media-preview">
+        <div class="diff-side-columns">
+          <div class="diff-side">
+            <div class="diff-side-label added">Added</div>
+            <audio controls controlsList="nodownload" preload="metadata" src="F83-media/theme-loop-before.wav"></audio>
+            <div class="diff-side-meta" data-bytes="41938"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="preview-panel">
+    <div class="panel-header preview-header">
+      <div class="preview-filemeta">
+        <span class="preview-filename">old-jingle.wav</span>
+        <span class="preview-dir">assets/audio</span>
+      </div>
+      <button class="icon-button" title="Close code panel">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+    <div class="preview-body">
+      <div class="media-preview">
+        <div class="diff-side-columns">
+          <div class="diff-side">
+            <div class="diff-side-label deleted">Deleted</div>
+            <audio controls controlsList="nodownload" preload="metadata" src="F83-media/theme-loop-after.wav"></audio>
+            <div class="diff-side-meta" data-bytes="52962"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2><span class="num">6</span>再生できないとき</h2>
+<p class="note">
+  失敗はプレビューの仕様として持つ。<b>再生できるかは開くまで分からない</b>ので、拡張子が対象でも
+  要素が <code>error</code> を出したら右の表示に落ちる。
+</p>
+<div class="alt-grid">
+  <div class="preview-panel">
+    <div class="panel-header preview-header">
+      <div class="preview-filemeta">
+        <span class="preview-filename">keynote-recording.mp4</span>
+        <span class="preview-dir">docs/media</span>
+      </div>
+      <button class="icon-button" title="Close code panel">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+    <div class="preview-body">
+      <div class="empty-state">
+        Too large to preview
+        <span class="sub">128.4 MB</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="preview-panel">
+    <div class="panel-header preview-header">
+      <div class="preview-filemeta">
+        <span class="preview-filename">capture.mov</span>
+        <span class="preview-dir">docs/media</span>
+      </div>
+      <button class="icon-button" title="Close code panel">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+    <div class="preview-body">
+      <div class="empty-state">
+        This file cannot be played here
+        <span class="sub">18.2 MB</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2><span class="num">7</span>音声コントロールの地の色</h2>
+<p class="note">
+  上のセクションはすべて <b>B</b> を当てている。<code>::-webkit-media-controls-panel</code> の
+  <code>background-color</code> を差し替えるだけの 1 行で、触れるのは地の色・外枠・一部のボタンの有無まで。
+  <b>タイムラインの線とつまみ、アイコンの色には CSS が届かない</b>ので、そこまで合わせたいなら自前のプレイヤーになる。
+</p>
+<div class="preview-panel">
+  <div class="panel-header preview-header">
+    <div class="preview-filemeta">
+      <span class="preview-filename">theme-loop.wav</span>
+      <span class="preview-dir">assets/audio</span>
+    </div>
+  </div>
+  <div class="preview-body">
+    <div class="media-preview" style="gap: 18px;">
+      <div class="variant variant-default">
+        <div class="variant-label">A. 既定（何もしない）</div>
+        <audio controls controlsList="nodownload" preload="metadata" src="F83-media/theme-loop-after.wav"></audio>
+      </div>
+      <div class="variant">
+        <div class="variant-label">B. 地の色だけ寄せる — <code>panel { background-color: var(--bg-panel) }</code></div>
+        <audio controls controlsList="nodownload" preload="metadata" src="F83-media/theme-loop-after.wav"></audio>
+      </div>
+      <div class="variant variant-framed">
+        <div class="variant-label">C. さらに角丸を落として枠線 — <code>enclosure { border-radius; border }</code></div>
+        <audio controls controlsList="nodownload" preload="metadata" src="F83-media/theme-loop-after.wav"></audio>
+      </div>
+      <div class="variant variant-trimmed">
+        <div class="variant-label">D. 音量を消す — <code>mute-button / volume-slider { display: none }</code>（⋮ は消えない）</div>
+        <audio controls controlsList="nodownload" preload="metadata" src="F83-media/theme-loop-after.wav"></audio>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// メタ情報の作り方も本番と同じにする。サイズは git から分かる値 (ここでは data-bytes)、
+// 長さと寸法は要素が読み込んだ値。読み込む前は何も出さない。
+function formatDuration(seconds) {
+  if (!Number.isFinite(seconds)) {
+    return null;
+  }
+  const total = Math.floor(seconds);
+  return Math.floor(total / 60) + ":" + String(total % 60).padStart(2, "0");
+}
+
+function formatBytes(byteLength) {
+  if (byteLength < 1024) {
+    return byteLength + " B";
+  }
+  if (byteLength < 1024 * 1024) {
+    return (byteLength / 1024).toFixed(1) + " KB";
+  }
+  return (byteLength / 1024 / 1024).toFixed(1) + " MB";
+}
+
+for (const meta of document.querySelectorAll(".diff-side-meta[data-bytes]")) {
+  const media = meta.parentElement.querySelector("audio, video");
+  const update = () => {
+    const parts = [];
+    if (media.videoWidth) {
+      parts.push(media.videoWidth + " × " + media.videoHeight);
+    }
+    const duration = formatDuration(media.duration);
+    if (duration) {
+      parts.push(duration);
+    }
+    parts.push(formatBytes(Number(meta.dataset.bytes)));
+    meta.textContent = parts.join(" · ");
+  };
+  media.addEventListener("loadedmetadata", update);
+  update();
+}
+</script>
+
+</body>
+</html>
