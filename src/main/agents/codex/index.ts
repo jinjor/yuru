@@ -4,7 +4,7 @@ import path from "path";
 import readline from "readline";
 import { streamRipgrepLineMatches } from "../../ripgrep.js";
 import type { PendingSession, SessionPreview, Agent, SessionSnapshot } from "../agent.js";
-import { SessionLogWatcher, type ConversationMessage } from "../session-log-watcher.js";
+import { SessionLogWatcher, type PreviewMessage } from "../session-log-watcher.js";
 import { listFilesRecursive, parseJsonLinesAs, readTextFileIfExists } from "../store-utils.js";
 import type { WorktreeSessionHint } from "../session-detection.js";
 import { codexSessionDateDirFromId, getCodexHistoryPath, getCodexSessionsDir } from "./paths.js";
@@ -33,11 +33,6 @@ interface CodexHistoryEntry {
 }
 
 const sessionFilePathsById = new Map<string, string>();
-const CODEX_INJECTED_USER_MESSAGE_PREFIXES = [
-  "# AGENTS.md instructions for ",
-  "<environment_context>",
-] as const;
-
 function parseCodexTimestamp(raw: string | number | null | undefined): number | null {
   if (typeof raw === "number") {
     return raw;
@@ -92,28 +87,22 @@ function parseCodexSessionMetaEntry(entry: unknown): Omit<CodexSessionMeta, "fil
   };
 }
 
-function parseCodexConversationMessageEntry(entry: unknown): ConversationMessage | null {
+function parseCodexPreviewMessageEntry(entry: unknown): PreviewMessage | null {
   const message = entry as {
     type?: unknown;
     timestamp?: unknown;
     payload?: { type?: unknown; role?: unknown; content?: unknown };
   } | null;
-  const role = message?.payload?.role;
   if (
     message?.type !== "response_item" ||
     message.payload?.type !== "message" ||
-    (role !== "user" && role !== "assistant")
+    message.payload.role !== "assistant"
   ) {
     return null;
   }
-  const texts = extractCodexMessageTexts(message.payload.content).filter(
-    (text) =>
-      role === "assistant" ||
-      !CODEX_INJECTED_USER_MESSAGE_PREFIXES.some((prefix) => text.trimStart().startsWith(prefix)),
-  );
+  const texts = extractCodexMessageTexts(message.payload.content);
   return texts.length > 0
     ? {
-        role,
         text: texts.join("\n"),
         timestamp:
           parseCodexTimestamp(
@@ -125,7 +114,7 @@ function parseCodexConversationMessageEntry(entry: unknown): ConversationMessage
     : null;
 }
 
-const sessionLogWatcher = new SessionLogWatcher(parseCodexConversationMessageEntry);
+const sessionLogWatcher = new SessionLogWatcher(parseCodexPreviewMessageEntry);
 
 function detectActivityState(terminalTitle: string): AgentActivityState | null {
   if (/^\[ [!.] \] Action Required(?: \||$)/.test(terminalTitle)) {
@@ -234,18 +223,6 @@ async function loadStoredSessions(): Promise<SessionSnapshot[]> {
 async function loadStoredSessionPreview(agentSessionId: string): Promise<SessionPreview | null> {
   const sessionFilePath = await findCodexSessionFile(agentSessionId);
   return sessionFilePath ? sessionLogWatcher.read(sessionFilePath) : null;
-}
-
-async function watchSessionMessages(
-  agentSessionId: string,
-  includeExistingMessages: boolean,
-  listener: (messages: readonly string[]) => void,
-): Promise<() => void> {
-  const sessionFilePath = await findCodexSessionFile(agentSessionId);
-  if (!sessionFilePath) {
-    return () => {};
-  }
-  return sessionLogWatcher.watch(sessionFilePath, includeExistingMessages, listener);
 }
 
 async function isStoppedByRateLimit(agentSessionId: string): Promise<boolean> {
@@ -392,7 +369,6 @@ export const agent: Agent = {
   resolvesSessionIdLazily: true,
   loadStoredSessions,
   loadStoredSessionPreview,
-  watchSessionMessages,
   loadWorktreeSessionHints,
   hasStoredSession,
   loadPlanUsage: loadCodexPlanUsage,

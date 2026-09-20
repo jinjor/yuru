@@ -66,25 +66,18 @@ Yuru metadata は source of truth の複製ではない。
 Git や agent store が持っている状態を丸ごとコピーせず、Yuru 自身が主導線を組み立てるために必要な最小限の情報だけを持つ。
 branch、diff、agent session の本文、terminal runtime は metadata に保存しない。
 
-Claude / Codex の会話ログと Kimi の `wire.jsonl` は、共有の `SessionLogWatcher`
+Claude / Codex の会話ログは、共有の `SessionLogWatcher`
 (`src/main/agents/session-log-watcher.ts`) が物理ファイルごとに 1 つの
 `IncrementalJsonlReader` で増分読み取りする。初回とファイル置換/truncate 後は JSONL の
 末尾から最新の assistant message までを読み、以後はその位置から追記された record だけを読む。
 preview に不要な過去の tool result などを走査しないため、ログ全体のサイズは初回表示の
-読み取り量に影響しない。provider adapter は provider 固有の record を
-user / assistant の会話へ変換する関数を渡すだけで、watcher が変換結果で preview を更新すると
-同時に登録中の全 listener (bookmark 取得側) へ通知する。listener は 1 ファイルに複数登録でき、
-過去分が必要な listener には共有 reader を巻き戻さず、使い捨ての reader で先頭から再生する。
-Kimi の preview は従来どおり `state.json` の `lastPrompt` / `title` から読み、`wire.jsonl` は
-listener がいるときだけ読む (`SessionLogWatcher.hasListeners`)。
-どちらも既存の session monitor の同じ tick で確認し、bookmark 専用の polling は持たない。
+読み取り量に影響しない。provider adapter が assistant message を抽出し、watcher が
+preview を更新する。Kimi の preview は `state.json` の `lastPrompt` / `title` から読む。
 
 ブックマークの登録経路は、ターミナルで URL または GitHub の Issue / PR 参照をクリックしたとき、
-Terminal ヘッダの PR バッジをクリックしたとき、および会話ログからの自動追加。
+Terminal ヘッダの PR バッジをクリックしたとき、および Bookmarks の入力欄からの手動登録。
 Issue / PR 参照は、現在の GitHub repository の `#123` と、外部 repository の
 `owner/repository#123` を扱う。どちらも GitHub URL にしてから通常のクリック登録へ流す。
-自動追加は実験中の機能で、デフォルト OFF。`YURU_BOOKMARK_AUTO_CAPTURE=1` を付けて
-起動したときだけ session ログの watch を登録する。
 
 worktree の PR バッジとブックマークの Issue / PR のステータスは、同じ 1 つのポーリングで
 まとめて最新に保つ。仕組みは 2 段に分かれる。

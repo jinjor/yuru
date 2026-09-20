@@ -58,8 +58,7 @@ function BookmarkRow({ bookmark, onOpen, onRemove, onStartRename }: BookmarkRowP
 }
 
 // worktree に紐づくブックマークの一覧と、その下の入力欄。入力欄には URL を入れるか、
-// 画像を貼り付けて Enter で登録する。一覧への登録はほかに、ターミナルの URL クリックと、
-// YURU_BOOKMARK_AUTO_CAPTURE=1 時の会話からの自動追加がある。
+// 画像を貼り付けて Enter で登録する。ターミナルの URL クリックでも登録できる。
 // クリックすると、リンクは既定ブラウザ、画像はプレビューで開く。
 export function BookmarksPane({
   bookmarks,

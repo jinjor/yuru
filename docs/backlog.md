@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-09-14
+Last updated: 2026-09-21
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -45,7 +45,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F80 | feature | Changes / Git | git reset ボタン | |
 | F81 | feature | Changes / Diff | 差分以外を折りたたんで表示 | |
 | B18 | bug | Files / Edit | 編集モードで閲覧中に更新された内容が反映されない | 外部で更新されたファイルの最新内容を編集モードでも確認したい |
-| F73 | investigate | Worktrees / Bookmarks | 自動ブックマーク（会話ログからの URL 自動追加）を残すか消すか判断する | URL クリック登録の体験を見て判断。`YURU_BOOKMARK_AUTO_CAPTURE=1` で有効化できる。詳細: docs/backlog-details/F71-bookmarks.md |
 | P18 | polish | Changes | Changes のファイル表示順を最適化する | 確認したい変更へ素早くたどり着けるようにしたい |
 | P25 | polish | Home | ホーム画面のスタイルを改善する | 最初に目に入る画面の見た目を整えたい |
 | F69 | feature | API / Sessions | API でセッション作成時に effort レベルを設定できるようにする | セッションの用途に応じて推論量を指定したい |

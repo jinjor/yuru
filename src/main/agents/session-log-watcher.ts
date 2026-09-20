@@ -1,42 +1,34 @@
 import type { SessionPreview } from "./agent.js";
 import { IncrementalJsonlReader } from "./incremental-jsonl-reader.js";
 
-// provider adapter が会話ログの 1 record から変換した user / assistant のメッセージ。
-export interface ConversationMessage {
-  role: "user" | "assistant";
+// provider adapter が会話ログの 1 record から変換した assistant のメッセージ。
+export interface PreviewMessage {
   text: string;
   timestamp: number;
 }
 
-export type SessionMessageListener = (messages: readonly string[]) => void;
-
 interface SessionLog {
   reader: IncrementalJsonlReader;
   preview: SessionPreview | null;
-  listeners: Set<SessionMessageListener>;
 }
 
 // セッションの会話ログ (JSONL) を物理ファイルごとに 1 つの reader で増分読み取りし、
-// preview の更新と bookmark 取得側への通知に共有する。listener は複数登録でき、
-// 読み取った batch は全 listener に通知する。
+// assistant の最新メッセージで preview を更新する。
 export class SessionLogWatcher {
   private readonly logs = new Map<string, SessionLog>();
-  private readonly parseEntry: (entry: unknown) => ConversationMessage | null;
+  private readonly parseEntry: (entry: unknown) => PreviewMessage | null;
 
-  constructor(parseEntry: (entry: unknown) => ConversationMessage | null) {
+  constructor(parseEntry: (entry: unknown) => PreviewMessage | null) {
     this.parseEntry = parseEntry;
   }
 
   async read(filePath: string): Promise<SessionPreview | null> {
     const log = this.getLog(filePath);
     // 初回とファイル置換/truncate 後は末尾スキャンで最新の assistant message だけを拾い、
-    // 全件走査を避ける。listener には通知しない (過去 URL や削除済み URL の復活を防ぐ)。
+    // 全件走査を避ける。
     const result = await log.reader.read((entry) => {
       const message = this.parseEntry(entry);
-      if (!message || message.role !== "assistant") {
-        return null;
-      }
-      return normalizePreviewText(message.text) ? message : null;
+      return message && normalizePreviewText(message.text) ? message : null;
     });
     if (result === null) {
       log.preview = null;
@@ -52,64 +44,20 @@ export class SessionLogWatcher {
       return log.preview;
     }
 
-    const messages = result.entries.flatMap((entry) => {
+    for (const entry of result.entries) {
       const message = this.parseEntry(entry);
-      return message ? [message] : [];
-    });
-    for (const message of messages) {
+      if (!message) {
+        continue;
+      }
       const lastMessage = normalizePreviewText(message.text);
-      if (
-        message.role === "assistant" &&
-        lastMessage &&
-        (!log.preview || message.timestamp >= log.preview.timestamp)
-      ) {
+      if (lastMessage && (!log.preview || message.timestamp >= log.preview.timestamp)) {
         log.preview = {
           lastMessage,
           timestamp: message.timestamp,
         };
       }
     }
-    if (messages.length > 0) {
-      const texts = messages.map((message) => message.text);
-      for (const listener of log.listeners) {
-        listener(texts);
-      }
-    }
     return log.preview;
-  }
-
-  async watch(
-    filePath: string,
-    includeExistingMessages: boolean,
-    listener: SessionMessageListener,
-  ): Promise<() => void> {
-    const log = this.getLog(filePath);
-    // 登録前に共有 reader を現在位置まで進める。includeExistingMessages=false では
-    // これ以降に追記されたメッセージだけが届く。
-    await this.read(filePath);
-    log.listeners.add(listener);
-    if (includeExistingMessages) {
-      // 過去分の再生で共有 reader を巻き戻すと他の listener にも再通知されるため、
-      // 使い捨ての reader で先頭から読み、この listener にだけ渡す。
-      const result = await new IncrementalJsonlReader(filePath).read();
-      const texts = (result?.entries ?? []).flatMap((entry) => {
-        const message = this.parseEntry(entry);
-        return message ? [message.text] : [];
-      });
-      if (texts.length > 0 && log.listeners.has(listener)) {
-        listener(texts);
-      }
-    }
-    return () => {
-      log.listeners.delete(listener);
-    };
-  }
-
-  // listener が 1 件も登録されていないファイルの読み取りを呼び出し側が省略できるようにする。
-  // preview に使わないログ (Kimi の wire.jsonl) を bookmark 取得のためだけに読む場合に使う。
-  hasListeners(filePath: string): boolean {
-    const log = this.logs.get(filePath);
-    return log !== undefined && log.listeners.size > 0;
   }
 
   private getLog(filePath: string): SessionLog {
@@ -118,7 +66,6 @@ export class SessionLogWatcher {
       log = {
         reader: new IncrementalJsonlReader(filePath),
         preview: null,
-        listeners: new Set(),
       };
       this.logs.set(filePath, log);
     }

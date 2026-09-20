@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { streamRipgrepLineMatches } from "../../ripgrep.js";
 import type { PendingSession, SessionPreview, Agent, SessionSnapshot } from "../agent.js";
-import { SessionLogWatcher, type ConversationMessage } from "../session-log-watcher.js";
+import { SessionLogWatcher, type PreviewMessage } from "../session-log-watcher.js";
 import { parseJsonLinesAs, readTextFileIfExists } from "../store-utils.js";
 import { type WorktreeSessionHint } from "../session-detection.js";
 import { detectClaudeWorktreeSessionLines } from "./session-detection.js";
@@ -31,14 +31,6 @@ interface ClaudeStoredSession extends SessionSnapshot {
 }
 
 const sessionFilePathsById = new Map<string, string>();
-const CLAUDE_COMMAND_MESSAGE_PREFIXES = [
-  "<bash-input>",
-  "<bash-stdout>",
-  "<command-message>",
-  "<command-name>",
-  "<local-command-stdout>",
-] as const;
-
 function parseClaudeHistoryEntry(entry: unknown): ClaudeHistoryEntry | null {
   if (typeof entry !== "object" || entry === null) {
     return null;
@@ -66,35 +58,27 @@ function parseClaudeHistoryEntry(entry: unknown): ClaudeHistoryEntry | null {
   };
 }
 
-function parseClaudeConversationMessageEntry(entry: unknown): ConversationMessage | null {
+function parseClaudePreviewMessageEntry(entry: unknown): PreviewMessage | null {
   const message = entry as {
     type?: unknown;
     timestamp?: unknown;
-    isMeta?: unknown;
     isSidechain?: unknown;
-    promptSource?: unknown;
     message?: { role?: unknown; content?: unknown };
   } | null;
-  const role = message?.message?.role;
   if (
     message?.isSidechain === true ||
-    (message?.type !== "user" && message?.type !== "assistant") ||
-    (role !== "user" && role !== "assistant") ||
-    (role === "user" && (message.isMeta === true || message.promptSource === "system"))
+    message?.type !== "assistant" ||
+    message.message?.role !== "assistant"
   ) {
     return null;
   }
-  const texts = extractClaudeMessageTexts(message.message?.content).filter(
-    (text) =>
-      role === "assistant" ||
-      !CLAUDE_COMMAND_MESSAGE_PREFIXES.some((prefix) => text.trimStart().startsWith(prefix)),
-  );
+  const texts = extractClaudeMessageTexts(message.message.content);
   return texts.length > 0
-    ? { role, text: texts.join("\n"), timestamp: parseClaudeTimestamp(message.timestamp) }
+    ? { text: texts.join("\n"), timestamp: parseClaudeTimestamp(message.timestamp) }
     : null;
 }
 
-const sessionLogWatcher = new SessionLogWatcher(parseClaudeConversationMessageEntry);
+const sessionLogWatcher = new SessionLogWatcher(parseClaudePreviewMessageEntry);
 
 function extractClaudeMessageTexts(content: unknown): string[] {
   const texts: string[] = [];
@@ -162,18 +146,6 @@ async function loadStoredSessions(): Promise<SessionSnapshot[]> {
 async function loadStoredSessionPreview(agentSessionId: string): Promise<SessionPreview | null> {
   const sessionFilePath = await findClaudeSessionFile(agentSessionId);
   return sessionFilePath ? sessionLogWatcher.read(sessionFilePath) : null;
-}
-
-async function watchSessionMessages(
-  agentSessionId: string,
-  includeExistingMessages: boolean,
-  listener: (messages: readonly string[]) => void,
-): Promise<() => void> {
-  const sessionFilePath = await findClaudeSessionFile(agentSessionId);
-  if (!sessionFilePath) {
-    return () => {};
-  }
-  return sessionLogWatcher.watch(sessionFilePath, includeExistingMessages, listener);
 }
 
 async function readClaudeHistoryEntries(): Promise<ClaudeHistoryEntry[]> {
@@ -288,7 +260,6 @@ export const agent: Agent = {
   resolvesSessionIdLazily: false,
   loadStoredSessions,
   loadStoredSessionPreview,
-  watchSessionMessages,
   isStoppedByRateLimit,
   loadWorktreeSessionHints,
   hasStoredSession,

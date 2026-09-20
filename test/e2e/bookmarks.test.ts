@@ -165,7 +165,7 @@ test("入力欄に画像を貼り付けて Enter で画像のブックマーク�
     await row.locator(".bookmark-open").click();
     await expect(visibleWorktreeView(window).locator(".preview-filename")).toHaveText(images[0]);
     // git を通さない 1 枚絵として出る (Before / After には割れない)
-    await expect(visibleWorktreeView(window).locator(".image-side-meta")).toHaveText(/^1 × 1 · /);
+    await expect(visibleWorktreeView(window).locator(".diff-side-meta")).toHaveText(/^1 × 1 · /);
 
     // 削除するとブックマークも実体も残らない
     await row.locator('[aria-label="Remove bookmark"]').click();
