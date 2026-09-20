@@ -1,6 +1,15 @@
 import type { PullRequestUpdate, SessionUpdate } from "../../shared/ipc";
-import type { PrimarySessionListItem, RepoListItem, WorktreeListItem } from "../../shared/metadata";
-import type { GitHubPullRequest, TerminalRuntimeId } from "../../shared/session";
+import type {
+  PrimarySessionListItem,
+  RepoListItem,
+  WorktreeListItem,
+  WorktreeSessionState,
+} from "../../shared/metadata";
+import type {
+  AgentActivityState,
+  GitHubPullRequest,
+  TerminalRuntimeId,
+} from "../../shared/session";
 
 export function findWorktree(
   repos: RepoListItem[],
@@ -35,6 +44,25 @@ function findRepoForWorktree(
 }
 
 // 並び替え直後の一覧。書き込みの結果が push で戻るまで、ドロップした並びを描き続ける。
+// 更新のための再起動が止めてしまう作業があるか。左ペインで点滅しているドット
+// (active かつ working な session) と同じ条件を、一覧全体に対して見る。
+export function hasWorkingSession(repos: RepoListItem[]): boolean {
+  return repos.some((repo) =>
+    [repo.mainWorktree, ...repo.taskWorktrees].some(
+      (worktree) =>
+        worktree.primarySessions.some(isWorkingSession) ||
+        worktree.suggestedSessions.some(isWorkingSession),
+    ),
+  );
+}
+
+function isWorkingSession(session: {
+  state: WorktreeSessionState;
+  activityState: AgentActivityState;
+}): boolean {
+  return session.state === "active" && session.activityState === "working";
+}
+
 export function sortReposByIds(repos: RepoListItem[], repoIds: string[]): RepoListItem[] {
   const orderByRepoId = new Map(repoIds.map((repoId, index) => [repoId, index]));
   return [...repos].sort(

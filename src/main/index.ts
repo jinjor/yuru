@@ -9,10 +9,14 @@ import { APP_NAME, getWindowTitleForAppPath } from "./app-title.js";
 import { recordAppError, recordAppWarning, setErrorNoticesListener } from "./errors/center.js";
 import { toAppError } from "./errors/app-error.js";
 import { PlanUsageMonitor } from "./agents/plan-usage-monitor.js";
+import { YuruUpdater } from "./yuru-update/updater.js";
+import { createYuruUpdateRunner } from "./yuru-update/runner.js";
+import { canUpdateYuru } from "./yuru-update/can-update.js";
 import { resolveCommandPaths } from "./agents/command.js";
 import { getAgent, agents } from "./agents/registry.js";
 import type {
   AppErrorNotice,
+  YuruUpdateState,
   GitDiffScope,
   PullRequestUpdate,
   SessionUpdate,
@@ -96,11 +100,33 @@ const planUsageMonitor = new PlanUsageMonitor({
   planUsageChanged: sendProviderPlanUsageChanged,
 });
 
+// 画面からの Yuru 自身の更新。更新できるのは、いま動いているのが差し替え対象の
+// Yuru.app 自身のときだけ (開発版は unavailable になる)。
+const yuruUpdater = new YuruUpdater({
+  canUpdate: canUpdateYuru({
+    platform: process.platform,
+    packaged: app.isPackaged,
+    appPath: app.getAppPath(),
+  }),
+  runner: createYuruUpdateRunner(),
+  stateChanged: sendYuruUpdateStateChanged,
+  recordError: (error) => {
+    recordAppError(error);
+  },
+  quit: () => {
+    app.quit();
+  },
+});
+
 function sendToRenderer(channel: string, ...args: unknown[]): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return;
   }
   mainWindow.webContents.send(channel, ...args);
+}
+
+function sendYuruUpdateStateChanged(state: YuruUpdateState): void {
+  sendToRenderer("yuruUpdate:changed", state);
 }
 
 function sendFileTreeChanged(worktreeId: string, relativePath: string): void {
@@ -382,6 +408,12 @@ function registerIpcHandlers(): void {
       service.setContinueWhenRateLimitResets(terminalRuntimeId, continueWhenReset);
     },
   );
+  handleIpc("yuruUpdate:getState", () => yuruUpdater.getState());
+
+  handleIpc("yuruUpdate:start", () => yuruUpdater.start());
+
+  handleIpc("yuruUpdate:restart", () => yuruUpdater.restart());
+
   handleIpc("errors:list", () => service.getErrors());
 
   handleIpc("errors:dismiss", (_event, id: string) => {

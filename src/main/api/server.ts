@@ -4,7 +4,7 @@ import path from "node:path";
 import type { AppError, Result } from "../../shared/ipc.js";
 import { SESSION_PROVIDER_IDS, type SessionProvider } from "../../shared/session.js";
 import { toAppError } from "../errors/app-error.js";
-import { getYuruHome } from "../yuru-home.js";
+import { getYuruHome } from "../yuru-paths.js";
 
 export interface ApiRequest {
   command: string;

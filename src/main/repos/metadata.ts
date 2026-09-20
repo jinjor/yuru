@@ -8,7 +8,7 @@ import type {
 } from "../../shared/metadata.js";
 import { SESSION_PROVIDER_IDS, toSessionKey, type SessionProvider } from "../../shared/session.js";
 import { toWorktreePathKey } from "../worktree-identity.js";
-import { getYuruHome } from "../yuru-home.js";
+import { getYuruHome } from "../yuru-paths.js";
 
 export function loadMetadata(): YuruMetadata {
   const metadataPath = getMetadataPath();

@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { getYuruHome } from "../yuru-home.js";
+import { getYuruHome } from "../yuru-paths.js";
 
 interface FileReviewStore {
   worktrees: Record<string, Record<string, string>>;

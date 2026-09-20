@@ -5,6 +5,7 @@ import {
   applyPullRequestUpdates,
   applySessionUpdate,
   collectKeepAliveWorktrees,
+  hasWorkingSession,
   sortPrimarySessionsByKeys,
   sortReposByIds,
   sortTaskWorktreesByPaths,
@@ -290,4 +291,34 @@ test("sortPrimarySessionsByKeys は対象 worktree の primary session を渡さ
   // 並び替えは worktree も repo もまたがない。
   assert.strictEqual(next[0].taskWorktrees[1], repos[0].taskWorktrees[1]);
   assert.strictEqual(next[1], repos[1]);
+});
+
+test("作業中の session があるのは、active かつ working な session がある時だけ", () => {
+  const idle = repo("repo-1", [
+    worktree("wt-1", { primarySessions: [primarySession("runtime-1")] }),
+  ]);
+  assert.equal(hasWorkingSession([idle]), false);
+
+  const working = repo("repo-1", [
+    worktree("wt-1", {
+      primarySessions: [{ ...primarySession("runtime-1"), activityState: "working" }],
+    }),
+  ]);
+  assert.equal(hasWorkingSession([working]), true);
+
+  const suggestedWorking = repo("repo-1", [
+    worktree("wt-1", {
+      suggestedSessions: [{ ...suggestedSession("runtime-1"), activityState: "working" }],
+    }),
+  ]);
+  assert.equal(hasWorkingSession([suggestedWorking]), true);
+
+  const inactive = repo("repo-1", [
+    worktree("wt-1", {
+      primarySessions: [
+        { ...primarySession("runtime-1"), state: "inactive", activityState: "working" },
+      ],
+    }),
+  ]);
+  assert.equal(hasWorkingSession([inactive]), false);
 });

@@ -29,7 +29,7 @@ function writeExecutable(filePath, contents) {
   fs.chmodSync(filePath, 0o755);
 }
 
-function createLatestFixture(t, { auditExitCode = 0, npmVersion = "11.16.0" } = {}) {
+function createLatestFixture(t, { auditExitCode = 0, npmVersion = "11.16.0", psRunningCalls = 0 } = {}) {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-cli-latest-"));
   t.after(() => {
     fs.rmSync(tempDir, { recursive: true, force: true });
@@ -69,7 +69,25 @@ if [ "$1" = "audit" ]; then
 fi
 `,
   );
-  writeExecutable(path.join(binDir, "ps"), "#!/bin/sh\n");
+  // 起動中の Yuru.app を、最初の psRunningCalls 回だけ見せる。--replace-app の
+  // 「終了を待ってから差し替える」を、待ち時間ではなく呼び出し回数で確かめるため。
+  writeExecutable(
+    path.join(binDir, "ps"),
+    `#!/bin/sh
+count=$(cat "$YURU_PS_COUNT_FILE" 2>/dev/null || echo 0)
+count=$((count + 1))
+printf '%s' "$count" > "$YURU_PS_COUNT_FILE"
+if [ "$count" -le "$YURU_PS_RUNNING_CALLS" ]; then
+  printf '123 %s/Yuru.app/Contents/MacOS/Yuru\\n' "$YURU_APPLICATIONS_DIR"
+fi
+`,
+  );
+  writeExecutable(
+    path.join(binDir, "open"),
+    `#!/bin/sh
+printf 'open %s\\n' "$*" >> "$YURU_COMMAND_LOG"
+`,
+  );
 
   return {
     commandLogPath,
@@ -82,13 +100,15 @@ fi
       YURU_COMMAND_LOG: commandLogPath,
       YURU_HOME: yuruHome,
       YURU_NPM_VERSION: npmVersion,
+      YURU_PS_COUNT_FILE: path.join(tempDir, "ps-count"),
+      YURU_PS_RUNNING_CALLS: String(psRunningCalls),
       YURU_REPO_DIR: repoDir,
     }),
   };
 }
 
-function runLatest(env) {
-  return execFileSync(process.execPath, [cliPath, "latest"], {
+function runLatest(env, ...args) {
+  return execFileSync(process.execPath, [cliPath, "latest", ...args], {
     env,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
@@ -568,5 +588,73 @@ test(
         error.status === 1 &&
         error.stderr === "npm 11.16.0 or later is required to update Yuru. Found npm 11.15.0.\n",
     );
+  },
+);
+
+function loggedCommands(commandLogPath, prefix) {
+  return fs
+    .readFileSync(commandLogPath, "utf8")
+    .trim()
+    .split("\n")
+    .filter((line) => line.startsWith(prefix));
+}
+
+test(
+  "yuru latest --update-checkout は build までで、app を差し替えない",
+  { skip: process.platform !== "darwin" },
+  (t) => {
+    const { commandLogPath, env, launcherPath } = createLatestFixture(t);
+
+    runLatest(env, "--update-checkout");
+
+    assert.equal(fs.readFileSync(launcherPath, "utf8"), "updated yuru launcher\n");
+    assert.deepEqual(loggedCommands(commandLogPath, "npm "), [
+      "npm --version",
+      "npm audit --package-lock-only --audit-level=high",
+      "npm ci",
+      "npm run build",
+    ]);
+    assert.deepEqual(loggedCommands(commandLogPath, "open "), []);
+  },
+);
+
+test(
+  "yuru latest --replace-app は Yuru の終了を待ってから差し替えて起動し直す",
+  { skip: process.platform !== "darwin" },
+  (t) => {
+    const { commandLogPath, env } = createLatestFixture(t, { psRunningCalls: 2 });
+
+    runLatest(env, "--replace-app");
+
+    // 起動中に見えている間は待ち、消えてから package:local に進む。
+    assert.deepEqual(loggedCommands(commandLogPath, "npm "), ["npm run package:local"]);
+    assert.deepEqual(loggedCommands(commandLogPath, "open "), [
+      `open -na ${path.join(env.YURU_APPLICATIONS_DIR, "Yuru.app")}`,
+    ]);
+    assert.deepEqual(loggedCommands(commandLogPath, "git "), []);
+  },
+);
+
+test(
+  "yuru latest --replace-app は差し替えに失敗しても Yuru を起動し直す",
+  { skip: process.platform !== "darwin" },
+  (t) => {
+    const { commandLogPath, env } = createLatestFixture(t);
+    writeExecutable(
+      path.join(path.dirname(env.YURU_PS_COUNT_FILE), "bin", "npm"),
+      `#!/bin/sh
+printf 'npm %s\\n' "$*" >> "$YURU_COMMAND_LOG"
+exit 1
+`,
+    );
+
+    assert.throws(
+      () => runLatest(env, "--replace-app"),
+      (error) => error.status === 1,
+    );
+
+    assert.deepEqual(loggedCommands(commandLogPath, "open "), [
+      `open -na ${path.join(env.YURU_APPLICATIONS_DIR, "Yuru.app")}`,
+    ]);
   },
 );

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { ping, sessionCommand, worktree } from "./api-commands.mjs";
-import { addRepo, openApp, updateApp } from "./local-commands.mjs";
+import { addRepo, latest, openApp } from "./local-commands.mjs";
 import { fail } from "./utils.mjs";
 
 function printHelp() {
@@ -32,7 +32,7 @@ switch (command) {
     addRepo(process.argv.slice(3));
     break;
   case "latest":
-    updateApp();
+    await latest(process.argv.slice(3));
     break;
   case "ping":
     await ping();

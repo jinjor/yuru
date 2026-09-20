@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import type { WorktreeContext } from "./agent.js";
-import { getYuruHome } from "../yuru-home.js";
+import { getYuruHome } from "../yuru-paths.js";
 
 const DEFAULT_WORKTREE_CONTEXT_PROMPT = [
   "Yuru opened this session for the task worktree '{worktreeName}' on branch '{branchName}'.",

@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
   AppErrorNotice,
+  YuruUpdateState,
   ElectronAPI,
   GitDiffScope,
   PullRequestUpdate,
@@ -20,6 +21,9 @@ const electronAPI: ElectronAPI = {
   getRateLimitStops: () => ipcRenderer.invoke("rateLimitStops:list"),
   setContinueWhenRateLimitResets: (terminalRuntimeId, continueWhenReset) =>
     ipcRenderer.invoke("rateLimitStops:setContinue", terminalRuntimeId, continueWhenReset),
+  getYuruUpdateState: () => ipcRenderer.invoke("yuruUpdate:getState"),
+  startYuruUpdate: () => ipcRenderer.invoke("yuruUpdate:start"),
+  restartForYuruUpdate: () => ipcRenderer.invoke("yuruUpdate:restart"),
   getErrors: () => ipcRenderer.invoke("errors:list"),
   dismissError: (id: string) => ipcRenderer.invoke("errors:dismiss", id),
   clearErrors: () => ipcRenderer.invoke("errors:clear"),
@@ -90,6 +94,13 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke("bookmarks:remove", worktreeId, url),
   renameBookmark: (worktreeId: string, url: string, title: string) =>
     ipcRenderer.invoke("bookmarks:rename", worktreeId, url, title),
+  onYuruUpdateStateChanged: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: YuruUpdateState) => callback(state);
+    ipcRenderer.on("yuruUpdate:changed", listener);
+    return () => {
+      ipcRenderer.removeListener("yuruUpdate:changed", listener);
+    };
+  },
   onErrorNoticesChanged: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, notices: AppErrorNotice[]) =>
       callback(notices);

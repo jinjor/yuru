@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import type { Bookmark } from "../../shared/ipc.js";
-import { getYuruHome } from "../yuru-home.js";
+import { getYuruHome } from "../yuru-paths.js";
 
 interface BookmarkStore {
   worktrees: Record<string, Bookmark[]>;

@@ -17,6 +17,7 @@ import { CreateWorktreeModal, type CreateWorktreeMode } from "./repos/CreateWork
 import { ErrorLogModal } from "./errors/ErrorLogModal";
 import { ProviderPlanUsageRows } from "./providers/ProviderPlanUsageRows";
 import { RepoList } from "./repos/RepoList";
+import { YuruUpdateRow } from "./yuru-update/YuruUpdateRow";
 import { WorktreeView } from "./worktrees/WorktreeView";
 import { WorktreeRemovalDialog } from "./repos/WorktreeRemovalDialog";
 import { EmptyState } from "./ui/EmptyState";
@@ -318,9 +319,10 @@ export function App() {
           />
         </div>
         <ProviderPlanUsageRows usages={planUsages} />
+        <YuruUpdateRow repos={repos} />
         <button
           type="button"
-          className={`sidebar-errors-row${errorCount > 0 ? " has-errors" : ""}`}
+          className={`sidebar-footer-row sidebar-errors-row${errorCount > 0 ? " has-errors" : ""}`}
           onClick={() => setIsErrorLogOpen(true)}
         >
           <AlertTriangle size={12} strokeWidth={2} aria-hidden="true" />

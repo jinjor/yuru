@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { getYuruHome } from "../yuru-home.js";
+import { getYuruHome } from "../yuru-paths.js";
 
 // 履歴は補完候補として使うだけなので、古い分は捨てる。
 const MAX_RECENT_FILES = 50;

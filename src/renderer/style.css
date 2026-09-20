@@ -421,8 +421,8 @@ body,
   }
 }
 
-/* エラーログへの常設導線。0 件でも見えるように置き、エラーがある時だけ danger 色にする */
-.sidebar-errors-row {
+/* サイドバー下部の常設導線 (Update / Errors)。worktree に紐づかない、アプリ全体の操作を並べる */
+.sidebar-footer-row {
   height: 32px;
   flex-shrink: 0;
   border: none;
@@ -433,12 +433,52 @@ body,
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 0 12px;
   cursor: pointer;
+}
+
+/* エラーログへの導線。0 件でも見えるように置き、エラーがある時だけ danger 色にする */
+.sidebar-errors-row {
+  padding: 0 12px;
 }
 
 .sidebar-errors-row:hover {
   background: var(--bg-hover);
+}
+
+/* Yuru 自身の更新。行そのものの押下 (開始・再起動) と、もう一度 update するボタンを
+   併せ持つので、行は div にして中にボタンを置く */
+.sidebar-update-row {
+  padding-right: 8px;
+  cursor: default;
+}
+
+.sidebar-update-main {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar-update-main:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.sidebar-update-main:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.sidebar-update-row .spinning {
+  animation: spin 900ms linear infinite;
 }
 
 .sidebar-errors-row.has-errors {
@@ -718,10 +758,10 @@ body,
 }
 
 .task-worktree-removing svg {
-  animation: task-worktree-removing-spin 900ms linear infinite;
+  animation: spin 900ms linear infinite;
 }
 
-@keyframes task-worktree-removing-spin {
+@keyframes spin {
   to {
     transform: rotate(360deg);
   }
@@ -2808,6 +2848,48 @@ button.github-badge {
 
 .task-worktree-menu-item:hover {
   background: rgba(240, 143, 134, 0.12);
+}
+
+/* 更新のための再起動の確認。作業中の session を巻き込む時だけ出す */
+.yuru-update-dialog {
+  width: 430px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+}
+
+.yuru-update-dialog-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 14px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+
+.yuru-update-dialog-head svg {
+  flex-shrink: 0;
+  color: var(--warning);
+}
+
+.yuru-update-dialog-body {
+  padding: 16px 18px;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--text-muted);
+}
+
+.yuru-update-dialog-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 13px 18px;
+  border-top: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.015);
 }
 
 /* Worktree removal confirmation dialog */

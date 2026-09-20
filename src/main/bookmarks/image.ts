@@ -4,7 +4,7 @@ import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { toAppError } from "../errors/app-error.js";
 import { recordAppWarning } from "../errors/center.js";
-import { getYuruHome } from "../yuru-home.js";
+import { getYuruHome } from "../yuru-paths.js";
 
 // 貼り付けた画像の実体を置く場所。bookmarks.json と同じ ~/.yuru の下。
 function imagesDirectory(): string {

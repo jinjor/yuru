@@ -5,6 +5,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { fail, withoutGitDir } from "./utils.mjs";
 
 const yuruHome = process.env.YURU_HOME ?? path.join(os.homedir(), ".yuru");
@@ -13,6 +14,10 @@ const appsDir = process.env.YURU_APPLICATIONS_DIR ?? path.join(os.homedir(), "Ap
 const appPath = path.join(appsDir, "Yuru.app");
 const metadataPath = process.env.YURU_METADATA_PATH ?? path.join(yuruHome, "metadata.json");
 const launcherPath = path.join(yuruHome, "bin", "yuru");
+const UPDATE_CHECKOUT_FLAG = "--update-checkout";
+const REPLACE_APP_FLAG = "--replace-app";
+const APP_EXIT_TIMEOUT_MS = 60_000;
+const APP_EXIT_POLL_INTERVAL_MS = 250;
 const allowedRemotes = new Set([
   "git@github.com:jinjor/yuru",
   "git@github.com:jinjor/yuru.git",
@@ -105,19 +110,37 @@ export function ensureNpm() {
   }
 }
 
-export function ensureAppNotRunning() {
+function findRunningApp() {
   const processList = execFileSync("ps", ["-axo", "pid=,command="], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
   const executablePath = path.join(appPath, "Contents", "MacOS");
-  const runningLine = processList
-    .split("\n")
-    .map((line) => line.trim())
-    .find((line) => line.includes(executablePath));
+  return (
+    processList
+      .split("\n")
+      .map((line) => line.trim())
+      .find((line) => line.includes(executablePath)) ?? null
+  );
+}
 
-  if (runningLine) {
+export function ensureAppNotRunning() {
+  if (findRunningApp()) {
     fail("Yuru.app is running. Quit Yuru and run `yuru latest` again.");
+  }
+}
+
+// Yuru 自身が終了してから差し替えるため、その終了を待つ。Yuru が終了要求を受けてから
+// PTY と子プロセスを片付けるまでに少しかかるので、消えるまで見に行く。
+async function waitForAppToExit() {
+  const deadline = Date.now() + APP_EXIT_TIMEOUT_MS;
+  while (findRunningApp()) {
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `Yuru.app is still running after ${Math.round(APP_EXIT_TIMEOUT_MS / 1000)}s.`,
+      );
+    }
+    await delay(APP_EXIT_POLL_INTERVAL_MS);
   }
 }
 
@@ -193,22 +216,64 @@ export function addRepo(args) {
   console.log(`Added: ${repoPath}`);
 }
 
-export function updateApp() {
+export async function latest(args) {
+  if (args.length === 0) {
+    updateApp();
+    return;
+  }
+  if (args.length === 1 && args[0] === UPDATE_CHECKOUT_FLAG) {
+    updateCheckout();
+    return;
+  }
+  if (args.length === 1 && args[0] === REPLACE_APP_FLAG) {
+    await replaceApp();
+    return;
+  }
+  fail("Usage: yuru latest");
+}
+
+function updateApp() {
+  ensureUpdatable();
+  ensureAppNotRunning();
+  pullAndBuild();
+  run("npm", ["run", "package:local"]);
+}
+
+// 更新の前半。Yuru.app が起動していても安全に走る (managed checkout の中だけで完結する)。
+// Yuru の画面からの更新は、まずこれを実行する。
+function updateCheckout() {
+  ensureUpdatable();
+  pullAndBuild();
+}
+
+// 更新の後半。Yuru の終了後に、切り離されたプロセスとして走る。
+// 差し替えに失敗しても Yuru が手元に戻るよう、成否にかかわらず最後に起動し直す
+// (package:local は差し替えに失敗すると旧 app を書き戻すので、戻るのは旧版)。
+async function replaceApp() {
+  try {
+    await waitForAppToExit();
+    run("npm", ["run", "package:local"]);
+  } finally {
+    run("open", ["-na", appPath], { cwd: process.cwd() });
+  }
+}
+
+function ensureUpdatable() {
   ensureMacOS();
   ensureManagedRepo();
   ensureNpm();
   ensureAllowedRemote();
   ensureCleanWorktree();
   ensureMainBranch();
-  ensureAppNotRunning();
+}
 
+function pullAndBuild() {
   run("git", ["fetch", "origin", "main"]);
   run("git", ["pull", "--ff-only", "origin", "main"]);
   updateLauncher();
   run("npm", ["audit", "--package-lock-only", "--audit-level=high"]);
   run("npm", ["ci"]);
   run("npm", ["run", "build"]);
-  run("npm", ["run", "package:local"]);
 }
 
 function updateLauncher() {

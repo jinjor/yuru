@@ -34,6 +34,16 @@ export interface AppErrorNotice {
   timestamp: number;
 }
 
+// 画面からの Yuru 自身の更新。更新は Yuru の終了を挟んで前半と後半に分かれ、前半が
+// 終わった `ready` で止まる。`unavailable` はこの app からは更新できないこと (開発版など)。
+export type YuruUpdatePhase = "unavailable" | "idle" | "updating" | "ready";
+
+export interface YuruUpdateState {
+  phase: YuruUpdatePhase;
+  // unavailable のときだけ入る、更新できない理由。
+  reason?: string;
+}
+
 export type Result<T> =
   | {
       ok: true;
@@ -231,6 +241,11 @@ export interface ElectronAPI {
     terminalRuntimeId: TerminalRuntimeId,
     continueWhenReset: boolean,
   ) => Promise<void>;
+  getYuruUpdateState: () => Promise<YuruUpdateState>;
+  // 前半を走らせる。ready から呼ぶと、もう一度最新を取り直して build し直す。
+  startYuruUpdate: () => Promise<void>;
+  // 後半へ進む。Yuru が終了し、差し替えの後に新しい Yuru が立ち上がる。
+  restartForYuruUpdate: () => Promise<void>;
   getErrors: () => Promise<AppErrorNotice[]>;
   dismissError: (id: string) => Promise<void>;
   clearErrors: () => Promise<void>;
@@ -308,6 +323,7 @@ export interface ElectronAPI {
   addImageBookmark: (worktreeId: string, dataUrl: string) => Promise<Result<void>>;
   removeBookmark: (worktreeId: string, url: string) => Promise<Result<void>>;
   renameBookmark: (worktreeId: string, url: string, title: string) => Promise<Result<void>>;
+  onYuruUpdateStateChanged: (callback: (state: YuruUpdateState) => void) => () => void;
   onErrorNoticesChanged: (callback: (notices: AppErrorNotice[]) => void) => () => void;
   onRepoListChanged: (callback: () => void) => () => void;
   onTerminalRuntimeExited: (callback: (terminalRuntimeId: TerminalRuntimeId) => void) => () => void;
