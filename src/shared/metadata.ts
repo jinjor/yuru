@@ -45,6 +45,8 @@ export interface PrimarySessionListItem {
   preview: string;
 }
 
+// 一覧の骨組みとしての worktree。repo と worktree の顔ぶれ・並び・Git の位置だけを表し、
+// session や PR のように頻繁に変わる表示状態は持たない (それは WorktreeDetail 側)。
 export interface WorktreeListItem {
   worktreeId: string;
   worktreePath: string;
@@ -53,13 +55,6 @@ export interface WorktreeListItem {
   headSha: string | null;
   headCommittedAt?: number;
   isMainWorktree?: boolean;
-  githubPullRequest?: GitHubPullRequest | null;
-  primarySessions: PrimarySessionListItem[];
-  suggestedSessions: SuggestedSessionListItem[];
-  // この task worktree に現在結びつく全 terminal runtime。provider session は primary link、
-  // ID 未確定 runtime と standalone terminal は launch target から導出する。renderer 側で
-  // 「表示中の runtime がまだ生きているか」を判定するために使う。
-  activeTerminalRuntimeIds: string[];
 }
 
 // 一覧の表示に必要な分だけを renderer へ渡す。worktreeOrder は taskWorktrees の並びとして
@@ -71,6 +66,20 @@ export interface RepoListItem {
   githubRepoSlug?: string;
   mainWorktree: WorktreeListItem;
   taskWorktrees: WorktreeListItem[];
+}
+
+// worktree 1 件ぶんの表示状態。カードと WorktreeView がそれぞれ worktreeId で取得・購読する。
+// 一覧 (RepoListItem) と違い、session の開始・終了や最新メッセージの更新で頻繁に変わる。
+export interface WorktreeDetail {
+  worktreeId: string;
+  primarySessions: PrimarySessionListItem[];
+  // この worktree に現在結びつく全 terminal runtime。provider session は primary link、
+  // ID 未確定 runtime と standalone terminal は launch target から導出する。renderer 側で
+  // 「表示中の runtime がまだ生きているか」を判定するために使う。
+  activeTerminalRuntimeIds: string[];
+  // null は「この branch に PR が無い」ことと「まだ GitHub から取れていない」ことの両方。
+  // どちらもバッジを出さないので区別しない。
+  githubPullRequest: GitHubPullRequest | null;
 }
 
 export interface YuruMetadata {

@@ -18,10 +18,9 @@ import type {
   AppErrorNotice,
   YuruUpdateState,
   GitDiffScope,
-  PullRequestUpdate,
-  SessionUpdate,
   WorktreeProcessRef,
 } from "../shared/ipc.js";
+import type { WorktreeDetail } from "../shared/metadata.js";
 import type { ProviderPlanUsage, RateLimitStop, SessionProvider } from "../shared/session.js";
 import {
   HTML_PREVIEW_CSP,
@@ -68,11 +67,10 @@ const service = new YuruService(
     fileTreeChanged: sendFileTreeChanged,
     ptyData: sendPtyData,
     terminalRuntimeExited: sendTerminalRuntimeExited,
-    sessionChanged: sendSessionChanged,
+    worktreeDetailChanged: sendWorktreeDetailChanged,
     repoListChanged: sendRepoListChanged,
     rateLimitStopsChanged: sendRateLimitStopsChanged,
     bookmarksChanged: sendBookmarksChanged,
-    pullRequestsChanged: sendPullRequestsChanged,
     refreshPlanUsage: () => {
       void planUsageMonitor.refreshOnce();
     },
@@ -141,12 +139,8 @@ function sendTerminalRuntimeExited(terminalRuntimeId: string): void {
   sendToRenderer("terminalRuntime:exited", terminalRuntimeId);
 }
 
-function sendSessionChanged(terminalRuntimeId: string, update: SessionUpdate): void {
-  sendToRenderer("session:changed", terminalRuntimeId, update);
-}
-
-function sendPullRequestsChanged(updates: PullRequestUpdate[]): void {
-  sendToRenderer("pullRequests:changed", updates);
+function sendWorktreeDetailChanged(detail: WorktreeDetail): void {
+  sendToRenderer("worktree:detailChanged", detail);
 }
 
 function sendBookmarksChanged(worktreeId: string): void {
@@ -376,6 +370,16 @@ function handleIpc<Args extends unknown[]>(
 
 function registerIpcHandlers(): void {
   handleIpc("metadata:listRepos", () => service.getRepos());
+
+  handleIpc("worktree:detail", (_event, worktreeId: string) =>
+    service.getWorktreeDetail(worktreeId),
+  );
+
+  handleIpc("worktreeSession:listSuggested", (_event, worktreeId: string) =>
+    service.getSuggestedSessions(worktreeId),
+  );
+
+  handleIpc("worktreeSession:hasWorking", () => service.hasWorkingSession());
 
   handleIpc("repos:reorder", (_event, repoIds: string[]) => {
     service.reorderRepos(repoIds);

@@ -24,6 +24,7 @@ import { TerminalPanel } from "../terminal/TerminalPanel";
 import { RateLimitStopBar } from "../terminal/RateLimitStopBar";
 import { TerminalHome } from "../terminal/TerminalHome";
 import { usePaneLayout } from "./usePaneLayout";
+import { useWorktreeDetail } from "./useWorktreeDetail";
 import type { PreviewSelection } from "../previewSelection";
 import {
   isEnergySavingPollingEnabled,
@@ -40,12 +41,6 @@ interface WorktreeViewProps {
   repo: RepoListItem;
   sidebarWidth: number;
   worktree: WorktreeListItem;
-  // ホームの Sessions の並び替え。渡すのはこの worktree の全 primary session の key。
-  onReorderPrimarySessions: (worktreeId: string, agentSessionKeys: string[]) => void;
-  // session の開始・終了で変わる左ペインの dot / preview を更新するため、
-  // App に repos の再取得を頼む。detach は取り直しの完了を待って表示を切り替えるので、
-  // 再取得の完了で resolve する。
-  onSessionsChanged: () => Promise<unknown>;
 }
 
 interface WorktreeViewContentProps extends Omit<WorktreeViewProps, "repo"> {
@@ -96,8 +91,6 @@ const WorktreeViewContent = memo(function WorktreeViewContent({
   rateLimitStops,
   sidebarWidth,
   worktree,
-  onReorderPrimarySessions,
-  onSessionsChanged,
 }: WorktreeViewContentProps) {
   const { worktreeId } = worktree;
   // memo の実効性を E2E で固定するための、計測専用の意図的な render 副作用。
@@ -108,13 +101,16 @@ const WorktreeViewContent = memo(function WorktreeViewContent({
   window.__yuruWorktreeViewRenderCounts[worktreeId] =
     (window.__yuruWorktreeViewRenderCounts[worktreeId] ?? 0) + 1;
 
+  // props で受け取るのは worktree の骨組みだけ。session と PR は自分で取得・購読する。
+  const { detail, refresh: refreshDetail, reorderPrimarySessions } = useWorktreeDetail(worktreeId);
   const worktreeViewColumnRef = useRef<HTMLDivElement>(null);
   // この worktree で明示的に選んだ terminal runtime。null はホームを表す。
   const [selectedTerminalRuntimeId, setSelectedTerminalRuntimeId] =
     useState<TerminalRuntimeId | null>(null);
-  const activeTerminalRuntimeIds = worktree.activeTerminalRuntimeIds;
+  const activeTerminalRuntimeIds = detail.activeTerminalRuntimeIds;
   // 選択した runtime が生きている間だけ表示する。fresh mount、ホーム選択、表示中 runtime
-  // の exit はすべてホームになる。生死は props から導出するため hidden 中の exit も漏れない。
+  // の exit はすべてホームになる。生死は取得した表示状態から導出するため、hidden 中の
+  // exit も漏れない (復帰時に取り直す)。
   const displayedTerminalRuntimeId =
     selectedTerminalRuntimeId && activeTerminalRuntimeIds.includes(selectedTerminalRuntimeId)
       ? selectedTerminalRuntimeId
@@ -132,7 +128,7 @@ const WorktreeViewContent = memo(function WorktreeViewContent({
     worktreeViewColumnRef,
   });
   const currentBranch = worktree.branch;
-  const currentGitHub = worktree.githubPullRequest ?? null;
+  const currentGitHub = detail.githubPullRequest;
   const previewPath = previewSelection?.path ?? null;
   const committedPreviewFile =
     previewSelection?.scope === "base" && reviewState?.kind === "ready"
@@ -182,15 +178,15 @@ const WorktreeViewContent = memo(function WorktreeViewContent({
           return;
         }
         setSelectedTerminalRuntimeId(result.data.terminalRuntimeId);
-        // repos が新しい runtime を含むまでは activeTerminalRuntimeIds 側に載っておらず
+        // 表示状態が新しい runtime を含むまでは activeTerminalRuntimeIds 側に載っておらず
         // displayedTerminalRuntimeId が一時的に null (start surface) に戻る。ガードを
         // 外すのをここまで待つことで、その間の再クリックを無視して二重起動を防ぐ。
-        await onSessionsChanged();
+        await refreshDetail();
       } finally {
         isStartingRef.current = false;
       }
     },
-    [onError, onSessionsChanged],
+    [onError, refreshDetail],
   );
 
   const detachPrimarySession = useCallback(
@@ -204,16 +200,15 @@ const WorktreeViewContent = memo(function WorktreeViewContent({
         if (!result.ok) {
           return;
         }
-        // 一覧を取り直すと worktree の primary が消え、Terminal は
-        // 既存 / 新規 session の選択肢に切り替わる。resume と違い表示の切り替えを
-        // この再取得だけに頼るので、完了までガードを保持して古い Resume / Detach への
-        // 再操作を無視する。
-        await onSessionsChanged();
+        // 取り直すと worktree の primary が消え、Terminal は既存 / 新規 session の
+        // 選択肢に切り替わる。resume と違い表示の切り替えをこの再取得だけに頼るので、
+        // 完了までガードを保持して古い Resume / Detach への再操作を無視する。
+        await refreshDetail();
       } finally {
         isStartingRef.current = false;
       }
     },
-    [onSessionsChanged, worktreeId],
+    [refreshDetail, worktreeId],
   );
 
   const killingTerminalRuntimeIdsRef = useRef(new Set<TerminalRuntimeId>());
@@ -360,14 +355,12 @@ const WorktreeViewContent = memo(function WorktreeViewContent({
             currentBranch={currentBranch}
             currentGitHub={currentGitHub}
             worktreeId={worktreeId}
-            primarySessions={worktree.primarySessions}
+            primarySessions={detail.primarySessions}
             selectedTerminalRuntimeId={displayedTerminalRuntimeId}
             onKillTerminalRuntime={(terminalRuntimeId) => {
               void killTerminalRuntime(terminalRuntimeId);
             }}
-            onReorderPrimarySessions={(agentSessionKeys) => {
-              onReorderPrimarySessions(worktreeId, agentSessionKeys);
-            }}
+            onReorderPrimarySessions={reorderPrimarySessions}
             onSelectTerminalRuntime={setSelectedTerminalRuntimeId}
           />
           {displayedRateLimitStop && (
@@ -396,8 +389,10 @@ const WorktreeViewContent = memo(function WorktreeViewContent({
             />
           ) : (
             <TerminalHome
+              isMainWorktree={isMainWorktree}
+              primarySessions={detail.primarySessions}
               providers={providers}
-              worktree={worktree}
+              worktreeId={worktreeId}
               onSelectPrimarySession={setSelectedTerminalRuntimeId}
               onResumePrimarySession={(agentSessionKey) => {
                 void startTerminalRuntime(() =>
@@ -407,9 +402,7 @@ const WorktreeViewContent = memo(function WorktreeViewContent({
               onDetachPrimarySession={(agentSessionKey) => {
                 void detachPrimarySession(agentSessionKey);
               }}
-              onReorderPrimarySessions={(agentSessionKeys) => {
-                onReorderPrimarySessions(worktreeId, agentSessionKeys);
-              }}
+              onReorderPrimarySessions={reorderPrimarySessions}
               onResumeSuggestedSession={(agentSessionKey) => {
                 void startTerminalRuntime(() =>
                   window.electronAPI.resumeSuggestedSession(worktreeId, agentSessionKey),

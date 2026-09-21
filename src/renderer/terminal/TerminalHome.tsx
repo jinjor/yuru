@@ -1,18 +1,16 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Terminal as TerminalIcon, Unlink } from "lucide-react";
-import type {
-  PrimarySessionListItem,
-  SuggestedSessionListItem,
-  WorktreeListItem,
-} from "../../shared/metadata";
+import type { PrimarySessionListItem, SuggestedSessionListItem } from "../../shared/metadata";
 import type { SessionProvider, TerminalRuntimeId } from "../../shared/session";
 import { providerLabel } from "../providers/providerLabel";
 import { SessionProviderDot } from "../providers/SessionProviderDot";
 import { useReorderDrag, type ReorderDrag } from "../utils/useReorderDrag";
 
 interface TerminalHomeProps {
+  isMainWorktree: boolean;
+  primarySessions: PrimarySessionListItem[];
   providers: SessionProvider[];
-  worktree: WorktreeListItem;
+  worktreeId: string;
   onSelectPrimarySession: (terminalRuntimeId: TerminalRuntimeId) => void;
   onResumePrimarySession: (agentSessionKey: string) => void;
   onDetachPrimarySession: (agentSessionKey: string) => void;
@@ -24,8 +22,10 @@ interface TerminalHomeProps {
 
 // Terminal のホーム。primary / suggested の選択と新規 session の開始導線を常にまとめて出す。
 export function TerminalHome({
+  isMainWorktree,
+  primarySessions,
   providers,
-  worktree,
+  worktreeId,
   onSelectPrimarySession,
   onResumePrimarySession,
   onDetachPrimarySession,
@@ -35,26 +35,31 @@ export function TerminalHome({
   onOpenWorktreeTerminal,
 }: TerminalHomeProps) {
   const homeRef = useRef<HTMLDivElement>(null);
+  const primarySessionKeys = primarySessions.flatMap((primarySession) =>
+    primarySession.agentSessionKey === null ? [] : [primarySession.agentSessionKey],
+  );
+  const suggestedSessions = useSuggestedSessions(
+    isMainWorktree ? null : worktreeId,
+    primarySessionKeys,
+  );
   // 並び替えられるのは Sessions の行だけ。Suggested と New session は掴めず、
   // 落とす先にもならない。
   const sessionReorder = useReorderDrag({
-    itemIds: worktree.primarySessions.flatMap((primarySession) =>
-      primarySession.agentSessionKey === null ? [] : [primarySession.agentSessionKey],
-    ),
+    itemIds: primarySessionKeys,
     containerRef: homeRef,
     onReorder: onReorderPrimarySessions,
   });
   return (
     <div className="terminal-session-start" ref={homeRef}>
       <div className="terminal-session-start-panel">
-        {worktree.isMainWorktree ? (
+        {isMainWorktree ? (
           <OpenTerminalSection onOpen={onOpenWorktreeTerminal} />
         ) : (
           <>
-            {worktree.primarySessions.length > 0 && (
+            {primarySessions.length > 0 && (
               <div className="action-surface-section">
                 <div className="action-surface-label">Sessions</div>
-                {worktree.primarySessions.map((primarySession) => (
+                {primarySessions.map((primarySession) => (
                   <PrimarySessionAction
                     key={primarySession.agentSessionKey ?? primarySession.activeTerminalRuntimeId}
                     primarySession={primarySession}
@@ -66,10 +71,10 @@ export function TerminalHome({
                 ))}
               </div>
             )}
-            {worktree.suggestedSessions.length > 0 && (
+            {suggestedSessions.length > 0 && (
               <div className="action-surface-section">
                 <div className="action-surface-label">Suggested</div>
-                {worktree.suggestedSessions.map((suggestedSession) => (
+                {suggestedSessions.map((suggestedSession) => (
                   <SuggestedSessionAction
                     key={suggestedSession.agentSessionKey}
                     suggestedSession={suggestedSession}
@@ -103,6 +108,40 @@ export function TerminalHome({
       </div>
     </div>
   );
+}
+
+// Yuru の外で作られた session の推測は agent store 全体の走査になるので、一覧にも
+// worktree の表示状態にも載せず、この画面が出ている間だけ取りに行く。取り直すのは
+// primary session の顔ぶれが変わった時 (detach で 1 件増え、昇格で 1 件減る) だけで、
+// 動作中 session の preview 更新では取り直さない。
+function useSuggestedSessions(
+  worktreeId: string | null,
+  primarySessionKeys: readonly string[],
+): SuggestedSessionListItem[] {
+  const [suggestedSessions, setSuggestedSessions] = useState<SuggestedSessionListItem[]>([]);
+  const primarySessionKey = primarySessionKeys.join("\n");
+
+  useEffect(() => {
+    if (!worktreeId) {
+      return;
+    }
+    let cancelled = false;
+    window.electronAPI
+      .getSuggestedSessions(worktreeId)
+      .then((sessions) => {
+        if (!cancelled) {
+          setSuggestedSessions(sessions);
+        }
+      })
+      .catch((error: unknown) => {
+        console.error("Failed to load suggested sessions.", error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [primarySessionKey, worktreeId]);
+
+  return suggestedSessions;
 }
 
 interface OpenTerminalSectionProps {

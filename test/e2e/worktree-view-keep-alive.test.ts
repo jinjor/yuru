@@ -70,21 +70,26 @@ test("worktree の表示状態は session の有無に関わらず保持され�
     const ids = await readKeepAliveIds(window);
     await resetRenderCounts(window, [ids.main, ids.idle, ids.active]);
     const marker = "HIDDEN_PUSH_REACHED_SIDEBAR";
-    await app.evaluate(
-      ({ BrowserWindow }, { runtimeId, preview }) => {
-        BrowserWindow.getAllWindows()[0]?.webContents.send("session:changed", runtimeId, {
-          preview,
-        });
+    const pushedDetail = await window.evaluate(
+      async ({ worktreeId, preview }) => {
+        const detail = await window.electronAPI.getWorktreeDetail(worktreeId);
+        return {
+          ...detail,
+          primarySessions: detail.primarySessions.map((session) => ({ ...session, preview })),
+        };
       },
-      { runtimeId: ids.runtime, preview: marker },
+      { worktreeId: ids.active, preview: marker },
     );
+    await app.evaluate(({ BrowserWindow }, detail) => {
+      BrowserWindow.getAllWindows()[0]?.webContents.send("worktree:detailChanged", detail);
+    }, pushedDetail);
 
-    // session preview の push が App まで届いた直後に、hidden な active worktree の render
-    // だけが増えて、表示中 idle と無関係な main は再描画されないことを固定する。
+    // push は購読している active worktree のカードにだけ届く。WorktreeView は表示中の
+    // idle も、購読が止まっている hidden の active / main も再描画されない。
     await expect(
       worktreeCard(window, "keep-alive-active").locator(".task-worktree-session-preview"),
     ).toContainText(marker);
-    await expect.poll(() => readRenderCount(window, ids.active)).toBeGreaterThan(0);
+    expect(await readRenderCount(window, ids.active)).toBe(0);
     expect(await readRenderCount(window, ids.idle)).toBe(0);
     expect(await readRenderCount(window, ids.main)).toBe(0);
 
@@ -131,7 +136,7 @@ test("worktree の表示状態は session の有無に関わらず保持され�
     await expect(stoppedCard.locator('[aria-label^="Codex primary session active"]')).toHaveCount(
       0,
     );
-    await expect(stoppedCard).toContainText("empty");
+    await expect(stoppedCard).toContainText("no session");
     await stoppedCard.click();
     await expect(sessionView.locator(".terminal-session-start")).toBeVisible();
     await expect(sessionView.locator(".new-session-action", { hasText: "Codex" })).toBeVisible();
@@ -290,21 +295,18 @@ async function readKeepAliveIds(window: Page): Promise<{
   main: string;
   idle: string;
   active: string;
-  runtime: string;
 }> {
   return window.evaluate(async () => {
     const repo = (await window.electronAPI.getRepos())[0];
     const idle = repo?.taskWorktrees.find((worktree) => worktree.name === "keep-alive-idle");
     const active = repo?.taskWorktrees.find((worktree) => worktree.name === "keep-alive-active");
-    const runtime = active?.primarySessions[0]?.activeTerminalRuntimeId;
-    if (!repo || !idle || !active || !runtime) {
-      throw new Error("keep-alive E2E worktrees are not active");
+    if (!repo || !idle || !active) {
+      throw new Error("keep-alive E2E worktrees are not listed");
     }
     return {
       main: repo.mainWorktree.worktreeId,
       idle: idle.worktreeId,
       active: active.worktreeId,
-      runtime,
     };
   });
 }

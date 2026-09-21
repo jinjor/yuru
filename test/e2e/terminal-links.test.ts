@@ -225,21 +225,22 @@ test("Terminal ヘッダの PR をクリックすると Bookmarks に登録す�
     await worktreeCard(window, "bookmark-pr").click();
 
     const pullRequestUrl = "http://127.0.0.1:1/pull/74";
-    await app.evaluate(
-      ({ BrowserWindow }, update) => {
-        BrowserWindow.getAllWindows()[0]?.webContents.send("pullRequests:changed", [update]);
-      },
-      {
-        worktreeId: toWorktreeId(repoId, worktreePath),
-        pullRequest: {
-          kind: "pr",
+    const pushedDetail = await window.evaluate(
+      async ({ worktreeId, url }) => ({
+        ...(await window.electronAPI.getWorktreeDetail(worktreeId)),
+        githubPullRequest: {
+          kind: "pr" as const,
           number: 74,
-          state: "open",
+          state: "open" as const,
           isApproved: false,
-          url: pullRequestUrl,
+          url,
         },
-      },
+      }),
+      { worktreeId: toWorktreeId(repoId, worktreePath), url: pullRequestUrl },
     );
+    await app.evaluate(({ BrowserWindow }, detail) => {
+      BrowserWindow.getAllWindows()[0]?.webContents.send("worktree:detailChanged", detail);
+    }, pushedDetail);
 
     const sessionView = visibleWorktreeView(window);
     const pullRequestBadge = sessionView.locator(".github-badge", { hasText: "Open #74" });

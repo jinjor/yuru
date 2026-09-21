@@ -40,11 +40,12 @@ import {
 } from "./review/review-state.js";
 import { loadRepoList } from "./repos/repo-list.js";
 import {
-  loadStoredSessionPreview,
-  loadStoredSessionPreviews,
-  loadSuggestedWorktreeSessions,
-} from "./sessions/suggested.js";
-import { toWorktreeId, toWorktreePathKey } from "./worktree-identity.js";
+  toPrimarySessionListItems,
+  toSuggestedSessionListItems,
+  type SessionDisplaySource,
+} from "./repos/worktree-sessions.js";
+import { loadStoredSessionPreview, loadSuggestedWorktreeSessions } from "./sessions/suggested.js";
+import { toWorktreeId, toWorktreePath, toWorktreePathKey } from "./worktree-identity.js";
 import { getFileDocument, getGitDiffDocument as loadGitDiffDocument } from "./git/diff.js";
 import { getCurrentBranch, getHeadSha, isSupportedGitRepo } from "./git/repo.js";
 import { getGitPathStates as loadGitPathStates } from "./git/status.js";
@@ -109,15 +110,14 @@ import type {
   TerminalRuntimeInfo,
 } from "./terminal/runtime.js";
 import { FileTreeWatcher } from "./files/tree-watcher.js";
+import type { SuggestedSessionListItem, WorktreeDetail, YuruMetadata } from "../shared/metadata.js";
 import {
   type AppError,
   type AppErrorNotice,
   type Bookmark,
   type CreatedTaskWorktree,
   type GitDiffScope,
-  type PullRequestUpdate,
   type Result,
-  type SessionUpdate,
   type WorktreeProcessRef,
   type WorktreeRemovalPreparationOutcome,
   type WorktreeSessionSelection,
@@ -224,9 +224,19 @@ interface BookmarkTitleUpdate {
 }
 
 interface GitHubStatusUpdates {
-  pullRequests: PullRequestUpdate[];
+  // PR バッジが変わった worktree。値そのものは pullRequestByWorktreeId が持つ。
+  pullRequestWorktreeIds: string[];
   bookmarkTitles: BookmarkTitleUpdate[];
   bookmarkWorktreeIds: string[];
+}
+
+function emptyWorktreeDetail(worktreeId: string): WorktreeDetail {
+  return {
+    worktreeId,
+    primarySessions: [],
+    activeTerminalRuntimeIds: [],
+    githubPullRequest: null,
+  };
 }
 
 function samePullRequest(a: GitHubPullRequest | null, b: GitHubPullRequest | null): boolean {
@@ -242,10 +252,10 @@ export interface YuruServiceEvents {
   fileTreeChanged(worktreeId: string, relativePath: string): void;
   ptyData(terminalRuntimeId: string, data: string): void;
   terminalRuntimeExited(terminalRuntimeId: string): void;
-  sessionChanged(terminalRuntimeId: string, update: SessionUpdate): void;
+  // worktree 1 件ぶんの表示状態が変わった。購読側は自分の worktreeId のものだけを見る。
+  worktreeDetailChanged(detail: WorktreeDetail): void;
   rateLimitStopsChanged(stops: RateLimitStop[]): void;
   bookmarksChanged(worktreeId: string): void;
-  pullRequestsChanged(updates: PullRequestUpdate[]): void;
   // 解除時刻になった後、サイドバーに出す利用状況も取り直す。
   refreshPlanUsage(): void;
   repoListChanged(): void;
@@ -410,8 +420,12 @@ export class YuruService {
   // 直前の tick で集めた「worktree と監視対象の対応」。listGitHubTargets が埋め、
   // toGitHubStatusUpdates が読む。
   private worktrees: readonly WorktreeTargets[] = [];
-  // renderer へ最後に push した PR バッジ。変わった分だけを push するために持つ。
-  private readonly pushedPullRequestByWorktreeId = new Map<string, GitHubPullRequest | null>();
+  // ポーリングが最後に確定させた worktree ごとの PR バッジ。表示状態を返す時に読み、
+  // 変わった分だけを push するためにも使う。
+  private readonly pullRequestByWorktreeId = new Map<string, GitHubPullRequest | null>();
+  // worktree ごとの、最後に始めた表示状態の組み立て。preview の読み取りを挟むため
+  // 組み立ては非同期で、追い越された古い結果は push しない。
+  private readonly worktreeDetailSequences = new Map<string, number>();
 
   constructor(
     private readonly events: YuruServiceEvents,
@@ -493,9 +507,9 @@ export class YuruService {
 
     this.worktrees = worktrees;
     const worktreeIds = new Set(worktrees.map((worktree) => worktree.worktreeId));
-    for (const worktreeId of this.pushedPullRequestByWorktreeId.keys()) {
+    for (const worktreeId of this.pullRequestByWorktreeId.keys()) {
       if (!worktreeIds.has(worktreeId)) {
-        this.pushedPullRequestByWorktreeId.delete(worktreeId);
+        this.pullRequestByWorktreeId.delete(worktreeId);
       }
     }
     return targets;
@@ -511,8 +525,8 @@ export class YuruService {
       // bookmarks.json が読めなくても、ステータスの通知までは止めない。
       recordAppWarning(toAppError(error));
     }
-    if (updates.pullRequests.length > 0) {
-      this.events.pullRequestsChanged(updates.pullRequests);
+    for (const worktreeId of updates.pullRequestWorktreeIds) {
+      this.emitWorktreeDetail(worktreeId);
     }
     for (const worktreeId of updates.bookmarkWorktreeIds) {
       this.events.bookmarksChanged(worktreeId);
@@ -522,7 +536,7 @@ export class YuruService {
   // 直前に集めた対応表を読むだけ。GitHub にも git にも行かない。
   private toGitHubStatusUpdates(changedKeys: ReadonlySet<string>): GitHubStatusUpdates {
     const updates: GitHubStatusUpdates = {
-      pullRequests: [],
+      pullRequestWorktreeIds: [],
       bookmarkTitles: [],
       bookmarkWorktreeIds: [],
     };
@@ -536,13 +550,13 @@ export class YuruService {
         // undefined は「まだ取れていない」。分からないものでバッジを消さない。
         if (fetched !== undefined) {
           const pullRequest = toVisiblePullRequest(fetched, worktree.branch.headSha);
-          const pushed = this.pushedPullRequestByWorktreeId;
+          const known = this.pullRequestByWorktreeId;
           if (
-            !pushed.has(worktree.worktreeId) ||
-            !samePullRequest(pushed.get(worktree.worktreeId) ?? null, pullRequest)
+            !known.has(worktree.worktreeId) ||
+            !samePullRequest(known.get(worktree.worktreeId) ?? null, pullRequest)
           ) {
-            pushed.set(worktree.worktreeId, pullRequest);
-            updates.pullRequests.push({ worktreeId: worktree.worktreeId, pullRequest });
+            known.set(worktree.worktreeId, pullRequest);
+            updates.pullRequestWorktreeIds.push(worktree.worktreeId);
           }
         }
       }
@@ -572,30 +586,162 @@ export class YuruService {
   }
 
   async getRepos() {
-    const previewsByKey = await loadStoredSessionPreviews();
-    const agentActivityStates = this.loadAgentActivityStatesByTerminalRuntimeId();
+    return loadRepoList(undefined, loadMetadata(), getGitHubRepoSlug);
+  }
+
+  // worktree 1 件ぶんの表示状態。Git には行かず、metadata と動いている runtime、
+  // それに primary session の preview だけを読む。
+  async getWorktreeDetail(worktreeId: string): Promise<WorktreeDetail> {
+    const worktreePath = toWorktreePath(worktreeId);
+    if (!worktreePath) {
+      return emptyWorktreeDetail(worktreeId);
+    }
+    const worktreePathKey = toWorktreePathKey(worktreePath);
     const metadata = loadMetadata();
-    const primaryWorktreePathsBySessionKey = indexPrimaryWorktreePathsBySessionKey(
-      metadata.taskWorktrees,
-    );
-    return loadRepoList(
-      this.getTerminalRuntimeIdsBySessionKey(),
-      undefined,
-      previewsByKey,
-      loadSuggestedWorktreeSessions,
-      this.getUnresolvedTerminalRuntimesByLaunchWorktreePath(),
-      (repoSlug, branch, headSha) => {
-        const fetched = this.githubStatusMonitor.get({ kind: "branch", repoSlug, branch });
-        return fetched === undefined ? undefined : toVisiblePullRequest(fetched, headSha);
-      },
-      agentActivityStates,
+    const primarySessions =
+      metadata.taskWorktrees.find(
+        (taskWorktree) => toWorktreePathKey(taskWorktree.worktreePath) === worktreePathKey,
+      )?.primarySessions ?? [];
+    const source = await this.loadSessionDisplaySource(primarySessions);
+    const activeTerminalRuntimeIds =
       indexTerminalRuntimeIdsByTaskWorktreePath(
         this.terminalRuntimeMap,
-        primaryWorktreePathsBySessionKey,
+        indexPrimaryWorktreePathsBySessionKey(metadata.taskWorktrees),
+      ).get(worktreePathKey) ?? [];
+    return {
+      worktreeId,
+      primarySessions: toPrimarySessionListItems(
+        primarySessions,
+        this.getUnresolvedTerminalRuntimesByLaunchWorktreePath().get(worktreePathKey) ?? null,
+        source,
       ),
-      metadata,
-      getGitHubRepoSlug,
+      activeTerminalRuntimeIds: [...activeTerminalRuntimeIds],
+      githubPullRequest: this.pullRequestByWorktreeId.get(worktreeId) ?? null,
+    };
+  }
+
+  // Yuru の外で作られ、この worktree に紐づいていると推測される session。agent store 全体を
+  // 走査するため、一覧にも表示状態にも載せず、Terminal のホームが必要とした時だけ取る。
+  async getSuggestedSessions(worktreeId: string): Promise<SuggestedSessionListItem[]> {
+    const worktreePath = toWorktreePath(worktreeId);
+    if (!worktreePath) {
+      return [];
+    }
+    const worktreePathKey = toWorktreePathKey(worktreePath);
+    const primarySessions =
+      loadTaskWorktrees().find(
+        (taskWorktree) => toWorktreePathKey(taskWorktree.worktreePath) === worktreePathKey,
+      )?.primarySessions ?? [];
+    const suggestedSessions =
+      (await loadSuggestedWorktreeSessions([worktreePath])).get(worktreePath) ?? [];
+    const source = await this.loadSessionDisplaySource(suggestedSessions);
+    return toSuggestedSessionListItems(
+      suggestedSessions,
+      new Set(
+        primarySessions.map((session) => toSessionKey(session.provider, session.agentSessionId)),
+      ),
+      source,
     );
+  }
+
+  // 更新のための再起動が止めてしまう作業があるか。動いている runtime の活動状態で決まる。
+  hasWorkingSession(): boolean {
+    for (const [terminalRuntimeId, runtime] of this.terminalRuntimeMap) {
+      if (
+        runtime.provider !== null &&
+        this.resolveTerminalRuntimeActivityState(terminalRuntimeId) === "working"
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private async loadSessionDisplaySource(
+    sessions: readonly { provider: SessionProvider; agentSessionId: string }[],
+  ): Promise<SessionDisplaySource> {
+    const previews = await Promise.all(
+      sessions.map(async (session) => {
+        const preview = await loadStoredSessionPreview(session.provider, session.agentSessionId);
+        return [toSessionKey(session.provider, session.agentSessionId), preview ?? ""] as const;
+      }),
+    );
+    return {
+      terminalRuntimeIdsBySessionKey: this.getTerminalRuntimeIdsBySessionKey(),
+      agentActivityStatesByTerminalRuntimeId: this.loadAgentActivityStatesByTerminalRuntimeId(),
+      previewsBySessionKey: new Map(previews),
+    };
+  }
+
+  // 表示状態の組み立ては preview の読み取りを挟むので、同じ worktree への連続した呼び出しが
+  // 追い越し合いうる。最後に始めた組み立ての結果だけを push する。
+  private emitWorktreeDetail(worktreeId: string): void {
+    const sequence = (this.worktreeDetailSequences.get(worktreeId) ?? 0) + 1;
+    this.worktreeDetailSequences.set(worktreeId, sequence);
+    void this.getWorktreeDetail(worktreeId)
+      .then((detail) => {
+        if (this.worktreeDetailSequences.get(worktreeId) !== sequence) {
+          return;
+        }
+        this.worktreeDetailSequences.delete(worktreeId);
+        this.events.worktreeDetailChanged(detail);
+      })
+      .catch((error: unknown) => {
+        recordAppWarning(toAppError(error));
+      });
+  }
+
+  // runtime の状態が変わった時の push 先。primary link を持つ runtime はその primary の
+  // worktree、持たない runtime は起動対象の worktree に出ている。
+  private emitWorktreeDetailForRuntime(runtime: TerminalRuntimeInfo): void {
+    const metadata = loadMetadata();
+    const worktreePath = resolveTerminalRuntimeTaskWorktreePath(
+      runtime,
+      indexPrimaryWorktreePathsBySessionKey(metadata.taskWorktrees),
+    );
+    if (worktreePath) {
+      this.emitWorktreeDetailForPath(worktreePath, metadata);
+    }
+  }
+
+  private emitWorktreeDetailForPath(
+    worktreePath: string,
+    metadata: YuruMetadata = loadMetadata(),
+  ): void {
+    void this.findWorktreeIdForPath(worktreePath, metadata)
+      .then((worktreeId) => {
+        if (worktreeId) {
+          this.emitWorktreeDetail(worktreeId);
+        }
+      })
+      .catch((error: unknown) => {
+        recordAppWarning(toAppError(error));
+      });
+  }
+
+  // worktree path から表示上の worktree ID を引く。metadata に載っている repo と task
+  // worktree で足りない時 (Yuru が知らない Git worktree で standalone terminal を開いた時)
+  // だけ Git に聞く。provider session のある worktree は必ず metadata に載っているので、
+  // 動作中セッションの更新でこの fallback には入らない。
+  private async findWorktreeIdForPath(
+    worktreePath: string,
+    metadata: YuruMetadata,
+  ): Promise<string | null> {
+    const worktreePathKey = toWorktreePathKey(worktreePath);
+    const repo = metadata.repos.find(
+      (entry) => toWorktreePathKey(entry.repoPath) === worktreePathKey,
+    );
+    if (repo) {
+      return toWorktreeId(repo.id, worktreePathKey);
+    }
+    const taskWorktree = metadata.taskWorktrees.find(
+      (entry) => toWorktreePathKey(entry.worktreePath) === worktreePathKey,
+    );
+    if (taskWorktree) {
+      return toWorktreeId(taskWorktree.repoId, worktreePathKey);
+    }
+    const owningRepo = await findRepoByWorktreePath(worktreePathKey, metadata.repos);
+    return owningRepo ? toWorktreeId(owningRepo.id, worktreePathKey) : null;
   }
 
   // attach 登録から serialize 開始までを同期的に行うことで、attach 前に届いた出力は
@@ -680,7 +826,7 @@ export class YuruService {
         message: "Sessions changed while reordering. The new order was not saved.",
       });
     }
-    this.events.repoListChanged();
+    this.emitWorktreeDetail(worktreeId);
     return ok(undefined);
   }
 
@@ -715,6 +861,7 @@ export class YuruService {
       provider: target.provider,
       agentSessionId: target.agentSessionId,
     });
+    this.emitWorktreeDetail(worktreeId);
     return ok(undefined);
   }
 
@@ -795,10 +942,6 @@ export class YuruService {
     }
     const agentSessionId =
       this.terminalRuntimeMap.get(result.data.terminalRuntimeId)?.agentSessionId ?? null;
-    // API callers do not receive the renderer selection result used by the in-app
-    // session start flow. Push a repo refresh so the new runtime appears on its
-    // worktree card immediately, including while a lazy provider session ID is unresolved.
-    this.events.repoListChanged();
     return ok({
       worktreePath: resolvedWorktreePath,
       provider,
@@ -1867,8 +2010,13 @@ export class YuruService {
       this.ptyProcesses.delete(pending.terminalRuntimeId);
       this.ptyScreens.delete(pending.terminalRuntimeId);
       this.ptyAttachments.delete(pending.terminalRuntimeId);
+      const runtime = this.terminalRuntimeMap.get(pending.terminalRuntimeId);
       this.terminalRuntimeMap.delete(pending.terminalRuntimeId);
       this.events.terminalRuntimeExited(pending.terminalRuntimeId);
+      // 消えた runtime がどの worktree に出ていたかは、消す前の情報からしか引けない。
+      if (runtime) {
+        this.emitWorktreeDetailForRuntime(runtime);
+      }
       onExit?.(pending);
     });
 
@@ -1880,12 +2028,14 @@ export class YuruService {
     this.pendingProcesses.delete(pending.proc);
     this.ptyProcesses.set(pending.terminalRuntimeId, pending.proc);
     this.ptyScreens.set(pending.terminalRuntimeId, pending.screen);
-    this.terminalRuntimeMap.set(pending.terminalRuntimeId, {
+    const runtime: TerminalRuntimeInfo = {
       provider: pending.provider,
       agentSessionId,
       launchWorktreePath: pending.worktreePath,
       startedAt: pending.startedAt,
-    });
+    };
+    this.terminalRuntimeMap.set(pending.terminalRuntimeId, runtime);
+    this.emitWorktreeDetailForRuntime(runtime);
     this.ensureSessionMonitor();
   }
 
@@ -1893,12 +2043,14 @@ export class YuruService {
     this.pendingProcesses.delete(pending.proc);
     this.ptyProcesses.set(pending.terminalRuntimeId, pending.proc);
     this.ptyScreens.set(pending.terminalRuntimeId, pending.screen);
-    this.terminalRuntimeMap.set(pending.terminalRuntimeId, {
+    const runtime: TerminalRuntimeInfo = {
       provider: null,
       agentSessionId: null,
       launchWorktreePath: pending.worktreePath,
       startedAt: pending.startedAt,
-    });
+    };
+    this.terminalRuntimeMap.set(pending.terminalRuntimeId, runtime);
+    this.emitWorktreeDetailForRuntime(runtime);
   }
 
   // この task worktree に現在結びつく provider runtime / standalone terminal を止める。
@@ -2009,7 +2161,7 @@ export class YuruService {
       this.updateTerminalRuntimeAgentSessionId(terminalRuntimeId, agentSessionId);
       void this.deliverInitialPrompt(agent, pending);
       await this.events.refreshWorktreeWatcher();
-      this.events.repoListChanged();
+      this.emitWorktreeDetailForPath(pending.worktreePath);
     } catch (error) {
       console.warn("[Yuru] failed to register the resolved session", {
         terminalRuntimeId,
@@ -2079,9 +2231,9 @@ export class YuruService {
     }
   }
 
-  // 動作中セッションの活動状態とプレビューを確認する。provider の同じ増分読み取りに
-  // message watcher も相乗りし、user / assistant message の URL を記録する。
-  // renderer が取りに来るのは初期表示などの getRepos だけで、以降の状態更新は push で届く。
+  // 動作中セッションの活動状態とプレビューを確認する。変化を見つけたら、その session が
+  // 出ている worktree の表示状態を push する。renderer が取りに来るのは初期表示だけで、
+  // 以降の更新はこの push で届く。
   private handleSessionMonitorTick(): void {
     let hasAgentRuntime = false;
     for (const [terminalRuntimeId, runtime] of this.terminalRuntimeMap) {
@@ -2094,7 +2246,7 @@ export class YuruService {
       const activityChanged = activityState !== state.activityState;
       if (activityChanged) {
         state.activityState = activityState;
-        this.events.sessionChanged(terminalRuntimeId, { activityState });
+        this.emitWorktreeDetailForRuntime(runtime);
       }
       // working 中はログが伸びるので毎 tick 確認する。working → waiting の遷移直後の
       // 1 回は、ターン終了時に書かれた最後のメッセージを取りこぼさないための確認。
@@ -2142,7 +2294,10 @@ export class YuruService {
         return;
       }
       state.preview = preview;
-      this.events.sessionChanged(terminalRuntimeId, { preview });
+      const runtime = this.terminalRuntimeMap.get(terminalRuntimeId);
+      if (runtime) {
+        this.emitWorktreeDetailForRuntime(runtime);
+      }
     } finally {
       state.checkingPreview = false;
     }
@@ -2282,12 +2437,21 @@ export class YuruService {
     worktree: { repoId: string; worktreePath: string },
     session: SuggestedWorktreeSession,
   ): void {
+    // 昇格は、その session が別の worktree の primary だったならその link を外す。
+    // 外された側のカードからも行が消えるので、両方の表示状態を押し直す。
+    const previousWorktreePath = indexPrimaryWorktreePathsBySessionKey(loadTaskWorktrees()).get(
+      toSessionKey(session.provider, session.agentSessionId),
+    );
     upsertTaskWorktree(worktree.repoId, worktree.worktreePath);
     attachPrimarySessionByPath(worktree.worktreePath, {
       provider: session.provider,
       agentSessionId: session.agentSessionId,
       cwd: session.cwd,
     });
+    this.emitWorktreeDetail(toWorktreeId(worktree.repoId, worktree.worktreePath));
+    if (previousWorktreePath && previousWorktreePath !== toWorktreePathKey(worktree.worktreePath)) {
+      this.emitWorktreeDetailForPath(previousWorktreePath);
+    }
   }
 
   private async activateWorktreeSession(
@@ -2312,7 +2476,7 @@ export class YuruService {
             provider: target.provider,
             agentSessionId: target.agentSessionId,
           });
-          this.events.repoListChanged();
+          this.emitWorktreeDetail(target.worktreeId);
         }
         return this.failAndReport<string>({
           code: "command_failed",

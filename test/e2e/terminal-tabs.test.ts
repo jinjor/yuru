@@ -220,11 +220,11 @@ test("同じ inactive session を同時に resume しても runtime は 1 件だ
       throw new Error("No concurrent resume request succeeded");
     }
 
-    const worktree = await window.evaluate(async (targetWorktreeId) => {
-      const repos = await window.electronAPI.getRepos();
-      return repos[0]?.taskWorktrees.find((entry) => entry.worktreeId === targetWorktreeId);
-    }, worktreeId);
-    expect(worktree?.activeTerminalRuntimeIds).toEqual([started.data.terminalRuntimeId]);
+    const detail = await window.evaluate(
+      (targetWorktreeId) => window.electronAPI.getWorktreeDetail(targetWorktreeId),
+      worktreeId,
+    );
+    expect(detail.activeTerminalRuntimeIds).toEqual([started.data.terminalRuntimeId]);
   } finally {
     await closeYuru(app);
     await context.cleanup();
@@ -275,18 +275,13 @@ test("Codex の session ID 確定中も runtime タブは worktree から消え�
         }> = [];
         const deadline = Date.now() + 5_000;
         while (Date.now() < deadline) {
-          const worktree = (await window.electronAPI.getRepos())[0]?.taskWorktrees.find(
-            (entry) => entry.worktreeId === targetWorktreeId,
-          );
-          if (!worktree) {
-            throw new Error("The task worktree disappeared during session ID resolution");
-          }
+          const detail = await window.electronAPI.getWorktreeDetail(targetWorktreeId);
           snapshots.push({
-            activeTerminalRuntimeIds: worktree.activeTerminalRuntimeIds,
-            primarySessionKeys: worktree.primarySessions.map((session) => session.agentSessionKey),
+            activeTerminalRuntimeIds: detail.activeTerminalRuntimeIds,
+            primarySessionKeys: detail.primarySessions.map((session) => session.agentSessionKey),
           });
           if (
-            worktree.primarySessions.some(
+            detail.primarySessions.some(
               (session) => session.agentSessionKey === resolvedSessionKey,
             )
           ) {
@@ -371,7 +366,10 @@ test("active suggested を promote すると既存 runtime のタブが移動先
     const runtimeId = await window.evaluate(async () => {
       const repo = (await window.electronAPI.getRepos())[0];
       const worktree = repo?.taskWorktrees.find((entry) => entry.name === "session-route-a");
-      const activeRuntimeId = worktree?.primarySessions[0]?.activeTerminalRuntimeId;
+      const activeRuntimeId = worktree
+        ? (await window.electronAPI.getWorktreeDetail(worktree.worktreeId)).primarySessions[0]
+            ?.activeTerminalRuntimeId
+        : null;
       if (!activeRuntimeId) {
         throw new Error("The primary session runtime was not active");
       }
@@ -393,14 +391,21 @@ test("active suggested を promote すると既存 runtime のタブが移動先
       }),
     ).toHaveClass(/selected/);
 
-    const reposAfterPromote = await window.evaluate(() => window.electronAPI.getRepos());
-    const taskWorktrees = reposAfterPromote[0]?.taskWorktrees ?? [];
-    const worktreeA = taskWorktrees.find((entry) => entry.name === "session-route-a");
-    const worktreeB = taskWorktrees.find((entry) => entry.name === "session-route-b");
-    expect(worktreeA?.activeTerminalRuntimeIds).not.toContain(runtimeId);
-    expect(worktreeA?.primarySessions).toHaveLength(0);
-    expect(worktreeB?.activeTerminalRuntimeIds).toEqual([runtimeId]);
-    expect(worktreeB?.primarySessions[0]?.activeTerminalRuntimeId).toBe(runtimeId);
+    const detailsAfterPromote = await window.evaluate(async () => {
+      const taskWorktrees = (await window.electronAPI.getRepos())[0]?.taskWorktrees ?? [];
+      const byName = async (name: string) => {
+        const worktree = taskWorktrees.find((entry) => entry.name === name);
+        if (!worktree) {
+          throw new Error(`The task worktree ${name} was not listed`);
+        }
+        return window.electronAPI.getWorktreeDetail(worktree.worktreeId);
+      };
+      return { a: await byName("session-route-a"), b: await byName("session-route-b") };
+    });
+    expect(detailsAfterPromote.a.activeTerminalRuntimeIds).not.toContain(runtimeId);
+    expect(detailsAfterPromote.a.primarySessions).toHaveLength(0);
+    expect(detailsAfterPromote.b.activeTerminalRuntimeIds).toEqual([runtimeId]);
+    expect(detailsAfterPromote.b.primarySessions[0]?.activeTerminalRuntimeId).toBe(runtimeId);
 
     await worktreeCard(window, "session-route-a").click();
     await expect(sessionView.locator(".session-tab:not(.session-tab-home)")).toHaveCount(0);
@@ -596,7 +601,7 @@ test("複数 runtime をタブで切り替え、kill と exit 後はホームへ
       timeout: 10_000,
     });
 
-    // session push は runtime id 単位でタブの preview / activity に反映される。
+    // worktree の表示状態の push はタブの preview / activity に反映される。
     const updatedPreview = "Updated parent preview from session push";
     await appendFile(
       firstSessionFile,
@@ -610,24 +615,25 @@ test("複数 runtime をタブで切り替え、kill と exit 後はホームへ
         },
       })}\n`,
     );
-    const firstRuntimeId = await window.evaluate(async () => {
+    const pushedDetail = await window.evaluate(async (preview) => {
       const repo = (await window.electronAPI.getRepos())[0];
       const worktree = repo?.taskWorktrees.find((entry) => entry.name === "session-tabs");
-      const runtimeId = worktree?.primarySessions[0]?.activeTerminalRuntimeId;
-      if (!runtimeId) {
+      if (!worktree) {
+        throw new Error("The task worktree was not listed");
+      }
+      const detail = await window.electronAPI.getWorktreeDetail(worktree.worktreeId);
+      const [first, ...rest] = detail.primarySessions;
+      if (!first?.activeTerminalRuntimeId) {
         throw new Error("First runtime was not active");
       }
-      return runtimeId;
-    });
-    await app.evaluate(
-      ({ BrowserWindow }, update) => {
-        BrowserWindow.getAllWindows()[0]?.webContents.send("session:changed", update.runtimeId, {
-          preview: update.preview,
-          activityState: "working",
-        });
-      },
-      { runtimeId: firstRuntimeId, preview: updatedPreview },
-    );
+      return {
+        ...detail,
+        primarySessions: [{ ...first, preview, activityState: "working" as const }, ...rest],
+      };
+    }, updatedPreview);
+    await app.evaluate(({ BrowserWindow }, detail) => {
+      BrowserWindow.getAllWindows()[0]?.webContents.send("worktree:detailChanged", detail);
+    }, pushedDetail);
     const updatedFirstTab = sessionView.locator(".session-tab", { hasText: updatedPreview });
     await expect(updatedFirstTab).toBeVisible();
     await expect(updatedFirstTab.locator(".session-provider-dot.activity-working")).toBeVisible();

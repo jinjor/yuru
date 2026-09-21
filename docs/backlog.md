@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-09-21
+Last updated: 2026-09-22
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -29,7 +29,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | P31 | polish | Changes / Files | Changes からファイルを開くときは preview を開かないようにする | 変更内容を確認したい |
 | P32 | polish | Worktrees | worktree を切った直後のセットアップを最適化する | worktree 作成後に作業を始めるまでの手間を減らしたい |
 | F76 | feature | Bookmarks | ローカルファイルのブックマーク | ファイルやフォルダ、よく確認する実装をブックマークしたい |
-| P22 | polish | App / Sessions | worktree の表示データを App の一括配布から worktreeId 単位の取得・購読に変える | WorktreeView が worktree オブジェクトを props で受け取っており、session の push 1 件で無関係な表示まで再描画が波及する。F51 の keep-alive で instance が増えると影響が拡大する。詳細: docs/backlog-details/P22-worktree-data-subscription.md |
 | B12 | bug | Sessions / Worktree Context | Claude の resume で worktree の作業指示が引き継がれない | `--append-system-prompt` の指示が保存されないため、resume すると Claude が repo root で作業してしまう。詳細: docs/backlog-details/B12-resume-worktree-context.md |
 | B15 | bug | Terminal | ターミナルにフォーカスできないことがある | キーボード入力を始められないことがある |
 | B16 | bug | Changes / Diff | Committed の diff を正確にする | commit 済みの変更を正しい差分でレビューしたい |
@@ -58,7 +57,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | I15 | investigate | IPC | `electronAPI` と IPC channel の対応を追いやすくする | renderer / preload / main で名前がズレていて読みにくいため、channel 名を露出するか shared RPC wrapper に寄せるか決めたい |
 | I16 | investigate | Events | backend event の発火ポリシーと購読設計を整理する | frontend 起点 IPC の応答代わりに push すると race しやすいため、外部変化・非同期完了・プロセス終了などに用途を限定したい |
 | I11 | investigate | App | モーダルとショートカットの管理設計を決める (詳細: docs/backlog-details/I11-modal-management.md) | FileSearch 導入時に Cmd+P が他モーダル裏で発火する問題が出たため、場当たり対応せず設計として直したい |
-| P17 | polish | Repos / Sessions | getRepos が毎回全セッションのログを読むのをやめる | 一覧は ID と並び順程度に痩せさせ、プレビュー等のセッション表示状態はカード側が個別に取得する。session:changed push の続きで、将来のカード単位購読にも繋がる。I21 の「選択中セッションをカードに出す」拡張の前提でもある |
 | P27 | polish | Sessions / Codex | Codex で削除済みの raw rollout を Yuru の対象から除外する | 現在のデータソースに沿った挙動だが、削除済みセッションを preview・worktree 検出の解析対象から除外すれば不要な解析を減らせる |
 | P26 | polish | Files / Search | Preview / View / Edit の切り替えでファイル内検索を引き継ぐ | 同じファイルをモード間で見比べる時、検索バーの開閉状態と検索語が失われないようにしたい |
 | P21 | polish | App | UI をクリックした時のインタラクションを全体的に見直す | 詳細: docs/backlog-details/P21-ui-click-interaction.md |

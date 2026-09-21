@@ -23,11 +23,8 @@ import { WorktreeRemovalDialog } from "./repos/WorktreeRemovalDialog";
 import { EmptyState } from "./ui/EmptyState";
 import { clamp, runPointerDrag } from "./utils/layout";
 import {
-  applyPullRequestUpdates,
-  applySessionUpdate,
   collectKeepAliveWorktrees,
   findWorktree,
-  sortPrimarySessionsByKeys,
   sortReposByIds,
   sortTaskWorktreesByPaths,
 } from "./repos/repoListState";
@@ -101,19 +98,6 @@ export function App() {
     const disposeRepoListChanged = window.electronAPI.onRepoListChanged(() => {
       void refreshRepos();
     });
-    // 表示中 runtime の切り替えは WorktreeView が自分の購読で行う。ここでは左ペインの
-    // dot / preview を更新するために一覧を取り直すだけ。
-    const disposeTerminalRuntimeExited = window.electronAPI.onTerminalRuntimeExited(() => {
-      void refreshRepos();
-    });
-    const disposeSessionChanged = window.electronAPI.onSessionChanged(
-      (terminalRuntimeId, update) => {
-        setRepos((prev) => applySessionUpdate(prev, terminalRuntimeId, update));
-      },
-    );
-    const disposePullRequestsChanged = window.electronAPI.onPullRequestsChanged((updates) => {
-      setRepos((prev) => applyPullRequestUpdates(prev, updates));
-    });
     // push を購読する前に最初の tick が終わっている場合があるので、最新値も取りに行く。
     window.electronAPI
       .getProviderPlanUsage()
@@ -132,9 +116,6 @@ export function App() {
       window.electronAPI.onRateLimitStopsChanged(setRateLimitStops);
     return () => {
       disposeRepoListChanged();
-      disposeTerminalRuntimeExited();
-      disposeSessionChanged();
-      disposePullRequestsChanged();
       disposePlanUsageChanged();
       disposeRateLimitStopsChanged();
     };
@@ -242,28 +223,6 @@ export function App() {
     [refreshRepos],
   );
 
-  const handleReorderPrimarySessions = useCallback(
-    (worktreeId: string, agentSessionKeys: string[]): void => {
-      repoRefreshRequestRef.current += 1;
-      setRepos((prev) => sortPrimarySessionsByKeys(prev, worktreeId, agentSessionKeys));
-      window.electronAPI
-        .reorderPrimarySessions(worktreeId, agentSessionKeys)
-        .then((result) => {
-          if (result.ok) {
-            return;
-          }
-          // ドラッグ中に session が増減していた場合。並びは書かれないので一覧を取り直す。
-          void refreshRepos();
-        })
-        .catch((error) => {
-          // 書き込みの失敗は main が error center に残す。ここでは一覧を実態に戻すだけ。
-          console.error("Failed to reorder primary sessions.", error);
-          void refreshRepos();
-        });
-    },
-    [refreshRepos],
-  );
-
   const handleCreateWorktree = useCallback(
     async (mode: CreateWorktreeMode, branchName: string): Promise<void> => {
       if (!worktreeTarget) {
@@ -319,7 +278,7 @@ export function App() {
           />
         </div>
         <ProviderPlanUsageRows usages={planUsages} />
-        <YuruUpdateRow repos={repos} />
+        <YuruUpdateRow />
         <button
           type="button"
           className={`sidebar-footer-row sidebar-errors-row${errorCount > 0 ? " has-errors" : ""}`}
@@ -351,8 +310,6 @@ export function App() {
             sidebarWidth={sidebarWidth}
             worktree={worktree}
             onError={setToastError}
-            onReorderPrimarySessions={handleReorderPrimarySessions}
-            onSessionsChanged={refreshRepos}
           />
         </Activity>
       ))}

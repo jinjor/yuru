@@ -289,7 +289,7 @@ for (const provider of providers) {
         const window = launched.window;
 
         const card = worktreeCard(window, "feat-external");
-        await expect(card).toContainText("1 existing session");
+        await expect(card).toContainText("no session");
         await card.click();
         const sessionView = visibleWorktreeView(window);
         await sessionView.locator(".suggested-session-action").first().click();

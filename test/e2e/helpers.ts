@@ -251,7 +251,7 @@ export async function seedClaudeHome(home: string, trustedRepoPath: string): Pro
 export async function seedCodexHome(
   home: string,
   trustedRepoPath: string,
-  model = "gpt-5.5",
+  model = "gpt-5.6-luna",
 ): Promise<void> {
   const codexDir = path.join(home, ".codex");
   await mkdir(codexDir, { recursive: true });

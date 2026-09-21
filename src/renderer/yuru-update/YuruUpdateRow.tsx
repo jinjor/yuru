@@ -1,20 +1,13 @@
 import { ArrowDownToLine, LoaderCircle, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { YuruUpdateState } from "../../shared/ipc";
-import type { RepoListItem } from "../../shared/metadata";
-import { hasWorkingSession } from "../repos/repoListState";
 import { IconButton } from "../ui/IconButton";
 import { YuruUpdateRestartDialog } from "./YuruUpdateRestartDialog";
-
-interface YuruUpdateRowProps {
-  // 再起動が止めてしまう作業があるかを、この一覧から見る。
-  repos: RepoListItem[];
-}
 
 // サイドバー下部の常設導線。Yuru 自身の更新はこの 1 行で完結する。
 // 押すと更新の前半 (checkout の更新と build) が走り、終わると `Restart to update` に
 // 変わって待つ。いつ再起動するかはユーザーが決める。
-export function YuruUpdateRow({ repos }: YuruUpdateRowProps) {
+export function YuruUpdateRow() {
   const [state, setState] = useState<YuruUpdateState>({ phase: "idle" });
   const [isRestartConfirmOpen, setIsRestartConfirmOpen] = useState(false);
   const isReady = state.phase === "ready";
@@ -33,8 +26,8 @@ export function YuruUpdateRow({ repos }: YuruUpdateRowProps) {
 
   // 動いている session を止めてしまう時だけ確認を挟む。何が動いているかは
   // 左ペインのドットに出ているので、確認には並べない。
-  const requestRestart = (): void => {
-    if (hasWorkingSession(repos)) {
+  const requestRestart = async (): Promise<void> => {
+    if (await window.electronAPI.hasWorkingSession()) {
       setIsRestartConfirmOpen(true);
       return;
     }
@@ -47,7 +40,15 @@ export function YuruUpdateRow({ repos }: YuruUpdateRowProps) {
         type="button"
         className="sidebar-update-main"
         disabled={isDisabled}
-        onClick={isReady ? requestRestart : startUpdate}
+        onClick={() => {
+          if (!isReady) {
+            startUpdate();
+            return;
+          }
+          void requestRestart().catch((error: unknown) => {
+            console.error("Failed to check for working sessions.", error);
+          });
+        }}
         title={state.reason}
       >
         <YuruUpdateRowIcon phase={state.phase} />

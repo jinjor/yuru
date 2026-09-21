@@ -5,6 +5,7 @@ import type { WorktreeListItem } from "../../shared/metadata";
 import { worktreeLabelText } from "./worktreeLabel";
 import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
+import { useWorktreeDetail } from "../worktrees/useWorktreeDetail";
 
 interface WorktreeRemovalDialogProps {
   worktree: WorktreeListItem;
@@ -22,6 +23,8 @@ export function WorktreeRemovalDialog({
   onClose,
   onReady,
 }: WorktreeRemovalDialogProps) {
+  // open PR の警告を出すかはこの worktree の PR バッジで決まるので、カードと同じ経路で取る。
+  const { detail } = useWorktreeDetail(worktree.worktreeId);
   const [forceReason, setForceReason] = useState<"dirty" | "submodule" | null>(null);
   const [blockingProcesses, setBlockingProcesses] = useState<WorktreeProcessInfo[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -62,7 +65,7 @@ export function WorktreeRemovalDialog({
 
   const isForce = forceReason !== null;
   const hasOpenPullRequest =
-    worktree.githubPullRequest?.state === "open" || worktree.githubPullRequest?.state === "draft";
+    detail.githubPullRequest?.state === "open" || detail.githubPullRequest?.state === "draft";
 
   return (
     <Modal onClose={() => !busy && onClose()} topOffset={topOffset}>

@@ -1,6 +1,6 @@
 # Architecture Notes
 
-Last updated: 2026-08-16
+Last updated: 2026-09-22
 
 この文書は現在の Yuru のアーキテクチャをまとめる。
 実装の細部、型定義、処理手順の正確な姿はコードを正とする。
@@ -174,12 +174,31 @@ main worktree は task worktree として表示しない。
 task worktree は、ユーザーが並び替えた順に表示する。並びが保存されていない worktree
 (新しく作ったものや Git で直接作ったもの) は、その後ろに Git の管理ディレクトリの
 作成日時が古い順で並ぶ。
-その上に Yuru metadata、agent store、active terminal runtime を重ねる。
+metadata にない Git worktree も task worktree として表示する。
 
-- metadata の `primarySessions` が有効なら、それらを task worktree の primary として扱う
-- agent store の hint から worktree 配下の session を推測できる場合は suggested session として表示する
-- primary / suggested session に対応する terminal runtime があれば active として表示する
-- metadata にない Git worktree も、primary なしの task worktree として表示する
+一覧が持つのは、この顔ぶれと並び、それに worktree ごとの `worktreeId` / path / branch /
+HEAD までである (P22)。session や PR のように頻繁に変わる表示状態は一覧に載せない。
+
+worktree 1 件ぶんの表示状態は、左ペインのカードと右ペイン (WorktreeView) が `worktreeId`
+だけを受け取り、それぞれ自分で取得して自分の worktree の変更を購読する。中身は次の 3 つで、
+どれも Git には行かず main のメモリと agent store から組み立てる。
+
+- metadata の `primarySessions` を、対応する terminal runtime の有無で active / inactive に、
+  agent store の保存済み最新メッセージで preview にする
+- その worktree に現在結びついている terminal runtime の一覧
+- その branch の PR バッジ (GitHub のポーリングが最後に確定させた値)
+
+main は、動作中セッションの活動状態や最新メッセージが変わった時、runtime が増減した時、
+primary link が変わった時、PR バッジが変わった時に、その worktree 1 件ぶんの表示状態を
+push する。購読側は自分の `worktreeId` のものだけを見るので、1 つの session の更新が
+無関係な worktree の再描画に波及しない。
+
+suggested session (Yuru の外で作られ、その worktree に紐づいていると推測される session) は
+この表示状態に含めない。推測には agent store 全体を走査する必要があり、worktree 1 件に
+絞っても安くならないためである。取りに行くのは、選択中 worktree の Terminal ホームが
+表示されている間だけで、primary session の顔ぶれが変わった時に取り直す。
+そのため左ペインのカードは suggested session の件数を出さず、primary session がない
+worktree は `no session` と表示する。
 
 provider の path hint は candidate 推測にだけ使う。
 task worktree と primary session の strong link は、作成・昇格・解除 (detach) の明示操作でだけ変わる。
@@ -303,7 +322,8 @@ Yuru の Terminal link 規則なので、custom template にかかわらず末�
 左カラムは `repo > task worktree` を基本構造にする。
 repo row は task worktree が 0 件でも表示し、新規 worktree session の起点になる。
 
-task worktree row は branch、先頭の primary session の状態、provider、preview、suggested session の存在を表示する。
+task worktree row は branch、先頭の primary session の状態、provider、preview を表示する。
+primary session がない worktree は `no session` と表示する。
 row のクリックは常に worktree の選択で、session やプロセスの起動は行わない (F43)。
 row に残る操作は選択と `︙ → Remove worktree` (worktree lifecycle) だけである。
 
@@ -353,9 +373,11 @@ visible に戻ると effect は再実行され、大半の state (git status、d
 ディレクトリ一覧など) はこれで最新化される。新しい state を足す時はこの前提を踏まえる:
 
 - イベント購読でしか同期しない state は、hidden 中の聞き逃しに個別の対応が要る。
+  worktree の表示状態 (primary session、生きている runtime、PR バッジ) は push で更新するが、
+  hidden の間は購読が止まるので、visible に戻った effect の再実行で必ず取り直す。
   「その worktree でいま選んでいる terminal runtime」は WorktreeView の local state で
-  保持するが、exit イベントを hidden 中に聞き逃し得るため、表示直前に props
-  (`activeTerminalRuntimeIds`、その worktree で今生きている runtime の一覧) と突き合わせる。
+  保持するが、exit イベントを hidden 中に聞き逃し得るため、表示直前に
+  `activeTerminalRuntimeIds` (その worktree で今生きている runtime の一覧) と突き合わせる。
   選択先が死んでいればホームを表示する
 - code search の結果は「復帰時の再実行で最新化する」の対象に**しない**。取得した
   時点のスナップショットとして扱い、query 文字列が変わらない限り再取得しない

@@ -1,8 +1,6 @@
-import type { RepoListItem } from "./metadata.js";
+import type { RepoListItem, SuggestedSessionListItem, WorktreeDetail } from "./metadata.js";
 import type {
-  AgentActivityState,
   GitHubItem,
-  GitHubPullRequest,
   ProviderPlanUsage,
   TerminalRuntimeId,
   SessionProvider,
@@ -190,20 +188,6 @@ export type WorktreeRemovalPreparationOutcome =
   // 初期化済み submodule の事前確認で通常削除を止めた
   | { status: "submodule" };
 
-// メインプロセスが検知した、動作中セッションの変化 (活動状態・最新メッセージ)。
-// 変わったフィールドだけが載る部分更新。
-export interface SessionUpdate {
-  activityState?: AgentActivityState;
-  preview?: string;
-}
-
-// メインプロセスの PR ポーリングが検知した、worktree ごとの PR 情報の更新。
-// null は「この branch に PR が無い」こと。
-export interface PullRequestUpdate {
-  worktreeId: string;
-  pullRequest: GitHubPullRequest | null;
-}
-
 // worktree に紐づく外部リンクのブックマーク。会話の user / assistant message に出た URL を記録する。
 // title は解決できるまで URL 文字列が仮 title として入る。
 export interface Bookmark {
@@ -226,7 +210,16 @@ export interface Bookmark {
 }
 
 export interface ElectronAPI {
+  // repo と worktree の顔ぶれ・並び・Git の位置だけ。session や PR は含まない。
   getRepos: () => Promise<RepoListItem[]>;
+  // worktree 1 件ぶんの表示状態。購読を始める前の分を取りこぼさないための初期値で、
+  // 以降は onWorktreeDetailChanged の push で置き換える。
+  getWorktreeDetail: (worktreeId: string) => Promise<WorktreeDetail>;
+  // Yuru の外で作られ、この worktree に紐づいていると推測される session。agent store 全体の
+  // 走査が必要なので、一覧にも worktree の表示状態にも含めず、必要になった時だけ取りに行く。
+  getSuggestedSessions: (worktreeId: string) => Promise<SuggestedSessionListItem[]>;
+  // 更新のための再起動が止めてしまう作業があるか。動いている terminal runtime から判定する。
+  hasWorkingSession: () => Promise<boolean>;
   // 並び替え後の全 repo ID。渡した順がそのまま保存される。
   reorderRepos: (repoIds: string[]) => Promise<void>;
   // 並び替え後の、その repo の全 task worktree path。今ある worktree と食い違えば保存しない。
@@ -327,10 +320,8 @@ export interface ElectronAPI {
   onErrorNoticesChanged: (callback: (notices: AppErrorNotice[]) => void) => () => void;
   onRepoListChanged: (callback: () => void) => () => void;
   onTerminalRuntimeExited: (callback: (terminalRuntimeId: TerminalRuntimeId) => void) => () => void;
-  onSessionChanged: (
-    callback: (terminalRuntimeId: TerminalRuntimeId, update: SessionUpdate) => void,
-  ) => () => void;
-  onPullRequestsChanged: (callback: (updates: PullRequestUpdate[]) => void) => () => void;
+  // 変わった worktree 1 件ぶんの表示状態。購読側は自分の worktreeId のものだけを見る。
+  onWorktreeDetailChanged: (callback: (detail: WorktreeDetail) => void) => () => void;
   // プランの利用状況。この配列に居る provider がインストール済みの provider でもある。
   onProviderPlanUsageChanged: (callback: (usages: ProviderPlanUsage[]) => void) => () => void;
   onRateLimitStopsChanged: (callback: (stops: RateLimitStop[]) => void) => () => void;

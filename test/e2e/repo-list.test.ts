@@ -136,7 +136,7 @@ test("branch・detached・metadata 無しの task worktree を一覧表示する
     const featureCard = worktreeCard(window, "feature/list-row");
     await expect(featureCard).toBeVisible();
     await expect(featureCard.locator(".task-worktree-branch-icon")).toBeVisible();
-    await expect(featureCard).toContainText("empty");
+    await expect(featureCard).toContainText("no session");
     await expect(featureCard).toHaveAttribute("title", featurePath);
     await expect(worktreeCard(window, `detached @ ${head}`)).toBeVisible();
     await expect(window.locator(".task-worktree-card")).toHaveCount(3);
@@ -206,8 +206,8 @@ test("provider store から primary と suggested Claude session の概要を表
       primaryCard.locator('[aria-label="Claude primary session inactive"]'),
     ).toBeVisible();
 
-    const suggestedCard = worktreeCard(window, "1 existing session");
-    await expect(suggestedCard).toContainText("suggested-row");
+    const suggestedCard = worktreeCard(window, "suggested-row");
+    await expect(suggestedCard).toContainText("no session");
     await suggestedCard.click();
     await expect(visibleWorktreeView(window).locator(".suggested-session-action")).toContainText(
       "Suggested preview from store",
@@ -218,7 +218,7 @@ test("provider store から primary と suggested Claude session の概要を表
   }
 });
 
-test("suggested session が複数ある worktree は件数を表示する", async () => {
+test("suggested session が複数ある worktree はホームに全件を並べる", async () => {
   const context = await createE2eContext();
   let app: ElectronApplication | null = null;
   try {
@@ -240,8 +240,7 @@ test("suggested session が複数ある worktree は件数を表示する", asyn
     app = launched.app;
     const window = launched.window;
 
-    const card = worktreeCard(window, "2 existing sessions");
-    await expect(card).toContainText("many-suggestions");
+    const card = worktreeCard(window, "many-suggestions");
     await card.click();
     await expect(visibleWorktreeView(window).locator(".suggested-session-action")).toHaveCount(2);
   } finally {
@@ -306,7 +305,7 @@ test("provider store から消えた primary session は通知して detach さ�
     );
     await expect(toast).toHaveCount(0, { timeout: 7_000 });
 
-    await expect(worktreeCard(window, "missing-primary")).toContainText("empty");
+    await expect(worktreeCard(window, "missing-primary")).toContainText("no session");
     const metadata = await readMetadata(context);
     expect(metadata.taskWorktrees[0].primarySessions).toEqual([]);
   } finally {

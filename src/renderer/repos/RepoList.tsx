@@ -17,6 +17,7 @@ import { SessionProviderDot } from "../providers/SessionProviderDot";
 import { EmptyState } from "../ui/EmptyState";
 import { IconButton } from "../ui/IconButton";
 import { useReorderDrag, type ReorderDrag } from "../utils/useReorderDrag";
+import { useWorktreeDetail } from "../worktrees/useWorktreeDetail";
 
 interface RepoListProps {
   repos: RepoListItem[];
@@ -199,8 +200,9 @@ function WorktreeCard({
   onSelectWorktree,
   onRequestRemoveWorktree,
 }: WorktreeCardProps) {
-  const { suggestedSessions } = worktree;
-  const primarySession = worktree.primarySessions[0];
+  // カードが受け取るのは worktree の骨組みだけで、session と PR は自分で取得・購読する。
+  const { detail } = useWorktreeDetail(worktree.worktreeId);
+  const primarySession = detail.primarySessions[0];
   const isSelected = selectedWorktreeId === worktree.worktreeId;
   const isPrimarySessionActive = primarySession?.state === "active";
   // main worktree は削除対象外。task worktree にだけ ︙ メニューを出す。
@@ -282,7 +284,7 @@ function WorktreeCard({
               {formatHeadCommittedAt(worktree.headCommittedAt)}
             </time>
           )}
-          {worktree.githubPullRequest && <GitHubBadge item={worktree.githubPullRequest} />}
+          {detail.githubPullRequest && <GitHubBadge item={detail.githubPullRequest} />}
         </span>
         {isRemoving ? (
           <span className="task-worktree-removing">
@@ -293,9 +295,7 @@ function WorktreeCard({
           <PrimarySessionSummary primarySession={primarySession} />
         ) : (
           <span className="task-worktree-hint">
-            {worktree.isMainWorktree === true
-              ? "terminal"
-              : formatExistingSessionCount(suggestedSessions.length)}
+            {worktree.isMainWorktree === true ? "terminal" : "no session"}
           </span>
         )}
       </div>
@@ -361,13 +361,6 @@ function renderWorktreeLabel(worktree: WorktreeListItem): ReactNode {
       {text}
     </>
   );
-}
-
-function formatExistingSessionCount(count: number): string {
-  if (count === 0) {
-    return "empty";
-  }
-  return `${count} existing session${count === 1 ? "" : "s"}`;
 }
 
 function formatHeadCommittedAt(timestamp: number): string {

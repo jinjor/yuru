@@ -4,14 +4,17 @@ import type {
   YuruUpdateState,
   ElectronAPI,
   GitDiffScope,
-  PullRequestUpdate,
-  SessionUpdate,
   WorktreeProcessRef,
 } from "../shared/ipc.js";
+import type { WorktreeDetail } from "../shared/metadata.js";
 import type { ProviderPlanUsage, RateLimitStop, SessionProvider } from "../shared/session.js";
 
 const electronAPI: ElectronAPI = {
   getRepos: () => ipcRenderer.invoke("metadata:listRepos"),
+  getWorktreeDetail: (worktreeId: string) => ipcRenderer.invoke("worktree:detail", worktreeId),
+  getSuggestedSessions: (worktreeId: string) =>
+    ipcRenderer.invoke("worktreeSession:listSuggested", worktreeId),
+  hasWorkingSession: () => ipcRenderer.invoke("worktreeSession:hasWorking"),
   reorderRepos: (repoIds: string[]) => ipcRenderer.invoke("repos:reorder", repoIds),
   reorderWorktrees: (repoId: string, worktreePaths: string[]) =>
     ipcRenderer.invoke("worktrees:reorder", repoId, worktreePaths),
@@ -124,23 +127,12 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.removeListener("terminalRuntime:exited", listener);
     };
   },
-  onSessionChanged: (callback) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      terminalRuntimeId: string,
-      update: SessionUpdate,
-    ) => callback(terminalRuntimeId, update);
-    ipcRenderer.on("session:changed", listener);
+  onWorktreeDetailChanged: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, detail: WorktreeDetail) =>
+      callback(detail);
+    ipcRenderer.on("worktree:detailChanged", listener);
     return () => {
-      ipcRenderer.removeListener("session:changed", listener);
-    };
-  },
-  onPullRequestsChanged: (callback) => {
-    const listener = (_event: Electron.IpcRendererEvent, updates: PullRequestUpdate[]) =>
-      callback(updates);
-    ipcRenderer.on("pullRequests:changed", listener);
-    return () => {
-      ipcRenderer.removeListener("pullRequests:changed", listener);
+      ipcRenderer.removeListener("worktree:detailChanged", listener);
     };
   },
   onProviderPlanUsageChanged: (callback) => {
