@@ -28,7 +28,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 |---|---|---|---|---|
 | P31 | polish | Changes / Files | Changes からファイルを開くときは preview を開かないようにする | 変更内容を確認したい |
 | P32 | polish | Worktrees | worktree を切った直後のセットアップを最適化する | worktree 作成後に作業を始めるまでの手間を減らしたい |
-| P33 | polish | Files / Preview | Shiki の言語定義を必要なときだけ読み込む | コード表示の初期読み込みを軽くしたい |
 | F76 | feature | Bookmarks | ローカルファイルのブックマーク | ファイルやフォルダ、よく確認する実装をブックマークしたい |
 | B12 | bug | Sessions / Worktree Context | Claude の resume で worktree の作業指示が引き継がれない | `--append-system-prompt` の指示が保存されないため、resume すると Claude が repo root で作業してしまう。詳細: docs/backlog-details/B12-resume-worktree-context.md |
 | B15 | bug | Terminal | ターミナルにフォーカスできないことがある | キーボード入力を始められないことがある |
@@ -75,6 +74,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F55 | feature | Mobile | モバイル連携 | モバイルから Yuru を使えるようにしたい |
 | P23 | polish | Files / Preview | diff パネルが表示している内容を 1 つの取得経路にまとめる | 差分テキストと画像で loader も state も別々にあり、表示中の内容を指す共通の識別子がない。今は取得契機と間隔をそろえて実害を消しているだけなので、片方だけ追従が漏れると「見ていない内容を Reviewed にできる」形の不整合が再発しうる |
 | P24 | polish | Sessions / Providers | Codex CLI 0.147 未満のログ形式 (exec_command function_call / patch_apply_end) 向けの後方互換パーサを削除する | 2026-09-11 以降に `~/.codex/sessions` を再確認し、旧形式が1ヶ月出現していなければ削除可。確認方法込みで詳細: docs/backlog-details/P24-remove-legacy-codex-exec-format.md |
+| P33 | polish | Files / Preview | Shiki の言語定義を必要なときだけ読み込む | コード表示の初期読み込みを軽くしたい |
 | F62 | feature | Worktrees / Terminal | worktree でターミナルを使えるようにする | エージェントのセッションとは別にコマンドを実行したい |
 | F36 | feature | Repos | `yuru add` の結果を実行中の画面に反映する | 詳細: docs/backlog-details/F36-yuru-add-refresh.md |
 
