@@ -28,6 +28,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 |---|---|---|---|---|
 | P31 | polish | Changes / Files | Changes からファイルを開くときは preview を開かないようにする | 変更内容を確認したい |
 | P32 | polish | Worktrees | worktree を切った直後のセットアップを最適化する | worktree 作成後に作業を始めるまでの手間を減らしたい |
+| P33 | polish | Files / Preview | Shiki の言語定義を必要なときだけ読み込む | コード表示の初期読み込みを軽くしたい |
 | F76 | feature | Bookmarks | ローカルファイルのブックマーク | ファイルやフォルダ、よく確認する実装をブックマークしたい |
 | B12 | bug | Sessions / Worktree Context | Claude の resume で worktree の作業指示が引き継がれない | `--append-system-prompt` の指示が保存されないため、resume すると Claude が repo root で作業してしまう。詳細: docs/backlog-details/B12-resume-worktree-context.md |
 | B15 | bug | Terminal | ターミナルにフォーカスできないことがある | キーボード入力を始められないことがある |
