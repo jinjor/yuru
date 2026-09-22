@@ -58,6 +58,16 @@ export function loadLanguageExtension(filePath: string): Promise<Extension> | nu
       return import("@codemirror/lang-rust").then((m) => m.rust());
     case "go":
       return import("@codemirror/lang-go").then((m) => m.go());
+    // Objective-C と Objective-C++ はそれぞれ専用の legacy mode を使う。
+    // 共用ヘッダの .h は拡張子だけでは判別できないため、下の既存どおり C++ に寄せる。
+    case "m":
+      return import("@codemirror/legacy-modes/mode/clike").then((m) =>
+        StreamLanguage.define(m.objectiveC),
+      );
+    case "mm":
+      return import("@codemirror/legacy-modes/mode/clike").then((m) =>
+        StreamLanguage.define(m.objectiveCpp),
+      );
     // lang-cpp は C と C++ を同じ文法で扱う。C 固有の拡張子 (.c) と、C/C++ で共用の
     // ヘッダ (.h) もここに含める。
     case "c":

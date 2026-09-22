@@ -132,6 +132,31 @@ test("C / C++ の拡張子 (.c .cpp .cc .hpp .h など) を lang-cpp でハイ�
   }
 });
 
+test(".m / .mm の編集時に Objective-C / Objective-C++ のキーワードをハイライトする", async () => {
+  for (const path of ["ios/AppDelegate.m", "ios/CppBridge.mm"]) {
+    const language = loadLanguageExtension(path);
+    assert.ok(language, path);
+
+    const state = EditorState.create({
+      doc: "@interface AppDelegate : NSObject\n@end",
+      extensions: [await language],
+    });
+    const highlighted = [];
+    highlightTree(syntaxTree(state), classHighlighter, (from, to, classes) => {
+      highlighted.push({ text: state.sliceDoc(from, to), classes });
+    });
+
+    assert.deepEqual(
+      highlighted.filter(({ text }) => text === "@interface" || text === "@end"),
+      [
+        { text: "@interface", classes: "tok-keyword" },
+        { text: "@end", classes: "tok-keyword" },
+      ],
+      path,
+    );
+  }
+});
+
 test("CMakeLists.txt / .cmake の編集時にコマンド・コメントをハイライトする", async () => {
   const paths = ["CMakeLists.txt", "src/CMakeLists.txt", "cmake/toolchain.cmake"];
 

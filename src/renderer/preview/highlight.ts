@@ -22,6 +22,8 @@ const defaultLangs: BundledLanguage[] = [
   "go",
   "c",
   "cpp",
+  "objective-c",
+  "objective-cpp",
   "cmake",
   "dockerfile",
   "proto",
@@ -80,6 +82,10 @@ const extensionToLang: Record<string, BundledLanguage> = {
   tpp: "cpp",
   ixx: "cpp",
   cppm: "cpp",
+  // Objective-C は C、Objective-C++ は C++ に Objective-C の構文を加えた別言語。
+  // 共用ヘッダの .h は拡張子だけでは判別できないため、上の既存どおり cpp に寄せる。
+  m: "objective-c",
+  mm: "objective-cpp",
   cmake: "cmake",
   dockerfile: "dockerfile",
   proto: "proto",

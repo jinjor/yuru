@@ -57,3 +57,11 @@ test(".json5 を拡張子で判定してハイライトする", async () => {
   assert.equal(line.tokens[0]?.content, "{ ");
   assert.notEqual(line.tokens[0]?.color, "#d4d4d4");
 });
+
+test(".m / .mm を Objective-C / Objective-C++ としてハイライトする", async () => {
+  for (const path of ["ios/AppDelegate.m", "ios/CppBridge.mm"]) {
+    const [line] = await tokenizeCode("@interface AppDelegate : NSObject", path, 32);
+    assert.equal(line.tokens[0]?.content, "@interface", path);
+    assert.notEqual(line.tokens[0]?.color, "#d4d4d4", path);
+  }
+});
