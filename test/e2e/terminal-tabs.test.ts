@@ -383,6 +383,34 @@ test("active suggested を promote すると既存 runtime のタブが移動先
     });
     await expect(suggestedRow).toContainText("active");
 
+    // 動いている session は A の primary なので、その更新は A の表示状態として push される。
+    // B のホームに出ている同じ session の行も、それを見て追従する。
+    const updatedPreview = "Active session moving between worktrees · UPDATED_WHILE_SUGGESTED";
+    const pushedDetail = await window.evaluate(
+      async ({ name, preview }) => {
+        const taskWorktrees = (await window.electronAPI.getRepos())[0]?.taskWorktrees ?? [];
+        const worktree = taskWorktrees.find((entry) => entry.name === name);
+        if (!worktree) {
+          throw new Error(`The task worktree ${name} was not listed`);
+        }
+        const detail = await window.electronAPI.getWorktreeDetail(worktree.worktreeId);
+        return {
+          ...detail,
+          primarySessions: detail.primarySessions.map((session) => ({
+            ...session,
+            preview,
+            activityState: "working" as const,
+          })),
+        };
+      },
+      { name: "session-route-a", preview: updatedPreview },
+    );
+    await app.evaluate(({ BrowserWindow }, detail) => {
+      BrowserWindow.getAllWindows()[0]?.webContents.send("worktree:detailChanged", detail);
+    }, pushedDetail);
+    await expect(suggestedRow).toContainText("UPDATED_WHILE_SUGGESTED");
+    await expect(suggestedRow.locator(".session-provider-dot.activity-working")).toBeVisible();
+
     await suggestedRow.click();
     await expect(sessionView.locator(".xterm")).toContainText(FIRST_SESSION_ID);
     await expect(

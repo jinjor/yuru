@@ -423,7 +423,7 @@ export class YuruService {
   // ポーリングが最後に確定させた worktree ごとの PR バッジ。表示状態を返す時に読み、
   // 変わった分だけを push するためにも使う。
   private readonly pullRequestByWorktreeId = new Map<string, GitHubPullRequest | null>();
-  // worktree ごとの、最後に始めた表示状態の組み立て。preview の読み取りを挟むため
+  // worktree ごとに、最後に始めた表示状態の組み立ての番号。preview の読み取りを挟むため
   // 組み立ては非同期で、追い越された古い結果は push しない。
   private readonly worktreeDetailSequences = new Map<string, number>();
 
@@ -674,17 +674,17 @@ export class YuruService {
   }
 
   // 表示状態の組み立ては preview の読み取りを挟むので、同じ worktree への連続した呼び出しが
-  // 追い越し合いうる。最後に始めた組み立ての結果だけを push する。
+  // 追い越し合いうる。最後に始めた組み立ての結果だけを push する。番号は worktree ごとに
+  // 増え続ける (消して振り直すと、走り続けている古い組み立てと番号が一致して古い状態を
+  // 最新として push してしまう)。
   private emitWorktreeDetail(worktreeId: string): void {
     const sequence = (this.worktreeDetailSequences.get(worktreeId) ?? 0) + 1;
     this.worktreeDetailSequences.set(worktreeId, sequence);
     void this.getWorktreeDetail(worktreeId)
       .then((detail) => {
-        if (this.worktreeDetailSequences.get(worktreeId) !== sequence) {
-          return;
+        if (this.worktreeDetailSequences.get(worktreeId) === sequence) {
+          this.events.worktreeDetailChanged(detail);
         }
-        this.worktreeDetailSequences.delete(worktreeId);
-        this.events.worktreeDetailChanged(detail);
       })
       .catch((error: unknown) => {
         recordAppWarning(toAppError(error));

@@ -102,7 +102,12 @@ const WorktreeViewContent = memo(function WorktreeViewContent({
     (window.__yuruWorktreeViewRenderCounts[worktreeId] ?? 0) + 1;
 
   // props で受け取るのは worktree の骨組みだけ。session と PR は自分で取得・購読する。
-  const { detail, refresh: refreshDetail, reorderPrimarySessions } = useWorktreeDetail(worktreeId);
+  const {
+    detail,
+    isLoaded: isDetailLoaded,
+    refresh: refreshDetail,
+    reorderPrimarySessions,
+  } = useWorktreeDetail(worktreeId);
   const worktreeViewColumnRef = useRef<HTMLDivElement>(null);
   // この worktree で明示的に選んだ terminal runtime。null はホームを表す。
   const [selectedTerminalRuntimeId, setSelectedTerminalRuntimeId] =
@@ -391,6 +396,7 @@ const WorktreeViewContent = memo(function WorktreeViewContent({
             <TerminalHome
               isMainWorktree={isMainWorktree}
               primarySessions={detail.primarySessions}
+              primarySessionsLoaded={isDetailLoaded}
               providers={providers}
               worktreeId={worktreeId}
               onSelectPrimarySession={setSelectedTerminalRuntimeId}

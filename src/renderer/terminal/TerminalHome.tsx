@@ -5,10 +5,14 @@ import type { SessionProvider, TerminalRuntimeId } from "../../shared/session";
 import { providerLabel } from "../providers/providerLabel";
 import { SessionProviderDot } from "../providers/SessionProviderDot";
 import { useReorderDrag, type ReorderDrag } from "../utils/useReorderDrag";
+import { applyPrimarySessionState } from "./suggestedSessionState";
 
 interface TerminalHomeProps {
   isMainWorktree: boolean;
   primarySessions: PrimarySessionListItem[];
+  // primarySessions が「まだ取得できていない」のか「1 件も無い」のかの区別。前者のうちに
+  // suggested を探しに行くと、届いた後にもう一度同じ探索を走らせることになる。
+  primarySessionsLoaded: boolean;
   providers: SessionProvider[];
   worktreeId: string;
   onSelectPrimarySession: (terminalRuntimeId: TerminalRuntimeId) => void;
@@ -24,6 +28,7 @@ interface TerminalHomeProps {
 export function TerminalHome({
   isMainWorktree,
   primarySessions,
+  primarySessionsLoaded,
   providers,
   worktreeId,
   onSelectPrimarySession,
@@ -39,7 +44,7 @@ export function TerminalHome({
     primarySession.agentSessionKey === null ? [] : [primarySession.agentSessionKey],
   );
   const suggestedSessions = useSuggestedSessions(
-    isMainWorktree ? null : worktreeId,
+    isMainWorktree || !primarySessionsLoaded ? null : worktreeId,
     primarySessionKeys,
   );
   // 並び替えられるのは Sessions の行だけ。Suggested と New session は掴めず、
@@ -112,8 +117,9 @@ export function TerminalHome({
 
 // Yuru の外で作られた session の推測は agent store 全体の走査になるので、一覧にも
 // worktree の表示状態にも載せず、この画面が出ている間だけ取りに行く。取り直すのは
-// primary session の顔ぶれが変わった時 (detach で 1 件増え、昇格で 1 件減る) だけで、
-// 動作中 session の preview 更新では取り直さない。
+// primary session の顔ぶれが変わった時 (detach で 1 件増え、昇格で 1 件減る) だけ。
+// 行の active / 活動状態 / preview は、その session が primary になっている worktree の
+// 表示状態が push で届くので、走査し直さずそこから写す。
 function useSuggestedSessions(
   worktreeId: string | null,
   primarySessionKeys: readonly string[],
@@ -140,6 +146,15 @@ function useSuggestedSessions(
       cancelled = true;
     };
   }, [primarySessionKey, worktreeId]);
+
+  useEffect(() => {
+    if (!worktreeId) {
+      return;
+    }
+    return window.electronAPI.onWorktreeDetailChanged((detail) => {
+      setSuggestedSessions((prev) => applyPrimarySessionState(prev, detail.primarySessions));
+    });
+  }, [worktreeId]);
 
   return suggestedSessions;
 }

@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PrimarySessionListItem, WorktreeDetail } from "../../shared/metadata";
 
 export interface WorktreeDetailStore {
   detail: WorktreeDetail;
+  // 取得も push もまだ届いていない間は false。空の表示状態と「本当に何も無い」を
+  // 区別したい所 (重い取得の起点など) がこれを見る。
+  isLoaded: boolean;
   // session の開始・解除のように、結果を待ってから表示を切り替えたい操作のための取り直し。
   refresh: () => Promise<void>;
   // ホームとタブの並び替え。渡すのはこの worktree の全 primary session の key。
@@ -22,7 +25,7 @@ function emptyWorktreeDetail(worktreeId: string): WorktreeDetail {
 // 取り直しのためで、以降の更新は push が置き換える。取得は push を追い越しうるので、
 // push と書き込みは走っている取得を無効にしてから state を書く。
 export function useWorktreeDetail(worktreeId: string): WorktreeDetailStore {
-  const [detail, setDetail] = useState<WorktreeDetail>(() => emptyWorktreeDetail(worktreeId));
+  const [detail, setDetail] = useState<WorktreeDetail | null>(null);
   const requestRef = useRef(0);
 
   const refresh = useCallback(async (): Promise<void> => {
@@ -54,10 +57,14 @@ export function useWorktreeDetail(worktreeId: string): WorktreeDetailStore {
     (agentSessionKeys: string[]): void => {
       // 書き込みの結果が push で戻るまで、ドロップした並びを描き続ける。
       requestRef.current += 1;
-      setDetail((prev) => ({
-        ...prev,
-        primarySessions: sortPrimarySessionsByKeys(prev.primarySessions, agentSessionKeys),
-      }));
+      setDetail((prev) =>
+        prev
+          ? {
+              ...prev,
+              primarySessions: sortPrimarySessionsByKeys(prev.primarySessions, agentSessionKeys),
+            }
+          : prev,
+      );
       window.electronAPI
         .reorderPrimarySessions(worktreeId, agentSessionKeys)
         .then((result) => {
@@ -76,7 +83,13 @@ export function useWorktreeDetail(worktreeId: string): WorktreeDetailStore {
     [refresh, worktreeId],
   );
 
-  return { detail, refresh, reorderPrimarySessions };
+  const emptyDetail = useMemo(() => emptyWorktreeDetail(worktreeId), [worktreeId]);
+  return {
+    detail: detail ?? emptyDetail,
+    isLoaded: detail !== null,
+    refresh,
+    reorderPrimarySessions,
+  };
 }
 
 function sortPrimarySessionsByKeys(
