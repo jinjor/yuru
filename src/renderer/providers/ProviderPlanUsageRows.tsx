@@ -86,12 +86,16 @@ function PlanUsageCell({ window, now }: { window: PlanUsageWindow | null; now: n
   );
 }
 
-function unavailableLabel(state: "logged-out" | "no-plan-limits" | "failed"): string {
+function unavailableLabel(
+  state: "logged-out" | "no-plan-limits" | "unavailable" | "failed",
+): string {
   switch (state) {
     case "logged-out":
       return "not logged in";
     case "no-plan-limits":
       return "no plan limits";
+    case "unavailable":
+      return "unavailable";
     case "failed":
       return "unavailable";
   }

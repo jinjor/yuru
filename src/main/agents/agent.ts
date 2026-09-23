@@ -54,7 +54,9 @@ export interface ResumeSessionTarget {
 }
 
 // provider が返したプランの利用状況。取得そのものに失敗した場合は例外になるので、
-// ここには「取れなかった」状態は現れない (呼び出し側が failed として扱う)。
+// ここに現れる「取れなかった」状態は unavailable だけ (呼び出し側は例外を failed
+// として扱う)。unavailable はエラーではなく、その provider に読むべきデータが
+// そもそも無いことを表す。
 export type PlanUsage =
   | {
       state: "ok";
@@ -63,7 +65,8 @@ export type PlanUsage =
       weekly: PlanUsageWindow | null;
     }
   | { state: "logged-out" }
-  | { state: "no-plan-limits" };
+  | { state: "no-plan-limits" }
+  | { state: "unavailable" };
 
 export interface Agent {
   definition: AgentDefinition;

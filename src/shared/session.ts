@@ -55,6 +55,9 @@ export type ProviderPlanUsage = { provider: SessionProvider } & (
   // ログインはしているがプランのリミットが適用されない。
   // Claude を ANTHROPIC_API_KEY や Bedrock / Vertex で使っているときにこうなる。
   | { state: "no-plan-limits" }
+  // ログインはしているが、その provider の利用量を読む手段が無い (devin)。
+  // リミットが無いのではなく、データが取れない。
+  | { state: "unavailable" }
   // 上記以外の理由で取得できなかった。詳細は error center に記録される。
   | { state: "failed" }
 );
