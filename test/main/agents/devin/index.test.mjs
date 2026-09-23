@@ -237,8 +237,9 @@ test("loadStoredSessionPreview は assistant message が無ければ title に�
   assert.equal(await devinAgent.loadStoredSessionPreview("unknown"), null);
 });
 
-test("hasStoredSession は session 行の存在を見る", async () => {
+test("hasStoredSession は session 行の存在を見る (hidden は存在しない扱い)", async () => {
   assert.equal(await devinAgent.hasStoredSession("quiet-river"), true);
+  assert.equal(await devinAgent.hasStoredSession("hidden-fox"), false);
   assert.equal(await devinAgent.hasStoredSession("unknown"), false);
 });
 

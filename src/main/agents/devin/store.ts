@@ -131,7 +131,11 @@ export function readSessionRow(db: DatabaseSync, agentSessionId: string): DevinS
   const select = ["id", "working_directory", "title", "created_at", "last_activity_at"]
     .filter((column) => columns.has(column))
     .join(", ");
-  const row = db.prepare(`SELECT ${select} FROM sessions WHERE id = ?`).get(agentSessionId);
+  const row = db
+    .prepare(
+      `SELECT ${select} FROM sessions WHERE id = ?${columns.has("hidden") ? " AND hidden = 0" : ""}`,
+    )
+    .get(agentSessionId);
   return parseSessionRow(row);
 }
 
@@ -149,8 +153,16 @@ export function listSessionIds(db: DatabaseSync): Set<string> {
   return ids;
 }
 
+// A hidden session is invisible in devin's own listing, so Yuru treats it as
+// absent here too — hasStoredSession gates resume, and resuming a session the
+// provider no longer lists is not meaningful.
 export function hasSessionRow(db: DatabaseSync, agentSessionId: string): boolean {
-  const row = db.prepare(`SELECT 1 AS one FROM sessions WHERE id = ?`).get(agentSessionId);
+  const columns = readSessionColumns(db);
+  const row = db
+    .prepare(
+      `SELECT 1 AS one FROM sessions WHERE id = ?${columns.has("hidden") ? " AND hidden = 0" : ""}`,
+    )
+    .get(agentSessionId);
   return row !== undefined;
 }
 
@@ -168,8 +180,17 @@ export function parseMessage(raw: unknown): DevinMessage | null {
   };
 }
 
+function chatMessageContent(raw: string): string | null {
+  try {
+    return parseMessage(JSON.parse(raw))?.content ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // The latest assistant message with actual text, for session previews.
 // Tool-call-only assistant nodes have an empty content and are skipped.
+// The role check runs in SQL so non-assistant nodes are never parsed.
 export function readLastAssistantMessage(
   db: DatabaseSync,
   agentSessionId: string,
@@ -177,7 +198,10 @@ export function readLastAssistantMessage(
   const rows = db
     .prepare(
       `SELECT chat_message, created_at FROM message_nodes
-       WHERE session_id = ? ORDER BY node_id DESC LIMIT ?`,
+       WHERE session_id = ?
+         AND json_valid(chat_message)
+         AND json_extract(chat_message, '$.role') = 'assistant'
+       ORDER BY node_id DESC LIMIT ?`,
     )
     .all(agentSessionId, LAST_MESSAGE_SCAN_LIMIT) as unknown[];
   for (const row of rows) {
@@ -191,15 +215,10 @@ export function readLastAssistantMessage(
     if (typeof raw !== "string") {
       continue;
     }
-    let message: DevinMessage | null;
-    try {
-      message = parseMessage(JSON.parse(raw));
-    } catch {
-      continue;
-    }
-    if (message?.role === "assistant" && message.content.trim() !== "") {
+    const content = chatMessageContent(raw);
+    if (content !== null && content.trim() !== "") {
       return {
-        text: message.content,
+        text: content,
         timestamp: typeof created_at === "number" ? created_at * 1000 : 0,
       };
     }
@@ -207,48 +226,63 @@ export function readLastAssistantMessage(
   return null;
 }
 
-// The contents of every user message recorded for the session, newest first.
-export function readUserMessageContents(db: DatabaseSync, agentSessionId: string): string[] {
+// The contents of the user messages recorded for the given sessions, grouped
+// by session. Used by session-id resolution, which only ever has a handful of
+// candidate sessions, so one IN query replaces a query per candidate.
+export function readUserMessageContents(
+  db: DatabaseSync,
+  agentSessionIds: readonly string[],
+): Map<string, string[]> {
+  const contentsBySession = new Map<string, string[]>();
+  if (agentSessionIds.length === 0) {
+    return contentsBySession;
+  }
+  const placeholders = agentSessionIds.map(() => "?").join(", ");
   const rows = db
     .prepare(
-      `SELECT chat_message FROM message_nodes
-       WHERE session_id = ?
+      `SELECT session_id, chat_message FROM message_nodes
+       WHERE session_id IN (${placeholders})
          AND json_valid(chat_message)
-         AND json_extract(chat_message, '$.role') = 'user'
-       ORDER BY node_id DESC`,
+         AND json_extract(chat_message, '$.role') = 'user'`,
     )
-    .all(agentSessionId) as unknown[];
-  const contents: string[] = [];
+    .all(...agentSessionIds) as unknown[];
   for (const row of rows) {
     if (typeof row !== "object" || row === null) {
       continue;
     }
-    const raw = (row as { chat_message?: unknown }).chat_message;
-    if (typeof raw !== "string") {
+    const { session_id: sessionId, chat_message: raw } = row as {
+      session_id?: unknown;
+      chat_message?: unknown;
+    };
+    if (typeof sessionId !== "string" || typeof raw !== "string") {
       continue;
     }
-    try {
-      const message = parseMessage(JSON.parse(raw));
-      if (message) {
-        contents.push(message.content);
-      }
-    } catch {
-      // Ignore malformed message rows.
+    const content = chatMessageContent(raw);
+    if (content !== null) {
+      const contents = contentsBySession.get(sessionId) ?? [];
+      contents.push(content);
+      contentsBySession.set(sessionId, contents);
     }
   }
-  return contents;
+  return contentsBySession;
 }
 
 // User messages containing the worktree-context marker, grouped by session.
 // Used to link repo-root-launched sessions to the worktree the injected
-// context names.
+// context names. Hidden sessions are excluded in SQL so the whole-table
+// marker scan never has to parse their messages.
 export function readMarkerUserMessages(db: DatabaseSync, marker: string): Map<string, string[]> {
+  const columns = readSessionColumns(db);
+  const visibleOnly = columns.has("hidden")
+    ? "AND session_id IN (SELECT id FROM sessions WHERE hidden = 0)"
+    : "";
   const rows = db
     .prepare(
       `SELECT session_id, chat_message FROM message_nodes
        WHERE instr(chat_message, ?) > 0
          AND json_valid(chat_message)
-         AND json_extract(chat_message, '$.role') = 'user'`,
+         AND json_extract(chat_message, '$.role') = 'user'
+         ${visibleOnly}`,
     )
     .all(marker) as unknown[];
   const contentsBySession = new Map<string, string[]>();
@@ -263,15 +297,11 @@ export function readMarkerUserMessages(db: DatabaseSync, marker: string): Map<st
     if (typeof sessionId !== "string" || typeof raw !== "string") {
       continue;
     }
-    try {
-      const message = parseMessage(JSON.parse(raw));
-      if (message) {
-        const contents = contentsBySession.get(sessionId) ?? [];
-        contents.push(message.content);
-        contentsBySession.set(sessionId, contents);
-      }
-    } catch {
-      // Ignore malformed message rows.
+    const content = chatMessageContent(raw);
+    if (content !== null) {
+      const contents = contentsBySession.get(sessionId) ?? [];
+      contents.push(content);
+      contentsBySession.set(sessionId, contents);
     }
   }
   return contentsBySession;

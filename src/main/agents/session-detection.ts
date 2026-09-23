@@ -21,6 +21,17 @@ export function normalizeRealPath(filePath: string): string {
   }
 }
 
+// Callers that scan many recorded sessions against the same worktree list
+// normalize the worktree paths once and hand down the normalized → original
+// map, instead of paying a realpathSync per session row per worktree.
+export function normalizeWorktreePaths(
+  worktreePaths: readonly string[],
+): ReadonlyMap<string, string> {
+  return new Map(
+    worktreePaths.map((worktreePath) => [normalizeRealPath(worktreePath), worktreePath]),
+  );
+}
+
 export function resolveContainingWorktreePath(
   cwd: string,
   worktreePaths: readonly string[],

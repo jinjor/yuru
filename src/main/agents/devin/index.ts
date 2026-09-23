@@ -2,11 +2,13 @@ import { setTimeout } from "node:timers/promises";
 import type { PendingSession, SessionPreview, Agent, SessionSnapshot } from "../agent.js";
 import {
   normalizeRealPath,
+  normalizeWorktreePaths,
   resolveMentionedWorktreePaths,
   type WorktreeSessionHint,
 } from "../session-detection.js";
 import {
   loadWorktreeContextPrompt,
+  USER_REQUEST_PREFIX,
   WORKTREE_CONTEXT_PROMPT_MARKER,
 } from "../worktree-context-prompt.js";
 import { loadDevinPlanUsage } from "./plan-usage.js";
@@ -29,13 +31,11 @@ const SESSION_STARTED_MARGIN_MS = 2_000;
 
 // devin takes the whole request as its first user message. kimi, which has to
 // type both messages into the PTY, separates the context from the task with
-// this prefix; devin joins them into the single launch prompt instead.
-const USER_MESSAGE_PREFIX = "User request:\n\n";
-
+// USER_REQUEST_PREFIX; devin joins them into the single launch prompt instead.
 function toFirstUserMessage(contextPrompt: string, initialPrompt: string | undefined): string {
   return initialPrompt === undefined
     ? contextPrompt
-    : `${contextPrompt}\n\n${USER_MESSAGE_PREFIX}${initialPrompt}`;
+    : `${contextPrompt}\n\n${USER_REQUEST_PREFIX}${initialPrompt}`;
 }
 
 async function loadStoredSessions(): Promise<SessionSnapshot[]> {
@@ -75,13 +75,14 @@ async function loadWorktreeSessionHints(
   return withDevinStore((db) => {
     const hints: WorktreeSessionHint[] = [];
     const rows = readSessionRows(db);
+    const worktrees = normalizeWorktreePaths(worktreePaths);
     // Mention hints must be limited to the same sessions the listing shows —
     // readSessionRows already excludes hidden sessions, so its ids are the
     // visible set. A hidden session's recorded context would otherwise still
     // surface it as a suggested session.
     const visibleIds = new Set(rows.map((row) => row.agentSessionId));
     for (const row of rows) {
-      const hint = detectDevinWorkDirHint(row.agentSessionId, row.workDir, worktreePaths);
+      const hint = detectDevinWorkDirHint(row.agentSessionId, row.workDir, worktrees);
       if (hint) {
         hints.push(hint);
       }
@@ -116,12 +117,19 @@ async function waitForSessionId(pending: PendingSession): Promise<string> {
       const candidates = readSessionRows(db).filter(
         (row) =>
           !pending.existingAgentSessionIds.has(row.agentSessionId) &&
-          row.createdAt >= pending.startedAt - SESSION_STARTED_MARGIN_MS &&
+          // A row whose created_at failed to read (e.g. schema drift) reports
+          // 0; that alone can't disqualify it — the launch-time id snapshot
+          // and the recorded context still tell new sessions apart.
+          (row.createdAt === 0 || row.createdAt >= pending.startedAt - SESSION_STARTED_MARGIN_MS) &&
           normalizeRealPath(row.workDir) === launchWorkDir,
+      );
+      const contentsBySession = readUserMessageContents(
+        db,
+        candidates.map((candidate) => candidate.agentSessionId),
       );
       return (
         candidates.find((candidate) =>
-          readUserMessageContents(db, candidate.agentSessionId).some(
+          (contentsBySession.get(candidate.agentSessionId) ?? []).some(
             (content) => resolveMentionedWorktreePaths(content, [pending.worktreePath]).length > 0,
           ),
         )?.agentSessionId ?? null

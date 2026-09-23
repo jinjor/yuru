@@ -38,6 +38,16 @@ test("default worktree context は GitHub Issue / PR の表記を指示する", 
   assert.match(prompt, /`owner\/repository#123` for another repository/);
 });
 
+// プロンプトを user message として記録する provider (kimi, devin) は、
+// マーカーと worktree path の言及で session を worktree に紐づけている。
+// テンプレートの変更でどちらかが欠けると、その検出経路が静かに壊れる。
+test("default worktree context は検出に使うマーカーと worktree path を含む", async () => {
+  const prompt = await loadWorktreeContextPrompt(context);
+
+  assert.ok(prompt.includes("Yuru opened this session for the task worktree"));
+  assert.ok(prompt.includes("/repo/.yuru/worktrees/feature-link"));
+});
+
 test("GitHub Issue / PR の表記は custom worktree context にも付加する", async () => {
   fs.writeFileSync(worktreeContextPromptPath(), "Custom context for {branchName}.\n");
 

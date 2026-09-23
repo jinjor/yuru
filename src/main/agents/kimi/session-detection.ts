@@ -1,12 +1,13 @@
 import { WORKTREE_CONTEXT_PROMPT_MARKER } from "../worktree-context-prompt.js";
 import {
   normalizeRealPath,
+  normalizeWorktreePaths,
   resolveContainingWorktreePath,
   resolveMentionedWorktreePaths,
   type WorktreeSessionHint,
 } from "../session-detection.js";
 
-export { normalizeRealPath };
+export { normalizeRealPath, normalizeWorktreePaths };
 
 export interface KimiStoredSessionRef {
   agentSessionId: string;
@@ -21,22 +22,22 @@ export const KIMI_EVIDENCE_RANK = {
 
 // Sessions launched with the worktree as cwd (outside Yuru) record that
 // worktree as workDir. This is the strongest evidence.
+// `worktrees` maps each realpath-normalized worktree path to its original.
 export function detectKimiWorkDirHint(
   ref: KimiStoredSessionRef,
-  worktreePaths: readonly string[],
+  worktrees: ReadonlyMap<string, string>,
 ): WorktreeSessionHint | null {
-  const normalizedWorktreePaths = worktreePaths.map(normalizeRealPath);
-  const matched = resolveContainingWorktreePath(
-    normalizeRealPath(ref.workDir),
-    normalizedWorktreePaths,
-  );
-  if (!matched) {
+  const matched = resolveContainingWorktreePath(normalizeRealPath(ref.workDir), [
+    ...worktrees.keys(),
+  ]);
+  const worktreePath = matched === null ? undefined : worktrees.get(matched);
+  if (worktreePath === undefined) {
     return null;
   }
   return {
     provider: "kimi",
     agentSessionId: ref.agentSessionId,
-    worktreePath: worktreePaths[normalizedWorktreePaths.indexOf(matched)],
+    worktreePath,
     worktreeRank: KIMI_EVIDENCE_RANK.workDir,
   };
 }

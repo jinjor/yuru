@@ -9,6 +9,7 @@ import { parseJsonLinesAs, readTextFileIfExists } from "../store-utils.js";
 import type { WorktreeSessionHint } from "../session-detection.js";
 import {
   loadWorktreeContextPrompt,
+  USER_REQUEST_PREFIX,
   WORKTREE_CONTEXT_PROMPT_MARKER,
 } from "../worktree-context-prompt.js";
 import { assertValidTerminalInput, deliverInitialInput } from "../../terminal/initial-input.js";
@@ -24,6 +25,7 @@ import {
   detectKimiMentionHints,
   detectKimiWorkDirHint,
   normalizeRealPath,
+  normalizeWorktreePaths,
   type KimiStoredSessionRef,
 } from "./session-detection.js";
 
@@ -36,7 +38,7 @@ interface KimiSessionState {
 
 // Kimi has no model-facing initial-message input for its interactive TUI yet:
 // https://github.com/MoonshotAI/kimi-code/issues/2507
-const KIMI_USER_MESSAGE_PREFIX = "User request:\n\n";
+// The request therefore rides in a user message behind USER_REQUEST_PREFIX.
 
 // Kimi prints "No session yet — one will be created on your first message."
 // once its session-less editor is ready. Only the opening words are matched so
@@ -46,7 +48,7 @@ const TUI_READY_POLL_INTERVAL_MS = 300;
 
 function toKimiUserMessage(initialPrompt: string): string {
   assertValidTerminalInput(initialPrompt);
-  return `${KIMI_USER_MESSAGE_PREFIX}${initialPrompt}`;
+  return `${USER_REQUEST_PREFIX}${initialPrompt}`;
 }
 
 const sessionRefsById = new Map<string, KimiStoredSessionRef>();
@@ -191,8 +193,9 @@ async function loadWorktreeSessionHints(
 
   const entries = await readKimiSessionIndex();
   const hints: WorktreeSessionHint[] = [];
+  const worktrees = normalizeWorktreePaths(worktreePaths);
   for (const entry of entries) {
-    const hint = detectKimiWorkDirHint(entry, worktreePaths);
+    const hint = detectKimiWorkDirHint(entry, worktrees);
     if (hint) {
       hints.push(hint);
     }

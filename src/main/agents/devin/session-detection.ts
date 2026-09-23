@@ -12,23 +12,21 @@ export const DEVIN_EVIDENCE_RANK = {
 
 // Sessions launched with the worktree as cwd (outside Yuru) record that
 // worktree as working_directory. This is the strongest evidence.
+// `worktrees` maps each realpath-normalized worktree path to its original.
 export function detectDevinWorkDirHint(
   agentSessionId: string,
   workDir: string,
-  worktreePaths: readonly string[],
+  worktrees: ReadonlyMap<string, string>,
 ): WorktreeSessionHint | null {
-  const normalizedWorktreePaths = worktreePaths.map(normalizeRealPath);
-  const matched = resolveContainingWorktreePath(
-    normalizeRealPath(workDir),
-    normalizedWorktreePaths,
-  );
-  if (!matched) {
+  const matched = resolveContainingWorktreePath(normalizeRealPath(workDir), [...worktrees.keys()]);
+  const worktreePath = matched === null ? undefined : worktrees.get(matched);
+  if (worktreePath === undefined) {
     return null;
   }
   return {
     provider: "devin",
     agentSessionId,
-    worktreePath: worktreePaths[normalizedWorktreePaths.indexOf(matched)],
+    worktreePath,
     worktreeRank: DEVIN_EVIDENCE_RANK.workDir,
   };
 }

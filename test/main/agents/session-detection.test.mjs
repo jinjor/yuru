@@ -11,6 +11,7 @@ import {
   detectKimiWorkDirHint,
 } from "../../../src/main/agents/kimi/session-detection.ts";
 import {
+  normalizeWorktreePaths,
   resolveContainingWorktreePath,
   resolveMentionedWorktreePaths,
 } from "../../../src/main/agents/session-detection.ts";
@@ -447,12 +448,18 @@ test("detectKimiWorkDirHint は workDir が一致する worktree を rank 0 で�
     workDir: "/repo/.yuru/worktrees/task-a",
   };
 
-  assert.deepEqual(detectKimiWorkDirHint(ref, ["/repo", "/repo/.yuru/worktrees/task-a"]), {
-    provider: "kimi",
-    agentSessionId: "session_1",
-    worktreePath: "/repo/.yuru/worktrees/task-a",
-    worktreeRank: 0,
-  });
+  assert.deepEqual(
+    detectKimiWorkDirHint(
+      ref,
+      normalizeWorktreePaths(["/repo", "/repo/.yuru/worktrees/task-a"]),
+    ),
+    {
+      provider: "kimi",
+      agentSessionId: "session_1",
+      worktreePath: "/repo/.yuru/worktrees/task-a",
+      worktreeRank: 0,
+    },
+  );
 });
 
 test("detectKimiWorkDirHint は worktree のサブディレクトリもその worktree に帰属させる", () => {
@@ -463,7 +470,8 @@ test("detectKimiWorkDirHint は worktree のサブディレクトリもその wo
   };
 
   assert.deepEqual(
-    detectKimiWorkDirHint(ref, ["/repo/.yuru/worktrees/task-a"])?.worktreePath,
+    detectKimiWorkDirHint(ref, normalizeWorktreePaths(["/repo/.yuru/worktrees/task-a"]))
+      ?.worktreePath,
     "/repo/.yuru/worktrees/task-a",
   );
 });
@@ -475,7 +483,10 @@ test("detectKimiWorkDirHint はどの worktree にも属さなければ null を
     workDir: "/elsewhere",
   };
 
-  assert.equal(detectKimiWorkDirHint(ref, ["/repo/.yuru/worktrees/task-a"]), null);
+  assert.equal(
+    detectKimiWorkDirHint(ref, normalizeWorktreePaths(["/repo/.yuru/worktrees/task-a"])),
+    null,
+  );
 });
 
 test("detectKimiMentionHints は注入プロンプトの言及から worktree を rank 1 で返す", () => {

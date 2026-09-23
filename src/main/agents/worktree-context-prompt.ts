@@ -23,6 +23,16 @@ const TEMPLATE_PATH = "worktree-context-prompt.txt";
 // drops this sentence loses that detection path.
 export const WORKTREE_CONTEXT_PROMPT_MARKER = "Yuru opened this session for the task worktree";
 
+// Detection also relies on the rendered prompt mentioning {worktreePath}
+// verbatim: providers that record the prompt as a user message are linked to
+// their worktree by that path mention. A custom template without
+// {worktreePath} loses the mention-based detection path too.
+
+// Providers without a context-injection channel (kimi types into the PTY,
+// devin takes a launch prompt) put the user's request in a user message
+// alongside the worktree context; this prefix separates the two.
+export const USER_REQUEST_PREFIX = "User request:\n\n";
+
 export function worktreeContextPromptPath(): string {
   return path.join(getYuruHome(), TEMPLATE_PATH);
 }
