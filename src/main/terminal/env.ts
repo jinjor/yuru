@@ -45,6 +45,7 @@ export function createTerminalEnv(
   // AI_AGENT is a generic marker any hosting agent CLI sets for its child
   // processes (devin_3000-11-1_agent, claude-code_...). A fresh top-level
   // session must not inherit the parent agent's marker.
+  const parentAgent = env.AI_AGENT;
   delete env.AI_AGENT;
 
   if (options.provider === "codex") {
@@ -55,12 +56,14 @@ export function createTerminalEnv(
     }
   }
 
-  if (options.provider === "devin") {
+  if (options.provider === "devin" && parentAgent?.startsWith("devin")) {
     // Yuru always launches devin as a fresh top-level session. When Yuru itself
     // runs inside a devin session's terminal, the parent's permission mode and
     // sandbox settings would leak into the child — e.g. a devin that approves
-    // every action without asking. CHISEL_SESSION_DB stays so the store the
-    // child writes is the same one Yuru reads for session detection.
+    // every action without asking. The devin parent marker is what separates
+    // that leak from the same variables the user set deliberately, which a
+    // fresh session keeps. CHISEL_SESSION_DB stays so the store the child
+    // writes is the same one Yuru reads for session detection.
     for (const key of ["DEVIN_MODEL", "DEVIN_PERMISSION_MODE", "DEVIN_SANDBOX"]) {
       delete env[key];
     }

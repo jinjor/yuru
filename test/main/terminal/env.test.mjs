@@ -103,6 +103,25 @@ test("createTerminalEnv は Devin 起動時に親の session 由来の設定を�
   assert.equal(env.CHISEL_SESSION_DB, "/tmp/parent-sessions.db");
 });
 
+test("createTerminalEnv は Devin 起動でも親が devin session でなければユーザーの DEVIN_* 設定を残す", () => {
+  for (const parentEnv of [{}, { AI_AGENT: "claude-code_2.0_agent" }]) {
+    const env = createTerminalEnv(
+      {
+        ...parentEnv,
+        DEVIN_MODEL: "swe-2-high",
+        DEVIN_PERMISSION_MODE: "accept-edits",
+      },
+      {
+        ...terminalEnvOptions,
+        provider: "devin",
+      },
+    );
+
+    assert.equal(env.DEVIN_MODEL, "swe-2-high");
+    assert.equal(env.DEVIN_PERMISSION_MODE, "accept-edits");
+  }
+});
+
 test("createTerminalEnv は他 provider の起動では Devin の設定をそのまま渡す", () => {
   const env = createTerminalEnv(
     {
