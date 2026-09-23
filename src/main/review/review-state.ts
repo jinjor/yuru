@@ -69,14 +69,21 @@ export async function getReviewState(cwd: string): Promise<GitReviewState> {
     return { kind: "no-base" };
   }
 
-  const [committedEntries, committedNumstat, indexEntries, worktreeEntries, statusOutput] =
-    await Promise.all([
-      loadRawDiff(cwd, base.mergeBase, "head"),
-      exec("git", ["diff", "--numstat", "--find-renames", "-z", base.mergeBase, "HEAD"], cwd),
-      loadRawDiff(cwd, base.mergeBase, "index"),
-      loadRawDiff(cwd, base.mergeBase, "worktree"),
-      exec("git", ["status", "--porcelain", "-uall"], cwd),
-    ]);
+  const [
+    committedEntries,
+    committedNumstat,
+    indexEntries,
+    worktreeEntries,
+    statusOutput,
+    indexOutput,
+  ] = await Promise.all([
+    loadRawDiff(cwd, base.mergeBase, "head"),
+    exec("git", ["diff", "--numstat", "--find-renames", "-z", base.mergeBase, "HEAD"], cwd),
+    loadRawDiff(cwd, base.mergeBase, "index"),
+    loadRawDiff(cwd, base.mergeBase, "worktree"),
+    exec("git", ["status", "--porcelain", "-uall"], cwd),
+    exec("git", ["ls-files", "-s", "-z"], cwd),
+  ]);
 
   const reviews = loadFileReviews(cwd);
   const committedStats = parseNumstatZ(committedNumstat);
@@ -101,17 +108,6 @@ export async function getReviewState(cwd: string): Promise<GitReviewState> {
         !entry.conflicted &&
         Boolean(entry.indexStatus || entry.worktreeStatus),
     );
-  // 必要なのは変更のある file の index OID だけ。全件ダンプすると大きいリポジトリで
-  // ポーリングごとに数万行を吐いてパースすることになるので、対象 path に絞る。
-  // ":(literal)" で glob 解釈を防ぐ。
-  const indexOutput =
-    pathStates.length === 0
-      ? ""
-      : await exec(
-          "git",
-          ["ls-files", "-s", "-z", "--", ...pathStates.map((entry) => `:(literal)${entry.path}`)],
-          cwd,
-        );
   const indexOids = parseIndexOids(indexOutput);
   const indexDiffByPath = rawEntryMap(indexEntries);
   const worktreeDiffByPath = rawEntryMap(worktreeEntries);
