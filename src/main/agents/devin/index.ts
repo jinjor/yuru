@@ -74,7 +74,13 @@ async function loadWorktreeSessionHints(
   }
   return withDevinStore((db) => {
     const hints: WorktreeSessionHint[] = [];
-    for (const row of readSessionRows(db)) {
+    const rows = readSessionRows(db);
+    // Mention hints must be limited to the same sessions the listing shows —
+    // readSessionRows already excludes hidden sessions, so its ids are the
+    // visible set. A hidden session's recorded context would otherwise still
+    // surface it as a suggested session.
+    const visibleIds = new Set(rows.map((row) => row.agentSessionId));
+    for (const row of rows) {
       const hint = detectDevinWorkDirHint(row.agentSessionId, row.workDir, worktreePaths);
       if (hint) {
         hints.push(hint);
@@ -84,6 +90,9 @@ async function loadWorktreeSessionHints(
       db,
       WORKTREE_CONTEXT_PROMPT_MARKER,
     )) {
+      if (!visibleIds.has(sessionId)) {
+        continue;
+      }
       hints.push(...detectDevinMentionHints(sessionId, contents, worktreePaths));
     }
     return hints;

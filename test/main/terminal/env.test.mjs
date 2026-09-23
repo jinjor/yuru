@@ -117,6 +117,16 @@ test("createTerminalEnv は他 provider の起動では Devin の設定をその
   assert.equal(env.DEVIN_PERMISSION_MODE, "dangerous");
 });
 
+test("createTerminalEnv は provider を問わず親 agent の AI_AGENT マーカーを渡さない", () => {
+  for (const provider of ["claude", "codex", "kimi", "devin"]) {
+    const env = createTerminalEnv(
+      { AI_AGENT: "devin_3000-11-1_agent" },
+      { ...terminalEnvOptions, provider },
+    );
+    assert.equal(env.AI_AGENT, undefined, provider);
+  }
+});
+
 test("createTerminalEnv は Yuru API と CLI と repo / worktree の位置を注入する", () => {
   const env = createTerminalEnv(
     {},

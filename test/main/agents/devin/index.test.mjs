@@ -304,6 +304,30 @@ test("Yuru 起動セッション (working_directory = repo root) は注入文の
   assert.deepEqual(suggestions.get(repoPath), expected);
 });
 
+test("hidden session は注入文の言及があっても suggested に出ない", async () => {
+  const repoPath = path.join(tempDir, "repo-hidden");
+  const worktreePath = path.join(repoPath, ".yuru", "worktrees", "task-c");
+  fs.mkdirSync(worktreePath, { recursive: true });
+  writeDevinSession({
+    id: "hidden-mole",
+    workDir: repoPath,
+    title: "hidden injected session",
+    createdAt: 1_790_000_000_000,
+    hidden: 1,
+    messages: [
+      {
+        role: "user",
+        content: `Yuru opened this session ... Use ${worktreePath} as the working directory.`,
+      },
+    ],
+  });
+
+  const suggestions = await loadSuggestedWorktreeSessions([repoPath, worktreePath]);
+
+  assert.equal(suggestions.get(worktreePath), undefined);
+  assert.equal(suggestions.get(repoPath), undefined);
+});
+
 test("waitForSessionId は注入 context を記録した新規 session を返す", async () => {
   const workDir = path.join(tempDir, "launch-a");
   const worktreePath = path.join(tempDir, "wt-a");

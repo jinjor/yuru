@@ -42,6 +42,11 @@ export function createTerminalEnv(
     delete env[key];
   }
 
+  // AI_AGENT is a generic marker any hosting agent CLI sets for its child
+  // processes (devin_3000-11-1_agent, claude-code_...). A fresh top-level
+  // session must not inherit the parent agent's marker.
+  delete env.AI_AGENT;
+
   if (options.provider === "codex") {
     for (const key of Object.keys(env)) {
       if (/^CODEX_.*(THREAD|SESSION|CONVERSATION).*/.test(key)) {
@@ -51,12 +56,12 @@ export function createTerminalEnv(
   }
 
   if (options.provider === "devin") {
-    // Yuru が起動する devin は常に新しいトップレベル session。Yuru 自身を
-    // devin session 内のターミナルから起動した場合、permission mode や
-    // sandbox 指定が子 session に漏れて、確認なしで全操作を通す devin が
-    // 上がってしまう。session 紐づけに使う CHISEL_SESSION_DB は残す
-    // (Yuru が読む store と子が書く store を一致させるため)。
-    for (const key of ["AI_AGENT", "DEVIN_MODEL", "DEVIN_PERMISSION_MODE", "DEVIN_SANDBOX"]) {
+    // Yuru always launches devin as a fresh top-level session. When Yuru itself
+    // runs inside a devin session's terminal, the parent's permission mode and
+    // sandbox settings would leak into the child — e.g. a devin that approves
+    // every action without asking. CHISEL_SESSION_DB stays so the store the
+    // child writes is the same one Yuru reads for session detection.
+    for (const key of ["DEVIN_MODEL", "DEVIN_PERMISSION_MODE", "DEVIN_SANDBOX"]) {
       delete env[key];
     }
   }
