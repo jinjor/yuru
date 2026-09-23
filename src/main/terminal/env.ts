@@ -50,6 +50,17 @@ export function createTerminalEnv(
     }
   }
 
+  if (options.provider === "devin") {
+    // Yuru が起動する devin は常に新しいトップレベル session。Yuru 自身を
+    // devin session 内のターミナルから起動した場合、permission mode や
+    // sandbox 指定が子 session に漏れて、確認なしで全操作を通す devin が
+    // 上がってしまう。session 紐づけに使う CHISEL_SESSION_DB は残す
+    // (Yuru が読む store と子が書く store を一致させるため)。
+    for (const key of ["AI_AGENT", "DEVIN_MODEL", "DEVIN_PERMISSION_MODE", "DEVIN_SANDBOX"]) {
+      delete env[key];
+    }
+  }
+
   env.YURU_API_SOCKET = options.apiSocketPath;
   env.YURU_CLI = options.yuruCliPath;
   env.YURU_REPO_PATH = options.repoPath;

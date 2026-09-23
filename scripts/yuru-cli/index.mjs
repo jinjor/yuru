@@ -15,7 +15,7 @@ Commands:
   yuru ping   Check the connection to the running Yuru app
   yuru worktree create <branch-name> [--repo <path>]
               Create a task worktree in the current or specified repository
-  yuru session create --provider <claude|codex|kimi> [--worktree <path>]
+  yuru session create --provider <claude|codex|kimi|devin> [--worktree <path>]
               [--model <model>] [--prompt <text>]
               Create a provider session for a task worktree
   yuru help   Show this message

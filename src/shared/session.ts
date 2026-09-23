@@ -1,4 +1,4 @@
-export const SESSION_PROVIDER_IDS = ["claude", "codex", "kimi"] as const;
+export const SESSION_PROVIDER_IDS = ["claude", "codex", "kimi", "devin"] as const;
 export type SessionProvider = (typeof SESSION_PROVIDER_IDS)[number];
 export type TerminalRuntimeId = string;
 export type AgentActivityState = "working" | "waiting";

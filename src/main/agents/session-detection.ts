@@ -1,3 +1,4 @@
+import fs from "fs";
 import path from "path";
 import type { SessionProvider } from "../../shared/session.js";
 import { isPathWithin } from "../worktree-identity.js";
@@ -7,6 +8,17 @@ export interface WorktreeSessionHint {
   agentSessionId: string;
   worktreePath: string;
   worktreeRank: number;
+}
+
+// Some providers realpath-resolve the working directory before recording it
+// (e.g. /tmp becomes /private/tmp on macOS) while Yuru's worktree paths are not
+// necessarily resolved, so cwd comparisons need both sides normalized.
+export function normalizeRealPath(filePath: string): string {
+  try {
+    return fs.realpathSync(filePath);
+  } catch {
+    return path.resolve(filePath);
+  }
 }
 
 export function resolveContainingWorktreePath(

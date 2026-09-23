@@ -7,7 +7,7 @@ Last updated: 2026-09-22
 
 ## Core entities
 
-Yuru の中では、Claude Code / Codex CLI / Kimi CLI そのものを `agent` と呼ぶ。
+Yuru の中では、Claude Code / Codex CLI / Kimi CLI / Devin CLI そのものを `agent` と呼ぶ。
 `provider` は agent の提供元を指し、session store の形式や resume command のように
 提供元ごとに処理が分岐する所にだけ現れる。分岐を隠した抽象の側は agent と呼ぶ。
 
@@ -211,13 +211,16 @@ worktree の外部 rename は自動追跡しない。
 
 ## Agent sessions
 
-対応 provider は Claude と Codex と Kimi である。
+対応 provider は Claude と Codex と Kimi と Devin である。
 provider ごとの session store や resume command の違いは agent の実装 (`src/main/agents/`) に閉じ込める。
 
 Claude / Codex の session preview は、初回に JSONL の末尾から最新の assistant message までを
 読み、以後はその位置から追記された record だけを読む。preview に不要な過去の tool result などを
 走査しないため、ログ全体のサイズは初回表示の読み取り量に影響しない。Kimi の preview は
-`state.json` の `lastPrompt` / `title` から読む。
+`state.json` の `lastPrompt` / `title` から読む。Devin の store は JSONL ではなく
+SQLite (`sessions.db`) なので、session の `message_nodes` から最新の assistant message を
+読む。読み取りは read-only で開き、store が無い・壊れている・スキーマが違う場合は空として扱う
+(devin の内部 store は公開インターフェースではないため)。
 
 worktree session の create / resume は、どの provider も cwd = repo root で起動する。
 PTY 内で `cd` しても、`Files`, `Changes`, diff の作業ルートは runtime cwd ではなく選択中 task worktree の `worktreePath` で決まる。
@@ -234,6 +237,13 @@ GitHub の Issue / PR を参照するときは、現在の repository なら `#1
 - Claude: `--append-system-prompt`
 - Codex: `-c developer_instructions=...`
 - Kimi: system prompt を起動ごとに追加する CLI option がないため、PTY に最初の user message として入力
+- Devin: `-- <prompt>` の positional prompt として最初の user message にする。ユーザーの
+  初期依頼があるときは同じ message に `User request:` プレフィックス付きで連結する
+
+Devin は session を SQLite に記録する。起動で作られた session は、起動 cwd
+(`working_directory`) に一致し、かつ注入した context (worktree path を含む) を user
+message として記録したものとして特定する。同じ repo root での同時起動でも、context が
+worktree ごとに異なるため取り違えない。
 
 Kimi は最初の message を受け取るまで session を作らない（CLI 0.40.1 で確認）。
 そのため session id 未確定のまま runtime を開始し、editor が入力可能になってからこの message を送り、
@@ -282,7 +292,7 @@ Yuru の Terminal link 規則なので、custom template にかかわらず末�
     移行せず、そのまま Git worktree として扱う
 - start session for worktree
   - task worktree の Terminal ホームには、primary session 全件、既存 session (suggested)、
-    新規 session (Claude / Codex / Kimi) の選択肢が常に出る
+    新規 session (Claude / Codex / Kimi / Devin) の選択肢が常に出る
   - 新規作成した worktree も既存の Git worktree も、この同じ flow で session を開始する
   - session の起動に失敗しても worktree は削除しない
 - resume primary session

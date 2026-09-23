@@ -8,5 +8,7 @@ export function providerLabel(provider: SessionProvider): string {
       return "Codex";
     case "kimi":
       return "Kimi";
+    case "devin":
+      return "Devin";
   }
 }

@@ -80,6 +80,43 @@ test("createTerminalEnv は Codex 起動時に親の Codex thread/session 情報
   assert.equal(env.CODEX_CONVERSATION_ID, undefined);
 });
 
+test("createTerminalEnv は Devin 起動時に親の session 由来の設定を渡さない", () => {
+  const env = createTerminalEnv(
+    {
+      AI_AGENT: "devin_3000-11-1_agent",
+      CHISEL_SESSION_DB: "/tmp/parent-sessions.db",
+      DEVIN_MODEL: "swe-2-high",
+      DEVIN_PERMISSION_MODE: "dangerous",
+      DEVIN_SANDBOX: "1",
+    },
+    {
+      ...terminalEnvOptions,
+      provider: "devin",
+    },
+  );
+
+  assert.equal(env.AI_AGENT, undefined);
+  assert.equal(env.DEVIN_MODEL, undefined);
+  assert.equal(env.DEVIN_PERMISSION_MODE, undefined);
+  assert.equal(env.DEVIN_SANDBOX, undefined);
+  // session store の場所は Yuru の読む側と子の書く側で一致させるため残す
+  assert.equal(env.CHISEL_SESSION_DB, "/tmp/parent-sessions.db");
+});
+
+test("createTerminalEnv は他 provider の起動では Devin の設定をそのまま渡す", () => {
+  const env = createTerminalEnv(
+    {
+      DEVIN_PERMISSION_MODE: "dangerous",
+    },
+    {
+      ...terminalEnvOptions,
+      provider: "claude",
+    },
+  );
+
+  assert.equal(env.DEVIN_PERMISSION_MODE, "dangerous");
+});
+
 test("createTerminalEnv は Yuru API と CLI と repo / worktree の位置を注入する", () => {
   const env = createTerminalEnv(
     {},

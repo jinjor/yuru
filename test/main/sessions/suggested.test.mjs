@@ -6,8 +6,11 @@ import test from "node:test";
 
 const previousHome = process.env.HOME;
 const previousKimiCodeHome = process.env.KIMI_CODE_HOME;
+const previousSessionsDb = process.env.CHISEL_SESSION_DB;
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-sessions-test-"));
 process.env.HOME = tempDir;
+// 実環境の devin store を拾わないよう、存在しない DB を指させる
+process.env.CHISEL_SESSION_DB = path.join(tempDir, "devin-sessions.db");
 
 const claudeDir = path.join(tempDir, ".claude");
 const codexDir = path.join(tempDir, ".codex");
@@ -179,6 +182,11 @@ test.after(() => {
     delete process.env.KIMI_CODE_HOME;
   } else {
     process.env.KIMI_CODE_HOME = previousKimiCodeHome;
+  }
+  if (previousSessionsDb === undefined) {
+    delete process.env.CHISEL_SESSION_DB;
+  } else {
+    process.env.CHISEL_SESSION_DB = previousSessionsDb;
   }
   fs.rmSync(tempDir, { recursive: true, force: true });
 });

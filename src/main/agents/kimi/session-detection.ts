@@ -1,11 +1,12 @@
-import fs from "fs";
-import path from "path";
 import { WORKTREE_CONTEXT_PROMPT_MARKER } from "../worktree-context-prompt.js";
 import {
+  normalizeRealPath,
   resolveContainingWorktreePath,
   resolveMentionedWorktreePaths,
   type WorktreeSessionHint,
 } from "../session-detection.js";
+
+export { normalizeRealPath };
 
 export interface KimiStoredSessionRef {
   agentSessionId: string;
@@ -17,17 +18,6 @@ export const KIMI_EVIDENCE_RANK = {
   workDir: 0,
   mention: 1,
 } as const;
-
-// kimi realpath-resolves workDir before recording it (e.g. /tmp becomes
-// /private/tmp on macOS) while Yuru's worktree paths are not necessarily
-// resolved, so the workDir comparison needs both sides normalized.
-export function normalizeRealPath(filePath: string): string {
-  try {
-    return fs.realpathSync(filePath);
-  } catch {
-    return path.resolve(filePath);
-  }
-}
 
 // Sessions launched with the worktree as cwd (outside Yuru) record that
 // worktree as workDir. This is the strongest evidence.
