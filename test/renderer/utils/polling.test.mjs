@@ -53,7 +53,7 @@ function setupPage(t, visibilityState, { focused = true, saveEnergy = true } = {
   };
 }
 
-test("実行完了から interval 後に次を実行し、以降は間隔を倍々に伸ばす", async (t) => {
+test("実行完了から interval 後に次を実行し、以降も同じ間隔で繰り返す", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
   const page = setupPage(t, "visible");
 
@@ -74,52 +74,12 @@ test("実行完了から interval 後に次を実行し、以降は間隔を倍�
   await drain();
   assert.equal(calls, 2);
 
-  // 2 回目以降は 3 秒 → 6 秒 → 12 秒と伸びる
-  t.mock.timers.tick(5999);
-  await drain();
-  assert.equal(calls, 2);
-
-  t.mock.timers.tick(1);
-  await drain();
-  assert.equal(calls, 3);
-
-  t.mock.timers.tick(12000);
-  await drain();
-  assert.equal(calls, 4);
-});
-
-test("間隔は最長 60 秒で頭打ちになる", async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
-  const page = setupPage(t, "visible");
-
-  let calls = 0;
-  const stop = startPollingLoop(async () => {
-    calls++;
-  }, 3000);
-  page.teardown(stop);
-
-  await drain();
-  assert.equal(calls, 1);
-
-  // 3 + 6 + 12 + 24 + 48 秒で 5 回追加され、次からは 60 秒間隔。
-  // 実行のたびに次が予約されるので、区間ごとに進めて microtask を回す。
-  for (const interval of [3000, 6000, 12000, 24000, 48000]) {
-    t.mock.timers.tick(interval);
+  // 何度実行しても間隔は伸びない
+  for (let expected = 3; expected <= 10; expected++) {
+    t.mock.timers.tick(3000);
     await drain();
+    assert.equal(calls, expected);
   }
-  assert.equal(calls, 6);
-
-  t.mock.timers.tick(59999);
-  await drain();
-  assert.equal(calls, 6);
-
-  t.mock.timers.tick(1);
-  await drain();
-  assert.equal(calls, 7);
-
-  t.mock.timers.tick(60000);
-  await drain();
-  assert.equal(calls, 8);
 });
 
 test("実行が interval を超えた時は所要時間と同じだけ待ってから次を実行する", async (t) => {
@@ -143,7 +103,7 @@ test("実行が interval を超えた時は所要時間と同じだけ待って�
   finishRun();
   await drain();
 
-  // バックオフ後の 6 秒ではなく、所要時間と同じ 12 秒待ってから次が動く
+  // interval の 3 秒ではなく、所要時間と同じ 12 秒待ってから次が動く
   t.mock.timers.tick(11999);
   await drain();
   assert.equal(calls, 1);
@@ -153,7 +113,7 @@ test("実行が interval を超えた時は所要時間と同じだけ待って�
   assert.equal(calls, 2);
 });
 
-test("非表示の間は実行を省き、表示に戻ったら間隔を戻して即座に再開する", async (t) => {
+test("非表示の間は実行を省き、表示に戻ったら即座に再開する", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
   const page = setupPage(t, "hidden");
 
@@ -173,7 +133,7 @@ test("非表示の間は実行を省き、表示に戻ったら間隔を戻し�
   await drain();
   assert.equal(calls, 1);
 
-  // 表示に戻ると即座に実行され、間隔も初期値に戻る
+  // 表示に戻ると即座に実行され、以降は interval ごとに実行する
   globalThis.document.visibilityState = "visible";
   page.fire("document", "visibilitychange");
   await drain();
@@ -184,7 +144,7 @@ test("非表示の間は実行を省き、表示に戻ったら間隔を戻し�
   assert.equal(calls, 3);
 });
 
-test("フォーカスが戻ったら間隔を戻して即座に実行する", async (t) => {
+test("フォーカスが戻ったら即座に実行する", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
   const page = setupPage(t, "visible", { focused: false });
 
@@ -257,7 +217,7 @@ test("停止後は実行されない", async (t) => {
   assert.equal(calls, 1);
 });
 
-test("YURU_SAVE_ENERGY=0 では固定間隔のままで、focus / visibilitychange でも即時実行しない", async (t) => {
+test("YURU_SAVE_ENERGY=0 では focus / visibilitychange でも即時実行しない", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
   const page = setupPage(t, "visible", { saveEnergy: false });
 
@@ -270,7 +230,6 @@ test("YURU_SAVE_ENERGY=0 では固定間隔のままで、focus / visibilitychan
   await drain();
   assert.equal(calls, 1);
 
-  // 間隔は伸びず 3 秒固定
   t.mock.timers.tick(3000);
   await drain();
   assert.equal(calls, 2);

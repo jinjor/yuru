@@ -1,21 +1,18 @@
-// 前回の実行完了を待ってから次を予約する自走ループ。固定間隔の setInterval と違い、
-// 1 回の実行が interval を超えても並走して積み上がらない。待ち時間は現在の間隔と
-// 前回の所要時間の長い方なので、実行が占める時間は最大でも半分に抑えられる。
-//
-// 省エネ方針が有効なとき (既定)、間隔は実行のたびに 2 倍ずつ伸ばし、MAX_INTERVAL_MS で
-// 頭打ちにする（バックオフ）。ウィンドウにフォーカスが戻った・再表示されたタイミングでは
-// 間隔を初期値に戻して即座に 1 回実行し、見た目の鮮度を優先する。
-// YURU_SAVE_ENERGY=0 で起動するとこの方針を無効にし、従来の固定間隔に戻る。
-// 停止用の関数を返す。
-const MAX_INTERVAL_MS = 60_000;
-
-// 省エネの polling 方針 (間隔のバックオフとフォーカス連動の即時 refresh) を使うか。
+// 省エネの polling 方針 (フォーカス中だけの実行とフォーカス連動の即時 refresh) を使うか。
 // preload が YURU_SAVE_ENERGY を読んで window.__yuruSaveEnergy に置く。
 // テストなど window が無い環境では有効扱いにする。
 export function isEnergySavingPollingEnabled(): boolean {
   return typeof window === "undefined" || window.__yuruSaveEnergy !== false;
 }
 
+// 前回の実行完了を待ってから次を予約する自走ループ。固定間隔の setInterval と違い、
+// 1 回の実行が interval を超えても並走して積み上がらない。待ち時間は interval と
+// 前回の所要時間の長い方なので、実行が占める時間は最大でも半分に抑えられる。
+//
+// 省エネ方針が有効なとき (既定)、ウィンドウにフォーカスが戻った・再表示されたタイミングで
+// 次の予約を待たずに即座に 1 回実行し、見た目の鮮度を優先する。
+// YURU_SAVE_ENERGY=0 で起動するとこの即時実行を行わない。
+// 停止用の関数を返す。
 export function startPollingLoop(
   run: () => Promise<void>,
   intervalMs: number,
@@ -24,15 +21,9 @@ export function startPollingLoop(
   const energySaving = isEnergySavingPollingEnabled();
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
-  let currentIntervalMs = intervalMs;
 
   const scheduleNext = (elapsedMs: number): void => {
-    // 次の待ち時間は現在の間隔と今回の所要時間の長い方。省エネ方針では予約してから間隔を
-    // 倍にするので、実際の待ち時間は intervalMs, intervalMs*2, ... と伸びていく。
-    timer = setTimeout(() => void tick(false), Math.max(currentIntervalMs, elapsedMs));
-    if (energySaving) {
-      currentIntervalMs = Math.min(currentIntervalMs * 2, MAX_INTERVAL_MS);
-    }
+    timer = setTimeout(() => void tick(false), Math.max(intervalMs, elapsedMs));
   };
 
   const tick = async (isFirst: boolean): Promise<void> => {
@@ -52,11 +43,10 @@ export function startPollingLoop(
     scheduleNext(Date.now() - startedAt);
   };
 
-  const resetAndRunNow = (): void => {
+  const runNow = (): void => {
     if (stopped || !shouldRun()) {
       return;
     }
-    currentIntervalMs = intervalMs;
     if (timer !== null) {
       clearTimeout(timer);
       timer = null;
@@ -69,11 +59,11 @@ export function startPollingLoop(
     // visibilitychange は document、focus は window で発火する。
     const focusTarget: Pick<Document, "addEventListener" | "removeEventListener"> =
       typeof window === "undefined" ? document : window;
-    focusTarget.addEventListener("focus", resetAndRunNow);
-    document.addEventListener("visibilitychange", resetAndRunNow);
+    focusTarget.addEventListener("focus", runNow);
+    document.addEventListener("visibilitychange", runNow);
     removeListeners = () => {
-      focusTarget.removeEventListener("focus", resetAndRunNow);
-      document.removeEventListener("visibilitychange", resetAndRunNow);
+      focusTarget.removeEventListener("focus", runNow);
+      document.removeEventListener("visibilitychange", runNow);
     };
   }
 
