@@ -1,5 +1,10 @@
 import { app, BrowserWindow, Menu, ipcMain, protocol, session } from "electron";
-import type { IpcMainInvokeEvent, MenuItemConstructorOptions } from "electron";
+import type {
+  ContextMenuParams,
+  IpcMainInvokeEvent,
+  MenuItemConstructorOptions,
+  WebContents,
+} from "electron";
 import path from "path";
 import { loadRepos } from "./repos/metadata.js";
 import { cleanupBrokenRepos, cleanupStaleTaskWorktrees } from "./repos/maintenance.js";
@@ -261,6 +266,11 @@ async function createWindow(): Promise<void> {
     htmlPreviewGrants.clear();
   });
 
+  const { webContents } = mainWindow;
+  webContents.on("context-menu", (_event, params) => {
+    showImageContextMenu(webContents, params);
+  });
+
   mainWindow.on("page-title-updated", (event) => {
     event.preventDefault();
     mainWindow?.setTitle(windowTitle);
@@ -284,6 +294,17 @@ async function createWindow(): Promise<void> {
   });
 
   await mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
+}
+
+// Electron は右クリックメニューを出さないので、画像の上でだけ「画像をコピー」を出す。
+// copyImageAt はメインフレームの中で画像を探すので、preview iframe 内の画像は対象にしない。
+function showImageContextMenu(webContents: WebContents, params: ContextMenuParams): void {
+  if (params.mediaType !== "image" || params.frame !== webContents.mainFrame) {
+    return;
+  }
+  Menu.buildFromTemplate([
+    { label: "Copy Image", click: () => webContents.copyImageAt(params.x, params.y) },
+  ]).popup();
 }
 
 function isHtmlPreviewUrl(url: string): boolean {
