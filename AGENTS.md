@@ -23,12 +23,11 @@ E2E テストでは、既定で BrowserWindow を非表示にする（`YURU_E2E_
 
 ## ドキュメント
 
-継続的にメンテされる最新情報は次の 4 つだけ:
+継続的にメンテされる最新情報は次の 3 つだけ:
 
 - 目的: `docs/purpose.md`
 - プロダクトのバックログ: `docs/backlog.md`
 - アーキテクチャの記録: `docs/architecture.md`
-- コーディング指針: `docs/coding-guidelines.md`
 
 それ以外のドキュメント（ADR を含む）は書いた時点での調査・設計・検討の記録。現在の実装とズレていても更新しない。現在の設計として残すべき内容は `docs/architecture.md` などメンテ対象のドキュメントに書く。
 

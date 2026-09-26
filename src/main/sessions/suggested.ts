@@ -22,14 +22,6 @@ async function loadStoredSessionSnapshots() {
   ).flat();
 }
 
-export async function loadStoredSessionPreviews(): Promise<Map<string, string>> {
-  const previews = new Map<string, string>();
-  for (const snapshot of await loadStoredSessionSnapshots()) {
-    previews.set(toSessionKey(snapshot.provider, snapshot.agentSessionId), snapshot.lastMessage);
-  }
-  return previews;
-}
-
 export async function loadStoredSessionPreview(
   provider: SessionProvider,
   agentSessionId: string,

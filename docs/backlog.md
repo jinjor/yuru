@@ -87,7 +87,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 このツールは作者個人のためのもので、作者の利用範囲から外れる用途はサポートしない。
 
 - macOS 以外のプラットフォーム（Windows / Linux）
-- Claude / Codex / Kimi 以外のエージェント
+- Claude / Codex / Kimi / Devin 以外のエージェント
 - 外付けボリューム上での使用
 - bare repository
 - UTF-8 以外の文字コードで書かれたファイル

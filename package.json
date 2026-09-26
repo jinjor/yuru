@@ -1,7 +1,7 @@
 {
   "name": "yuru",
   "version": "0.1.1",
-  "description": "Vibe Coding editor for Claude Code and Codex CLI",
+  "description": "Vibe Coding editor for Claude Code, Codex CLI, Kimi CLI, and Devin CLI",
   "main": "dist/main/index.js",
   "scripts": {
     "build": "npm run typecheck:renderer && tsc && vite build",
@@ -62,7 +62,6 @@
   },
   "devDependencies": {
     "@electron/packager": "^20.0.2",
-    "@electron/rebuild": "^4.0.3",
     "@playwright/test": "^1.60.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

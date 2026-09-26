@@ -35,12 +35,11 @@ fs.writeFileSync(
   })}\n`,
 );
 
-const { loadStoredSessionPreview, loadStoredSessionPreviews, loadSuggestedWorktreeSessions } =
+const { loadStoredSessionPreview, loadSuggestedWorktreeSessions } =
   await import("../../../src/main/sessions/suggested.ts");
 const { agent: codexAgent } = await import("../../../src/main/agents/codex/index.ts");
 const { agent: claudeAgent } = await import("../../../src/main/agents/claude/index.ts");
 const { agent: kimiAgent } = await import("../../../src/main/agents/kimi/index.ts");
-const { toSessionKey } = await import("../../../src/shared/session.ts");
 
 function jsonl(...entries) {
   return `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`;
@@ -189,15 +188,6 @@ test.after(() => {
     process.env.CHISEL_SESSION_DB = previousSessionsDb;
   }
   fs.rmSync(tempDir, { recursive: true, force: true });
-});
-
-test("loadStoredSessionPreviews は stored session の preview を key で返す", async () => {
-  const previews = await loadStoredSessionPreviews();
-
-  assert.equal(previews.get(toSessionKey("claude", "claude-1")), "new claude assistant message");
-  assert.equal(previews.get(toSessionKey("codex", codexSessionId)), "new codex assistant message");
-  assert.equal(previews.get(toSessionKey("kimi", kimiSessionId)), "kimi last prompt");
-  assert.equal(previews.has(toSessionKey("claude", missingClaudeSessionId)), false);
 });
 
 test("loadStoredSessionPreview は指定 session の preview だけを返す", async () => {

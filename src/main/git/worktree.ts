@@ -111,10 +111,6 @@ export async function branchExists(cwd: string, branchName: string): Promise<boo
   }
 }
 
-export async function renameBranch(cwd: string, oldName: string, newName: string): Promise<void> {
-  await exec("git", ["branch", "-m", oldName, newName], cwd);
-}
-
 export async function createWorktree(
   repoPath: string,
   worktreePath: string,

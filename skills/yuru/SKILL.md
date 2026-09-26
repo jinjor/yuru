@@ -1,6 +1,6 @@
 ---
 name: yuru
-description: Operate Yuru from an agent session to create task worktrees and start Claude, Codex, or Kimi sessions. Use when the user asks to use Yuru, branch or fork work into a new worktree, create a separate task worktree, or delegate work to another Yuru session.
+description: Operate Yuru from an agent session to create task worktrees and start Claude, Codex, Kimi, or Devin sessions. Use when the user asks to use Yuru, branch or fork work into a new worktree, create a separate task worktree, or delegate work to another Yuru session.
 ---
 
 # Yuru
@@ -42,7 +42,7 @@ The result prints the new worktree's absolute path and branch name. Keep the ret
 
 ```sh
 node "$YURU_CLI" session create \
-  --provider <claude|codex|kimi>
+  --provider <claude|codex|kimi|devin>
 ```
 
 This starts the session in the current worktree. To start it in another existing worktree, including one in another repository, add:

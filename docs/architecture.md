@@ -345,7 +345,7 @@ session lifecycle の操作は選択中 worktree の Terminal が担う。Termin
 `[ホーム] [live terminal runtime...]` のタブ列で、runtime の生成・終了から一覧を導出する。
 ホームは常設で、session の一覧と開始操作を表示する。
 
-- task worktree: primary session 全件、suggested session 全件、新規 session (Claude / Codex / Kimi)
+- task worktree: primary session 全件、suggested session 全件、新規 session (Claude / Codex / Kimi / Devin)
   を primary の有無に関わらず表示する
 - active な primary 行: 対応する runtime タブを選択する
 - inactive な primary 行: agent session を resume する。detach は行の副操作として表示し、
