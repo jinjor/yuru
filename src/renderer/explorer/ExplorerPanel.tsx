@@ -86,6 +86,8 @@ interface ExplorerPanelProps {
   reviewState: GitReviewState | null;
   width: number;
   worktreeId: string;
+  // ファイル行の右クリックで絶対パスをコピーするための worktree のルート。
+  worktreePath: string;
 }
 
 export function ExplorerPanel({
@@ -96,6 +98,7 @@ export function ExplorerPanel({
   reviewState,
   width,
   worktreeId,
+  worktreePath,
 }: ExplorerPanelProps) {
   const [activeTab, setActiveTab] = useState<ExplorerTab>("changes");
   // 検索入力へフォーカスを促す合図。hidden の間 SearchPane の effect は動かないため、
@@ -200,6 +203,7 @@ export function ExplorerPanel({
           reviewState={reviewState}
           stagedFiles={stagedFiles}
           unstagedFiles={unstagedFiles}
+          worktreePath={worktreePath}
         />
       </Activity>
       <Activity mode={activeTab === "search" ? "visible" : "hidden"}>
@@ -208,6 +212,7 @@ export function ExplorerPanel({
           onPreviewSelectionChange={onPreviewSelectionChange}
           previewSelection={previewSelection}
           worktreeId={worktreeId}
+          worktreePath={worktreePath}
         />
       </Activity>
       <Activity mode={activeTab === "bookmarks" ? "visible" : "hidden"}>
@@ -226,6 +231,7 @@ export function ExplorerPanel({
           onPreviewSelectionChange={onPreviewSelectionChange}
           previewSelection={previewSelection}
           worktreeId={worktreeId}
+          worktreePath={worktreePath}
         />
       </Activity>
     </aside>

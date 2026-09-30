@@ -441,6 +441,7 @@ const WorktreeViewContent = memo(function WorktreeViewContent({
         reviewState={reviewState}
         width={paneLayout.changesPanelWidth}
         worktreeId={worktreeId}
+        worktreePath={worktree.worktreePath}
       />
       <FileSearch
         onSelectFile={(path) => setPreviewSelection({ path })}

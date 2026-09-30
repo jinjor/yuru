@@ -24,6 +24,7 @@ import {
 import { Button } from "../ui/Button";
 import { EmptyState } from "../ui/EmptyState";
 import { beginWorktreeFileDrag, endWorktreeFileDrag } from "../utils/fileDrag";
+import { handleFilePathContextMenu } from "../utils/filePathMenu";
 
 interface FilesPaneProps {
   changedFiles: readonly GitFileStatus[];
@@ -32,6 +33,8 @@ interface FilesPaneProps {
   onPreviewSelectionChange: (selection: PreviewSelection | null) => void;
   previewSelection: PreviewSelection | null;
   worktreeId: string;
+  // ファイル行の右クリックで絶対パスをコピーするための worktree のルート。
+  worktreePath: string;
 }
 
 interface FilesCache {
@@ -61,6 +64,7 @@ export function FilesPane({
   onPreviewSelectionChange,
   previewSelection,
   worktreeId,
+  worktreePath,
 }: FilesPaneProps) {
   const [expandedDirectories, setExpandedDirectories] = useState<Set<string>>(() => new Set());
   const expandedDirectoriesRef = useRef(expandedDirectories);
@@ -387,6 +391,7 @@ export function FilesPane({
               onFileSelect={onPreviewSelectionChange}
               row={row}
               statusByPath={treeStatusByPath}
+              worktreePath={worktreePath}
             />
           ))
         )}
@@ -403,6 +408,7 @@ function FileTreeRow({
   onFileSelect,
   row,
   statusByPath,
+  worktreePath,
 }: {
   isLoading: boolean;
   ignoredPaths: ReadonlySet<string>;
@@ -411,6 +417,7 @@ function FileTreeRow({
   onFileSelect: (selection: PreviewSelection | null) => void;
   row: VisibleTreeRow;
   statusByPath: ReadonlyMap<string, string>;
+  worktreePath: string;
 }) {
   const { depth, isOpen, node } = row;
   const isDirectory = node.kind === "directory";
@@ -422,6 +429,11 @@ function FileTreeRow({
       className={`file-tree-row ${isSelected ? "selected" : ""}`}
       data-path={node.path}
       draggable
+      onContextMenu={
+        isDirectory
+          ? undefined
+          : (event) => handleFilePathContextMenu(event, worktreePath, node.path)
+      }
       onDragEnd={(event) => endWorktreeFileDrag(event.currentTarget)}
       onDragStart={(event) =>
         beginWorktreeFileDrag(event.dataTransfer, event.currentTarget, node.path)

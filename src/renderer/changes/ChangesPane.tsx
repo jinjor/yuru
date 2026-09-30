@@ -8,6 +8,7 @@ import { LineStatLabel } from "./LineStatLabel";
 import { buildChangeSections, type ChangeSection } from "./changes";
 import { EmptyState } from "../ui/EmptyState";
 import { beginWorktreeFileDrag, endWorktreeFileDrag } from "../utils/fileDrag";
+import { handleFilePathContextMenu } from "../utils/filePathMenu";
 
 interface ChangesPaneProps {
   conflictedFiles: readonly GitFileStatus[];
@@ -16,6 +17,8 @@ interface ChangesPaneProps {
   reviewState: GitReviewState | null;
   stagedFiles: readonly GitFileStatus[];
   unstagedFiles: readonly GitFileStatus[];
+  // ファイル行の右クリックで絶対パスをコピーするための worktree のルート。
+  worktreePath: string;
 }
 
 export function ChangesPane({
@@ -25,6 +28,7 @@ export function ChangesPane({
   reviewState,
   stagedFiles,
   unstagedFiles,
+  worktreePath,
 }: ChangesPaneProps) {
   const [isCommittedExpanded, setIsCommittedExpanded] = useState(false);
   const workingChecks = new Map(
@@ -65,6 +69,7 @@ export function ChangesPane({
           section={conflictedSection}
           onPreviewSelectionChange={onPreviewSelectionChange}
           previewSelection={previewSelection}
+          worktreePath={worktreePath}
         />
       )}
       {showsNoBase && (
@@ -84,6 +89,7 @@ export function ChangesPane({
           onExpandedChange={section.key === "base" ? setIsCommittedExpanded : undefined}
           onPreviewSelectionChange={onPreviewSelectionChange}
           previewSelection={previewSelection}
+          worktreePath={worktreePath}
         />
       ))}
     </div>
@@ -97,6 +103,7 @@ function ChangeSectionView({
   onExpandedChange,
   onPreviewSelectionChange,
   previewSelection,
+  worktreePath,
 }: {
   section: ChangeSection;
   baseBranch?: string;
@@ -104,6 +111,7 @@ function ChangeSectionView({
   onExpandedChange?: (expanded: boolean) => void;
   onPreviewSelectionChange: (selection: PreviewSelection | null) => void;
   previewSelection: PreviewSelection | null;
+  worktreePath: string;
 }) {
   // conflicted file は staged/unstaged の diff が成立しないため、
   // scope なし (HEAD ↔ 作業ツリー) の diff を開く
@@ -149,6 +157,7 @@ function ChangeSectionView({
               key={`${section.label}:${file.path}`}
               className={`change-item ${isSelected ? "selected" : ""} ${file.reviewed ? "reviewed" : ""} ${isTestFile(file.path) ? "test-file" : ""}`}
               draggable
+              onContextMenu={(event) => handleFilePathContextMenu(event, worktreePath, file.path)}
               onDragEnd={(event) => endWorktreeFileDrag(event.currentTarget)}
               onDragStart={(event) =>
                 beginWorktreeFileDrag(event.dataTransfer, event.currentTarget, file.path)

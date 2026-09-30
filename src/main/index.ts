@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, ipcMain, protocol, session } from "electron";
+import { app, BrowserWindow, clipboard, Menu, ipcMain, protocol, session } from "electron";
 import type {
   ContextMenuParams,
   IpcMainInvokeEvent,
@@ -307,6 +307,14 @@ function showImageContextMenu(webContents: WebContents, params: ContextMenuParam
   ]).popup();
 }
 
+// 右ペインのファイル名の右クリック。相対パスと絶対パスのコピーを出す。
+function showFilePathContextMenu(relativePath: string, absolutePath: string): void {
+  Menu.buildFromTemplate([
+    { label: "Copy Relative Path", click: () => clipboard.writeText(relativePath) },
+    { label: "Copy Absolute Path", click: () => clipboard.writeText(absolutePath) },
+  ]).popup();
+}
+
 function isHtmlPreviewUrl(url: string): boolean {
   try {
     return new URL(url).protocol === `${HTML_PREVIEW_SCHEME}:`;
@@ -513,6 +521,13 @@ function registerIpcHandlers(): void {
 
   handleIpc("shell:openExternal", (_event, url: string) => {
     return service.openExternal(url);
+  });
+
+  handleIpc("contextMenu:filePath", (event, relativePath: string, absolutePath: string) => {
+    if (!isMainFrameSender(event)) {
+      return;
+    }
+    showFilePathContextMenu(relativePath, absolutePath);
   });
 
   handleIpc("bookmarks:list", (_event, worktreeId: string) => {

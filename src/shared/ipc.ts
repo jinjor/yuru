@@ -273,6 +273,8 @@ export interface ElectronAPI {
   ) => Promise<Result<WorktreeRemovalPreparationOutcome>>;
   executeWorktreeRemoval: (worktreeId: string, force: boolean) => Promise<Result<void>>;
   openExternal: (url: string) => Promise<void>;
+  // 右ペインのファイル名の右クリックメニュー。相対パスと絶対パスのコピーを出す。
+  showFilePathContextMenu: (relativePath: string, absolutePath: string) => Promise<void>;
   getGitPathStates: (worktreeId: string) => Promise<Result<GitPathState[]>>;
   getReviewState: (worktreeId: string) => Promise<Result<GitReviewState | null>>;
   setFileReviewed: (

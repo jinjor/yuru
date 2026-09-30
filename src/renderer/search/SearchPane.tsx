@@ -7,12 +7,15 @@ import type {
 } from "../../shared/ipc";
 import type { PreviewSelection } from "../previewSelection";
 import { TextInput } from "../ui/TextInput";
+import { handleFilePathContextMenu } from "../utils/filePathMenu";
 
 interface SearchPaneProps {
   focusRequest: number;
   onPreviewSelectionChange: (selection: PreviewSelection | null) => void;
   previewSelection: PreviewSelection | null;
   worktreeId: string;
+  // ファイル名の右クリックで絶対パスをコピーするための worktree のルート。
+  worktreePath: string;
 }
 
 interface FlatSearchMatch {
@@ -41,6 +44,7 @@ export function SearchPane({
   onPreviewSelectionChange,
   previewSelection,
   worktreeId,
+  worktreePath,
 }: SearchPaneProps) {
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<{
@@ -227,6 +231,7 @@ export function SearchPane({
             onMatchHover={(index) => setSelectedIndex(index)}
             previewSelection={previewSelection}
             selectedIndex={selectedIndex}
+            worktreePath={worktreePath}
           />
         ))}
       </div>
@@ -280,6 +285,7 @@ function SearchFileGroup({
   onMatchHover,
   previewSelection,
   selectedIndex,
+  worktreePath,
 }: {
   file: CodeSearchFileResult;
   matches: IndexedSearchFile["matches"];
@@ -287,10 +293,15 @@ function SearchFileGroup({
   onMatchHover: (index: number) => void;
   previewSelection: PreviewSelection | null;
   selectedIndex: number;
+  worktreePath: string;
 }) {
   return (
     <section className="code-search-file-group">
-      <div className="code-search-file-header" title={file.path}>
+      <div
+        className="code-search-file-header"
+        title={file.path}
+        onContextMenu={(event) => handleFilePathContextMenu(event, worktreePath, file.path)}
+      >
         <span className="code-search-file-name">{basename(file.path)}</span>
         <span className="code-search-file-dir">{dirname(file.path)}</span>
         <span className="code-search-file-count">{file.matches.length}</span>

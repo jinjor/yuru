@@ -56,6 +56,8 @@ const electronAPI: ElectronAPI = {
   executeWorktreeRemoval: (worktreeId: string, force: boolean) =>
     ipcRenderer.invoke("worktree:executeRemoval", worktreeId, force),
   openExternal: (url: string) => ipcRenderer.invoke("shell:openExternal", url),
+  showFilePathContextMenu: (relativePath: string, absolutePath: string) =>
+    ipcRenderer.invoke("contextMenu:filePath", relativePath, absolutePath),
   getGitPathStates: (worktreeId: string) => ipcRenderer.invoke("git:pathStates", worktreeId),
   getReviewState: (worktreeId: string) => ipcRenderer.invoke("git:reviewState", worktreeId),
   setFileReviewed: (
