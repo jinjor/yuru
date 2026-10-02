@@ -91,3 +91,31 @@ test("tracks the latest OSC terminal title", async () => {
 
   screen.dispose();
 });
+
+test("visible text reflects repaints and excludes scrollback", async () => {
+  const screen = new TerminalScreen(COLS, ROWS);
+  screen.write("old picker footer\r\n");
+  for (let row = 0; row < ROWS; row += 1) {
+    screen.write(`working ${row}\r\n`);
+  }
+  await screen.serialize();
+  assert.ok(!screen.getVisibleText().includes("old picker footer"));
+  assert.ok(screen.getVisibleText().includes("working 9"));
+
+  screen.write("\x1b[H\x1b[2J❭ 1 Yes\r\n  2 No\r\n↑↓ select · ↵ confirm · esc cancel");
+  await screen.serialize();
+  assert.equal(
+    screen.getVisibleText().trimEnd(),
+    "❭ 1 Yes\n  2 No\n↑↓ select · ↵ confirm · esc cancel",
+  );
+  screen.dispose();
+});
+
+test("visible text joins picker footers wrapped in a narrow terminal", async () => {
+  const screen = new TerminalScreen(COLS, ROWS);
+  const footer = "↑↓ select · ←→ reasoning effort · ↵ confirm · esc cancel";
+  screen.write(`❭ SWE-2 High\r\n${footer}`);
+  await screen.serialize();
+  assert.equal(screen.getVisibleText().trimEnd(), `❭ SWE-2 High\n${footer}`);
+  screen.dispose();
+});

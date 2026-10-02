@@ -43,6 +43,22 @@ export class TerminalScreen {
     return this.title;
   }
 
+  // Only the current screen, joining soft-wrapped rows without scrollback.
+  getVisibleText(): string {
+    const buffer = this.terminal.buffer.active;
+    const lines: string[] = [];
+    for (let row = 0; row < this.terminal.rows; row += 1) {
+      const line = buffer.getLine(buffer.baseY + row);
+      const text = line?.translateToString(false) ?? "";
+      if (line?.isWrapped && lines.length > 0) {
+        lines[lines.length - 1] += text;
+      } else {
+        lines.push(text);
+      }
+    }
+    return lines.map((line) => line.trimEnd()).join("\n");
+  }
+
   // write() は内部キューで非同期に処理されるため、空 write のコールバックで
   // 「ここまでの write が反映済み」になるのを待ってから serialize する。
   // serialize はコールバック内で同期的に行う。これにより、このメソッド呼び出し以前に

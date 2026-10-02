@@ -1,4 +1,5 @@
 import { setTimeout } from "node:timers/promises";
+import type { AgentActivityState } from "../../../shared/session.js";
 import type { PendingSession, SessionPreview, Agent, SessionSnapshot } from "../agent.js";
 import {
   normalizeRealPath,
@@ -28,6 +29,32 @@ const SESSION_POLL_INTERVAL_MS = 500;
 // sessions.created_at has one-second resolution, so the launch timestamp needs
 // a margin to not exclude a session created within the same second.
 const SESSION_STARTED_MARGIN_MS = 2_000;
+
+function detectActivityState(
+  _terminalTitle: string,
+  readVisibleText: () => string,
+): AgentActivityState | null {
+  // Devin keeps repainting both at the idle prompt and inside pickers. Its
+  // title names the session, not its activity. Read only the latest prompt and
+  // footer so earlier input prompts retained on screen do not stop working.
+  const lines = readVisibleText().trimEnd().split("\n");
+  const footer = lines.at(-1)?.trim() ?? "";
+  if (/^↑↓ select(?: · [^·]+)* · ↵ confirm · esc cancel$/.test(footer)) {
+    return "waiting";
+  }
+  if (
+    /(?:^|\n)↑↓ navigate · ↵ select · \? help me out · esc cancel(?:\n\? Not ready to answer, help me out!)?$/.test(
+      lines.slice(-2).join("\n"),
+    )
+  ) {
+    return "waiting";
+  }
+  const prompt = lines.reverse().find((line) => /^[❭❯>] /.test(line));
+  return prompt !== undefined &&
+    /^[❭❯>] Ask Devin to build features, fix bugs, or work on your code$/.test(prompt)
+    ? "waiting"
+    : null;
+}
 
 // devin takes the whole request as its first user message. kimi, which has to
 // type both messages into the PTY, separates the context from the task with
@@ -185,4 +212,5 @@ export const agent: Agent = {
     };
   },
   waitForSessionId,
+  detectActivityState,
 };

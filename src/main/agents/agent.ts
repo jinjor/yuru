@@ -84,9 +84,13 @@ export interface Agent {
   // Complete provider-specific initialization, including initialInput delivery,
   // and return the session ID. The runtime owns registration and monitoring.
   waitForSessionId(pending: PendingSession): Promise<string>;
-  // Prefer the agent's explicit state over terminal output, which can include
-  // idle animations. null means the title does not expose a recognized state.
-  detectActivityState?(terminalTitle: string): AgentActivityState | null;
+  // Prefer explicit titles or visible input prompts over output, which can
+  // include idle animations. Read the screen only when the provider needs it.
+  // null means the provider does not expose a recognized state.
+  detectActivityState?(
+    terminalTitle: string,
+    readVisibleText: () => string,
+  ): AgentActivityState | null;
   // Whether the session is stopped where the provider refused a request for
   // rate limiting. Reads the agent's own record of the refusal; agents that do
   // not record one leave this out and never auto-continue.

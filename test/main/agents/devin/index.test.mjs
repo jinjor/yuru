@@ -139,6 +139,42 @@ test("新規 Devin session は ID 未確定のまま起動する", () => {
   assert.equal(devinAgent.resolvesSessionIdLazily, true);
 });
 
+test("Devin の選択肢は出力が続いても回答待ちとして扱う", () => {
+  for (const screen of [
+    "● Running command\n❭ 1 Yes (Approve once)\n  2 No\n↑↓ select · ↵ confirm · esc cancel\n\n",
+    "Which option?\n❭ 1 Red\n  2 Blue\n↑↓ navigate · ↵ select · ? help me out · esc cancel",
+    "Which option?\n❭ 1 Red\n  2 Blue\n↑↓ navigate · ↵ select · ? help me out · esc cancel\n? Not ready to answer, help me out!\n\n",
+    "❭ SWE-2 High\n↑↓ select · ←→ reasoning effort · ↵ confirm · esc cancel",
+  ]) {
+    assert.equal(devinAgent.detectActivityState("devin: task", () => screen), "waiting");
+  }
+});
+
+test("選択肢を閉じた後や通常の作業中は端末出力による判定に戻る", () => {
+  for (const screen of [
+    "",
+    "Thinking · 4s\n❭ Guide Devin while it works\nSWE-2 High",
+    "↑↓ select · ↵ confirm · esc cancel\n❭ Guide Devin while it works\nSWE-2 High",
+    "↑↓ navigate · ↵ select · ? help me out · esc cancel\n? Not ready to answer, help me out!\n❭ Guide Devin while it works\nSWE-2 High",
+    "❭ Ask Devin to build features, fix bugs, or work on your code\n❭ Guide Devin while it works\nSWE-2 High",
+  ]) {
+    assert.equal(devinAgent.detectActivityState("devin: task", () => screen), null);
+  }
+});
+
+test("返答後の通常入力待ちも再描画やバックグラウンド shell の表示によらず待機する", () => {
+  for (const marker of ["❭", "❯", ">"]) {
+    const screen = [
+      "Done.\n────────────────────────────────────────",
+      `${marker} Ask Devin to build features, fix bugs, or work on your code`,
+      "────────────────────────────────────────",
+      "SWE-2 High                  ctrl+v to paste image in clipboard",
+      "1 shell · ↓ select\n\n",
+    ].join("\n");
+    assert.equal(devinAgent.detectActivityState("devin: finished task", () => screen), "waiting");
+  }
+});
+
 test("createWorktreeLaunch は worktree context と初期依頼を最初の user message として渡す", async () => {
   const repoPath = path.join(tempDir, "repo-launch");
   const worktreePath = path.join(repoPath, ".yuru", "worktrees", "task-a");

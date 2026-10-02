@@ -2184,7 +2184,7 @@ export class YuruService {
   }
 
   // Recent terminal output normally means the agent is working. A provider can
-  // override that heuristic when its terminal title exposes an explicit state.
+  // override that heuristic when its title or screen exposes an explicit state.
   private loadAgentActivityStatesByTerminalRuntimeId(): Map<string, AgentActivityState> {
     const states = new Map<string, AgentActivityState>();
     for (const [terminalRuntimeId, runtime] of this.terminalRuntimeMap) {
@@ -2201,9 +2201,11 @@ export class YuruService {
     if (!runtime?.provider) {
       return "waiting";
     }
+    const screen = this.ptyScreens.get(terminalRuntimeId);
     const detectedActivityState =
       getAgent(runtime.provider).detectActivityState?.(
-        this.ptyScreens.get(terminalRuntimeId)?.getTitle() ?? "",
+        screen?.getTitle() ?? "",
+        () => screen?.getVisibleText() ?? "",
       ) ?? null;
     if (detectedActivityState !== null) {
       return detectedActivityState;
