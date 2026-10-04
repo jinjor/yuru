@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-09-22
+Last updated: 2026-10-05
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -77,6 +77,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | P33 | polish | Files / Preview | Shiki の言語定義を必要なときだけ読み込む | コード表示の初期読み込みを軽くしたい |
 | F62 | feature | Worktrees / Terminal | worktree でターミナルを使えるようにする | エージェントのセッションとは別にコマンドを実行したい |
 | F36 | feature | Repos | `yuru add` の結果を実行中の画面に反映する | 詳細: docs/backlog-details/F36-yuru-add-refresh.md |
+| P34 | polish | Changes / Preview | git status と Review 状態からの判定が Changes と Preview で重複している | 「変更ありか」「scope ごとに差分ありか」「Reviewed 済みか」を、`changes/gitStatus.ts`・`ChangesPane.tsx` と `DiffPreviewPanel.tsx` がそれぞれ判定している。scope なしで開いたコンフリクト中のファイルの扱いだけ異なる |
 
 ## Open decisions
 
