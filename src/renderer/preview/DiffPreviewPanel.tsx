@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { diffArrays } from "diff";
-import type { GitDiffDocument, GitDiffScope } from "../../shared/ipc";
+import type { GitDiffDocument, GitDiffScope, GitPathState, GitReviewState } from "../../shared/ipc";
 import { isImagePath } from "../../shared/image-preview";
 import { mediaPreviewKind } from "../../shared/media-preview";
+import { buildIgnoredPathSet, isIgnoredPath } from "../changes/gitStatus";
 import type { FileViewMode } from "./fileViewMode";
 import { computeDiffHunks } from "./diffHunks";
 import { SourceViewer, type SourceLine } from "./SourceViewer";
@@ -44,32 +45,58 @@ function renderedPreviewKind(path: string): RenderedPreviewKind | null {
   return null;
 }
 
+function isPathChanged(states: readonly GitPathState[], path: string): boolean {
+  return states.some(
+    (entry) =>
+      !entry.ignored &&
+      (entry.conflicted || entry.indexStatus || entry.worktreeStatus) &&
+      entry.path === path,
+  );
+}
+
+function isPathChangedInScope(
+  states: readonly GitPathState[],
+  path: string,
+  scope: "staged" | "unstaged" | undefined,
+): boolean {
+  const entry = states.find((state) => state.path === path);
+  if (!entry || entry.ignored || entry.conflicted) {
+    return false;
+  }
+  if (scope === "staged") {
+    return Boolean(entry.indexStatus);
+  }
+  if (scope === "unstaged") {
+    return Boolean(entry.worktreeStatus);
+  }
+  return Boolean(entry.indexStatus || entry.worktreeStatus);
+}
+
 interface DiffPreviewPanelProps {
-  baseBranch?: string;
+  gitPathStates: readonly GitPathState[];
   line?: number;
   onClose: () => void;
-  onReviewedChange: (reviewed: boolean) => Promise<void>;
+  onReviewedChange: (
+    path: string,
+    scope: GitDiffScope | undefined,
+    reviewed: boolean,
+  ) => Promise<void>;
   path: string;
+  reviewState: GitReviewState | null;
   // Changes pane から選んだ時だけ入る scope。なしは HEAD ↔ 作業ツリーの合算 diff。
   scope?: GitDiffScope;
   worktreeId: string;
-  // 変更ありのファイルだけ diff をポーリングするための判定。git status は親が持つ。
-  pathChanged: boolean;
-  reviewed?: boolean;
-  reviewable: boolean;
 }
 
 export function DiffPreviewPanel({
-  baseBranch,
+  gitPathStates,
   line,
   onClose,
   onReviewedChange,
   path,
+  reviewState,
   scope,
   worktreeId,
-  pathChanged,
-  reviewed,
-  reviewable,
 }: DiffPreviewPanelProps) {
   // 取得した diff は「どの scope を要求した結果か」と対で持つ。document 自身は path しか
   // 持たないので、scope を別 state にすると表示中の中身と要求がズレうる。
@@ -109,10 +136,19 @@ export function DiffPreviewPanel({
   // worktree 外のファイル (ターミナルリンク由来の絶対パス)。git state には載らず、
   // 編集モードも対象外 (worktree 内のファイルだけ書き込みを許す)。
   const isExternalPath = path.startsWith("/");
-  // 中身が動きうるファイルか。外部ファイルは git status に載らず pathChanged が常に false
-  // なので、常に poll して追従する (エージェントと話しながらメモを更新していく用途で使う)。
+  const readyReviewState = reviewState?.kind === "ready" ? reviewState : null;
+  const committedFile =
+    scope === "base"
+      ? readyReviewState?.committedFiles.find((file) => file.path === path)
+      : undefined;
+  const pathChanged =
+    scope === "base" ? committedFile !== undefined : isPathChanged(gitPathStates, path);
+  // 中身が動きうるファイルか。外部ファイルと gitignore されたファイルは、変化しても git status
+  // に変更として載らず pathChanged が常に false なので、常に poll して追従する
+  // (エージェントと話しながらメモを更新していく用途で使う)。
   // 差分テキストと画像プレビューは、同じ判定・同じ間隔で追従する。
-  const shouldPollContent = pathChanged || isExternalPath;
+  const shouldPollContent =
+    pathChanged || isExternalPath || isIgnoredPath(path, buildIgnoredPathSet(gitPathStates));
   // staged 差分は index を見ているので、作業ツリーを編集する編集モードには入れない。
   // (unstaged / Files から開いた時は current 側が作業ツリーなので編集に入れる)。実在チェックは
   // 編集に入った EditModeEditor が実ファイルを読んで行う (削除済みなら "missing")。
@@ -127,8 +163,21 @@ export function DiffPreviewPanel({
         : undefined;
   const canEdit = diffDocument !== null && isCurrentDocument && !editDisabledReason;
   const isEditing = mode === "edit" && canEdit;
-  // reviewable は「この path に選択中 scope の差分があるか」を親が Git state から判定した値。
+  // reviewable は「この path に選択中 scope の差分があるか」を Git state から判定した値。
   // review state / snapshot の取得中もガワを維持し、差分のない Files 表示では出さない。
+  const reviewable =
+    scope === "base"
+      ? committedFile !== undefined
+      : isPathChangedInScope(gitPathStates, path, scope);
+  const workingCheck = readyReviewState?.workingChecks.find((check) => check.path === path);
+  const reviewed =
+    !readyReviewState || !reviewable
+      ? undefined
+      : scope === "base"
+        ? committedFile?.reviewed
+        : scope === "staged"
+          ? workingCheck?.stagedReviewed
+          : workingCheck?.unstagedReviewed;
   const activeReviewed = reviewable ? (reviewed ?? false) : undefined;
   // ヘッダの +/- と、プレビューの変更マークを同じ差分から導く。
   // (編集中の数値は autosave 後に追従する)。
@@ -205,7 +254,9 @@ export function DiffPreviewPanel({
   return (
     <div className="preview-panel">
       <PreviewHeader
-        baseBranch={scope === "base" && isCurrentDocument ? baseBranch : undefined}
+        baseBranch={
+          scope === "base" && isCurrentDocument ? readyReviewState?.baseBranch : undefined
+        }
         path={displayPath}
         mode={mode}
         onModeChange={setMode}
@@ -217,7 +268,9 @@ export function DiffPreviewPanel({
         reviewPending={isSettingReviewed || reviewed === undefined}
         onReviewedChange={(nextReviewed) => {
           setIsSettingReviewed(true);
-          void onReviewedChange(nextReviewed).finally(() => setIsSettingReviewed(false));
+          void onReviewedChange(path, scope, nextReviewed).finally(() =>
+            setIsSettingReviewed(false),
+          );
         }}
         onClose={onClose}
       />

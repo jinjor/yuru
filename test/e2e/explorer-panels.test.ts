@@ -56,6 +56,38 @@ test("Files タブで追跡ファイルを表示しクリックしたファイ�
   }
 });
 
+test("gitignore されたファイルのプレビューも書き換えに追従する", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context, {
+      ".gitignore": "out/\n",
+      "README.md": "# e2e\n",
+    });
+    await writeFiles(repoDir, { "out/result.txt": "first build\n" });
+    await registerRepo(context, repoDir);
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+    await openMainTerminal(window);
+
+    await window.locator(".panel-tabs .tab", { hasText: "Files" }).click();
+    await window.locator(".file-tree-row", { hasText: "out" }).click();
+    await expect(window.locator(".file-tree-name.ignored", { hasText: "result.txt" })).toBeVisible();
+    await window.locator(".file-tree-row", { hasText: "result.txt" }).click();
+    await expectPreviewPath(window, "out/result.txt");
+    await expect(window.locator(".source-viewer")).toContainText("first build");
+
+    await writeFiles(repoDir, { "out/result.txt": "second build\n" });
+    await expect(window.locator(".source-viewer")).toContainText("second build", {
+      timeout: 10_000,
+    });
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
 test("Files / Search から開いた合算 diff でも Reviewed を切り替えられる", async () => {
   const context = await createE2eContext();
   let app: ElectronApplication | null = null;

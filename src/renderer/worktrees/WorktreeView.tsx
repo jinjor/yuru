@@ -9,6 +9,7 @@ import {
 } from "react";
 import type {
   AppError,
+  GitDiffScope,
   GitPathState,
   GitReviewState,
   Result,
@@ -45,33 +46,6 @@ interface WorktreeViewProps {
 
 interface WorktreeViewContentProps extends Omit<WorktreeViewProps, "repo"> {
   githubRepoSlug: string | null;
-}
-
-function isPathChanged(states: readonly GitPathState[], path: string): boolean {
-  return states.some(
-    (entry) =>
-      !entry.ignored &&
-      (entry.conflicted || entry.indexStatus || entry.worktreeStatus) &&
-      entry.path === path,
-  );
-}
-
-function isPathChangedInScope(
-  states: readonly GitPathState[],
-  path: string,
-  scope: "staged" | "unstaged" | undefined,
-): boolean {
-  const entry = states.find((state) => state.path === path);
-  if (!entry || entry.ignored || entry.conflicted) {
-    return false;
-  }
-  if (scope === "staged") {
-    return Boolean(entry.indexStatus);
-  }
-  if (scope === "unstaged") {
-    return Boolean(entry.worktreeStatus);
-  }
-  return Boolean(entry.indexStatus || entry.worktreeStatus);
 }
 
 // ポーリングの結果が前回と同じ内容なら前の参照を返し、再レンダーを省く。
@@ -134,33 +108,6 @@ const WorktreeViewContent = memo(function WorktreeViewContent({
   });
   const currentBranch = worktree.branch;
   const currentGitHub = detail.githubPullRequest;
-  const previewPath = previewSelection?.path ?? null;
-  const committedPreviewFile =
-    previewSelection?.scope === "base" && reviewState?.kind === "ready"
-      ? reviewState.committedFiles.find((file) => file.path === previewSelection.path)
-      : undefined;
-  const previewPathChanged = previewPath
-    ? previewSelection?.scope === "base"
-      ? committedPreviewFile !== undefined
-      : isPathChanged(gitPathStates, previewPath)
-    : false;
-  const workingReviewCheck =
-    reviewState?.kind === "ready" && previewPath
-      ? reviewState.workingChecks.find((check) => check.path === previewPath)
-      : undefined;
-  const previewHasReviewableChange = previewSelection
-    ? previewSelection.scope === "base"
-      ? committedPreviewFile !== undefined
-      : isPathChangedInScope(gitPathStates, previewSelection.path, previewSelection.scope)
-    : false;
-  const previewReviewed =
-    reviewState?.kind !== "ready" || !previewHasReviewableChange
-      ? undefined
-      : previewSelection?.scope === "base"
-        ? committedPreviewFile?.reviewed
-        : previewSelection?.scope === "staged"
-          ? workingReviewCheck?.stagedReviewed
-          : workingReviewCheck?.unstagedReviewed;
   const resetPreviewState = useCallback((): void => {
     setPreviewSelection(null);
   }, []);
@@ -292,20 +239,12 @@ const WorktreeViewContent = memo(function WorktreeViewContent({
   }, [worktreeId]);
 
   const handleReviewedChange = useCallback(
-    async (reviewed: boolean): Promise<void> => {
-      if (!previewSelection) {
-        return;
-      }
+    async (path: string, scope: GitDiffScope | undefined, reviewed: boolean): Promise<void> => {
       // 記録してから読み直すまでの間に返ってくる polling は、まだ古い状態を持っている。
       // version を進めておき、その結果で上書きされないようにする。
       const reviewMutationVersion = reviewMutationVersionRef.current + 1;
       reviewMutationVersionRef.current = reviewMutationVersion;
-      const result = await window.electronAPI.setFileReviewed(
-        worktreeId,
-        previewSelection.path,
-        previewSelection.scope,
-        reviewed,
-      );
+      const result = await window.electronAPI.setFileReviewed(worktreeId, path, scope, reviewed);
       if (!result.ok) {
         return;
       }
@@ -315,7 +254,7 @@ const WorktreeViewContent = memo(function WorktreeViewContent({
         setReviewState(nextReviewState.data);
       }
     },
-    [previewSelection, worktreeId],
+    [worktreeId],
   );
 
   return (
@@ -334,14 +273,8 @@ const WorktreeViewContent = memo(function WorktreeViewContent({
             path={previewSelection.path}
             line={previewSelection.line}
             scope={previewSelection.scope}
-            pathChanged={previewPathChanged}
-            baseBranch={
-              previewSelection.scope === "base" && reviewState?.kind === "ready"
-                ? reviewState.baseBranch
-                : undefined
-            }
-            reviewed={previewReviewed}
-            reviewable={previewHasReviewableChange}
+            gitPathStates={gitPathStates}
+            reviewState={reviewState}
             onReviewedChange={handleReviewedChange}
             onClose={resetPreviewState}
             worktreeId={worktreeId}
