@@ -146,13 +146,14 @@ export function TerminalPanel({
       },
     } satisfies ILinkProvider);
 
+    const textEncoder = new TextEncoder();
     term.attachCustomKeyEventHandler((event) => {
       const sequence = terminalKeySequence(event);
       if (sequence) {
         if (event.type === "keydown") {
           event.preventDefault();
           event.stopPropagation();
-          window.electronAPI.ptyWrite(terminalRuntimeId, sequence);
+          window.electronAPI.ptyWrite(terminalRuntimeId, textEncoder.encode(sequence));
         }
         return false;
       }
@@ -160,7 +161,15 @@ export function TerminalPanel({
     });
 
     term.onData((data) => {
-      window.electronAPI.ptyWrite(terminalRuntimeId, data);
+      window.electronAPI.ptyWrite(terminalRuntimeId, textEncoder.encode(data));
+    });
+
+    // 旧形式のマウス報告は UTF-8 の文字列ではなく、生のバイトとして PTY に送る。
+    term.onBinary((data) => {
+      window.electronAPI.ptyWrite(
+        terminalRuntimeId,
+        Uint8Array.from(data, (char) => char.charCodeAt(0)),
+      );
     });
 
     term.onResize(({ cols, rows }) => {

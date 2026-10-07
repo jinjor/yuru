@@ -81,6 +81,55 @@ test("serialize includes writes issued immediately before it", async () => {
   restored.dispose();
 });
 
+async function mouseModeReports(terminal) {
+  const reports = [];
+  const listener = terminal.onData((data) => reports.push(data));
+  await writeAll(terminal, "\x1b[?1003$p\x1b[?1006$p\x1b[?1016$p");
+  listener.dispose();
+  return reports;
+}
+
+test("serialize preserves mouse tracking and encoding after mode changes and reset", async () => {
+  const screen = new TerminalScreen(COLS, ROWS);
+  const source = new Terminal({ cols: COLS, rows: ROWS });
+  try {
+    for (const modes of [
+      "\x1b[?1049h\x1b[?1003h\x1b[?1006h",
+      "\x1b[?1016h",
+      "\x1b[?1016l",
+      "\x1b[?1006h",
+      "\x1bc",
+    ]) {
+      // Split escape sequences across writes, as real PTY chunks can be split.
+      for (const char of modes) screen.write(char);
+      await writeAll(source, modes);
+      const restored = new Terminal({ cols: COLS, rows: ROWS });
+      try {
+        await writeAll(restored, await screen.serialize());
+        assert.deepEqual(await mouseModeReports(restored), await mouseModeReports(source));
+      } finally {
+        restored.dispose();
+      }
+    }
+  } finally {
+    screen.dispose();
+    source.dispose();
+  }
+});
+
+test("simultaneous snapshots query the mouse encoding without changing the screen", async () => {
+  const screen = new TerminalScreen(COLS, ROWS);
+  try {
+    screen.write("mouse screen\x1b[?1003h\x1b[?1006h");
+    const snapshots = await Promise.all([screen.serialize(), screen.serialize()]);
+    assert.equal(snapshots[0], snapshots[1]);
+    assert.equal(screen.getVisibleText().trimEnd(), "mouse screen");
+    assert.ok(snapshots[0].includes("\x1b[?1006h"));
+  } finally {
+    screen.dispose();
+  }
+});
+
 test("tracks the latest OSC terminal title", async () => {
   const screen = new TerminalScreen(COLS, ROWS);
   screen.write("\x1b]0;codex-permission-dot\x07");

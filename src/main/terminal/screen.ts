@@ -59,14 +59,33 @@ export class TerminalScreen {
     return lines.map((line) => line.trimEnd()).join("\n");
   }
 
-  // write() は内部キューで非同期に処理されるため、空 write のコールバックで
+  // write() は内部キューで非同期に処理されるため、write のコールバックで
   // 「ここまでの write が反映済み」になるのを待ってから serialize する。
   // serialize はコールバック内で同期的に行う。これにより、このメソッド呼び出し以前に
   // 届いたデータは必ずスナップショットに含まれ、以後に届いたデータは決して含まれない。
   serialize(): Promise<string> {
     return new Promise((resolve) => {
-      this.terminal.write("", () => {
-        resolve(this.serializeAddon.serialize());
+      // addon-serialize はマウスの送信形式を保存しない。端末自身に現在の形式を
+      // 問い合わせて補い、復元後も TUI が要求した形式でマウス入力を送る。
+      const mouseModes = new Map([
+        [1006, false],
+        [1016, false],
+      ]);
+      const listener = this.terminal.onData((data) => {
+        const report = data.startsWith("\x1b[?")
+          ? /^(1006|1016);([12])\$y$/.exec(data.slice(3))
+          : null;
+        if (report) {
+          mouseModes.set(Number(report[1]), report[2] === "1");
+        }
+      });
+      this.terminal.write("\x1b[?1006$p\x1b[?1016$p", () => {
+        listener.dispose();
+        const mouseEncoding = [...mouseModes]
+          .filter(([, enabled]) => enabled)
+          .map(([mode]) => `\x1b[?${mode}h`)
+          .join("");
+        resolve(this.serializeAddon.serialize() + mouseEncoding);
       });
     });
   }

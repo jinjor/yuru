@@ -1641,10 +1641,10 @@ export class YuruService {
     this.cancelActiveCodeSearch(worktreeId);
   }
 
-  ptyWrite(terminalRuntimeId: string, data: string): void {
+  ptyWrite(terminalRuntimeId: string, data: Uint8Array): void {
     const proc = this.ptyProcesses.get(terminalRuntimeId);
     if (proc) {
-      proc.write(data);
+      proc.write(Buffer.from(data));
       // xterm の onData はキー入力だけでなく、TUI からの問い合わせに対する端末応答も
       // 流す。後者まで入力扱いすると、その直後の agent 出力を再描画として除外してしまう。
       if (!isCursorPositionReport(data)) {

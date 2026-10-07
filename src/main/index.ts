@@ -646,7 +646,7 @@ function registerIpcHandlers(): void {
     service.cancelCodeSearch(worktreeId);
   });
 
-  ipcMain.on("pty:write", (_event, terminalRuntimeId: string, data: string) => {
+  ipcMain.on("pty:write", (_event, terminalRuntimeId: string, data: Uint8Array) => {
     service.ptyWrite(terminalRuntimeId, data);
   });
 

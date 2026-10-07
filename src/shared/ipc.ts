@@ -332,7 +332,7 @@ export interface ElectronAPI {
   attachPty: (terminalRuntimeId: TerminalRuntimeId) => Promise<string>;
   readyPty: (terminalRuntimeId: TerminalRuntimeId) => Promise<void>;
   detachPty: (terminalRuntimeId: TerminalRuntimeId) => Promise<void>;
-  ptyWrite: (terminalRuntimeId: TerminalRuntimeId, data: string) => void;
+  ptyWrite: (terminalRuntimeId: TerminalRuntimeId, data: Uint8Array) => void;
   ptyResize: (terminalRuntimeId: TerminalRuntimeId, cols: number, rows: number) => void;
   onPtyData: (callback: (terminalRuntimeId: TerminalRuntimeId, data: string) => void) => () => void;
 }

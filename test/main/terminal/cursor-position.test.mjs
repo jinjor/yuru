@@ -6,6 +6,8 @@ import {
   isCursorPositionReport,
 } from "../../../src/main/terminal/cursor-position.ts";
 
+const textEncoder = new TextEncoder();
+
 test("標準・private cursor position query を識別する", () => {
   assert.equal(isCursorPositionQuery("\x1b[6n"), true);
   assert.equal(isCursorPositionQuery("\x1b[?6n"), true);
@@ -13,14 +15,18 @@ test("標準・private cursor position query を識別する", () => {
 });
 
 test("xterm が返す標準・private cursor position report を識別する", () => {
-  assert.equal(isCursorPositionReport("\x1b[24;80R"), true);
-  assert.equal(isCursorPositionReport("\x1b[?55;3R"), true);
+  assert.equal(isCursorPositionReport(textEncoder.encode("\x1b[24;80R")), true);
+  assert.equal(isCursorPositionReport(textEncoder.encode("\x1b[?55;3R")), true);
+  assert.equal(isCursorPositionReport(textEncoder.encode("\x1b[24;80R\x1b[?55;3R")), true);
 });
 
 test("キー入力・マウス入力・通常出力は cursor position protocol にしない", () => {
   assert.equal(isCursorPositionQuery("n"), false);
   assert.equal(isCursorPositionQuery("\x1b[?6nredraw"), false);
-  assert.equal(isCursorPositionReport("R"), false);
-  assert.equal(isCursorPositionReport("\x1b[A"), false);
-  assert.equal(isCursorPositionReport("\x1b[<0;52;29M"), false);
+  assert.equal(isCursorPositionReport(textEncoder.encode("R")), false);
+  assert.equal(isCursorPositionReport(textEncoder.encode("\x1b[A")), false);
+  assert.equal(isCursorPositionReport(textEncoder.encode("\x1b[<0;52;29M")), false);
+  assert.equal(isCursorPositionReport(textEncoder.encode("日本語🙂")), false);
+  assert.equal(isCursorPositionReport(textEncoder.encode("\ufeff\x1b[24;80R")), false);
+  assert.equal(isCursorPositionReport(new Uint8Array([27, 91, 77, 32, 142, 33])), false);
 });

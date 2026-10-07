@@ -174,7 +174,7 @@ const electronAPI: ElectronAPI = {
   attachPty: (terminalRuntimeId: string) => ipcRenderer.invoke("pty:attach", terminalRuntimeId),
   readyPty: (terminalRuntimeId: string) => ipcRenderer.invoke("pty:ready", terminalRuntimeId),
   detachPty: (terminalRuntimeId: string) => ipcRenderer.invoke("pty:detach", terminalRuntimeId),
-  ptyWrite: (terminalRuntimeId: string, data: string) =>
+  ptyWrite: (terminalRuntimeId: string, data: Uint8Array) =>
     ipcRenderer.send("pty:write", terminalRuntimeId, data),
   ptyResize: (terminalRuntimeId: string, cols: number, rows: number) =>
     ipcRenderer.send("pty:resize", terminalRuntimeId, cols, rows),

@@ -3,11 +3,12 @@
 const ESCAPE_CHARACTER = String.fromCharCode(0x1b);
 const CURSOR_POSITION_QUERY_PATTERN = new RegExp(`^(?:${ESCAPE_CHARACTER}\\[[?]?6n)+$`);
 const CURSOR_POSITION_REPORT_PATTERN = new RegExp(`^(?:${ESCAPE_CHARACTER}\\[[?]?\\d+;\\d+R)+$`);
+const textDecoder = new TextDecoder("utf-8", { ignoreBOM: true });
 
 export function isCursorPositionQuery(data: string): boolean {
   return CURSOR_POSITION_QUERY_PATTERN.test(data);
 }
 
-export function isCursorPositionReport(data: string): boolean {
-  return CURSOR_POSITION_REPORT_PATTERN.test(data);
+export function isCursorPositionReport(data: Uint8Array): boolean {
+  return CURSOR_POSITION_REPORT_PATTERN.test(textDecoder.decode(data));
 }
