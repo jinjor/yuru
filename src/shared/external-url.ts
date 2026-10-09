@@ -1,18 +1,25 @@
-export interface HttpUrlMatch {
+export interface ExternalUrlMatch {
   url: string;
   startIndex: number;
 }
 
-const urlPattern = /\bhttps?:\/\/[^\s<>"'`]+/g;
+// chrome:// はブラウザの内部ページだが、Chrome を指定すれば OS 経由で開ける。
+const externalUrlProtocols = new Set(["http:", "https:", "chrome:"]);
 
-export function findHttpUrls(text: string): HttpUrlMatch[] {
-  const matches: HttpUrlMatch[] = [];
+export function isExternalUrlProtocol(protocol: string): boolean {
+  return externalUrlProtocols.has(protocol);
+}
+
+const urlPattern = /\b(?:https?|chrome):\/\/[^\s<>"'`]+/g;
+
+export function findExternalUrls(text: string): ExternalUrlMatch[] {
+  const matches: ExternalUrlMatch[] = [];
   let match: RegExpExecArray | null;
 
   urlPattern.lastIndex = 0;
   while ((match = urlPattern.exec(text)) !== null) {
     const url = trimTrailingUrlPunctuation(match[0]);
-    if (!isHttpUrl(url)) {
+    if (!isExternalUrl(url)) {
       continue;
     }
 
@@ -62,10 +69,9 @@ function countCharacter(text: string, character: string): number {
   return count;
 }
 
-function isHttpUrl(text: string): boolean {
+function isExternalUrl(text: string): boolean {
   try {
-    const url = new URL(text);
-    return url.protocol === "http:" || url.protocol === "https:";
+    return isExternalUrlProtocol(new URL(text).protocol);
   } catch {
     return false;
   }

@@ -1,5 +1,6 @@
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { Highlighter } from "shiki";
+import { isExternalUrlProtocol } from "../../shared/external-url.js";
 import { useMarkdownFind } from "./MarkdownFind";
 import type { DiffHunk } from "./diffHunks";
 import { getHighlighter } from "./highlight";
@@ -24,7 +25,8 @@ export default function MarkdownPreview({ content, hunks }: MarkdownPreviewProps
   const findBar = useMarkdownFind(scrollRef, bodyRef, renderedHtml.__html);
 
   // リンクは BrowserWindow をその URL に遷移させてアプリを壊すので、既定の遷移を必ず止める。
-  // http(s) だけ OS の既定ブラウザに渡す。相対リンクやアンカーは遷移を止めるだけにする。
+  // 開けるスキーム (http/https/chrome) だけ OS 側のブラウザに渡す。相対リンクやアンカーは
+  // 遷移を止めるだけにする。
   const handleClick = (event: MouseEvent<HTMLDivElement>): void => {
     const anchor = (event.target as HTMLElement).closest("a");
     if (!anchor) {
@@ -36,7 +38,7 @@ export default function MarkdownPreview({ content, hunks }: MarkdownPreviewProps
       return;
     }
     const url = new URL(href);
-    if (url.protocol === "http:" || url.protocol === "https:") {
+    if (isExternalUrlProtocol(url.protocol)) {
       void window.electronAPI.openExternal(url.toString());
     }
   };

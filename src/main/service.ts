@@ -1,6 +1,7 @@
 import { shell } from "electron";
 import { randomUUID } from "crypto";
 import fs from "fs";
+import os from "os";
 import path from "path";
 import { setTimeout as setTimeoutPromise } from "node:timers/promises";
 import * as pty from "node-pty";
@@ -132,6 +133,8 @@ import {
   type ProviderPlanUsage,
 } from "../shared/session.js";
 import { isFileNotFoundError, toAppError } from "./errors/app-error.js";
+import { exec } from "./exec.js";
+import { isExternalUrlProtocol } from "../shared/external-url.js";
 import {
   clearErrorNotices,
   dismissErrorNotice,
@@ -1222,10 +1225,22 @@ export class YuruService {
 
   async openExternal(url: string): Promise<void> {
     const parsedUrl = new URL(url);
-    if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+    if (!isExternalUrlProtocol(parsedUrl.protocol)) {
       throw new Error("Unsupported external URL protocol.");
     }
 
+    // chrome:// に OS の既定ハンドラはいないので、バンドル ID で Chrome を指定して開く。
+    if (parsedUrl.protocol === "chrome:") {
+      try {
+        await exec("open", ["-b", "com.google.Chrome", parsedUrl.toString()], os.homedir());
+      } catch (error) {
+        // 失敗理由 (Chrome 未インストールなど) は環境に依るので、事実だけの文に
+        // 内部メッセージを添えて出す。
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new Error(`Failed to open Chrome. ${detail}`);
+      }
+      return;
+    }
     await shell.openExternal(parsedUrl.toString());
   }
 
@@ -1365,10 +1380,10 @@ export class YuruService {
   // ターミナルやメッセージ表示でクリックされた URL をブックマークに登録する。
   async addBookmark(worktreeId: string, url: string) {
     const parsedUrl = URL.canParse(url) ? new URL(url) : null;
-    if (!parsedUrl || (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:")) {
+    if (!parsedUrl || !isExternalUrlProtocol(parsedUrl.protocol)) {
       return this.failAndReport<void>({
         code: "invalid_path",
-        message: "Only http/https URLs can be bookmarked.",
+        message: "Only http/https/chrome URLs can be bookmarked.",
         detail: url,
       });
     }

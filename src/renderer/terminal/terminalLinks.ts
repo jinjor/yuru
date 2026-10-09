@@ -1,4 +1,4 @@
-import { findHttpUrls } from "../../shared/http-url.js";
+import { findExternalUrls } from "../../shared/external-url.js";
 
 export type TerminalLink =
   | {
@@ -34,7 +34,7 @@ export function findTerminalLinks(
 }
 
 function findUrlLinks(lineText: string): TerminalLink[] {
-  return findHttpUrls(lineText).map((match) => {
+  return findExternalUrls(lineText).map((match) => {
     return {
       kind: "url",
       text: match.url,

@@ -14,6 +14,17 @@ test("findTerminalLinks は http/https URL を検出する", () => {
   ]);
 });
 
+test("findTerminalLinks は chrome:// URL を検出する", () => {
+  assert.deepEqual(findTerminalLinks("Help: chrome://settings/help"), [
+    {
+      kind: "url",
+      text: "chrome://settings/help",
+      startIndex: 6,
+      url: "chrome://settings/help",
+    },
+  ]);
+});
+
 test("findTerminalLinks は URL の末尾に付いた文末記号を外す", () => {
   assert.deepEqual(findTerminalLinks("See (https://github.com/jinjor/yuru/pull/40)."), [
     {
