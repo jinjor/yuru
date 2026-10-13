@@ -10,24 +10,8 @@ function normalizePorcelainStatus(status: string): string {
 // git-status(1) の仕様で unmerged と定義されている XY の組み合わせ
 const UNMERGED_STATUSES = new Set(["DD", "AU", "UD", "UA", "DU", "AA", "UU"]);
 
-export function parsePorcelainLine(line: string): GitPathState | null {
-  if (!line) {
-    return null;
-  }
-
-  const rawStatus = line.substring(0, 2);
-  let filePath = line.substring(3).trim();
-
-  if (!filePath) {
-    return null;
-  }
-
-  if (filePath.includes(" -> ")) {
-    const parts = filePath.split(" -> ");
-    filePath = parts[parts.length - 1] ?? filePath;
-  }
-
-  filePath = filePath.replace(/\/$/, "");
+function parsePorcelainEntry(rawStatus: string, path: string): GitPathState {
+  const filePath = path.replace(/\/$/, "");
 
   if (rawStatus === "!!") {
     return {
@@ -68,21 +52,33 @@ export function parsePorcelainLine(line: string): GitPathState | null {
   };
 }
 
+// `git status --porcelain -z` の出力を解釈する。-z ではパスがクォートされず、
+// rename/copy は "XY 移動先\0移動元\0" の形になる
+export function parsePorcelainZ(output: string): GitPathState[] {
+  const fields = output.split("\0");
+  const states: GitPathState[] = [];
+  for (let i = 0; i < fields.length; i++) {
+    const field = fields[i] ?? "";
+    if (field.length < 4) {
+      continue;
+    }
+    const rawStatus = field.substring(0, 2);
+    states.push(parsePorcelainEntry(rawStatus, field.substring(3)));
+    if (rawStatus.includes("R") || rawStatus.includes("C")) {
+      i++;
+    }
+  }
+  return states;
+}
+
 export async function getGitPathStates(cwd: string): Promise<GitPathState[]> {
   const [statusOutput, stagedNumstat, unstagedNumstat] = await Promise.all([
-    exec("git", ["status", "--porcelain", "-uall", "--ignored=matching"], cwd),
+    exec("git", ["status", "--porcelain", "-z", "-uall", "--ignored=matching"], cwd),
     exec("git", ["diff", "--numstat", "-z", "--cached"], cwd),
     exec("git", ["diff", "--numstat", "-z"], cwd),
   ]);
 
-  if (!statusOutput.trim()) {
-    return [];
-  }
-
-  const states = statusOutput
-    .split("\n")
-    .map(parsePorcelainLine)
-    .filter((entry): entry is GitPathState => entry !== null);
+  const states = parsePorcelainZ(statusOutput);
 
   const stagedStats = parseNumstatZ(stagedNumstat);
   const unstagedStats = parseNumstatZ(unstagedNumstat);

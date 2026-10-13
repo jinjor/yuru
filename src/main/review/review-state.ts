@@ -10,7 +10,7 @@ import { exec } from "../exec.js";
 import { loadFileReviews, setFileReview, type FileReviewRecord } from "./store.js";
 import { loadDiffBuffers, parseNumstatZ } from "../git/diff.js";
 import { resolveGitReviewBase } from "../git/repo.js";
-import { parsePorcelainLine } from "../git/status.js";
+import { parsePorcelainZ } from "../git/status.js";
 import {
   baseOidForLayer,
   blobOid,
@@ -81,7 +81,7 @@ export async function getReviewState(cwd: string): Promise<GitReviewState> {
     exec("git", ["diff", "--numstat", "--find-renames", "-z", base.mergeBase, "HEAD"], cwd),
     loadRawDiff(cwd, base.mergeBase, "index"),
     loadRawDiff(cwd, base.mergeBase, "worktree"),
-    exec("git", ["status", "--porcelain", "-uall"], cwd),
+    exec("git", ["status", "--porcelain", "-z", "-uall"], cwd),
     exec("git", ["ls-files", "-s", "-z"], cwd),
   ]);
 
@@ -98,16 +98,10 @@ export async function getReviewState(cwd: string): Promise<GitReviewState> {
     };
   });
 
-  const pathStates = statusOutput
-    .split("\n")
-    .map(parsePorcelainLine)
-    .filter(
-      (entry): entry is NonNullable<typeof entry> =>
-        entry !== null &&
-        !entry.ignored &&
-        !entry.conflicted &&
-        Boolean(entry.indexStatus || entry.worktreeStatus),
-    );
+  const pathStates = parsePorcelainZ(statusOutput).filter(
+    (entry) =>
+      !entry.ignored && !entry.conflicted && Boolean(entry.indexStatus || entry.worktreeStatus),
+  );
   const indexOids = parseIndexOids(indexOutput);
   const indexDiffByPath = rawEntryMap(indexEntries);
   const worktreeDiffByPath = rawEntryMap(worktreeEntries);
