@@ -18,7 +18,7 @@ import type {
 import type { RepoListItem, WorktreeListItem } from "../../shared/metadata";
 import type { RateLimitStop, SessionProvider, TerminalRuntimeId } from "../../shared/session";
 import { DiffPreviewPanel } from "../preview/DiffPreviewPanel";
-import { ExplorerPanel } from "../explorer/ExplorerPanel";
+import { ExplorerPanel, type ExplorerPanelHandle } from "../explorer/ExplorerPanel";
 import { FileSearch } from "../files/FileSearch";
 import { TerminalBar } from "../terminal/TerminalBar";
 import { TerminalPanel } from "../terminal/TerminalPanel";
@@ -98,6 +98,7 @@ const WorktreeViewContent = memo(function WorktreeViewContent({
   const displayedRateLimitStop =
     rateLimitStops.find((stop) => stop.terminalRuntimeId === displayedTerminalRuntimeId) ?? null;
   const [previewSelection, setPreviewSelection] = useState<PreviewSelection | null>(null);
+  const explorerPanelRef = useRef<ExplorerPanelHandle>(null);
   const [gitPathStates, setGitPathStates] = useState<GitPathState[]>([]);
   const [reviewState, setReviewState] = useState<GitReviewState | null>(null);
   const reviewMutationVersionRef = useRef(0);
@@ -195,14 +196,20 @@ const WorktreeViewContent = memo(function WorktreeViewContent({
     void startTerminalRuntime(() => window.electronAPI.openWorktreeTerminal(worktreeId));
   }, [isMainWorktree, startTerminalRuntime, worktreeId]);
 
-  const handleFileLinkActivate = useCallback(
-    async (filePath: string, line?: number): Promise<void> => {
-      // worktree 内なら相対パス、外なら絶対パスが返る (どちらもプレビューで開ける)。
-      const resolvedPath = await window.electronAPI.resolveRepoFile(worktreeId, filePath);
-      if (!resolvedPath) {
+  const handlePathLinkActivate = useCallback(
+    async (targetPath: string, line?: number): Promise<void> => {
+      // ファイルは worktree 内なら相対パス、外なら絶対パスが返る (どちらもプレビューで開ける)。
+      // ディレクトリは worktree 内の相対パスだけが返る。
+      const target = await window.electronAPI.resolveRepoPath(worktreeId, targetPath);
+      if (!target) {
         return;
       }
-      setPreviewSelection({ path: resolvedPath, line });
+      if (target.kind === "directory") {
+        // パスの解決を待つ間に別の worktree へ移っていたら、この画面は隠れていて handle が外れている。
+        explorerPanelRef.current?.revealDirectory(target.path);
+        return;
+      }
+      setPreviewSelection({ path: target.path, line });
     },
     [worktreeId],
   );
@@ -318,8 +325,8 @@ const WorktreeViewContent = memo(function WorktreeViewContent({
               changesPanelWidth={paneLayout.changesPanelWidth}
               currentGitHubRepoSlug={githubRepoSlug}
               isPreviewOpen={previewSelection !== null}
-              onFileLinkActivate={(filePath, line) => {
-                void handleFileLinkActivate(filePath, line);
+              onPathLinkActivate={(targetPath, line) => {
+                void handlePathLinkActivate(targetPath, line);
               }}
               previewRatio={paneLayout.previewRatio}
               terminalRuntimeId={displayedTerminalRuntimeId}
@@ -371,6 +378,7 @@ const WorktreeViewContent = memo(function WorktreeViewContent({
         onError={onError}
         onPreviewSelectionChange={setPreviewSelection}
         previewSelection={previewSelection}
+        ref={explorerPanelRef}
         reviewState={reviewState}
         width={paneLayout.changesPanelWidth}
         worktreeId={worktreeId}

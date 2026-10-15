@@ -103,6 +103,12 @@ export interface FileTreeNode {
   children: FileTreeNode[] | null;
 }
 
+// ターミナルのパスリンクの行き先。file はプレビュー、directory は Files で開く。
+export interface RepoPathTarget {
+  kind: "file" | "directory";
+  path: string;
+}
+
 export interface GitDiffDocument {
   path: string;
   // null は元側にファイルが無いこと (例: 新規追加されたファイル)。
@@ -305,8 +311,9 @@ export interface ElectronAPI {
   // Cmd+P で開いたときの初期候補。新しく開いた順の相対パス。
   listRecentFiles: (worktreeId: string) => Promise<Result<string[]>>;
   recordRecentFile: (worktreeId: string, filePath: string) => Promise<void>;
-  // ターミナルのファイルリンクの解決。worktree 内なら相対パス、外なら絶対パス、開けなければ null。
-  resolveRepoFile: (worktreeId: string, filePath: string) => Promise<string | null>;
+  // ターミナルのパスリンクの解決。相対パスは worktree 基準。worktree 内は相対パス、
+  // 外は絶対パスを返す (外はファイルのみ)。開けなければ null。
+  resolveRepoPath: (worktreeId: string, targetPath: string) => Promise<RepoPathTarget | null>;
   readWorktreeFile: (worktreeId: string, filePath: string) => Promise<Result<string | null>>;
   writeFile: (worktreeId: string, filePath: string, content: string) => Promise<Result<void>>;
   syncFileWatchTargets: (worktreeId: string, relativePaths: string[]) => Promise<void>;

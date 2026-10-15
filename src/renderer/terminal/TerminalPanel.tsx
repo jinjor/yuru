@@ -8,7 +8,8 @@ interface TerminalPanelProps {
   changesPanelWidth: number;
   currentGitHubRepoSlug: string | null;
   isPreviewOpen: boolean;
-  onFileLinkActivate: (filePath: string, line?: number) => void;
+  // ファイルまたはディレクトリへのパスリンクのクリック。行き先の判定は受け取る側が行う。
+  onPathLinkActivate: (targetPath: string, line?: number) => void;
   previewRatio: number;
   terminalRuntimeId: string;
   worktreeId: string;
@@ -32,7 +33,7 @@ export function TerminalPanel({
   changesPanelWidth,
   currentGitHubRepoSlug,
   isPreviewOpen,
-  onFileLinkActivate,
+  onPathLinkActivate,
   previewRatio,
   terminalRuntimeId,
   worktreeId,
@@ -47,12 +48,12 @@ export function TerminalPanel({
     term.focus();
     term.paste(relativePath);
   });
-  const onFileLinkActivateRef = useRef(onFileLinkActivate);
+  const onPathLinkActivateRef = useRef(onPathLinkActivate);
   const worktreeIdRef = useRef(worktreeId);
   useLayoutEffect(() => {
-    onFileLinkActivateRef.current = onFileLinkActivate;
+    onPathLinkActivateRef.current = onPathLinkActivate;
     worktreeIdRef.current = worktreeId;
-  }, [onFileLinkActivate, worktreeId]);
+  }, [onPathLinkActivate, worktreeId]);
 
   // URL リンクをクリックしたら開くだけでなくブックマークにも登録する。
   // 重複は main 側で除外される。失敗は Error Center に記録されるのでここでは握らない。
@@ -138,7 +139,7 @@ export function TerminalPanel({
                 return;
               }
 
-              onFileLinkActivateRef.current(entry.filePath, entry.fileLine);
+              onPathLinkActivateRef.current(entry.path, entry.line);
             },
           };
         });

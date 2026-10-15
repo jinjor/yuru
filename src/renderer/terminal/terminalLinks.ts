@@ -2,11 +2,12 @@ import { findExternalUrls } from "../../shared/external-url.js";
 
 export type TerminalLink =
   | {
-      kind: "file";
+      // ファイルかディレクトリかは区別しない。クリック時に解決して開き方を決める。
+      kind: "path";
       text: string;
       startIndex: number;
-      filePath: string;
-      fileLine?: number;
+      path: string;
+      line?: number;
     }
   | {
       kind: "url";
@@ -15,13 +16,30 @@ export type TerminalLink =
       url: string;
     };
 
-// 絶対パスは拡張子がなくても拾う (worktree 外も含め、任意の種類のファイルを開くため)。
-// 誤検出を減らすため 2 セグメント以上 (`/tmp/mock`) を要求し、`/12` のような分数表記は拾わない。
-// 相対パスは従来通り拡張子ありのみ。拡張子は `c++` のように + を含みうる。
-const filePathPattern =
-  /(?:\/(?:[\w.+-]+\/)+[\w.+-]+|[\w./-][\w./-]*\.[\w+-]+)(?::(\d+)(?::\d+)?)?/g;
+// パスに使われる文字の並びと、続く `:行` / `:行:列`。パスとして扱うかは isPathLike で形から判定する。
+// 並びの途中からは拾わない (`src/nested/dir` の `/nested/dir` を絶対パスとみなさない)。
+const pathCandidatePattern = /(?<![\w.+/-])[\w.+/-]+(?::(\d+)(?::\d+)?)?/g;
 const gitHubIssueOrPrReferencePattern =
   /(^|[^\w./-])((?:[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)?#([1-9]\d*))(?![A-Za-z0-9_])/g;
+
+// 形だけでパスと言い切れるものに限る。`and/or` や `10/12` のような表記と区別できないため、
+// 拡張子も先頭の `./` も末尾の `/` もない相対パス (`src/renderer`) は拾わない。
+function isPathLike(path: string): boolean {
+  return (
+    // 絶対パス。`/12` のような分数表記を拾わないよう、2 階層以上か末尾の `/` を要求する。
+    /^\/[\w.+-]+\//.test(path) ||
+    // `./` か `../` で始まる相対パス。
+    /^\.\.?\//.test(path) ||
+    // 末尾の `/` でディレクトリと明示したもの。`/` や `//` だけのものは除く。
+    /[\w.+-]\/$/.test(path) ||
+    hasFileExtension(path)
+  );
+}
+
+// 拡張子。`c++` のように + を含みうる。`.gitignore` のような先頭のドットは拡張子とみなさない。
+export function hasFileExtension(path: string): boolean {
+  return /.\.[\w+-]+$/.test(path);
+}
 
 export function findTerminalLinks(
   lineText: string,
@@ -29,8 +47,8 @@ export function findTerminalLinks(
 ): TerminalLink[] {
   const urlLinks = findUrlLinks(lineText);
   const gitHubLinks = findGitHubIssueOrPrLinks(lineText, currentGitHubRepoSlug, urlLinks);
-  const fileLinks = findFileLinks(lineText, [...urlLinks, ...gitHubLinks]);
-  return [...urlLinks, ...gitHubLinks, ...fileLinks].sort((a, b) => a.startIndex - b.startIndex);
+  const pathLinks = findPathLinks(lineText, [...urlLinks, ...gitHubLinks]);
+  return [...urlLinks, ...gitHubLinks, ...pathLinks].sort((a, b) => a.startIndex - b.startIndex);
 }
 
 function findUrlLinks(lineText: string): TerminalLink[] {
@@ -77,32 +95,29 @@ function findGitHubIssueOrPrLinks(
   return links;
 }
 
-function findFileLinks(lineText: string, urlLinks: readonly TerminalLink[]): TerminalLink[] {
+function findPathLinks(lineText: string, urlLinks: readonly TerminalLink[]): TerminalLink[] {
   const links: TerminalLink[] = [];
   let match: RegExpExecArray | null;
 
-  filePathPattern.lastIndex = 0;
-  while ((match = filePathPattern.exec(lineText)) !== null) {
+  pathCandidatePattern.lastIndex = 0;
+  while ((match = pathCandidatePattern.exec(lineText)) !== null) {
     const startIndex = match.index;
     const lineMatch = match[0].match(/:(\d+)(?::\d+)?$/);
     const suffix = lineMatch?.[0] ?? "";
     // 文末に続くピリオドはパスに含めない ("see /tmp/mock." の '.' を外す)
-    const filePath = match[0].slice(0, match[0].length - suffix.length).replace(/\.+$/, "");
-    const text = filePath + suffix;
-    if (overlapsAnyLink(startIndex, startIndex + text.length, urlLinks)) {
+    const path = match[0].slice(0, match[0].length - suffix.length).replace(/\.+$/, "");
+    const text = path + suffix;
+    if (!isPathLike(path) || overlapsAnyLink(startIndex, startIndex + text.length, urlLinks)) {
       continue;
     }
 
-    const fileLine = lineMatch ? parseInt(lineMatch[1], 10) : undefined;
-    if (filePath.includes("/") || filePath.includes(".")) {
-      links.push({
-        kind: "file",
-        text,
-        startIndex,
-        filePath,
-        fileLine,
-      });
-    }
+    links.push({
+      kind: "path",
+      text,
+      startIndex,
+      path,
+      line: lineMatch ? parseInt(lineMatch[1], 10) : undefined,
+    });
   }
 
   return links;

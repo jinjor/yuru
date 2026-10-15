@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type Ref, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, ChevronsDownUp, FolderGit2 } from "lucide-react";
 import type { FileTreeNode, GitFileStatus, GitPathState } from "../../shared/ipc";
 import { isTestFile } from "../../shared/test-file";
@@ -26,12 +26,18 @@ import { EmptyState } from "../ui/EmptyState";
 import { beginWorktreeFileDrag, endWorktreeFileDrag } from "../utils/fileDrag";
 import { handleFilePathContextMenu } from "../utils/filePathMenu";
 
+export interface FilesPaneHandle {
+  // 親まで展開してディレクトリ自身も展開し、その行へスクロールする。path は worktree 基準の相対パス。
+  revealDirectory: (relativePath: string) => void;
+}
+
 interface FilesPaneProps {
   changedFiles: readonly GitFileStatus[];
   gitPathStates: readonly GitPathState[];
   height: number;
   onPreviewSelectionChange: (selection: PreviewSelection | null) => void;
   previewSelection: PreviewSelection | null;
+  ref?: Ref<FilesPaneHandle>;
   worktreeId: string;
   // ファイル行の右クリックで絶対パスをコピーするための worktree のルート。
   worktreePath: string;
@@ -63,6 +69,7 @@ export function FilesPane({
   height,
   onPreviewSelectionChange,
   previewSelection,
+  ref,
   worktreeId,
   worktreePath,
 }: FilesPaneProps) {
@@ -73,8 +80,12 @@ export function FilesPane({
   const directoryLoadsRef = useRef<Map<string, DirectoryLoad>>(new Map());
   const fileTreeRef = useRef<HTMLDivElement>(null);
   const lastRevealedPathRef = useRef<string | null>(null);
-  // 同じファイルの再表示でも、ツリー取得後に新しい要求としてスクロールする。
-  const [revealRequest, setRevealRequest] = useState<{ path: string } | null>(null);
+  const directoryRevealControllerRef = useRef<AbortController | null>(null);
+  // 同じパスの再表示でも、ツリー取得後に新しい要求としてスクロールする。
+  const [revealRequest, setRevealRequest] = useState<{
+    kind: "file" | "directory";
+    path: string;
+  } | null>(null);
   const lastScrolledRequestRef = useRef<typeof revealRequest>(null);
   const treeStatusByPath = buildTreeStatusMap(gitPathStates);
   const treeIgnoredPaths = buildIgnoredPathSet(gitPathStates);
@@ -242,24 +253,33 @@ export function FilesPane({
     [loadDirectory],
   );
 
-  const revealFile = useCallback(
-    async (relativePath: string, signal: AbortSignal): Promise<void> => {
+  // 親から順に読み直して展開し、スクロールを頼む。中断されたら false。
+  const revealPath = useCallback(
+    async (relativePath: string, signal: AbortSignal): Promise<boolean> => {
       const directoryPaths = collectAncestorDirectories([relativePath]);
 
       await refreshDirectoryForReveal(ROOT_DIRECTORY_PATH);
       for (const directoryPath of directoryPaths) {
         if (signal.aborted) {
-          return;
+          return false;
         }
         if (!collectDirectoryPaths(filesCacheRef.current.treeData).has(directoryPath)) {
-          lastRevealedPathRef.current = relativePath;
-          return;
+          return true;
         }
         await refreshDirectoryForReveal(directoryPath);
       }
 
       if (signal.aborted) {
-        return;
+        return false;
+      }
+      // ツリー上でディレクトリなら、自身も読み込んで展開し、中身を見せる。
+      const isDirectory = collectDirectoryPaths(filesCacheRef.current.treeData).has(relativePath);
+      if (isDirectory) {
+        await refreshDirectoryForReveal(relativePath);
+        if (signal.aborted) {
+          return false;
+        }
+        directoryPaths.push(relativePath);
       }
       const nextExpandedDirectories = new Set(expandedDirectoriesRef.current);
       let didExpandDirectory = false;
@@ -272,11 +292,11 @@ export function FilesPane({
           didExpandDirectory = true;
         }
       }
-      lastRevealedPathRef.current = relativePath;
       if (didExpandDirectory) {
         commitExpandedDirectories(nextExpandedDirectories);
       }
-      setRevealRequest({ path: relativePath });
+      setRevealRequest({ kind: isDirectory ? "directory" : "file", path: relativePath });
+      return true;
     },
     [commitExpandedDirectories, refreshDirectoryForReveal],
   );
@@ -307,24 +327,42 @@ export function FilesPane({
     }
 
     const controller = new AbortController();
-    void revealFile(selectedPath, controller.signal);
+    void revealPath(selectedPath, controller.signal).then((completed) => {
+      if (completed) {
+        lastRevealedPathRef.current = selectedPath;
+      }
+    });
     return () => {
       controller.abort();
     };
-  }, [previewSelection?.path, revealFile]);
+  }, [previewSelection?.path, revealPath]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      revealDirectory(relativePath: string): void {
+        directoryRevealControllerRef.current?.abort();
+        const controller = new AbortController();
+        directoryRevealControllerRef.current = controller;
+        void revealPath(relativePath, controller.signal);
+      },
+    }),
+    [revealPath],
+  );
 
   useEffect(() => {
     if (!revealRequest || lastScrolledRequestRef.current === revealRequest) {
       return;
     }
     lastScrolledRequestRef.current = revealRequest;
-    if (previewSelection?.path === revealRequest.path) {
-      const selectedRow = Array.from(
-        fileTreeRef.current?.querySelectorAll<HTMLElement>(".file-tree-row") ?? [],
-      ).find((row) => row.dataset.path === revealRequest.path);
-      selectedRow?.scrollIntoView({ block: "nearest" });
-    }
-  }, [revealRequest, previewSelection?.path]);
+    const revealedRow = Array.from(
+      fileTreeRef.current?.querySelectorAll<HTMLElement>(".file-tree-row") ?? [],
+    ).find((row) => row.dataset.path === revealRequest.path);
+    // ディレクトリは展開した中身が続くので、行を上端に寄せる。
+    revealedRow?.scrollIntoView({
+      block: revealRequest.kind === "directory" ? "start" : "nearest",
+    });
+  }, [revealRequest]);
 
   useEffect(() => {
     const dispose = window.electronAPI.onFileTreeChanged((changedWorktreeId, relativePath) => {

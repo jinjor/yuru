@@ -11,17 +11,17 @@ function writeAll(terminal, data) {
   });
 }
 
-test("findTerminalLinksInBufferLine は自動折り返しを跨ぐ file link を検出する", async () => {
+test("findTerminalLinksInBufferLine は自動折り返しを跨ぐパスのリンクを検出する", async () => {
   const terminal = new Terminal({ cols: 12, rows: 6 });
   await writeAll(terminal, "open src/very/long/file.ts:12");
 
   const expected = [
     {
-      kind: "file",
+      kind: "path",
       text: "src/very/long/file.ts:12",
       startIndex: 5,
-      filePath: "src/very/long/file.ts",
-      fileLine: 12,
+      path: "src/very/long/file.ts",
+      line: 12,
       range: {
         start: { x: 6, y: 1 },
         end: { x: 5, y: 3 },
@@ -58,16 +58,16 @@ test("findTerminalLinksInBufferLine は全角文字のセル幅を考慮する",
   terminal.dispose();
 });
 
-test("findTerminalLinksInBufferLine は TUI が複数行に描画した file link を各行で検出する", async () => {
+test("findTerminalLinksInBufferLine は TUI が複数行に描画したパスのリンクを各行で検出する", async () => {
   const terminal = new Terminal({ cols: 17, rows: 5 });
   await writeAll(terminal, "open src/rendere\r\n  r/components/Te\r\n  rminal.tsx:12");
 
   const expectedLink = {
-    kind: "file",
+    kind: "path",
     text: "src/renderer/components/Terminal.tsx:12",
     startIndex: 0,
-    filePath: "src/renderer/components/Terminal.tsx",
-    fileLine: 12,
+    path: "src/renderer/components/Terminal.tsx",
+    line: 12,
   };
   assert.deepEqual(findTerminalLinksInBufferLine(terminal.buffer.active, terminal.cols, 1), [
     {
@@ -100,14 +100,14 @@ test("findTerminalLinksInBufferLine は TUI が複数行に描画した file lin
   terminal.dispose();
 });
 
-test("findTerminalLinksInBufferLine は右端より前で改行された TUI の file link を検出する", async () => {
+test("findTerminalLinksInBufferLine は右端より前で改行された TUI のパスのリンクを検出する", async () => {
   const terminal = new Terminal({ cols: 40, rows: 4 });
   await writeAll(terminal, "open src/components/very-long-\r\n  terminal-link-target.ts");
 
   for (const bufferLineNumber of [1, 2]) {
     assert.equal(
       findTerminalLinksInBufferLine(terminal.buffer.active, terminal.cols, bufferLineNumber)[0]
-        ?.filePath,
+        ?.path,
       "src/components/very-long-terminal-link-target.ts",
     );
   }
@@ -115,14 +115,35 @@ test("findTerminalLinksInBufferLine は右端より前で改行された TUI の
   terminal.dispose();
 });
 
-test("findTerminalLinksInBufferLine は拡張子の途中で改行された file link を検出する", async () => {
+test("findTerminalLinksInBufferLine は ./ で始まるパスや / の直後で改行された TUI のパスのリンクを結合する", async () => {
+  // `./src/rend` や `src/renderer/` はそれだけでもパスの形だが、次の行に続きがありうる。
+  for (const [cols, data, expected] of [
+    [16, "open ./src/rend\r\n  erer/app.ts", "./src/renderer/app.ts"],
+    [24, "open src/renderer/\r\n  components/Term.tsx", "src/renderer/components/Term.tsx"],
+  ]) {
+    const terminal = new Terminal({ cols, rows: 4 });
+    await writeAll(terminal, data);
+
+    for (const bufferLineNumber of [1, 2]) {
+      assert.equal(
+        findTerminalLinksInBufferLine(terminal.buffer.active, terminal.cols, bufferLineNumber)[0]
+          ?.path,
+        expected,
+      );
+    }
+
+    terminal.dispose();
+  }
+});
+
+test("findTerminalLinksInBufferLine は拡張子の途中で改行されたパスのリンクを検出する", async () => {
   const terminal = new Terminal({ cols: 16, rows: 4 });
   await writeAll(terminal, "open src/foo.ts\r\n  x");
 
   for (const bufferLineNumber of [1, 2]) {
     assert.equal(
       findTerminalLinksInBufferLine(terminal.buffer.active, terminal.cols, bufferLineNumber)[0]
-        ?.filePath,
+        ?.path,
       "src/foo.tsx",
     );
   }
@@ -130,14 +151,14 @@ test("findTerminalLinksInBufferLine は拡張子の途中で改行された file
   terminal.dispose();
 });
 
-test("findTerminalLinksInBufferLine はディレクトリを持たない長い file link を検出する", async () => {
+test("findTerminalLinksInBufferLine はディレクトリを持たない長いパスのリンクを検出する", async () => {
   const terminal = new Terminal({ cols: 17, rows: 4 });
   await writeAll(terminal, "open aaaaaaaaaaa\r\n  aaaaa.ts");
 
   for (const bufferLineNumber of [1, 2]) {
     assert.equal(
       findTerminalLinksInBufferLine(terminal.buffer.active, terminal.cols, bufferLineNumber)[0]
-        ?.filePath,
+        ?.path,
       "aaaaaaaaaaaaaaaa.ts",
     );
   }
@@ -145,13 +166,20 @@ test("findTerminalLinksInBufferLine はディレクトリを持たない長い f
   terminal.dispose();
 });
 
-test("findTerminalLinksInBufferLine は短い隣接行を file link に結合しない", async () => {
+test("findTerminalLinksInBufferLine は短い隣接行をパスのリンクに結合しない", async () => {
   const terminal = new Terminal({ cols: 20, rows: 4 });
   await writeAll(terminal, "docs/\r\npackage.json");
 
-  assert.deepEqual(findTerminalLinksInBufferLine(terminal.buffer.active, terminal.cols, 1), []);
+  // docs/ 自体はパスのリンクになるが、次行と結合しない。
+  assert.deepEqual(
+    findTerminalLinksInBufferLine(terminal.buffer.active, terminal.cols, 1).map((link) => [
+      link.kind,
+      link.text,
+    ]),
+    [["path", "docs/"]],
+  );
   assert.equal(
-    findTerminalLinksInBufferLine(terminal.buffer.active, terminal.cols, 2)[0]?.filePath,
+    findTerminalLinksInBufferLine(terminal.buffer.active, terminal.cols, 2)[0]?.path,
     "package.json",
   );
 
@@ -162,38 +190,45 @@ test("findTerminalLinksInBufferLine は右端で終わる行をインデント�
   const terminal = new Terminal({ cols: 16, rows: 4 });
   await writeAll(terminal, "prefixxxx docs/\r\npackage.json");
 
-  assert.deepEqual(findTerminalLinksInBufferLine(terminal.buffer.active, terminal.cols, 1), []);
+  // docs/ 自体はパスのリンクになるが、次行と結合しない。
+  assert.deepEqual(
+    findTerminalLinksInBufferLine(terminal.buffer.active, terminal.cols, 1).map((link) => [
+      link.kind,
+      link.text,
+    ]),
+    [["path", "docs/"]],
+  );
   assert.equal(
-    findTerminalLinksInBufferLine(terminal.buffer.active, terminal.cols, 2)[0]?.filePath,
+    findTerminalLinksInBufferLine(terminal.buffer.active, terminal.cols, 2)[0]?.path,
     "package.json",
   );
 
   terminal.dispose();
 });
 
-test("findTerminalLinksInBufferLine は別々の file link が続く行を結合しない", async () => {
+test("findTerminalLinksInBufferLine は別々のパスのリンクが続く行を結合しない", async () => {
   const terminal = new Terminal({ cols: 20, rows: 4 });
   await writeAll(terminal, "prefixxxx src/one.ts\r\n  src/two.ts");
 
   assert.equal(
-    findTerminalLinksInBufferLine(terminal.buffer.active, terminal.cols, 1)[0]?.filePath,
+    findTerminalLinksInBufferLine(terminal.buffer.active, terminal.cols, 1)[0]?.path,
     "src/one.ts",
   );
   assert.equal(
-    findTerminalLinksInBufferLine(terminal.buffer.active, terminal.cols, 2)[0]?.filePath,
+    findTerminalLinksInBufferLine(terminal.buffer.active, terminal.cols, 2)[0]?.path,
     "src/two.ts",
   );
 
   terminal.dispose();
 });
 
-test("findTerminalLinksInBufferLine は直前の単語を file link に結合しない", async () => {
+test("findTerminalLinksInBufferLine は直前の単語をパスのリンクに結合しない", async () => {
   const terminal = new Terminal({ cols: 20, rows: 4 });
   await writeAll(terminal, "  explanation\r\n  src/file.ts");
 
   assert.deepEqual(findTerminalLinksInBufferLine(terminal.buffer.active, terminal.cols, 1), []);
   assert.equal(
-    findTerminalLinksInBufferLine(terminal.buffer.active, terminal.cols, 2)[0]?.filePath,
+    findTerminalLinksInBufferLine(terminal.buffer.active, terminal.cols, 2)[0]?.path,
     "src/file.ts",
   );
 

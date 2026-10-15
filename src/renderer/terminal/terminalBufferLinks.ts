@@ -1,5 +1,5 @@
 import type { IBuffer, IBufferLine, IBufferRange } from "@xterm/xterm";
-import { findTerminalLinks, type TerminalLink } from "./terminalLinks.js";
+import { findTerminalLinks, hasFileExtension, type TerminalLink } from "./terminalLinks.js";
 
 export type TerminalBufferLink = TerminalLink & {
   range: IBufferRange;
@@ -13,7 +13,7 @@ export function findTerminalLinksInBufferLine(
   bufferLineNumber: number,
   currentGitHubRepoSlug: string | null = null,
 ): TerminalBufferLink[] {
-  const tuiWrappedLink = findTuiWrappedFileLink(buffer, cols, bufferLineNumber);
+  const tuiWrappedLink = findTuiWrappedPathLink(buffer, cols, bufferLineNumber);
   if (tuiWrappedLink) {
     return [tuiWrappedLink];
   }
@@ -135,7 +135,7 @@ interface PathFragment {
   continuationIndent: number | undefined;
 }
 
-function findTuiWrappedFileLink(
+function findTuiWrappedPathLink(
   buffer: IBuffer,
   cols: number,
   bufferLineNumber: number,
@@ -148,11 +148,11 @@ function findTuiWrappedFileLink(
   const text = fragments.map((fragment) => fragment.text).join("");
   const link = findTerminalLinks(text).find(
     (candidate) =>
-      candidate.kind === "file" &&
+      candidate.kind === "path" &&
       candidate.startIndex === 0 &&
       candidate.text.length === text.length,
   );
-  if (!link || link.kind !== "file") {
+  if (!link || link.kind !== "path") {
     return undefined;
   }
 
@@ -235,7 +235,7 @@ function selectTuiPathCandidate(
 
   for (let index = 1; index < fragments.length; index++) {
     const next = fragments[index];
-    if (isCompleteFilePath(candidateText) && isCompleteFilePath(next.text)) {
+    if (isCompletePath(candidateText) && isCompletePath(next.text)) {
       if (bufferLineNumber < next.bufferLineNumber) {
         return acceptTuiPathCandidate(fragments.slice(candidateStartIndex, index), cols);
       }
@@ -298,11 +298,14 @@ function looksLikePathFragment(text: string): boolean {
   return text.includes("/") || text.includes(".");
 }
 
-function isCompleteFilePath(text: string): boolean {
+// その行だけでパスが終わっているか。`./` で始まることや末尾の `/` はパスである手がかりにはなるが、
+// 次の行に続きがないことは示さないので、拡張子か絶対パスかで判断する。
+function isCompletePath(text: string): boolean {
   return findTerminalLinks(text).some(
     (link) =>
-      link.kind === "file" &&
+      link.kind === "path" &&
       link.startIndex === 0 &&
-      link.startIndex + link.text.length === text.length,
+      link.startIndex + link.text.length === text.length &&
+      (hasFileExtension(link.path) || (link.path.startsWith("/") && !link.path.endsWith("/"))),
   );
 }

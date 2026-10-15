@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import type { FileTreeNode } from "../../shared/ipc.js";
+import type { FileTreeNode, RepoPathTarget } from "../../shared/ipc.js";
 import { execBuffer } from "../exec.js";
 import { isFileNotFoundError } from "../errors/app-error.js";
 
@@ -33,56 +33,43 @@ async function detectDirectory(entryPath: string, dirent: fs.Dirent): Promise<bo
   }
 }
 
-// ターミナルのファイルリンクからの解決。worktree 内なら相対パス、外なら絶対パスを返す。
-// 絶対パスは実在する通常ファイルのみ許し、不在・ディレクトリ・相対パスでの外への脱出は null。
-export function resolveRepoFile(
+// ターミナルのパスのリンクの解決。相対パスは worktree 基準で絶対パスにしてから判定する。
+// worktree の中なら実在するファイル・ディレクトリを worktree 基準の相対パス (ルート自身は "") で返す。
+// 外はプレビューで開ける通常ファイルだけを絶対パスで返す。それ以外は null。
+export async function resolveRepoPath(
   workingRoot: string,
-  filePath: string,
-  repoRoot = workingRoot,
-): string | null {
+  targetPath: string,
+): Promise<RepoPathTarget | null> {
   const basePath = path.resolve(workingRoot);
-  const isAbsoluteInput = path.isAbsolute(filePath);
-  const candidates = isAbsoluteInput
-    ? [path.resolve(filePath)]
-    : [path.resolve(basePath, filePath), path.resolve(repoRoot, filePath)];
-
-  for (const candidate of candidates) {
-    const relative = path.relative(basePath, candidate);
-    if (relative.startsWith("..") || path.isAbsolute(relative)) {
-      if (!isAbsoluteInput) {
-        continue;
-      }
-      try {
-        return fs.statSync(candidate).isFile() ? candidate : null;
-      } catch {
-        return null;
-      }
-    }
-    try {
-      if (fs.statSync(candidate).isFile()) {
-        return normalizeRelativePath(relative);
-      }
-    } catch {
-      // 相対パスは worktree 基準を優先し、不在なら repo root 基準も試す。
-    }
+  const absolutePath = path.resolve(basePath, targetPath);
+  const relative = path.relative(basePath, absolutePath);
+  const stats = await statExisting(absolutePath);
+  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    return stats?.isFile() ? { kind: "file", path: absolutePath } : null;
+  }
+  if (stats?.isFile()) {
+    return { kind: "file", path: normalizeRelativePath(relative) };
+  }
+  if (stats?.isDirectory()) {
+    return { kind: "directory", path: normalizeRelativePath(relative) };
   }
   return null;
 }
 
 // HTML プレビュー対象の解決。worktree 内なら root=worktree ルート、外なら root=entry の
 // 親ディレクトリ (相対参照される CSS / JavaScript は大抵同じディレクトリにある)。
-export function resolveHtmlPreviewEntry(
+export async function resolveHtmlPreviewEntry(
   workingRoot: string,
   filePath: string,
-): { root: string; path: string } | null {
-  const resolvedPath = resolveRepoFile(workingRoot, filePath);
-  if (!resolvedPath) {
+): Promise<{ root: string; path: string } | null> {
+  const target = await resolveRepoPath(workingRoot, filePath);
+  if (target?.kind !== "file") {
     return null;
   }
-  if (path.isAbsolute(resolvedPath)) {
-    return { root: path.dirname(resolvedPath), path: path.basename(resolvedPath) };
+  if (path.isAbsolute(target.path)) {
+    return { root: path.dirname(target.path), path: path.basename(target.path) };
   }
-  return { root: workingRoot, path: resolvedPath };
+  return { root: workingRoot, path: target.path };
 }
 
 // 絶対パス指定の読み取り。不在・通常ファイルでない場合は null (呼び出し側で範囲を確認済みの前提)。
@@ -95,11 +82,16 @@ export async function readRegularFile(absolutePath: string): Promise<Buffer | nu
 
 // 中身を読まずに大きさと更新時刻だけ見る。不在・通常ファイルでない場合は null。
 export async function statRegularFile(absolutePath: string): Promise<fs.Stats | null> {
+  const stat = await statExisting(absolutePath);
+  return stat?.isFile() ? stat : null;
+}
+
+// 不在は null。
+async function statExisting(targetPath: string): Promise<fs.Stats | null> {
   try {
-    const stat = await fs.promises.stat(absolutePath);
-    return stat.isFile() ? stat : null;
+    return await fs.promises.stat(targetPath);
   } catch (error) {
-    // ENOTDIR はパス途中のコンポーネントがファイルだった場合。どちらも「開けない」ので null。
+    // ENOTDIR はパス途中のコンポーネントがファイルだった場合。これも不在として扱う。
     if (isFileNotFoundError(error) || (error as { code?: unknown }).code === "ENOTDIR") {
       return null;
     }

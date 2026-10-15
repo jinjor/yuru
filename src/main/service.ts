@@ -82,7 +82,7 @@ import {
   listFiles as listRepoFiles,
   readWorktreeFile as readRepoWorktreeFile,
   resolveHtmlPreviewEntry as resolveHtmlPreviewEntryPath,
-  resolveRepoFile as resolveRepoFilePath,
+  resolveRepoPath as resolveRepoPathTarget,
   writeFile as writeRepoFile,
 } from "./files/files.js";
 import { addRecentFile, loadRecentFiles } from "./files/recent-files.js";
@@ -118,6 +118,7 @@ import {
   type Bookmark,
   type CreatedTaskWorktree,
   type GitDiffScope,
+  type RepoPathTarget,
   type Result,
   type WorktreeProcessRef,
   type WorktreeRemovalPreparationOutcome,
@@ -1581,12 +1582,12 @@ export class YuruService {
     }
   }
 
-  async resolveRepoFile(worktreeId: string, filePath: string): Promise<string | null> {
-    const worktree = await this.findGitWorktree(worktreeId);
-    if (!worktree) {
+  async resolveRepoPath(worktreeId: string, targetPath: string): Promise<RepoPathTarget | null> {
+    const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
+    if (!workingRoot) {
       return null;
     }
-    return resolveRepoFilePath(worktree.worktreePath, filePath, worktree.repoPath);
+    return await resolveRepoPathTarget(workingRoot, targetPath);
   }
 
   async resolveHtmlPreviewEntry(
@@ -1600,7 +1601,7 @@ export class YuruService {
         message: "Selected worktree is no longer available.",
       });
     }
-    const entry = resolveHtmlPreviewEntryPath(workingRoot, filePath);
+    const entry = await resolveHtmlPreviewEntryPath(workingRoot, filePath);
     if (!entry) {
       return fail({
         code: "invalid_path",

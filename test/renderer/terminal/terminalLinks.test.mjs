@@ -36,7 +36,7 @@ test("findTerminalLinks は URL の末尾に付いた文末記号を外す", () 
   ]);
 });
 
-test("findTerminalLinks は URL の内側を file link として重複検出しない", () => {
+test("findTerminalLinks は URL の内側をパスのリンクとして重複検出しない", () => {
   assert.deepEqual(findTerminalLinks("open https://example.com/docs/readme.md and src/app.ts:12"), [
     {
       kind: "url",
@@ -45,11 +45,11 @@ test("findTerminalLinks は URL の内側を file link として重複検出し�
       url: "https://example.com/docs/readme.md",
     },
     {
-      kind: "file",
+      kind: "path",
       text: "src/app.ts:12",
       startIndex: 44,
-      filePath: "src/app.ts",
-      fileLine: 12,
+      path: "src/app.ts",
+      line: 12,
     },
   ]);
 });
@@ -97,18 +97,18 @@ test("findTerminalLinks は GitHub repository が不明なら裸の #番号を�
 test("findTerminalLinks は拡張子のない絶対パスを検出する", () => {
   assert.deepEqual(findTerminalLinks("open /tmp/mock and /tmp/Dockerfile"), [
     {
-      kind: "file",
+      kind: "path",
       text: "/tmp/mock",
       startIndex: 5,
-      filePath: "/tmp/mock",
-      fileLine: undefined,
+      path: "/tmp/mock",
+      line: undefined,
     },
     {
-      kind: "file",
+      kind: "path",
       text: "/tmp/Dockerfile",
       startIndex: 19,
-      filePath: "/tmp/Dockerfile",
-      fileLine: undefined,
+      path: "/tmp/Dockerfile",
+      line: undefined,
     },
   ]);
 });
@@ -116,18 +116,18 @@ test("findTerminalLinks は拡張子のない絶対パスを検出する", () =>
 test("findTerminalLinks は + を含む拡張子を切り詰めない", () => {
   assert.deepEqual(findTerminalLinks("see /tmp/report.c++ and src/foo.c++"), [
     {
-      kind: "file",
+      kind: "path",
       text: "/tmp/report.c++",
       startIndex: 4,
-      filePath: "/tmp/report.c++",
-      fileLine: undefined,
+      path: "/tmp/report.c++",
+      line: undefined,
     },
     {
-      kind: "file",
+      kind: "path",
       text: "src/foo.c++",
       startIndex: 24,
-      filePath: "src/foo.c++",
-      fileLine: undefined,
+      path: "src/foo.c++",
+      line: undefined,
     },
   ]);
 });
@@ -135,24 +135,93 @@ test("findTerminalLinks は + を含む拡張子を切り詰めない", () => {
 test("findTerminalLinks は絶対パスの行番号を解釈し、文末のピリオドを外す", () => {
   assert.deepEqual(findTerminalLinks("check /tmp/notes.md:7. done"), [
     {
-      kind: "file",
+      kind: "path",
       text: "/tmp/notes.md:7",
       startIndex: 6,
-      filePath: "/tmp/notes.md",
-      fileLine: 7,
+      path: "/tmp/notes.md",
+      line: 7,
     },
   ]);
   assert.deepEqual(findTerminalLinks("see /tmp/mock."), [
     {
-      kind: "file",
+      kind: "path",
       text: "/tmp/mock",
       startIndex: 4,
-      filePath: "/tmp/mock",
-      fileLine: undefined,
+      path: "/tmp/mock",
+      line: undefined,
     },
   ]);
 });
 
 test("findTerminalLinks は分数や and/or のようなスラッシュ表記をリンクにしない", () => {
   assert.deepEqual(findTerminalLinks("10/12 done, true/false, and/or"), []);
+});
+
+test("findTerminalLinks は拡張子も ./ も末尾の / もない相対パスをリンクにしない", () => {
+  // 途中の `/renderer/terminal` を絶対パスとして拾わないことも確かめる。
+  assert.deepEqual(findTerminalLinks("see src/renderer and src/renderer/terminal"), []);
+});
+
+test("findTerminalLinks は 1 階層の絶対パスや / だけの表記をリンクにしない", () => {
+  assert.deepEqual(findTerminalLinks("/tmp and /12, a / b // c"), []);
+});
+
+test("findTerminalLinks は ./ や ../ で始まる相対パスを拡張子がなくても検出する", () => {
+  assert.deepEqual(findTerminalLinks("run ./bin/yuru or ../tmp/mock."), [
+    {
+      kind: "path",
+      text: "./bin/yuru",
+      startIndex: 4,
+      path: "./bin/yuru",
+      line: undefined,
+    },
+    {
+      kind: "path",
+      text: "../tmp/mock",
+      startIndex: 18,
+      path: "../tmp/mock",
+      line: undefined,
+    },
+  ]);
+});
+
+test("findTerminalLinks は末尾に / があるパスを末尾の / ごと検出する", () => {
+  assert.deepEqual(findTerminalLinks("see docs/, src/renderer/terminal/ and /tmp/out/."), [
+    {
+      kind: "path",
+      text: "docs/",
+      startIndex: 4,
+      path: "docs/",
+      line: undefined,
+    },
+    {
+      kind: "path",
+      text: "src/renderer/terminal/",
+      startIndex: 11,
+      path: "src/renderer/terminal/",
+      line: undefined,
+    },
+    {
+      kind: "path",
+      text: "/tmp/out/",
+      startIndex: 38,
+      path: "/tmp/out/",
+      line: undefined,
+    },
+  ]);
+});
+
+test("findTerminalLinks は他のリンクと重なる部分をパスのリンクにしない", () => {
+  assert.deepEqual(
+    findTerminalLinks("/tmp/mock https://example.com/a/b/ src/app.ts owner/repo#1 docs/").map(
+      (link) => [link.kind, link.text],
+    ),
+    [
+      ["path", "/tmp/mock"],
+      ["url", "https://example.com/a/b/"],
+      ["path", "src/app.ts"],
+      ["url", "owner/repo#1"],
+      ["path", "docs/"],
+    ],
+  );
 });

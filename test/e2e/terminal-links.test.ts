@@ -49,6 +49,9 @@ async function clickTerminalRowStart(row: Locator, window: Page): Promise<void> 
   }
   const x = box.x + 20;
   const y = box.y + box.height / 2;
+  // xterm はターミナル外へ出ても最後のセルを覚えていて、同じセルへ一度に戻るとリンクを探し直さない。
+  // 別のセルを経由してから目的のセルへ動かす。
+  await window.mouse.move(box.x + 2, y);
   await window.mouse.move(x, y);
   await window.mouse.click(x, y);
 }
@@ -290,6 +293,61 @@ test("TUI が文中から複数行に描画したファイルパスの先頭行�
 
     await expectPreviewPath(window, filePath);
     await expect(window.locator(".source-viewer")).toContainText("wrappedLinkTarget");
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+test("ターミナルのディレクトリパスをクリックすると Files でそのディレクトリを開く", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context, {
+      "src/nested/target/leaf.ts": "export const leaf = true;\n",
+    });
+    await registerRepo(context, repoDir);
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+
+    await openMainTerminal(window);
+    const sessionView = visibleWorktreeView(window);
+    const filesTab = sessionView.locator(".panel-tabs .tab", { hasText: "Files" });
+    const treeRow = (path: string) => sessionView.locator(`.file-tree-row[data-path="${path}"]`);
+    await window.locator(".xterm").click();
+
+    // 相対パスは末尾の `/` でディレクトリと分かる形にする。echo された入力行と出力行が
+    // 同じテキストにならないよう、printf で組み立てる。
+    await window.keyboard.type("printf '%s/target/\\n' src/nested");
+    await window.keyboard.press("Enter");
+    const relativeRow = window.locator(".xterm-rows > div", { hasText: "src/nested/target/" });
+    await expect(relativeRow).toBeVisible({ timeout: 10_000 });
+    await clickTerminalRowStart(relativeRow, window);
+
+    await expect(filesTab).toHaveClass(/selected/);
+    await expect(treeRow("src/nested/target")).toBeVisible();
+    await expect(treeRow("src/nested/target/leaf.ts")).toBeVisible();
+
+    // Files を開いたまま、畳んだ同じディレクトリをもう一度開く。
+    await treeRow("src/nested/target").click();
+    await expect(treeRow("src/nested/target/leaf.ts")).toHaveCount(0);
+    await clickTerminalRowStart(relativeRow, window);
+    await expect(treeRow("src/nested/target/leaf.ts")).toBeVisible();
+
+    // worktree 内の絶対パス。
+    await sessionView.getByTitle("Collapse all directories").click();
+    await sessionView.locator(".panel-tabs .tab", { hasText: "Changes" }).click();
+    await window.locator(".xterm").click();
+    await window.keyboard.type("printf '%s/src/nested\\n' \"$PWD\"");
+    await window.keyboard.press("Enter");
+    const absoluteRow = window.locator(".xterm-rows > div", { hasText: `${repoDir}/src/nested` });
+    await expect(absoluteRow).toBeVisible({ timeout: 10_000 });
+    await clickTerminalRowStart(absoluteRow, window);
+
+    await expect(filesTab).toHaveClass(/selected/);
+    await expect(treeRow("src/nested/target")).toBeVisible();
+    await expect(treeRow("src/nested/target/leaf.ts")).toHaveCount(0);
   } finally {
     await closeYuru(app);
     await context.cleanup();

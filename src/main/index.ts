@@ -622,8 +622,8 @@ function registerIpcHandlers(): void {
     return service.recordRecentFile(worktreeId, filePath);
   });
 
-  handleIpc("files:resolveRepoFile", (_event, worktreeId: string, filePath: string) => {
-    return service.resolveRepoFile(worktreeId, filePath);
+  handleIpc("files:resolveRepoPath", (_event, worktreeId: string, targetPath: string) => {
+    return service.resolveRepoPath(worktreeId, targetPath);
   });
 
   handleIpc("files:readWorktree", (_event, worktreeId: string, filePath: string) => {

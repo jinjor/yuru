@@ -1,4 +1,15 @@
-import { Activity, type ReactNode, type RefObject, useCallback, useEffect, useState } from "react";
+import {
+  Activity,
+  type ReactNode,
+  type Ref,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
+import { flushSync } from "react-dom";
 import { Bookmark, FileDiff, Folder, Search } from "lucide-react";
 import type {
   AppError,
@@ -17,7 +28,7 @@ import {
 } from "../changes/gitStatus";
 import { ChangesPane } from "../changes/ChangesPane";
 import { BookmarksPane } from "../bookmarks/BookmarksPane";
-import { FilesPane } from "../files/FilesPane";
+import { FilesPane, type FilesPaneHandle } from "../files/FilesPane";
 import { SearchPane } from "../search/SearchPane";
 import { Tab } from "../ui/Tab";
 import { resultDataOrNull } from "../utils/result";
@@ -78,11 +89,17 @@ function ExplorerTabProbe({
 
 function noop(): void {}
 
+export interface ExplorerPanelHandle {
+  // Files タブに切り替えて、ディレクトリを展開して見せる。path は worktree 基準の相対パス。
+  revealDirectory: (relativePath: string) => void;
+}
+
 interface ExplorerPanelProps {
   gitPathStates: readonly GitPathState[];
   onError: (error: AppError) => void;
   onPreviewSelectionChange: (selection: PreviewSelection | null) => void;
   previewSelection: PreviewSelection | null;
+  ref?: Ref<ExplorerPanelHandle>;
   reviewState: GitReviewState | null;
   width: number;
   worktreeId: string;
@@ -95,6 +112,7 @@ export function ExplorerPanel({
   onError,
   onPreviewSelectionChange,
   previewSelection,
+  ref,
   reviewState,
   width,
   worktreeId,
@@ -111,6 +129,23 @@ export function ExplorerPanel({
     }
   }, []);
   const showSearch = useCallback(() => selectTab("search"), [selectTab]);
+  const filesPaneRef = useRef<FilesPaneHandle>(null);
+  useImperativeHandle(
+    ref,
+    () => ({
+      revealDirectory(relativePath: string): void {
+        // hidden の間 FilesPane の handle は外れているので、タブの切り替えを即座に反映してから呼ぶ。
+        flushSync(() => {
+          setActiveTab("files");
+        });
+        if (!filesPaneRef.current) {
+          throw new Error("Files pane handle is missing after switching to the Files tab");
+        }
+        filesPaneRef.current.revealDirectory(relativePath);
+      },
+    }),
+    [],
+  );
   useCommandShortcut({ key: "f", shift: true }, showSearch);
   // タブのカウントにも使うので、一覧の取得と購読はここが持つ。
   const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
@@ -230,6 +265,7 @@ export function ExplorerPanel({
           height={contentHeight || 400}
           onPreviewSelectionChange={onPreviewSelectionChange}
           previewSelection={previewSelection}
+          ref={filesPaneRef}
           worktreeId={worktreeId}
           worktreePath={worktreePath}
         />
