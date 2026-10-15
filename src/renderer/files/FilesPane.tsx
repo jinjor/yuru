@@ -23,7 +23,7 @@ import {
 } from "./fileTree";
 import { Button } from "../ui/Button";
 import { EmptyState } from "../ui/EmptyState";
-import { beginWorktreeFileDrag, endWorktreeFileDrag } from "../utils/fileDrag";
+import { beginWorktreeFileDrag, endWorktreeFileDrag, setFileDownloadDrag } from "../utils/fileDrag";
 import { handleFilePathContextMenu } from "../utils/filePathMenu";
 
 export interface FilesPaneHandle {
@@ -473,9 +473,12 @@ function FileTreeRow({
           : (event) => handleFilePathContextMenu(event, worktreePath, node.path)
       }
       onDragEnd={(event) => endWorktreeFileDrag(event.currentTarget)}
-      onDragStart={(event) =>
-        beginWorktreeFileDrag(event.dataTransfer, event.currentTarget, node.path)
-      }
+      onDragStart={(event) => {
+        beginWorktreeFileDrag(event.dataTransfer, event.currentTarget, node.path);
+        if (!isDirectory) {
+          setFileDownloadDrag(event.dataTransfer, `${worktreePath}/${node.path}`, node.name);
+        }
+      }}
       onClick={() => {
         if (isDirectory) {
           onDirectoryToggle(node.path);

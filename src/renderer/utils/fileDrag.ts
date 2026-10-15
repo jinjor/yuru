@@ -11,6 +11,27 @@ export function beginWorktreeFileDrag(
   document.body.classList.add("is-file-transfer-dragging");
 }
 
+// Finder などアプリの外へドロップしたとき、Chromium がこのファイルをドロップ先へダウンロードする
+// (結果としてコピーになる)。値は `MIME type:ファイル名:URL` で、区切りの `:` をエスケープする
+// 手段がないため、名前に `:` を含むファイルは外へ出さない。
+export function setFileDownloadDrag(
+  dataTransfer: DataTransfer,
+  absolutePath: string,
+  fileName: string,
+): void {
+  if (fileName.includes(":")) {
+    return;
+  }
+  dataTransfer.setData(
+    "DownloadURL",
+    `application/octet-stream:${fileName}:${fileUrl(absolutePath)}`,
+  );
+}
+
+function fileUrl(absolutePath: string): string {
+  return `file://${absolutePath.split("/").map(encodeURIComponent).join("/")}`;
+}
+
 export function endWorktreeFileDrag(source: HTMLElement): void {
   source.classList.remove("file-transfer-dragging");
   document.body.classList.remove("is-file-transfer-dragging");

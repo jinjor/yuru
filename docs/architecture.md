@@ -414,6 +414,8 @@ runtime が終わった時だけホームへ戻る。main worktree でも自動�
 `Files` と `Changes` のファイル行は、表示中の live `Terminal` へ drag & drop できる。
 渡す文字列は選択中 worktree を基準にした相対 path で、Terminal の現在の入力位置へ paste する。
 directory 行と、live runtime が選択されていない Terminal ホームは drop の対象にしない。
+`Files` のファイル行は、Finder などアプリの外へ drop するとそのファイルのコピーになる。Chromium の
+`DownloadURL` によるドラッグダウンロードを使うので、1 ファイルずつで、directory 行は外へ出せない。
 
 `Changes` は Git の層を `merge-base → HEAD → index → worktree` の重複しない区間に分け、
 `Committed → Staged → Unstaged` の順で表示する。merge conflict は例外として `Conflicted` を先頭に置く。
