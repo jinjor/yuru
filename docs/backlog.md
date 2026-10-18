@@ -34,6 +34,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | B16 | bug | Changes / Diff | Committed の diff を正確にする | commit 済みの変更を正しい差分でレビューしたい |
 | F72 | feature | Files / Blame | GitLens みたいな blame 表示機能 | コードの各行が変更された経緯をファイル表示から確認したい |
 | F74 | feature | Dependencies | ライブラリの GitHub Issue / PR を長期にわたって監視する | 依存ライブラリのバグ修正や機能追加を把握したい |
+| P35 | polish | Files / Preview | 変更ファイルの表示中の読み直しを、ファイル単位の git 呼び出しで済ませる | 巨大モノレポで変更ファイルを開いている間の負荷を減らしたい。scope なしの表示は 3 秒ごとの読み直しのたびに、rename 元を探すため repo 全体に `git diff --name-status HEAD` をかけている。rename 元が要るのは新規追加 (A) に見えるファイルだけで、変更 (M) なら元の名前は同じ |
 
 ## Next
 
