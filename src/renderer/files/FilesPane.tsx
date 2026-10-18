@@ -467,11 +467,7 @@ function FileTreeRow({
       className={`file-tree-row ${isSelected ? "selected" : ""}`}
       data-path={node.path}
       draggable
-      onContextMenu={
-        isDirectory
-          ? undefined
-          : (event) => handleFilePathContextMenu(event, worktreePath, node.path)
-      }
+      onContextMenu={(event) => handleFilePathContextMenu(event, worktreePath, node.path)}
       onDragEnd={(event) => endWorktreeFileDrag(event.currentTarget)}
       onDragStart={(event) => {
         beginWorktreeFileDrag(event.dataTransfer, event.currentTarget, node.path);

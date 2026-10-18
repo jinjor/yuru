@@ -1,10 +1,11 @@
-import { app, BrowserWindow, clipboard, Menu, ipcMain, protocol, session } from "electron";
+import { app, BrowserWindow, clipboard, Menu, ipcMain, protocol, session, shell } from "electron";
 import type {
   ContextMenuParams,
   IpcMainInvokeEvent,
   MenuItemConstructorOptions,
   WebContents,
 } from "electron";
+import fs from "fs";
 import path from "path";
 import { loadRepos } from "./repos/metadata.js";
 import { cleanupBrokenRepos, cleanupStaleTaskWorktrees } from "./repos/maintenance.js";
@@ -307,12 +308,31 @@ function showImageContextMenu(webContents: WebContents, params: ContextMenuParam
   ]).popup();
 }
 
-// 右ペインのファイル名の右クリック。相対パスと絶対パスのコピーを出す。
+// 右ペインのファイル名の右クリック。相対パスと絶対パスのコピーと、OS のファイルマネージャーでの表示を出す。
+// Changes の削除済みファイルのように実体がないパスは表示できないので、その項目を無効にする。
 function showFilePathContextMenu(relativePath: string, absolutePath: string): void {
   Menu.buildFromTemplate([
     { label: "Copy Relative Path", click: () => clipboard.writeText(relativePath) },
     { label: "Copy Absolute Path", click: () => clipboard.writeText(absolutePath) },
+    { type: "separator" },
+    {
+      label: revealInFileManagerLabel(),
+      enabled: fs.existsSync(absolutePath),
+      click: () => shell.showItemInFolder(absolutePath),
+    },
   ]).popup();
+}
+
+// VS Code と同じく、OS ごとのファイルマネージャーの呼び名に合わせる。
+function revealInFileManagerLabel(): string {
+  switch (process.platform) {
+    case "darwin":
+      return "Reveal in Finder";
+    case "win32":
+      return "Reveal in File Explorer";
+    default:
+      return "Open Containing Folder";
+  }
 }
 
 function isHtmlPreviewUrl(url: string): boolean {

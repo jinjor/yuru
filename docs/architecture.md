@@ -417,6 +417,11 @@ directory 行と、live runtime が選択されていない Terminal ホーム�
 `Files` のファイル行は、Finder などアプリの外へ drop するとそのファイルのコピーになる。Chromium の
 `DownloadURL` によるドラッグダウンロードを使うので、1 ファイルずつで、directory 行は外へ出せない。
 
+`Files`・`Changes`・`Search` のファイル行 (`Files` は directory 行も) の右クリックメニューは main
+process の native メニューで、相対・絶対パスのコピーと、OS のファイルマネージャーでの表示
+(`shell.showItemInFolder`) を出す。表示の項目名は VS Code に合わせて OS ごとに変え
+(macOS は `Reveal in Finder`)、削除済みファイルのように実体がないパスでは無効にする。
+
 `Changes` は Git の層を `merge-base → HEAD → index → worktree` の重複しない区間に分け、
 `Committed → Staged → Unstaged` の順で表示する。merge conflict は例外として `Conflicted` を先頭に置く。
 `Committed` の基準は local default branch と HEAD の merge-base に固定し、ヘッダには実際の
