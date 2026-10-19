@@ -1,5 +1,5 @@
 import path from "path";
-import { exec } from "../exec.js";
+import { exec, isExitCode } from "../exec.js";
 
 export interface GitReviewBase {
   branch: string;
@@ -22,15 +22,6 @@ async function getReviewBaseSha(cwd: string, branch: string): Promise<string | n
     }
     throw error;
   }
-}
-
-function isExitCode(error: unknown, code: number): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: unknown }).code === code
-  );
 }
 
 async function resolveDefaultBranch(cwd: string): Promise<{ branch: string; sha: string } | null> {

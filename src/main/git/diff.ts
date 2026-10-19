@@ -242,6 +242,20 @@ async function resolveOriginalBlob(
   return originalPath ? { kind: "blob", rev: originalRef, path: originalPath } : null;
 }
 
+// 表示側 (右側) の場所。元側と違い scope だけで決まるので、git に問い合わせない。
+export function resolveCurrentDiffSource(
+  filePath: string,
+  scope: GitDiffScope | undefined,
+): DiffSource {
+  if (scope === "base") {
+    return { kind: "blob", rev: "HEAD", path: filePath };
+  }
+  if (scope === "staged") {
+    return { kind: "index", path: filePath };
+  }
+  return { kind: "worktree", path: filePath };
+}
+
 // scope なし: HEAD ↔ 作業ツリー (staged + unstaged の合算)
 // base: merge-base ↔ HEAD / staged: HEAD ↔ index / unstaged: index ↔ 作業ツリー
 export async function resolveDiffSources(
@@ -250,6 +264,8 @@ export async function resolveDiffSources(
   scope: GitDiffScope | undefined,
   reviewBase: GitReviewBase | null,
 ): Promise<DiffSources> {
+  const current = resolveCurrentDiffSource(filePath, scope);
+
   if (scope === "base") {
     if (!reviewBase) {
       throw new Error("Base branch is unknown.");
@@ -261,25 +277,24 @@ export async function resolveDiffSources(
         [reviewBase.mergeBase, "HEAD"],
         reviewBase.mergeBase,
       ),
-      current: { kind: "blob", rev: "HEAD", path: filePath },
+      current,
     };
   }
 
   if (scope === "staged") {
     return {
       original: await resolveOriginalBlob(cwd, filePath, ["--cached"], "HEAD"),
-      current: { kind: "index", path: filePath },
+      current,
     };
   }
 
   if (scope === "unstaged") {
     return {
       original: { kind: "index", path: filePath },
-      current: { kind: "worktree", path: filePath },
+      current,
     };
   }
 
-  const current: DiffSource = { kind: "worktree", path: filePath };
   if (!(await isPathChanged(cwd, filePath))) {
     return { original: current, current };
   }

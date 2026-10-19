@@ -1,4 +1,5 @@
 import os from "os";
+import type { CommitPullRequest } from "../../shared/ipc.js";
 import type { GitHubItem, GitHubPullRequest } from "../../shared/session.js";
 import { recordAppWarning } from "../errors/center.js";
 import { toAppError } from "../errors/app-error.js";
@@ -301,15 +302,7 @@ export async function fetchGitHubItems(
   const result = parseGitHubItemsResponse(stdout, targetsByRepoSlug);
   if (!result) {
     // 通信断や認証切れなど、クエリ全体の失敗。バッジは前回値のまま、記録は残す。
-    recordAppWarning(
-      error
-        ? toAppError(error, { command: "gh" })
-        : {
-            code: "command_failed",
-            message: "Could not read the GitHub response.",
-            detail: "gh api graphql returned an unexpected shape.",
-          },
-    );
+    recordGraphqlFailure(error);
     return null;
   }
   if (error) {
@@ -317,6 +310,104 @@ export async function fetchGitHubItems(
     recordAppWarning(toAppError(error, { command: "gh" }));
   }
   return result;
+}
+
+// first は GitHub の 1 ページの上限。返るのは merged PR 1 件と open な PR だけなので、実際には届かない。
+const COMMIT_PULL_REQUESTS_QUERY =
+  "query($owner: String!, $name: String!, $oid: GitObjectID!) { " +
+  "repository(owner: $owner, name: $name) { object(oid: $oid) { ... on Commit { " +
+  `associatedPullRequests(first: 100) { nodes { ${PULL_REQUEST_FIELDS} bodyText } } } } } }`;
+
+// 応答が想定外なら null。commit が GitHub に無い (まだ push していない) ときは空配列。
+export function parseCommitPullRequestsResponse(raw: string): CommitPullRequest[] | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return null;
+    }
+    throw error;
+  }
+
+  const repository = (parsed as { data?: { repository?: unknown } })?.data?.repository;
+  if (typeof repository !== "object" || repository === null) {
+    return null;
+  }
+  const object = (repository as { object?: unknown }).object;
+  if (object === null) {
+    return [];
+  }
+  const nodes = (object as { associatedPullRequests?: { nodes?: unknown } } | undefined)
+    ?.associatedPullRequests?.nodes;
+  if (!Array.isArray(nodes)) {
+    return null;
+  }
+
+  const pullRequests: CommitPullRequest[] = [];
+  for (const node of nodes) {
+    const fetched = toFetchedItem(node);
+    if (fetched?.status.kind !== "pr") {
+      continue;
+    }
+    const bodyText = (node as { bodyText?: unknown }).bodyText;
+    pullRequests.push({
+      status: fetched.status,
+      title: fetched.title,
+      bodyText: typeof bodyText === "string" ? bodyText : "",
+    });
+  }
+  return pullRequests;
+}
+
+// commit に紐づく PR。GitHub のスキーマの説明では、その commit を入れた merged PR と、
+// commit がまだ default branch に無いときはそれを含む open な PR が返る。
+// null は GitHub に問い合わせられなかったこと (gh が無い・未認証・通信失敗・応答が想定外)。
+export async function fetchCommitPullRequests(
+  repoSlug: string,
+  oid: string,
+): Promise<CommitPullRequest[] | null> {
+  if (!(await hasGhAuthenticated())) {
+    return null;
+  }
+
+  const [owner, name] = repoSlug.split("/");
+  const { stdout, error } = await execAllowingFailure(
+    "gh",
+    [
+      "api",
+      "graphql",
+      "-f",
+      `query=${COMMIT_PULL_REQUESTS_QUERY}`,
+      "-f",
+      `owner=${owner}`,
+      "-f",
+      `name=${name}`,
+      "-f",
+      `oid=${oid}`,
+    ],
+    os.homedir(),
+  );
+
+  const result = parseCommitPullRequestsResponse(stdout);
+  if (!result) {
+    recordGraphqlFailure(error);
+  }
+  return result;
+}
+
+// gh api graphql の応答から結果を取り出せなかったときの記録。gh が失敗していればその理由、
+// 失敗していなければ応答の形が想定外だったこと。
+function recordGraphqlFailure(error: Error | null): void {
+  recordAppWarning(
+    error
+      ? toAppError(error, { command: "gh" })
+      : {
+          code: "command_failed",
+          message: "Could not read the GitHub response.",
+          detail: "gh api graphql returned an unexpected shape.",
+        },
+  );
 }
 
 // ブランチ名は使い回されることがあるので、名前一致だけでは過去の PR を誤って拾う。

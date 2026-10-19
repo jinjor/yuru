@@ -577,6 +577,10 @@ function registerIpcHandlers(): void {
     return service.getReviewState(worktreeId);
   });
 
+  handleIpc("git:headSha", (_event, worktreeId: string) => {
+    return service.getGitHeadSha(worktreeId);
+  });
+
   handleIpc(
     "git:setFileReviewed",
     (
@@ -596,6 +600,18 @@ function registerIpcHandlers(): void {
       return service.getGitDiffDocument(worktreeId, filePath, scope);
     },
   );
+
+  handleIpc("git:blame", (_event, worktreeId: string, filePath: string, scope?: GitDiffScope) => {
+    return service.getGitBlame(worktreeId, filePath, scope);
+  });
+
+  handleIpc("git:commitMessage", (_event, worktreeId: string, oid: string) => {
+    return service.getGitCommitMessage(worktreeId, oid);
+  });
+
+  handleIpc("github:commitPullRequests", (_event, worktreeId: string, oid: string) => {
+    return service.getCommitPullRequests(worktreeId, oid);
+  });
 
   handleIpc(
     "git:previewDiffDocument",

@@ -1,6 +1,7 @@
 import type { RepoListItem, SuggestedSessionListItem, WorktreeDetail } from "./metadata.js";
 import type {
   GitHubItem,
+  GitHubPullRequest,
   ProviderPlanUsage,
   TerminalRuntimeId,
   SessionProvider,
@@ -117,6 +118,33 @@ export interface GitDiffDocument {
   currentContent: string | null;
   isBinary: boolean;
   size: number;
+}
+
+export interface GitBlameCommit {
+  oid: string;
+  author: string;
+  // epoch ms
+  authorTime: number;
+  summary: string;
+  // shallow clone で履歴が切れている commit。ここに割り当てられた行が本当はどこで入ったかは、
+  // この clone からは分からない (境界より古い行がすべてこの commit のものとして出る)。
+  historyTruncated: boolean;
+}
+
+// 差分の表示側 (右側) の内容に対する blame。
+export interface GitBlame {
+  // 表示側の行ごとに、その行を入れた commit (commits の添字)。null は未コミットの行。
+  // 行番号 - 1 で引く。
+  lines: (number | null)[];
+  commits: GitBlameCommit[];
+}
+
+// commit に紐づく PR 1 件。カードに出す分だけを持つ。
+export interface CommitPullRequest {
+  status: GitHubPullRequest;
+  title: string;
+  // 本文を平文にしたもの。
+  bodyText: string;
 }
 
 // 画像・音声・動画は中身を文字列にできないので、テキストの GitDiffDocument とは別に取得する。
@@ -283,6 +311,8 @@ export interface ElectronAPI {
   showFilePathContextMenu: (relativePath: string, absolutePath: string) => Promise<void>;
   getGitPathStates: (worktreeId: string) => Promise<Result<GitPathState[]>>;
   getReviewState: (worktreeId: string) => Promise<Result<GitReviewState | null>>;
+  // HEAD の commit の OID。commit がまだ無い repo では null。
+  getGitHeadSha: (worktreeId: string) => Promise<Result<string | null>>;
   setFileReviewed: (
     worktreeId: string,
     path: string,
@@ -294,6 +324,19 @@ export interface ElectronAPI {
     filePath: string,
     scope?: GitDiffScope,
   ) => Promise<Result<GitDiffDocument | null>>;
+  // 差分の表示側の内容に対する blame。worktree 外のファイルや、表示側にファイルが無いときは null。
+  getGitBlame: (
+    worktreeId: string,
+    filePath: string,
+    scope?: GitDiffScope,
+  ) => Promise<Result<GitBlame | null>>;
+  getGitCommitMessage: (worktreeId: string, oid: string) => Promise<Result<string | null>>;
+  // その commit に紐づく PR。GitHub に問い合わせられないとき (gh が無い・未認証・GitHub の
+  // repository でない・通信失敗) は null。
+  getCommitPullRequests: (
+    worktreeId: string,
+    oid: string,
+  ) => Promise<Result<CommitPullRequest[] | null>>;
   // 画像・音声・動画のプレビュー用。開けない path は null。中身は含まない。
   getPreviewDiffDocument: (
     worktreeId: string,

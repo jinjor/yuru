@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import type { ThemedToken } from "shiki";
 import { useSourceFind } from "./SourceFind";
 
@@ -12,9 +13,22 @@ interface SourceViewerProps {
   lines: SourceLine[];
   className?: string;
   scrollToLine?: number;
+  // クリックで動く行 (表示側の行番号)。行指定で開いた行の強調表示 (scrollToLine) とは別に持ち、
+  // 見た目は focusedLineEnd だけで表す。
+  focusedLine?: number;
+  onFocusLine?: (lineNumber: number) => void;
+  // フォーカス行の行末に出す内容。
+  focusedLineEnd?: ReactNode;
 }
 
-export function SourceViewer({ lines, className, scrollToLine }: SourceViewerProps) {
+export function SourceViewer({
+  lines,
+  className,
+  scrollToLine,
+  focusedLine,
+  onFocusLine,
+  focusedLineEnd,
+}: SourceViewerProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { findBar, renderTokens } = useSourceFind(lines);
 
@@ -39,11 +53,24 @@ export function SourceViewer({ lines, className, scrollToLine }: SourceViewerPro
 
   const markers = computeDiffMarkers(lines);
 
+  const handleClick = (event: MouseEvent<HTMLDivElement>): void => {
+    // 文字列の選択を終えたときのクリックでは、フォーカスを動かさない。
+    if (!onFocusLine || window.getSelection()?.isCollapsed === false) {
+      return;
+    }
+    // 行番号を持たない行 (削除行) は data-line を持たないので、フォーカスできない。
+    const lineElement = (event.target as Element).closest<HTMLElement>("[data-line]");
+    const lineNumber = Number(lineElement?.dataset.line);
+    if (lineNumber > 0) {
+      onFocusLine(lineNumber);
+    }
+  };
+
   return (
     <div className="source-viewer-wrap">
       {findBar}
       <div ref={scrollRef} className={`source-viewer ${className ?? ""}`}>
-        <div className="source-viewer-content">
+        <div className="source-viewer-content" onClick={handleClick}>
           {lines.map((line, index) => (
             <div
               key={index}
@@ -53,6 +80,7 @@ export function SourceViewer({ lines, className, scrollToLine }: SourceViewerPro
               <span className="source-gutter">{line.lineNumber ?? ""}</span>
               <span className="source-code">
                 {renderTokens(line.tokens, index)}
+                {line.lineNumber !== undefined && line.lineNumber === focusedLine && focusedLineEnd}
                 {line.tokens.length === 0 && "\n"}
               </span>
             </div>

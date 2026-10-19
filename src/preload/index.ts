@@ -60,6 +60,7 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke("contextMenu:filePath", relativePath, absolutePath),
   getGitPathStates: (worktreeId: string) => ipcRenderer.invoke("git:pathStates", worktreeId),
   getReviewState: (worktreeId: string) => ipcRenderer.invoke("git:reviewState", worktreeId),
+  getGitHeadSha: (worktreeId: string) => ipcRenderer.invoke("git:headSha", worktreeId),
   setFileReviewed: (
     worktreeId: string,
     path: string,
@@ -68,6 +69,12 @@ const electronAPI: ElectronAPI = {
   ) => ipcRenderer.invoke("git:setFileReviewed", worktreeId, path, scope, reviewed),
   getGitDiffDocument: (worktreeId: string, filePath: string, scope?: GitDiffScope) =>
     ipcRenderer.invoke("git:diffDocument", worktreeId, filePath, scope),
+  getGitBlame: (worktreeId: string, filePath: string, scope?: GitDiffScope) =>
+    ipcRenderer.invoke("git:blame", worktreeId, filePath, scope),
+  getGitCommitMessage: (worktreeId: string, oid: string) =>
+    ipcRenderer.invoke("git:commitMessage", worktreeId, oid),
+  getCommitPullRequests: (worktreeId: string, oid: string) =>
+    ipcRenderer.invoke("github:commitPullRequests", worktreeId, oid),
   getPreviewDiffDocument: (worktreeId: string, filePath: string, scope?: GitDiffScope) =>
     ipcRenderer.invoke("git:previewDiffDocument", worktreeId, filePath, scope),
   createHtmlPreview: (worktreeId: string, filePath: string, content: string) =>

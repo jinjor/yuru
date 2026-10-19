@@ -1,4 +1,4 @@
-import { exec } from "../exec.js";
+import { exec, isExitCode } from "../exec.js";
 import { isPathWithin } from "../worktree-identity.js";
 import type { WorktreeProcessInfo } from "../../shared/ipc.js";
 
@@ -37,7 +37,8 @@ export async function listLiveProcessesInWorktree(
         };
       } catch (error) {
         // lsof と ps の間に終了したプロセスは、すでに worktree を妨げていない。
-        if (isProcessNotFoundError(error)) {
+        // ps は対象のプロセスが無いと 1 で終わる。
+        if (isExitCode(error, 1)) {
           return null;
         }
         throw error;
@@ -91,13 +92,4 @@ export function parseLsofCwdPaths(output: string): string[] {
     .split("\n")
     .filter((line) => line.startsWith("n"))
     .map((line) => line.slice(1));
-}
-
-function isProcessNotFoundError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: unknown }).code === 1
-  );
 }

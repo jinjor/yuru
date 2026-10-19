@@ -75,3 +75,25 @@ test("execAllowingFailure は成功なら error が null", async () => {
   assert.equal(stdout, "ok");
   assert.equal(error, null);
 });
+
+test("exec は input を標準入力に渡す", async () => {
+  const output = await exec(
+    process.execPath,
+    ["-e", "process.stdin.pipe(process.stdout)"],
+    cwd,
+    Buffer.from("from stdin"),
+  );
+
+  assert.equal(output, "from stdin");
+});
+
+test("exec は input を読まずに終了するコマンドでも終了コードで成否を返す", async () => {
+  const output = await exec(
+    process.execPath,
+    ["-e", 'process.stdout.write("done")'],
+    cwd,
+    Buffer.alloc(10 * 1024 * 1024),
+  );
+
+  assert.equal(output, "done");
+});

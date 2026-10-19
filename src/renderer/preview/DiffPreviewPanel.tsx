@@ -5,6 +5,9 @@ import { isImagePath } from "../../shared/image-preview";
 import { mediaPreviewKind } from "../../shared/media-preview";
 import { buildIgnoredPathSet, isIgnoredPath } from "../changes/gitStatus";
 import type { FileViewMode } from "./fileViewMode";
+import { BlameAnnotation } from "./blame/BlameAnnotation";
+import { useBlame } from "./blame/useBlame";
+import { useCommitDetails } from "./blame/useCommitDetails";
 import { computeDiffHunks } from "./diffHunks";
 import { SourceViewer, type SourceLine } from "./SourceViewer";
 import { tokenizeCode, type TokenizedLine } from "./highlight";
@@ -74,6 +77,7 @@ function isPathChangedInScope(
 
 interface DiffPreviewPanelProps {
   gitPathStates: readonly GitPathState[];
+  headSha: string | null;
   line?: number;
   onClose: () => void;
   onReviewedChange: (
@@ -90,6 +94,7 @@ interface DiffPreviewPanelProps {
 
 export function DiffPreviewPanel({
   gitPathStates,
+  headSha,
   line,
   onClose,
   onReviewedChange,
@@ -118,6 +123,16 @@ export function DiffPreviewPanel({
     setPrevPath(path);
     setMode(hasRenderedPreview ? "preview" : "view");
   }
+
+  // blame を出す行。行指定で開いた行から始まりクリックで動く。行指定の強調表示とは別に持つ。
+  // クリックした行はどこを開いていたときのものかと対で持ち、ファイル・scope・指定行が
+  // 変わったら指定行に戻す。
+  const openedLocation = JSON.stringify([path, scope ?? null, line ?? null]);
+  const [clickedLine, setClickedLine] = useState<{ location: string; line: number } | null>(null);
+  const focusedLine = clickedLine?.location === openedLocation ? clickedLine.line : line;
+  const focusLine = (lineNumber: number): void => {
+    setClickedLine({ location: openedLocation, line: lineNumber });
+  };
 
   // While a new file's diff is being fetched, `diffDocument` still holds the
   // previously shown file. Render it (with its own path) until the new diff
@@ -186,6 +201,30 @@ export function DiffPreviewPanel({
     [originalContent, currentContent],
   );
   const headerLineStat = diff.stat;
+
+  // 本文に何を出すか。
+  const body: "empty" | "edit" | "preview" | "binary" | "source" =
+    diffDocument === null
+      ? "empty"
+      : isEditing
+        ? "edit"
+        : mode === "preview" && displayPreviewKind !== null
+          ? "preview"
+          : isBinary
+            ? "binary"
+            : "source";
+  // worktree 外のファイルは git の履歴を持たないので、フォーカスも blame もしない。
+  const canFocusLine = isCurrentDocument && !isExternalPath;
+  const blameLoad = useBlame({
+    worktreeId,
+    path,
+    scope,
+    enabled: body === "source" && canFocusLine && focusedLine !== undefined,
+    currentContent,
+    gitPathState: gitPathStates.find((state) => state.path === path),
+    headSha,
+  });
+  const { commitDetails, requestCommitDetails } = useCommitDetails({ worktreeId, path, scope });
 
   useEffect(() => {
     let cancelled = false;
@@ -275,13 +314,13 @@ export function DiffPreviewPanel({
         onClose={onClose}
       />
       <div className="preview-body">
-        {diffDocument === null ? (
+        {body === "empty" ? (
           <EmptyState>{isLoadingDiff ? "Loading..." : "Preview is not available"}</EmptyState>
-        ) : isEditing ? (
+        ) : body === "edit" ? (
           <Suspense fallback={<EmptyState>Loading editor…</EmptyState>}>
             <EditModeEditor key={path} worktreeId={worktreeId} path={path} />
           </Suspense>
-        ) : mode === "preview" && displayPreviewKind !== null ? (
+        ) : body === "preview" ? (
           <Suspense fallback={<EmptyState>Loading preview…</EmptyState>}>
             {displayPreviewKind === "html" ? (
               <HtmlPreview
@@ -309,13 +348,25 @@ export function DiffPreviewPanel({
               <MarkdownPreview content={currentContent ?? ""} hunks={diff.hunks} />
             )}
           </Suspense>
-        ) : isBinary ? (
+        ) : body === "binary" ? (
           <EmptyState>Binary preview is not available</EmptyState>
         ) : (
           <SourceViewer
             lines={lines}
             className={hasChanges ? "diff-viewer" : ""}
             scrollToLine={isCurrentDocument ? line : undefined}
+            focusedLine={canFocusLine ? focusedLine : undefined}
+            onFocusLine={canFocusLine ? focusLine : undefined}
+            focusedLineEnd={
+              focusedLine === undefined ? null : (
+                <BlameAnnotation
+                  load={blameLoad}
+                  commitDetails={commitDetails}
+                  onOpenCard={requestCommitDetails}
+                  lineNumber={focusedLine}
+                />
+              )
+            }
           />
         )}
       </div>

@@ -19,3 +19,28 @@ export function formatDuration(seconds: number): string {
   }
   return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}:${paddedSeconds}`;
 }
+
+const relativeTimeFormat = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
+// 大きい単位から順に、1 以上になる最初の単位で表す。月と年は平均の長さで近似する。
+const relativeTimeUnits: [Intl.RelativeTimeFormatUnit, number][] = [
+  ["year", 365 * DAY_MS],
+  ["month", 30 * DAY_MS],
+  ["week", 7 * DAY_MS],
+  ["day", DAY_MS],
+  ["hour", HOUR_MS],
+  ["minute", MINUTE_MS],
+];
+
+// 「3 days ago」のような、過去の時刻の相対表記。1 分未満は「now」。
+export function formatRelativeTime(epochMs: number, nowMs: number): string {
+  const elapsedMs = Math.max(0, nowMs - epochMs);
+  for (const [unit, unitMs] of relativeTimeUnits) {
+    if (elapsedMs >= unitMs) {
+      return relativeTimeFormat.format(-Math.floor(elapsedMs / unitMs), unit);
+    }
+  }
+  return relativeTimeFormat.format(0, "second");
+}

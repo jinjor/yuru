@@ -47,6 +47,10 @@ import {
 } from "./repos/worktree-sessions.js";
 import { loadStoredSessionPreview, loadSuggestedWorktreeSessions } from "./sessions/suggested.js";
 import { toWorktreeId, toWorktreePath, toWorktreePathKey } from "./worktree-identity.js";
+import {
+  getGitBlame as loadGitBlame,
+  getGitCommitMessage as loadGitCommitMessage,
+} from "./git/blame.js";
 import { getFileDocument, getGitDiffDocument as loadGitDiffDocument } from "./git/diff.js";
 import { getCurrentBranch, getHeadSha, isSupportedGitRepo } from "./git/repo.js";
 import { getGitPathStates as loadGitPathStates } from "./git/status.js";
@@ -69,6 +73,7 @@ import {
 } from "./preview/binary-preview.js";
 import { hasLiveProcessInWorktree, listLiveProcessesInWorktree } from "./repos/process-check.js";
 import {
+  fetchCommitPullRequests,
   fetchGitHubItems,
   getGitHubRepoSlug,
   gitHubTargetKey,
@@ -1259,6 +1264,14 @@ export class YuruService {
     }
   }
 
+  async getGitHeadSha(worktreeId: string) {
+    const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
+    if (!workingRoot) {
+      return ok(null);
+    }
+    return ok(await getHeadSha(workingRoot));
+  }
+
   async getReviewState(worktreeId: string) {
     const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
     if (!workingRoot) {
@@ -1479,6 +1492,40 @@ export class YuruService {
         toAppError(error, path.isAbsolute(filePath) ? undefined : { command: "git" }),
       );
     }
+  }
+
+  async getGitBlame(worktreeId: string, filePath: string, scope?: GitDiffScope) {
+    const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
+    // worktree 外のファイル (ターミナルリンク由来の絶対パス) は git の履歴を持たない。
+    if (!workingRoot || path.isAbsolute(filePath)) {
+      return ok(null);
+    }
+    try {
+      return ok(await loadGitBlame(workingRoot, filePath, scope));
+    } catch (error) {
+      return this.failAndReport(toAppError(error, { command: "git" }));
+    }
+  }
+
+  async getGitCommitMessage(worktreeId: string, oid: string) {
+    const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
+    if (!workingRoot) {
+      return ok(null);
+    }
+    try {
+      return ok(await loadGitCommitMessage(workingRoot, oid));
+    } catch (error) {
+      return this.failAndReport(toAppError(error, { command: "git" }));
+    }
+  }
+
+  async getCommitPullRequests(worktreeId: string, oid: string) {
+    const worktree = await this.findGitWorktree(worktreeId);
+    const repoSlug = worktree ? await getGitHubRepoSlug(worktree.repoPath) : null;
+    if (!repoSlug) {
+      return ok(null);
+    }
+    return ok(await fetchCommitPullRequests(repoSlug, oid));
   }
 
   async getPreviewDiffDocument(worktreeId: string, filePath: string, scope?: GitDiffScope) {

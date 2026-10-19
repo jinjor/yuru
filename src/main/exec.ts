@@ -8,12 +8,23 @@ interface RunResult {
   error: Error | null;
 }
 
-export async function exec(cmd: string, args: string[], cwd: string): Promise<string> {
-  return (await execBuffer(cmd, args, cwd)).toString("utf-8");
+// input を渡すと、それを標準入力に書き込んで閉じる。渡さなければ空の入力になる。
+export async function exec(
+  cmd: string,
+  args: string[],
+  cwd: string,
+  input?: Buffer,
+): Promise<string> {
+  return (await execBuffer(cmd, args, cwd, input)).toString("utf-8");
 }
 
-export async function execBuffer(cmd: string, args: string[], cwd: string): Promise<Buffer> {
-  const { stdout, error } = await run(cmd, args, cwd);
+export async function execBuffer(
+  cmd: string,
+  args: string[],
+  cwd: string,
+  input?: Buffer,
+): Promise<Buffer> {
+  const { stdout, error } = await run(cmd, args, cwd, input);
   if (error) {
     throw error;
   }
@@ -70,12 +81,31 @@ export async function execAllowingFailure(
   return { stdout: stdout.toString("utf-8"), error };
 }
 
-function run(cmd: string, args: string[], cwd: string): Promise<RunResult> {
+// exec が投げたエラーが、コマンドがその終了コードで終わったことによるものか。
+export function isExitCode(error: unknown, code: number): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === code
+  );
+}
+
+function run(cmd: string, args: string[], cwd: string, input?: Buffer): Promise<RunResult> {
   return new Promise((resolve) => {
-    const child = spawn(cmd, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(cmd, args, { cwd, stdio: ["pipe", "pipe", "pipe"] });
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
     let spawnError: NodeJS.ErrnoException | null = null;
+
+    child.stdin.on("error", (error: NodeJS.ErrnoException) => {
+      // 入力を読み切る前にコマンドが終了すると EPIPE になる。成否は終了コードで決まるので
+      // ここでは扱わない。それ以外の書き込み失敗はコマンドの失敗として返す。
+      if (error.code !== "EPIPE") {
+        spawnError ??= error;
+      }
+    });
+    child.stdin.end(input);
 
     child.stdout.on("data", (chunk: Buffer) => {
       stdoutChunks.push(chunk);

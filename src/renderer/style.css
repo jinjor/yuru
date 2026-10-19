@@ -2073,6 +2073,8 @@ button.github-badge {
 
 .source-code {
   display: table-cell;
+  position: relative;
+  overflow-x: clip;
   padding: 0 0 0 8px;
   white-space: pre-wrap;
   word-break: break-all;
@@ -2101,6 +2103,109 @@ button.github-badge {
 
 .source-line.diff-deleted .source-gutter {
   background: color-mix(in srgb, var(--viewer-remove) 52%, var(--viewer-gutter));
+}
+
+/* Blame annotation on the focused line, and its hover card */
+/* 注記は折り返しの計算に入れない。コードの最後の文字の後ろから右へ伸ばし、入りきらない分は
+   行の右端で切る。 */
+.blame-annotation {
+  position: absolute;
+  margin-left: 3ch;
+  color: color-mix(in srgb, var(--text-subtle) 65%, transparent);
+  white-space: pre;
+  user-select: none;
+}
+
+.blame-annotation.interactive {
+  anchor-name: --blame-annotation;
+  cursor: default;
+}
+
+.blame-card {
+  position-anchor: --blame-annotation;
+  position-area: block-end span-inline-end;
+  position-try-fallbacks:
+    flip-block,
+    flip-inline,
+    flip-block flip-inline;
+  inset: auto;
+  margin: 4px 0;
+  width: max-content;
+  max-width: min(480px, calc(100vw - 32px));
+  max-height: min(360px, 50vh);
+  overflow: auto;
+  padding: 10px 12px;
+  background: var(--bg-panel);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.blame-card-message {
+  white-space: pre-wrap;
+}
+
+.blame-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.blame-card-oid {
+  font-family: var(--font-mono);
+}
+
+.blame-card-pull-requests {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.blame-card-pull-request-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.blame-card-pull-request-title {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.blame-card-pull-request-title:hover {
+  text-decoration: underline;
+}
+
+.blame-card-pull-request-body {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  margin-top: 4px;
+  color: var(--text-muted);
+  white-space: pre-wrap;
 }
 
 /* Diff overview ruler (minimap-style change markers) */

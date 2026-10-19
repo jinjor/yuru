@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   buildGitHubItemsQuery,
+  parseCommitPullRequestsResponse,
   gitHubTargetKey,
   parseGitHubItemUrl,
   parseGitHubItemsResponse,
@@ -258,4 +259,54 @@ test("toVisiblePullRequest は PR なしと issue を null にする", () => {
     ),
     null,
   );
+});
+
+function commitPullRequestsResponse(object) {
+  return JSON.stringify({ data: { repository: { object } } });
+}
+
+test("parseCommitPullRequestsResponse は commit に紐づく PR を全部返す", () => {
+  const response = commitPullRequestsResponse({
+    associatedPullRequests: {
+      nodes: [
+        pullRequestNode({ number: 1, state: "MERGED", bodyText: "Body of 1" }),
+        pullRequestNode({ number: 2, url: "https://example.com/2", bodyText: "" }),
+      ],
+    },
+  });
+
+  assert.deepEqual(parseCommitPullRequestsResponse(response), [
+    {
+      status: {
+        kind: "pr",
+        number: 1,
+        state: "merged",
+        isApproved: false,
+        url: "https://example.com/1",
+      },
+      title: "Add a thing",
+      bodyText: "Body of 1",
+    },
+    {
+      status: {
+        kind: "pr",
+        number: 2,
+        state: "open",
+        isApproved: false,
+        url: "https://example.com/2",
+      },
+      title: "Add a thing",
+      bodyText: "",
+    },
+  ]);
+});
+
+test("parseCommitPullRequestsResponse は GitHub に無い commit を空配列にする", () => {
+  assert.deepEqual(parseCommitPullRequestsResponse(commitPullRequestsResponse(null)), []);
+});
+
+test("parseCommitPullRequestsResponse は想定外の形なら null を返す", () => {
+  assert.equal(parseCommitPullRequestsResponse(""), null);
+  assert.equal(parseCommitPullRequestsResponse(JSON.stringify({ errors: [] })), null);
+  assert.equal(parseCommitPullRequestsResponse(commitPullRequestsResponse({})), null);
 });

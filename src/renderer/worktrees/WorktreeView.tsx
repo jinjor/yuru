@@ -101,6 +101,7 @@ const WorktreeViewContent = memo(function WorktreeViewContent({
   const explorerPanelRef = useRef<ExplorerPanelHandle>(null);
   const [gitPathStates, setGitPathStates] = useState<GitPathState[]>([]);
   const [reviewState, setReviewState] = useState<GitReviewState | null>(null);
+  const [headSha, setHeadSha] = useState<string | null>(null);
   const reviewMutationVersionRef = useRef(0);
   const paneLayout = usePaneLayout({
     appRef,
@@ -219,15 +220,17 @@ const WorktreeViewContent = memo(function WorktreeViewContent({
 
     const fetchGitState = async (): Promise<void> => {
       const reviewMutationVersion = reviewMutationVersionRef.current;
-      const [pathStatesResult, reviewStateResult] = await Promise.all([
+      const [pathStatesResult, reviewStateResult, headShaResult] = await Promise.all([
         window.electronAPI.getGitPathStates(worktreeId),
         window.electronAPI.getReviewState(worktreeId),
+        window.electronAPI.getGitHeadSha(worktreeId),
       ]);
       if (cancelled) {
         return;
       }
 
       setGitPathStates((prev) => keepIfUnchanged(prev, resultDataOrNull(pathStatesResult) ?? []));
+      setHeadSha(resultDataOrNull(headShaResult));
       if (reviewMutationVersion === reviewMutationVersionRef.current) {
         setReviewState((prev) => keepIfUnchanged(prev, resultDataOrNull(reviewStateResult)));
       }
@@ -281,6 +284,7 @@ const WorktreeViewContent = memo(function WorktreeViewContent({
             line={previewSelection.line}
             scope={previewSelection.scope}
             gitPathStates={gitPathStates}
+            headSha={headSha}
             reviewState={reviewState}
             onReviewedChange={handleReviewedChange}
             onClose={resetPreviewState}
