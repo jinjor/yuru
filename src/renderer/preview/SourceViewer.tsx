@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 import type { MouseEvent, ReactNode } from "react";
 import type { ThemedToken } from "shiki";
 import { useSourceFind } from "./SourceFind";
@@ -72,18 +72,18 @@ export function SourceViewer({
       <div ref={scrollRef} className={`source-viewer ${className ?? ""}`}>
         <div className="source-viewer-content" onClick={handleClick}>
           {lines.map((line, index) => (
-            <div
+            <SourceLineRow
               key={index}
-              className={`source-line ${line.className ?? ""} ${line.lineNumber === scrollToLine ? "highlight" : ""}`}
-              data-line={line.lineNumber}
-            >
-              <span className="source-gutter">{line.lineNumber ?? ""}</span>
-              <span className="source-code">
-                {renderTokens(line.tokens, index)}
-                {line.lineNumber !== undefined && line.lineNumber === focusedLine && focusedLineEnd}
-                {line.tokens.length === 0 && "\n"}
-              </span>
-            </div>
+              line={line}
+              lineIndex={index}
+              highlighted={line.lineNumber === scrollToLine}
+              lineEnd={
+                line.lineNumber !== undefined && line.lineNumber === focusedLine
+                  ? focusedLineEnd
+                  : null
+              }
+              renderTokens={renderTokens}
+            />
           ))}
         </div>
       </div>
@@ -104,6 +104,37 @@ export function SourceViewer({
     </div>
   );
 }
+
+interface SourceLineRowProps {
+  line: SourceLine;
+  lineIndex: number;
+  highlighted: boolean;
+  lineEnd: ReactNode;
+  renderTokens: (tokens: ThemedToken[], lineIndex: number) => ReactNode;
+}
+
+// フォーカス行が動くたびに全行を描き直さないよう、props が変わった行だけ描き直す。
+const SourceLineRow = memo(function SourceLineRow({
+  line,
+  lineIndex,
+  highlighted,
+  lineEnd,
+  renderTokens,
+}: SourceLineRowProps) {
+  return (
+    <div
+      className={`source-line ${line.className ?? ""} ${highlighted ? "highlight" : ""}`}
+      data-line={line.lineNumber}
+    >
+      <span className="source-gutter">{line.lineNumber ?? ""}</span>
+      <span className="source-code">
+        {renderTokens(line.tokens, lineIndex)}
+        {lineEnd}
+        {line.tokens.length === 0 && "\n"}
+      </span>
+    </div>
+  );
+});
 
 interface DiffMarker {
   start: number;

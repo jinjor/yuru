@@ -46,8 +46,11 @@ export function useSourceFind(lines: readonly SearchableSourceLine[]): SourceFin
     element?.scrollIntoView({ block: "center" });
   }, []);
 
-  const renderTokens = (tokens: ThemedToken[], lineIndex: number): ReactNode =>
-    renderLineTokens(tokens, matchesByLine.get(lineIndex), activeMatch, activeMatchRef);
+  const renderTokens = useCallback(
+    (tokens: ThemedToken[], lineIndex: number): ReactNode =>
+      renderLineTokens(tokens, matchesByLine.get(lineIndex), activeMatch, activeMatchRef),
+    [activeMatch, activeMatchRef, matchesByLine],
+  );
 
   return { findBar, renderTokens };
 }
