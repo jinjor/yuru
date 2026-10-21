@@ -3,7 +3,7 @@
 Yuru is a session-centered editor for Claude Code, Codex CLI, Kimi CLI, and Devin CLI.
 
 Current local-app workflow is supported on macOS only.
-Updating and building Yuru requires npm 11.16.0 or later.
+Updating and building Yuru requires Node.js 26.12.1 or later (24.22.1+ or 22.23.4+ on those release lines) and npm 11.16.0 or later.
 
 ## Install
 
