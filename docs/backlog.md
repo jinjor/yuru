@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-10-05
+Last updated: 2026-10-30
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -28,18 +28,20 @@ UI 改善も機能追加も同じ土俵で扱う。
 |---|---|---|---|---|
 | P31 | polish | Changes / Files | Changes からファイルを開くときは preview を開かないようにする | 変更内容を確認したい |
 | P32 | polish | Worktrees | worktree を切った直後のセットアップを最適化する | worktree 作成後に作業を始めるまでの手間を減らしたい |
-| F76 | feature | Bookmarks | ローカルファイルのブックマーク | ファイルやフォルダ、よく確認する実装をブックマークしたい |
+| F76 | feature | Bookmarks | ターミナルでクリックした worktree 外のファイルをブックマークする | 個人用のタスクなど worktree 外のファイルを後から見返したいが、会話が流れたり Yuru を再起動したりすると見失う |
 | B12 | bug | Sessions / Worktree Context | Claude の resume で worktree の作業指示が引き継がれない | `--append-system-prompt` の指示が保存されないため、resume すると Claude が repo root で作業してしまう。詳細: docs/backlog-details/B12-resume-worktree-context.md |
 | B15 | bug | Terminal | ターミナルにフォーカスできないことがある | キーボード入力を始められないことがある |
 | B16 | bug | Changes / Diff | Committed の diff を正確にする | commit 済みの変更を正しい差分でレビューしたい |
 | F74 | feature | Dependencies | ライブラリの GitHub Issue / PR を長期にわたって監視する | 依存ライブラリのバグ修正や機能追加を把握したい |
 | P35 | polish | Files / Preview | 変更ファイルの表示中の読み直しを、ファイル単位の git 呼び出しで済ませる | 巨大モノレポで変更ファイルを開いている間の負荷を減らしたい。scope なしの表示は 3 秒ごとの読み直しのたびに、rename 元を探すため repo 全体に `git diff --name-status HEAD` をかけている。rename 元が要るのは新規追加 (A) に見えるファイルだけで、変更 (M) なら元の名前は同じ |
 | P36 | polish | Git / Polling | git を読む IPC で、worktreeId からパスを求めるのに git を呼ばない | 巨大モノレポで worktree を開いている間の負荷を減らしたい。git を読む IPC は毎回 `findGitWorktree` で登録済みの repo を順に git に問い合わせて worktree を探しており (repo 1 つにつき git を約 4 回)、3 秒ごとのポーリング (ファイルの状態・レビューの状態・HEAD) のたびに走る。パスは worktreeId に入っているので `toWorktreePath` で取り出せる |
+| F83 | feature | Files | ターミナルでクリックした worktree 外のディレクトリを Files で開く | 今はクリックしても何も起きない。エージェントが示した worktree 外のディレクトリの中身を見たい |
 
 ## Next
 
 | ID | Type | Area | Item | Notes |
 |---|---|---|---|---|
+| F84 | feature | Bookmarks | ターミナルでクリックした worktree 外のディレクトリをブックマークする | ディレクトリとファイル名が別々に表示されるとファイルのパスはクリックできないので、ディレクトリから辿りたい。F76 と F83 が前提 |
 | F78 | feature | Changes / Review | コミット単位でレビュー | |
 | F79 | feature | Skills / Sessions | 作業終了を明示的に通知するスキル | |
 | F80 | feature | Changes / Git | git reset ボタン | |
@@ -79,6 +81,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | F62 | feature | Worktrees / Terminal | worktree でターミナルを使えるようにする | エージェントのセッションとは別にコマンドを実行したい |
 | F36 | feature | Repos | `yuru add` の結果を実行中の画面に反映する | 詳細: docs/backlog-details/F36-yuru-add-refresh.md |
 | P34 | polish | Changes / Preview | git status と Review 状態からの判定が Changes と Preview で重複している | 「変更ありか」「scope ごとに差分ありか」「Reviewed 済みか」を、`changes/gitStatus.ts`・`ChangesPane.tsx` と `DiffPreviewPanel.tsx` がそれぞれ判定している。scope なしで開いたコンフリクト中のファイルの扱いだけ異なる |
+| F85 | feature | Bookmarks | worktree 内のファイル・ディレクトリのブックマーク | よく確認する実装にすぐたどり着きたい |
 
 ## Open decisions
 
