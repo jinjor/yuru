@@ -298,6 +298,8 @@ try {
 }
 status.textContent =
   "script loaded; api=" + typeof window.electronAPI +
+  "; require=" + typeof require +
+  "; process=" + typeof process +
   "; parent=" + parentAccess +
   "; eval=" + evalAccess +
   "; storage=" + storageAccess;
@@ -309,7 +311,6 @@ status.textContent =
   </head>
   <body>
     <p id="status">not loaded</p>
-    <a id="external-link" href="https://example.com/">external</a>
     <script src="./app.js"></script>
   </body>
 </html>
@@ -332,14 +333,12 @@ status.textContent =
 
     const preview = window.frameLocator(".html-preview-frame");
     const status = preview.locator("#status");
-    const expected = "script loaded; api=undefined; parent=blocked; eval=blocked; storage=kept";
+    const expected =
+      "script loaded; api=undefined; require=undefined; process=undefined; parent=blocked; eval=blocked; storage=kept";
     await expect(status).toHaveText(expected);
     expect(await status.evaluate((element) => getComputedStyle(element).color)).toBe(
       "rgb(12, 34, 56)",
     );
-
-    await preview.locator("#external-link").click();
-    await expect(status).toHaveText(expected);
   } finally {
     await closeYuru(app);
     await context.cleanup();

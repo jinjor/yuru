@@ -75,7 +75,12 @@ test("grant を release すると同じ URL は読めない", async (t) => {
 
   const grants = new HtmlPreviewGrants();
   const grant = await grants.create(dir, "index.html", "<h1>preview</h1>");
+  assert.equal(grants.isActive(grant.url), true);
+  assert.equal(grants.isActive(new URL("./other.html#heading", grant.url).href), true);
+  assert.equal(grants.isActive(grant.url.replace("yuru-preview:", "https:")), false);
+  assert.equal(grants.isActive("not a URL"), false);
   grants.release(grant.id);
+  assert.equal(grants.isActive(grant.url), false);
 
   const response = await grants.respond(grant.url);
   assert.equal(response.status, 404);

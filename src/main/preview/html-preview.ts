@@ -154,6 +154,14 @@ export class HtmlPreviewGrants {
     this.grants.delete(id);
   }
 
+  isActive(url: string): boolean {
+    if (!URL.canParse(url)) {
+      return false;
+    }
+    const parsed = new URL(url);
+    return parsed.protocol === `${HTML_PREVIEW_SCHEME}:` && this.grants.has(parsed.hostname);
+  }
+
   clear(): void {
     this.grants.clear();
   }

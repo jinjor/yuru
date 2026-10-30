@@ -243,6 +243,8 @@ async function createWindow(): Promise<void> {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // sandbox と contextIsolation を維持したまま、iframe でも preload のクリック監視を動かす。
+      nodeIntegrationInSubFrames: true,
     },
   });
 
@@ -255,7 +257,7 @@ async function createWindow(): Promise<void> {
     return { action: "deny" };
   });
 
-  // アプリ本体は画面遷移しない。preview iframe も専用 protocol 内だけに閉じ込める。
+  // 外部ブラウザを開くのは preload が確認したリンク操作だけ。自動転送はここで止める。
   mainWindow.webContents.on("will-frame-navigate", (event) => {
     if (event.isMainFrame || !isHtmlPreviewUrl(event.url)) {
       event.preventDefault();
@@ -640,6 +642,29 @@ function registerIpcHandlers(): void {
       throw new Error("HTML preview grants are only available to the main frame.");
     }
     htmlPreviewGrants.release(grantId);
+  });
+
+  // この IPC は隔離された preload のリンク監視からだけ送る。HTML 側には公開しない。
+  ipcMain.on("htmlPreview:openExternal", (event, url: unknown) => {
+    const frame = event.senderFrame;
+    if (
+      !mainWindow ||
+      event.sender !== mainWindow.webContents ||
+      !frame ||
+      frame.parent !== mainWindow.webContents.mainFrame ||
+      !htmlPreviewGrants.isActive(frame.url) ||
+      typeof url !== "string" ||
+      !URL.canParse(url)
+    ) {
+      return;
+    }
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return;
+    }
+    void service.openExternal(parsed.href).catch((error: unknown) => {
+      recordAppError(toAppError(error));
+    });
   });
 
   handleIpc("files:list", (_event, worktreeId: string, relativePath?: string) => {

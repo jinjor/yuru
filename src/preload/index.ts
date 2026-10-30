@@ -195,11 +195,38 @@ const electronAPI: ElectronAPI = {
   },
 };
 
-// Electron は同じ BrowserWindow 内の iframe にも preload を読み込む。preview HTML へ
-// filesystem や PTY の IPC を渡さないよう、bridge は Yuru 本体の frame だけに公開する。
+// iframe ではリンク操作だけを監視し、filesystem や PTY の API は本体にだけ公開する。
 if (process.isMainFrame) {
   contextBridge.exposeInMainWorld("electronAPI", electronAPI);
   // YURU_SAVE_ENERGY=0 で起動したときだけ polling を従来の固定間隔に戻すスイッチ。
   // 省エネ方針で画面の鮮度がどう変わるか比較できるようにするためのもの。
   contextBridge.exposeInMainWorld("__yuruSaveEnergy", process.env.YURU_SAVE_ENERGY !== "0");
+} else if (window.location.protocol === "yuru-preview:") {
+  // preload の隔離された context で検証する。HTML からの click() / dispatchEvent() は
+  // isTrusted=false なので受け付けず、URL を送る API も HTML 側には公開しない。
+  const handleLink = (event: MouseEvent): void => {
+    if (!event.isTrusted || (event.type === "click" ? event.button !== 0 : event.button !== 1)) {
+      return;
+    }
+    const anchor = event
+      .composedPath()
+      .find(
+        (node): node is Element =>
+          node instanceof Element && (node.localName === "a" || node.localName === "area"),
+      );
+    const href =
+      anchor?.getAttribute("href") ??
+      anchor?.getAttributeNS("http://www.w3.org/1999/xlink", "href");
+    if (!href || !URL.canParse(href, document.baseURI)) {
+      return;
+    }
+    const url = new URL(href, document.baseURI);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return;
+    }
+    event.preventDefault();
+    ipcRenderer.send("htmlPreview:openExternal", url.href);
+  };
+  window.addEventListener("click", handleLink, true);
+  window.addEventListener("auxclick", handleLink, true);
 }
