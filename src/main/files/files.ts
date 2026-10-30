@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import type { FileTreeNode, RepoPathTarget } from "../../shared/ipc.js";
 import { execBuffer } from "../exec.js";
-import { isFileNotFoundError } from "../errors/app-error.js";
+import { isErrnoException } from "../errors/utils.js";
 
 function normalizeRelativePath(relativePath: string): string {
   return relativePath.split(path.sep).join("/");
@@ -92,7 +92,7 @@ async function statExisting(targetPath: string): Promise<fs.Stats | null> {
     return await fs.promises.stat(targetPath);
   } catch (error) {
     // ENOTDIR はパス途中のコンポーネントがファイルだった場合。これも不在として扱う。
-    if (isFileNotFoundError(error) || (error as { code?: unknown }).code === "ENOTDIR") {
+    if (isErrnoException(error) && (error.code === "ENOENT" || error.code === "ENOTDIR")) {
       return null;
     }
     throw error;
@@ -108,7 +108,7 @@ export async function readWorktreeFile(
   try {
     return await fs.promises.readFile(targetPath, "utf-8");
   } catch (error) {
-    if (isFileNotFoundError(error)) {
+    if (isErrnoException(error) && error.code === "ENOENT") {
       return null;
     }
     throw error;

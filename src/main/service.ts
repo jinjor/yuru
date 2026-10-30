@@ -138,7 +138,8 @@ import {
   type RateLimitStop,
   type ProviderPlanUsage,
 } from "../shared/session.js";
-import { isFileNotFoundError, toAppError } from "./errors/app-error.js";
+import { toAppError } from "./errors/app-error.js";
+import { isErrnoException } from "./errors/utils.js";
 import { exec } from "./exec.js";
 import { isExternalUrlProtocol } from "../shared/external-url.js";
 import {
@@ -396,15 +397,6 @@ function wait(milliseconds: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, milliseconds);
   });
-}
-
-function isNoSuchProcessError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: unknown }).code === "ESRCH"
-  );
 }
 
 export class YuruService {
@@ -1139,7 +1131,7 @@ export class YuruService {
           try {
             process.kill(processInfo.pid, "SIGTERM");
           } catch (error) {
-            if (!isNoSuchProcessError(error)) {
+            if (!(isErrnoException(error) && error.code === "ESRCH")) {
               throw error;
             }
           }
@@ -1622,7 +1614,7 @@ export class YuruService {
       return ok(undefined);
     } catch (error) {
       // 編集中に削除された等で対象が無いのは想定内の競合。error center に出さず静かに失敗。
-      if (isFileNotFoundError(error)) {
+      if (isErrnoException(error) && error.code === "ENOENT") {
         return fail({ code: "filesystem_failed", message: "File no longer exists." });
       }
       return this.failAndReport(toAppError(error));

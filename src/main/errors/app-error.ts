@@ -1,4 +1,5 @@
 import type { AppError } from "../../shared/ipc.js";
+import { isErrnoException } from "./utils.js";
 
 function errorDetail(error: unknown): string | undefined {
   if (error instanceof Error) {
@@ -11,28 +12,20 @@ function errorDetail(error: unknown): string | undefined {
 }
 
 function isFilesystemError(error: unknown): boolean {
-  if (!error || typeof error !== "object") {
+  if (!isErrnoException(error)) {
     return false;
   }
-
-  const maybeCode = (error as { code?: unknown }).code;
   return (
-    maybeCode === "EACCES" ||
-    maybeCode === "ENOENT" ||
-    maybeCode === "ENOTDIR" ||
-    maybeCode === "EISDIR" ||
-    maybeCode === "EPERM"
-  );
-}
-
-export function isFileNotFoundError(error: unknown): boolean {
-  return (
-    Boolean(error) && typeof error === "object" && (error as { code?: unknown }).code === "ENOENT"
+    error.code === "EACCES" ||
+    error.code === "ENOENT" ||
+    error.code === "ENOTDIR" ||
+    error.code === "EISDIR" ||
+    error.code === "EPERM"
   );
 }
 
 function isCommandNotFound(error: unknown, detail?: string): boolean {
-  if (error && typeof error === "object" && (error as { code?: unknown }).code === "ENOENT") {
+  if (isErrnoException(error) && error.code === "ENOENT") {
     return true;
   }
 

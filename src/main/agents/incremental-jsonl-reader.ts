@@ -1,4 +1,5 @@
 import fs from "fs";
+import { isErrnoException } from "../errors/utils.js";
 import { readLatestJsonlEntry } from "./jsonl-tail.js";
 
 interface FileCursor {
@@ -48,7 +49,7 @@ export class IncrementalJsonlReader {
     try {
       handle = await fs.promises.open(this.filePath, "r");
     } catch (error) {
-      if (isFileNotFoundError(error)) {
+      if (isErrnoException(error) && error.code === "ENOENT") {
         this.cursor = null;
         return null;
       }
@@ -149,13 +150,4 @@ function parseLine(line: string): unknown | null {
   } catch {
     return null;
   }
-}
-
-function isFileNotFoundError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: unknown }).code === "ENOENT"
-  );
 }

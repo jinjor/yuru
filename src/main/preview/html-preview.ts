@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
 import type { HtmlPreviewGrant } from "../../shared/ipc.js";
+import { isErrnoException } from "../errors/utils.js";
 import { isPathWithin } from "../worktree-identity.js";
 
 export const HTML_PREVIEW_SCHEME = "yuru-preview";
@@ -122,15 +123,6 @@ function encodeUrlPath(relativePath: string): string {
     .join("/");
 }
 
-function isFileNotFound(error: unknown): boolean {
-  return (
-    !!error &&
-    typeof error === "object" &&
-    ((error as { code?: unknown }).code === "ENOENT" ||
-      (error as { code?: unknown }).code === "ENOTDIR")
-  );
-}
-
 /**
  * HTML preview URL の host を、読み取りを許可する root ディレクトリへ対応付ける。
  * URL に実パスは含めない。preview が読めるのは root の内側だけで、release すると
@@ -194,7 +186,7 @@ export class HtmlPreviewGrants {
       try {
         realPath = await fs.promises.realpath(resolved.absolutePath);
       } catch (error) {
-        if (isFileNotFound(error)) {
+        if (isErrnoException(error) && (error.code === "ENOENT" || error.code === "ENOTDIR")) {
           return errorResponse(404, "Not found");
         }
         throw error;

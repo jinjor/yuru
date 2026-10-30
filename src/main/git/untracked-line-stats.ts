@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import type { GitLineStat } from "../../shared/ipc.js";
+import { isErrnoException } from "../errors/utils.js";
 
 interface CacheEntry {
   size: number;
@@ -73,7 +74,7 @@ async function countAddedLines(filePath: string): Promise<GitLineStat | null> {
       }
     }
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (isErrnoException(error) && error.code === "ENOENT") {
       // status 取得後に消えた file
       return null;
     }
@@ -92,7 +93,7 @@ async function statIfExists(filePath: string): Promise<fs.Stats | null> {
   try {
     return await fs.promises.stat(filePath);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (isErrnoException(error) && error.code === "ENOENT") {
       return null;
     }
     throw error;

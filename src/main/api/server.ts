@@ -4,6 +4,7 @@ import path from "node:path";
 import type { AppError, Result } from "../../shared/ipc.js";
 import { SESSION_PROVIDER_IDS, type SessionProvider } from "../../shared/session.js";
 import { toAppError } from "../errors/app-error.js";
+import { isErrnoException } from "../errors/utils.js";
 import { getYuruHome } from "../yuru-paths.js";
 
 export interface ApiRequest {
@@ -102,14 +103,10 @@ function isProcessAlive(pid: number): boolean {
     process.kill(pid, 0);
     return true;
   } catch (error) {
-    const code =
-      error && typeof error === "object" && "code" in error
-        ? (error as { code?: unknown }).code
-        : undefined;
-    if (code === "ESRCH") {
+    if (isErrnoException(error) && error.code === "ESRCH") {
       return false;
     }
-    if (code === "EPERM") {
+    if (isErrnoException(error) && error.code === "EPERM") {
       return true;
     }
     throw error;

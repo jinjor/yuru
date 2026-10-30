@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import type { GitBlame, GitBlameCommit, GitDiffScope } from "../../shared/ipc.js";
+import { isErrnoException } from "../errors/utils.js";
 import { exec, isExitCode } from "../exec.js";
 import { readDiffSource, resolveCurrentDiffSource } from "./diff.js";
 import { getHeadSha } from "./repo.js";
@@ -148,7 +149,7 @@ async function readShallowOids(cwd: string): Promise<Set<string>> {
   try {
     content = await fs.promises.readFile(path.resolve(cwd, gitPath), "utf-8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (isErrnoException(error) && error.code === "ENOENT") {
       return new Set();
     }
     throw error;

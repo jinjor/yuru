@@ -7,6 +7,7 @@ import type {
   GitWorkingReviewCheck,
 } from "../../shared/ipc.js";
 import { exec } from "../exec.js";
+import { isErrnoException } from "../errors/utils.js";
 import { loadFileReviews, setFileReview, type FileReviewRecord } from "./store.js";
 import { loadDiffBuffers, parseNumstatZ } from "../git/diff.js";
 import { resolveGitReviewBase } from "../git/repo.js";
@@ -47,7 +48,7 @@ async function worktreeBlobOid(cwd: string, filePath: string): Promise<string> {
   try {
     content = await fs.promises.readFile(path.join(cwd, filePath));
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (isErrnoException(error) && error.code === "ENOENT") {
       return MISSING_BLOB_OID;
     }
     throw error;

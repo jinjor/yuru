@@ -1,4 +1,5 @@
 import fs from "fs";
+import { isErrnoException } from "../errors/utils.js";
 
 // セッションの記録に現れる印。provider がリクエストを rate limit で断った所を
 // "stopped"、その後に会話が先に進んだ所を "moved-on" とする。
@@ -30,7 +31,7 @@ async function readTailLines(filePath: string): Promise<string[]> {
   try {
     handle = await fs.promises.open(filePath, "r");
   } catch (error) {
-    if (isFileNotFoundError(error)) {
+    if (isErrnoException(error) && error.code === "ENOENT") {
       return [];
     }
     throw error;
@@ -46,13 +47,4 @@ async function readTailLines(filePath: string): Promise<string[]> {
   } finally {
     await handle.close();
   }
-}
-
-function isFileNotFoundError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: unknown }).code === "ENOENT"
-  );
 }

@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import type { WorktreeContext } from "./agent.js";
+import { isErrnoException } from "../errors/utils.js";
 import { getYuruHome } from "../yuru-paths.js";
 
 const DEFAULT_WORKTREE_CONTEXT_PROMPT = [
@@ -52,7 +53,7 @@ async function readTemplate(): Promise<string> {
   try {
     return await fs.promises.readFile(worktreeContextPromptPath(), "utf-8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (isErrnoException(error) && error.code === "ENOENT") {
       return DEFAULT_WORKTREE_CONTEXT_PROMPT;
     }
     throw error;
