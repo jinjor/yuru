@@ -39,7 +39,7 @@ function detectActivityState(
   // footer so earlier input prompts retained on screen do not stop working.
   const lines = readVisibleText().trimEnd().split("\n");
   const footer = lines.at(-1)?.trim() ?? "";
-  if (/^↑↓ select(?: · [^·]+)* · ↵ confirm · esc cancel$/.test(footer)) {
+  if (/^↑↓ select(?: · [^·]+)* · ↵ confirm(?: · [^·]+)* · esc cancel$/.test(footer)) {
     return "waiting";
   }
   if (

@@ -98,9 +98,8 @@ function appendDevinUserMessage(id, content) {
   withDb((db) => {
     initDb(db);
     const nextNodeId =
-      (db
-        .prepare(`SELECT MAX(node_id) AS max_id FROM message_nodes WHERE session_id = ?`)
-        .get(id)?.max_id ?? -1) + 1;
+      (db.prepare(`SELECT MAX(node_id) AS max_id FROM message_nodes WHERE session_id = ?`).get(id)
+        ?.max_id ?? -1) + 1;
     db.prepare(
       `INSERT INTO message_nodes (session_id, node_id, chat_message, created_at)
        VALUES (?, ?, ?, ?)`,
@@ -142,11 +141,17 @@ test("新規 Devin session は ID 未確定のまま起動する", () => {
 test("Devin の選択肢は出力が続いても回答待ちとして扱う", () => {
   for (const screen of [
     "● Running command\n❭ 1 Yes (Approve once)\n  2 No\n↑↓ select · ↵ confirm · esc cancel\n\n",
+    "● Running command\n❭ Allow  Exec(sleep)\n  Bypass mode\n  Deny\n↑↓ select · e edit · ↵ confirm · esc cancel\n\n",
     "Which option?\n❭ 1 Red\n  2 Blue\n↑↓ navigate · ↵ select · ? help me out · esc cancel",
+    "Which option?\n❭ 1 Red\n  2 Blue\n↑↓ select · ↵ confirm · ? help me out · esc cancel",
     "Which option?\n❭ 1 Red\n  2 Blue\n↑↓ navigate · ↵ select · ? help me out · esc cancel\n? Not ready to answer, help me out!\n\n",
     "❭ SWE-2 High\n↑↓ select · ←→ reasoning effort · ↵ confirm · esc cancel",
+    "❭ SWE-1.6 Slow\n↑↓ select · ↵ confirm · opt+↵ this session only · esc cancel",
   ]) {
-    assert.equal(devinAgent.detectActivityState("devin: task", () => screen), "waiting");
+    assert.equal(
+      devinAgent.detectActivityState("devin: task", () => screen),
+      "waiting",
+    );
   }
 });
 
@@ -155,10 +160,16 @@ test("選択肢を閉じた後や通常の作業中は端末出力による判�
     "",
     "Thinking · 4s\n❭ Guide Devin while it works\nSWE-2 High",
     "↑↓ select · ↵ confirm · esc cancel\n❭ Guide Devin while it works\nSWE-2 High",
+    "↑↓ select · e edit · ↵ confirm · esc cancel\n❭ Guide Devin while it works\nSWE-1.6 Slow",
+    "↑↓ select · ↵ confirm · ? help me out · esc cancel\n❭ Guide Devin while it works\nSWE-1.6 Slow",
+    "↑↓ select · ↵ confirm · opt+↵ this session only · esc cancel\n❭ Guide Devin while it works\nSWE-1.6 Slow",
     "↑↓ navigate · ↵ select · ? help me out · esc cancel\n? Not ready to answer, help me out!\n❭ Guide Devin while it works\nSWE-2 High",
     "❭ Ask Devin to build features, fix bugs, or work on your code\n❭ Guide Devin while it works\nSWE-2 High",
   ]) {
-    assert.equal(devinAgent.detectActivityState("devin: task", () => screen), null);
+    assert.equal(
+      devinAgent.detectActivityState("devin: task", () => screen),
+      null,
+    );
   }
 });
 
@@ -171,7 +182,10 @@ test("返答後の通常入力待ちも再描画やバックグラウンド shel
       "SWE-2 High                  ctrl+v to paste image in clipboard",
       "1 shell · ↓ select\n\n",
     ].join("\n");
-    assert.equal(devinAgent.detectActivityState("devin: finished task", () => screen), "waiting");
+    assert.equal(
+      devinAgent.detectActivityState("devin: finished task", () => screen),
+      "waiting",
+    );
   }
 });
 

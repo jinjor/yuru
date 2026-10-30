@@ -14,8 +14,9 @@ import {
 } from "./helpers";
 
 const BRANCH = "activity-devin";
-const PICKER_FOOTER = "↑↓ select · ↵ confirm · esc cancel";
-const QUESTION_FOOTER = "↑↓ navigate · ↵ select · ? help me out · esc cancel";
+const MODEL_PICKER_PLACEHOLDER = "Type to search";
+const PERMISSION_FOOTER = "↑↓ select · e edit · ↵ confirm · esc cancel";
+const QUESTION_FOOTER = "↑↓ select · ↵ confirm · ? help me out · esc cancel";
 
 test("Devin: 選択肢の再描画中は待機し、選択後は作業中に戻る", async () => {
   test.setTimeout(150_000);
@@ -51,26 +52,26 @@ test("Devin: 選択肢の再描画中は待機し、選択後は作業中に戻�
     await expectActivity(window, "waiting");
 
     await submitPrompt(window, "/model");
-    await expect(terminal).toContainText("reasoning effort", { timeout: 20_000 });
+    // The search field is present regardless of the model's reasoning controls.
+    await expect(terminal).toContainText(MODEL_PICKER_PLACEHOLDER, { timeout: 20_000 });
     await expectActivity(window, "waiting");
     await assertWaitingDuringRedraw(app, window);
     await window.keyboard.press("Escape");
-    await expect(terminal).not.toContainText("reasoning effort");
+    await expect(terminal).not.toContainText(MODEL_PICKER_PLACEHOLDER);
 
     await submitPrompt(
       window,
       "Use the exec tool to run exactly: sleep 5; printf DEVIN_ACTIVITY_DONE. Do not run other tools.",
     );
     await expectActivity(window, "working");
-    await expect(terminal).toContainText("(Approve once)", { timeout: 60_000 });
-    await expect(terminal).toContainText(PICKER_FOOTER);
+    await expect(terminal).toContainText(PERMISSION_FOOTER, { timeout: 60_000 });
     await expectActivity(window, "waiting");
     await assertWaitingDuringRedraw(app, window);
 
     // Approve only the harmless command above; its five-second wait leaves
     // enough time to observe working after the picker disappears.
     await window.keyboard.press("Enter");
-    await expect(terminal).not.toContainText(PICKER_FOOTER);
+    await expect(terminal).not.toContainText(PERMISSION_FOOTER);
     await expectActivity(window, "working");
     await expect(terminal).toContainText("Ask Devin to build features", { timeout: 45_000 });
     await expectActivity(window, "waiting");
