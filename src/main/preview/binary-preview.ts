@@ -5,7 +5,7 @@ import path from "path";
 import { pathToFileURL } from "url";
 import type { GitDiffScope, PreviewDiffDocument, PreviewSide } from "../../shared/ipc.js";
 import { execToFile } from "../exec.js";
-import { statRegularFile } from "../files/files.js";
+import { statRegularFile } from "../files/utils.js";
 import { resolveDiffSources, statDiffSource, type DiffSource } from "../git/diff.js";
 import { resolveGitReviewBase } from "../git/repo.js";
 

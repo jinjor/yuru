@@ -3,20 +3,7 @@ import path from "path";
 import type { FileTreeNode, RepoPathTarget } from "../../shared/ipc.js";
 import { execBuffer } from "../exec.js";
 import { isErrnoException } from "../errors/utils.js";
-
-function normalizeRelativePath(relativePath: string): string {
-  return relativePath.split(path.sep).join("/");
-}
-
-function resolveSessionPath(workingRoot: string, relativePath = ""): string {
-  const basePath = path.resolve(workingRoot);
-  const targetPath = relativePath ? path.resolve(basePath, relativePath) : basePath;
-  const relative = path.relative(basePath, targetPath);
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
-    throw new Error("Invalid path");
-  }
-  return targetPath;
-}
+import { normalizeRelativePath, resolvePathUnderRoot, statExisting } from "./utils.js";
 
 async function detectDirectory(entryPath: string, dirent: fs.Dirent): Promise<boolean> {
   if (dirent.isDirectory()) {
@@ -72,39 +59,12 @@ export async function resolveHtmlPreviewEntry(
   return { root: workingRoot, path: target.path };
 }
 
-// 絶対パス指定の読み取り。不在・通常ファイルでない場合は null (呼び出し側で範囲を確認済みの前提)。
-export async function readRegularFile(absolutePath: string): Promise<Buffer | null> {
-  if ((await statRegularFile(absolutePath)) === null) {
-    return null;
-  }
-  return await fs.promises.readFile(absolutePath);
-}
-
-// 中身を読まずに大きさと更新時刻だけ見る。不在・通常ファイルでない場合は null。
-export async function statRegularFile(absolutePath: string): Promise<fs.Stats | null> {
-  const stat = await statExisting(absolutePath);
-  return stat?.isFile() ? stat : null;
-}
-
-// 不在は null。
-async function statExisting(targetPath: string): Promise<fs.Stats | null> {
-  try {
-    return await fs.promises.stat(targetPath);
-  } catch (error) {
-    // ENOTDIR はパス途中のコンポーネントがファイルだった場合。これも不在として扱う。
-    if (isErrnoException(error) && (error.code === "ENOENT" || error.code === "ENOTDIR")) {
-      return null;
-    }
-    throw error;
-  }
-}
-
 // 編集モードの seed 用。既存テキストは内容 (空は "")、不在は null、範囲外は throw。
 export async function readWorktreeFile(
   workingRoot: string,
   filePath: string,
 ): Promise<string | null> {
-  const targetPath = resolveSessionPath(workingRoot, filePath);
+  const targetPath = resolvePathUnderRoot(workingRoot, filePath);
   try {
     return await fs.promises.readFile(targetPath, "utf-8");
   } catch (error) {
@@ -122,7 +82,7 @@ export async function writeFile(
   filePath: string,
   content: string,
 ): Promise<void> {
-  const targetPath = resolveSessionPath(workingRoot, filePath);
+  const targetPath = resolvePathUnderRoot(workingRoot, filePath);
   const handle = await fs.promises.open(targetPath, "r+");
   try {
     const { bytesWritten } = await handle.write(content, 0, "utf-8");
@@ -170,7 +130,7 @@ function splitNulSeparated(text: string): string[] {
 }
 
 export async function listFiles(workingRoot: string, relativePath = ""): Promise<FileTreeNode[]> {
-  const targetPath = resolveSessionPath(workingRoot, relativePath);
+  const targetPath = resolvePathUnderRoot(workingRoot, relativePath);
   const entries = await fs.promises.readdir(targetPath, { withFileTypes: true });
 
   const nodes = await Promise.all(

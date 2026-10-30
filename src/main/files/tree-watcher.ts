@@ -1,21 +1,7 @@
 import fs from "fs";
-import path from "path";
+import { normalizeRelativePath, resolvePathUnderRoot } from "./utils.js";
 
 type FileTreeChangeCallback = (worktreeId: string, relativePath: string) => void;
-
-function normalizeRelativePath(relativePath: string): string {
-  return relativePath.split(path.sep).join("/");
-}
-
-function resolveWatchPath(workingRoot: string, relativePath: string): string {
-  const basePath = path.resolve(workingRoot);
-  const targetPath = relativePath ? path.resolve(basePath, relativePath) : basePath;
-  const relative = path.relative(basePath, targetPath);
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
-    throw new Error("Invalid path");
-  }
-  return targetPath;
-}
 
 async function isDirectory(targetPath: string): Promise<boolean> {
   try {
@@ -62,7 +48,7 @@ export class FileTreeWatcher {
         continue;
       }
 
-      const absolutePath = resolveWatchPath(workingRoot, relativePath);
+      const absolutePath = resolvePathUnderRoot(workingRoot, relativePath);
       if (!(await isDirectory(absolutePath))) {
         continue;
       }

@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import type { GitDiffDocument, GitDiffScope, GitLineStat } from "../../shared/ipc.js";
 import { exec, execBuffer } from "../exec.js";
-import { readRegularFile, statRegularFile } from "../files/files.js";
+import { readRegularFile, statRegularFile } from "../files/utils.js";
 import { resolveGitReviewBase, type GitReviewBase } from "./repo.js";
 
 export interface NameStatusEntry {
