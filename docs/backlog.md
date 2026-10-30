@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-10-30
+Last updated: 2026-10-31
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -34,7 +34,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | B16 | bug | Changes / Diff | Committed の diff を正確にする | commit 済みの変更を正しい差分でレビューしたい |
 | F74 | feature | Dependencies | ライブラリの GitHub Issue / PR を長期にわたって監視する | 依存ライブラリのバグ修正や機能追加を把握したい |
 | P35 | polish | Files / Preview | 変更ファイルの表示中の読み直しを、ファイル単位の git 呼び出しで済ませる | 巨大モノレポで変更ファイルを開いている間の負荷を減らしたい。scope なしの表示は 3 秒ごとの読み直しのたびに、rename 元を探すため repo 全体に `git diff --name-status HEAD` をかけている。rename 元が要るのは新規追加 (A) に見えるファイルだけで、変更 (M) なら元の名前は同じ |
-| P36 | polish | Git / Polling | git を読む IPC で、worktreeId からパスを求めるのに git を呼ばない | 巨大モノレポで worktree を開いている間の負荷を減らしたい。git を読む IPC は毎回 `findGitWorktree` で登録済みの repo を順に git に問い合わせて worktree を探しており (repo 1 つにつき git を約 4 回)、3 秒ごとのポーリング (ファイルの状態・レビューの状態・HEAD) のたびに走る。パスは worktreeId に入っているので `toWorktreePath` で取り出せる |
 | F83 | feature | Files | ターミナルでクリックした worktree 外のディレクトリを Files で開く | 今はクリックしても何も起きない。エージェントが示した worktree 外のディレクトリの中身を見たい |
 
 ## Next

@@ -52,7 +52,7 @@ import {
   getGitCommitMessage as loadGitCommitMessage,
 } from "./git/blame.js";
 import { getFileDocument, getGitDiffDocument as loadGitDiffDocument } from "./git/diff.js";
-import { getCurrentBranch, getHeadSha, isSupportedGitRepo } from "./git/repo.js";
+import { getCurrentBranch, getHeadSha, hasDotGit, isSupportedGitRepo } from "./git/repo.js";
 import { getGitPathStates as loadGitPathStates } from "./git/status.js";
 import {
   branchExists,
@@ -2485,9 +2485,15 @@ export class YuruService {
     };
   }
 
+  // ポーリングでも呼ばれるので git は呼ばず、ID に入っているパスに .git があるかだけを確かめる。
+  // 無ければ worktree が無くなったとみなして null。.git の無いディレクトリで git を走らせると、
+  // 親をさかのぼって元の repo を拾ってしまう。
   private async getWorkingRootForWorktree(worktreeId: string): Promise<string | null> {
-    const worktree = await this.findGitWorktree(worktreeId);
-    return worktree?.worktreePath ?? null;
+    const worktreePath = toWorktreePath(worktreeId);
+    if (!worktreePath || !(await hasDotGit(worktreePath))) {
+      return null;
+    }
+    return worktreePath;
   }
 
   private promotePrimarySession(

@@ -1,5 +1,6 @@
 import path from "path";
 import { exec, isExitCode } from "../exec.js";
+import { statExisting } from "../files/utils.js";
 
 export interface GitReviewBase {
   branch: string;
@@ -91,6 +92,12 @@ export async function getRepoRootForProject(cwd: string): Promise<string | null>
   } catch {
     return null;
   }
+}
+
+// directoryPath の直下に .git があるか (linked worktree は .git ファイル、main worktree は .git
+// ディレクトリ)。git は呼ばないので、.git が正しい repo を指しているかまでは確かめない。
+export async function hasDotGit(directoryPath: string): Promise<boolean> {
+  return (await statExisting(path.join(directoryPath, ".git"))) !== null;
 }
 
 export async function isSupportedGitRepo(cwd: string): Promise<boolean> {
