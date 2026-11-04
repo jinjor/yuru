@@ -35,6 +35,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | P35 | polish | Files / Preview | 変更ファイルの表示中の読み直しを、ファイル単位の git 呼び出しで済ませる | 巨大モノレポで変更ファイルを開いている間の負荷を減らしたい。scope なしの表示は 3 秒ごとの読み直しのたびに、rename 元を探すため repo 全体に `git diff --name-status HEAD` をかけている。rename 元が要るのは新規追加 (A) に見えるファイルだけで、変更 (M) なら元の名前は同じ |
 | F83 | feature | Files | ターミナルでクリックした worktree 外のディレクトリを Files で開く | 今はクリックしても何も起きない。エージェントが示した worktree 外のディレクトリの中身を見たい |
 | B19 | bug | Worktrees / Terminal | ブランチ切り替えを左カードとターミナル上部の表示に反映する | 切り替え前のブランチ名が残る |
+| I22 | investigate | Main Worktree | main worktree の UX を考え直す | main worktree の使い方に合う操作と表示を整理したい |
 
 ## Next
 
@@ -64,7 +65,6 @@ UI 改善も機能追加も同じ土俵で扱う。
 | P21 | polish | App | UI をクリックした時のインタラクションを全体的に見直す | 詳細: docs/backlog-details/P21-ui-click-interaction.md |
 | F57 | feature | Files / Preview | HTML プレビューを手動でリロードできるようにする | CSS/JS 単独の変更は entry の content が変わらないと iframe が再読み込みされず表示に反映されない。現状は表示モードの切り替えで再マウントさせるしかない |
 | F12 | feature | Diff | Split mode | 面積と複雑さが増える |
-| I22 | investigate | Main Worktree | main worktree の UX を考え直す | main worktree の使い方に合う操作と表示を整理したい |
 
 ## Later
 
