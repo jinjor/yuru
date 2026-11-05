@@ -94,6 +94,8 @@ export interface GitPathState {
   unstagedLineStat?: GitLineStat;
   // conflicted な path のみ。HEAD ↔ 作業ツリー (scope なし diff と同じ範囲) の行数
   conflictLineStat?: GitLineStat;
+  // staged と unstaged の両方に変更がある場合の HEAD ↔ 作業ツリーの行数。
+  combinedLineStat?: GitLineStat;
 }
 
 export interface FileTreeNode {

@@ -144,7 +144,7 @@ test("staged 差分では編集が無効で、unstaged からは作業ツリー�
   }
 });
 
-test("バイナリファイルは編集アイコンが無効になる", async () => {
+test("種類が不明なバイナリファイルは編集時に拒否する", async () => {
   const context = await createE2eContext();
   let app: ElectronApplication | null = null;
   try {
@@ -166,7 +166,10 @@ test("バイナリファイルは編集アイコンが無効になる", async ()
     await expect(window.locator(".preview-body .empty-state")).toContainText(
       "Binary preview is not available",
     );
-    await expect(editButton(window)).toBeDisabled();
+    await editButton(window).click();
+    await expect(window.locator(".preview-body .empty-state")).toHaveText(
+      "Binary files cannot be edited",
+    );
   } finally {
     await closeYuru(app);
     await context.cleanup();
@@ -200,7 +203,6 @@ test("削除済みファイルは編集に入れず、保存でも復活しな�
     await context.cleanup();
   }
 });
-
 
 test("編集モードは worktree の再表示時に非表示中のファイル更新を読み直す", async () => {
   const context = await createE2eContext();

@@ -1,6 +1,7 @@
 import type { GitLineStat, GitPathState } from "../../shared/ipc.js";
 import { exec } from "../exec.js";
 import { parseNumstatZ } from "./diff.js";
+import { getHeadSha } from "./repo.js";
 import { getUntrackedLineStats } from "./untracked-line-stats.js";
 
 function normalizePorcelainStatus(status: string): string {
@@ -85,19 +86,29 @@ export async function getGitPathStates(cwd: string): Promise<GitPathState[]> {
   const untrackedPaths = states
     .filter((entry) => entry.worktreeStatus === "??")
     .map((entry) => entry.path);
-  const hasConflicts = states.some((entry) => entry.conflicted);
-  const [untrackedStats, conflictStats] = await Promise.all([
+  const needsCombinedStats = states.some(
+    (entry) => entry.conflicted || (entry.indexStatus && entry.worktreeStatus),
+  );
+  const [untrackedStats, headWorktreeStats] = await Promise.all([
     getUntrackedLineStats(cwd, untrackedPaths),
-    hasConflicts ? getHeadWorktreeLineStats(cwd) : new Map<string, GitLineStat>(),
+    needsCombinedStats
+      ? getHeadWorktreeLineStats(
+          cwd,
+          states.map((entry) => entry.path),
+        )
+      : new Map<string, GitLineStat>(),
   ]);
 
   for (const entry of states) {
     if (entry.conflicted) {
-      const conflictLineStat = conflictStats.get(entry.path);
+      const conflictLineStat = headWorktreeStats.get(entry.path);
       if (conflictLineStat) {
         entry.conflictLineStat = conflictLineStat;
       }
       continue;
+    }
+    if (entry.indexStatus && entry.worktreeStatus) {
+      entry.combinedLineStat = headWorktreeStats.get(entry.path);
     }
     const stagedLineStat = stagedStats.get(entry.path);
     if (stagedLineStat) {
@@ -115,9 +126,15 @@ export async function getGitPathStates(cwd: string): Promise<GitPathState[]> {
   return states;
 }
 
-// conflict 中の file は index が unmerged で staged/unstaged の行数が意味を持たないため、
-// scope なし diff と同じ HEAD ↔ 作業ツリー の行数を別途取得する
-async function getHeadWorktreeLineStats(cwd: string): Promise<Map<string, GitLineStat>> {
+// conflict 中、または staged / unstaged の両方に変更がある場合は、
+// scope なし diff と同じ HEAD ↔ 作業ツリーの行数を取得する。
+async function getHeadWorktreeLineStats(
+  cwd: string,
+  paths: string[],
+): Promise<Map<string, GitLineStat>> {
+  if (!(await getHeadSha(cwd))) {
+    return getUntrackedLineStats(cwd, paths);
+  }
   const output = await exec("git", ["diff", "--numstat", "-z", "HEAD"], cwd);
   return parseNumstatZ(output);
 }

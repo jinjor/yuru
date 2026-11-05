@@ -1,57 +1,15 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import { diffArrays } from "diff";
-import type { GitDiffDocument, GitDiffScope, GitPathState, GitReviewState } from "../../shared/ipc";
-import { isImagePath } from "../../shared/image-preview";
-import { mediaPreviewKind } from "../../shared/media-preview";
-import { isPdfPath } from "../../shared/pdf-preview";
+import { lazy, Suspense, useState } from "react";
+import type { GitDiffScope, GitPathState, GitReviewState } from "../../shared/ipc";
+import { renderedPreviewKind } from "./renderedPreviewKind";
 import { buildIgnoredPathSet, isIgnoredPath } from "../changes/gitStatus";
 import type { FileViewMode } from "./fileViewMode";
-import { BlameAnnotation } from "./blame/BlameAnnotation";
-import { useBlame } from "./blame/useBlame";
-import { useCommitDetails } from "./blame/useCommitDetails";
-import { computeDiffHunks } from "./diffHunks";
-import { SourceViewer, type SourceLine } from "./SourceViewer";
-import { tokenizeCode, type TokenizedLine } from "./highlight";
 import { PreviewHeader } from "./PreviewHeader";
-import { startPollingLoop } from "../utils/polling";
-import { resultDataOrNull } from "../utils/result";
 import { EmptyState } from "../ui/EmptyState";
+import TextDiffPreview from "./TextDiffPreview";
 
-const EditModeEditor = lazy(() => import("./editor/EditModeEditor"));
-const HtmlPreview = lazy(() => import("./HtmlPreview"));
 const ImagePreview = lazy(() => import("./ImagePreview"));
 const MediaPreview = lazy(() => import("./MediaPreview"));
 const PdfPreview = lazy(() => import("./PdfPreview"));
-const MarkdownPreview = lazy(() => import("./MarkdownPreview"));
-
-const markdownExtensions = new Set(["md", "markdown"]);
-const htmlExtensions = new Set(["htm", "html"]);
-
-type RenderedPreviewKind = "html" | "image" | "markdown" | "media" | "pdf";
-
-function renderedPreviewKind(path: string): RenderedPreviewKind | null {
-  if (isPdfPath(path)) {
-    return "pdf";
-  }
-  const ext = path.split(".").pop()?.toLowerCase();
-  if (!ext) {
-    return null;
-  }
-  if (markdownExtensions.has(ext)) {
-    return "markdown";
-  }
-  if (htmlExtensions.has(ext)) {
-    return "html";
-  }
-  // SVG は画像として描画できるテキストなので、閲覧モードではそのまま差分も読める。
-  if (isImagePath(path)) {
-    return "image";
-  }
-  if (mediaPreviewKind(path) !== null) {
-    return "media";
-  }
-  return null;
-}
 
 function isPathChanged(states: readonly GitPathState[], path: string): boolean {
   return states.some(
@@ -108,51 +66,23 @@ export function DiffPreviewPanel({
   scope,
   worktreeId,
 }: DiffPreviewPanelProps) {
-  // 取得した diff は「どの scope を要求した結果か」と対で持つ。document 自身は path しか
-  // 持たないので、scope を別 state にすると表示中の中身と要求がズレうる。
-  const [loadedDiff, setLoadedDiff] = useState<{
-    document: GitDiffDocument;
-    scope?: GitDiffScope;
-  } | null>(null);
-  const [isLoadingDiff, setIsLoadingDiff] = useState(true);
   const [isSettingReviewed, setIsSettingReviewed] = useState(false);
-  const [tokenizedLines, setLines] = useState<SourceLine[]>([]);
   // 描画できるファイルはプレビューを既定にし、それ以外は閲覧を既定にする。
-  const hasRenderedPreview = renderedPreviewKind(path) !== null;
+  const previewKind = renderedPreviewKind(path);
+  const hasRenderedPreview = previewKind !== null;
   const [mode, setMode] = useState<FileViewMode>(hasRenderedPreview ? "preview" : "view");
 
-  // ファイルが変わったら既定モードに戻す。パネルは再マウントしたくない (前の diff を出し続けて
-  // チラつきを防ぐため key にしていない) ので、effect ではなく描画中に直接調整する React の方式。
+  // ファイルが変わったら既定モードに戻す。
   const [prevPath, setPrevPath] = useState(path);
   if (path !== prevPath) {
     setPrevPath(path);
     setMode(hasRenderedPreview ? "preview" : "view");
   }
 
-  // blame を出す行。行指定で開いた行から始まりクリックで動く。行指定の強調表示とは別に持つ。
-  // クリックした行はどこを開いていたときのものかと対で持ち、ファイル・scope・指定行が
-  // 変わったら指定行に戻す。
-  const openedLocation = JSON.stringify([path, scope ?? null, line ?? null]);
-  const [clickedLine, setClickedLine] = useState<{ location: string; line: number } | null>(null);
-  const focusedLine = clickedLine?.location === openedLocation ? clickedLine.line : line;
-  const focusLine = (lineNumber: number): void => {
-    setClickedLine({ location: openedLocation, line: lineNumber });
-  };
-
-  // While a new file's diff is being fetched, `diffDocument` still holds the
-  // previously shown file. Render it (with its own path) until the new diff
-  // arrives so switching files does not flash a "Loading..." screen.
-  const diffDocument = loadedDiff?.document ?? null;
-  const displayPath = diffDocument?.path ?? path;
-  const displayPreviewKind = renderedPreviewKind(displayPath);
-  const originalContent = diffDocument?.originalContent ?? null;
-  const currentContent = diffDocument?.currentContent ?? null;
-  const lines = originalContent === null && currentContent === null ? [] : tokenizedLines;
-  const fileSize = diffDocument?.size ?? null;
-  const isBinary = diffDocument?.isBinary ?? false;
-  const hasChanges = originalContent !== currentContent;
-  const isCurrentDocument = loadedDiff?.document.path === path && loadedDiff.scope === scope;
-
+  const isBinaryPreview =
+    previewKind === "pdf" ||
+    previewKind === "media" ||
+    (previewKind === "image" && !path.toLowerCase().endsWith(".svg"));
   // worktree 外のファイル (ターミナルリンク由来の絶対パス)。git state には載らず、
   // 編集モードも対象外 (worktree 内のファイルだけ書き込みを許す)。
   const isExternalPath = path.startsWith("/");
@@ -166,13 +96,13 @@ export function DiffPreviewPanel({
   // 中身が動きうるファイルか。外部ファイルと gitignore されたファイルは、変化しても git status
   // に変更として載らず pathChanged が常に false なので、常に poll して追従する
   // (エージェントと話しながらメモを更新していく用途で使う)。
-  // 差分テキストと画像プレビューは、同じ判定・同じ間隔で追従する。
+  // 各表示先に同じ更新条件を渡す。
   const shouldPollContent =
     pathChanged || isExternalPath || isIgnoredPath(path, buildIgnoredPathSet(gitPathStates));
   // staged 差分は index を見ているので、作業ツリーを編集する編集モードには入れない。
   // (unstaged / Files から開いた時は current 側が作業ツリーなので編集に入れる)。実在チェックは
   // 編集に入った EditModeEditor が実ファイルを読んで行う (削除済みなら "missing")。
-  const editDisabledReason = isBinary
+  const editDisabledReason = isBinaryPreview
     ? "Binary files cannot be edited"
     : isExternalPath
       ? "Files outside the worktree cannot be edited"
@@ -181,8 +111,6 @@ export function DiffPreviewPanel({
           ? "Committed diffs cannot be edited"
           : "Switch to the unstaged diff to edit"
         : undefined;
-  const canEdit = diffDocument !== null && isCurrentDocument && !editDisabledReason;
-  const isEditing = mode === "edit" && canEdit;
   // reviewable は「この path に選択中 scope の差分があるか」を Git state から判定した値。
   // review state / snapshot の取得中もガワを維持し、差分のない Files 表示では出さない。
   const reviewable =
@@ -199,115 +127,33 @@ export function DiffPreviewPanel({
           ? workingCheck?.stagedReviewed
           : workingCheck?.unstagedReviewed;
   const activeReviewed = reviewable ? (reviewed ?? false) : undefined;
-  // ヘッダの +/- と、プレビューの変更マークを同じ差分から導く。
-  // (編集中の数値は autosave 後に追従する)。
-  const diff = useMemo(
-    () => computeDiffHunks((originalContent ?? "").split("\n"), (currentContent ?? "").split("\n")),
-    [originalContent, currentContent],
-  );
-  const headerLineStat = diff.stat;
-
-  // 本文に何を出すか。
-  const body: "empty" | "edit" | "preview" | "binary" | "source" =
-    diffDocument === null
-      ? "empty"
-      : isEditing
-        ? "edit"
-        : mode === "preview" && displayPreviewKind !== null
-          ? "preview"
-          : isBinary
-            ? "binary"
-            : "source";
-  // worktree 外のファイルは git の履歴を持たないので、フォーカスも blame もしない。
-  const canFocusLine = isCurrentDocument && !isExternalPath;
-  const blameLoad = useBlame({
-    worktreeId,
-    path,
-    scope,
-    enabled: body === "source" && canFocusLine && focusedLine !== undefined,
-    currentContent,
-    gitPathState: gitPathStates.find((state) => state.path === path),
-    headSha,
-  });
-  const { commitDetails, requestCommitDetails } = useCommitDetails({ worktreeId, path, scope });
-
-  useEffect(() => {
-    let cancelled = false;
-    // Activity の再表示を含め、最初の取得が完了するまでは loading とする。
-    // oxlint-disable-next-line react/set-state-in-effect
-    setIsLoadingDiff(true);
-    let showLoader = true;
-
-    const fetchDiff = async (): Promise<void> => {
-      const result = await window.electronAPI.getGitDiffDocument(worktreeId, path, scope);
-      if (cancelled) {
-        return;
-      }
-
-      const document = resultDataOrNull(result);
-      setLoadedDiff(document ? { document, scope } : null);
-      if (showLoader) {
-        showLoader = false;
-        setIsLoadingDiff(false);
-      }
-    };
-
-    if (!shouldPollContent) {
-      void fetchDiff();
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    const stopPolling = startPollingLoop(fetchDiff, 3000);
-
-    return () => {
-      cancelled = true;
-      stopPolling();
-    };
-  }, [path, scope, shouldPollContent, worktreeId]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (originalContent === null && currentContent === null) {
-      return;
-    }
-
-    const original = originalContent ?? "";
-    const current = currentContent ?? "";
-
-    Promise.all([
-      tokenizeCode(original, displayPath, fileSize),
-      tokenizeCode(current, displayPath, fileSize),
-    ]).then(([originalTokenized, currentTokenized]) => {
-      if (cancelled) {
-        return;
-      }
-
-      const originalLines = original.split("\n");
-      const currentLines = current.split("\n");
-      setLines(computeDiffLines(originalTokenized, currentTokenized, originalLines, currentLines));
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentContent, fileSize, originalContent, displayPath]);
+  const pathState = gitPathStates.find((state) => state.path === path);
+  const lineStat = isBinaryPreview
+    ? undefined
+    : scope === "base"
+      ? committedFile?.lineStat
+      : scope === "staged"
+        ? pathState?.stagedLineStat
+        : scope === "unstaged"
+          ? pathState?.unstagedLineStat
+          : pathState?.conflicted
+            ? pathState.conflictLineStat
+            : pathState?.indexStatus && pathState.worktreeStatus
+              ? pathState.combinedLineStat
+              : (pathState?.stagedLineStat ?? pathState?.unstagedLineStat);
+  const contentProps = { path, scope, worktreeId, poll: shouldPollContent };
 
   return (
     <div className="preview-panel">
       <PreviewHeader
-        baseBranch={
-          scope === "base" && isCurrentDocument ? readyReviewState?.baseBranch : undefined
-        }
-        path={displayPath}
+        path={path}
+        baseBranch={scope === "base" ? readyReviewState?.baseBranch : undefined}
         mode={mode}
         onModeChange={setMode}
-        showPreview={displayPreviewKind !== null}
-        canEdit={canEdit}
+        showPreview={hasRenderedPreview}
+        canEdit={!editDisabledReason}
         editDisabledReason={editDisabledReason}
-        lineStat={isBinary ? undefined : headerLineStat}
+        lineStat={lineStat}
         reviewed={activeReviewed}
         reviewPending={isSettingReviewed || reviewed === undefined}
         onReviewedChange={(nextReviewed) => {
@@ -319,125 +165,29 @@ export function DiffPreviewPanel({
         onClose={onClose}
       />
       <div className="preview-body">
-        {body === "empty" ? (
-          <EmptyState>{isLoadingDiff ? "Loading..." : "Preview is not available"}</EmptyState>
-        ) : body === "edit" ? (
-          <Suspense fallback={<EmptyState>Loading editor…</EmptyState>}>
-            <EditModeEditor key={path} worktreeId={worktreeId} path={path} />
-          </Suspense>
-        ) : body === "preview" ? (
-          <Suspense fallback={<EmptyState>Loading preview…</EmptyState>}>
-            {displayPreviewKind === "html" ? (
-              <HtmlPreview
-                content={currentContent ?? ""}
-                path={displayPath}
-                worktreeId={worktreeId}
-              />
-            ) : displayPreviewKind === "image" ? (
-              // 画像は中身を diff document に載せられないので、パネルとは別に自分で取得する。
-              <ImagePreview
-                path={displayPath}
-                scope={scope}
-                worktreeId={worktreeId}
-                poll={shouldPollContent}
-              />
-            ) : displayPreviewKind === "pdf" ? (
-              <PdfPreview
-                key={JSON.stringify([worktreeId, displayPath, scope])}
-                path={displayPath}
-                scope={scope}
-                worktreeId={worktreeId}
-                poll={shouldPollContent}
-              />
-            ) : displayPreviewKind === "media" ? (
-              // 音声・動画も画像と同じく、中身はパネルとは別に自分で取得する。
-              <MediaPreview
-                path={displayPath}
-                scope={scope}
-                worktreeId={worktreeId}
-                poll={shouldPollContent}
-              />
+        <Suspense fallback={<EmptyState>Loading preview…</EmptyState>}>
+          {isBinaryPreview ? (
+            mode !== "preview" ? (
+              <EmptyState>Binary preview is not available</EmptyState>
+            ) : previewKind === "image" ? (
+              <ImagePreview {...contentProps} />
+            ) : previewKind === "pdf" ? (
+              <PdfPreview key={JSON.stringify([worktreeId, path, scope])} {...contentProps} />
             ) : (
-              <MarkdownPreview content={currentContent ?? ""} hunks={diff.hunks} />
-            )}
-          </Suspense>
-        ) : body === "binary" ? (
-          <EmptyState>Binary preview is not available</EmptyState>
-        ) : (
-          <SourceViewer
-            lines={lines}
-            className={hasChanges ? "diff-viewer" : ""}
-            scrollToLine={isCurrentDocument ? line : undefined}
-            focusedLine={canFocusLine ? focusedLine : undefined}
-            onFocusLine={canFocusLine ? focusLine : undefined}
-            focusedLineEnd={
-              focusedLine === undefined ? null : (
-                <BlameAnnotation
-                  load={blameLoad}
-                  commitDetails={commitDetails}
-                  onOpenCard={requestCommitDetails}
-                  lineNumber={focusedLine}
-                />
-              )
-            }
-          />
-        )}
+              <MediaPreview {...contentProps} />
+            )
+          ) : (
+            <TextDiffPreview
+              key={JSON.stringify([worktreeId, path, scope])}
+              {...contentProps}
+              mode={mode}
+              headSha={headSha}
+              line={line}
+              gitPathState={pathState}
+            />
+          )}
+        </Suspense>
       </div>
     </div>
   );
-}
-
-function computeDiffLines(
-  originalTokenized: TokenizedLine[],
-  currentTokenized: TokenizedLine[],
-  originalLines: string[],
-  currentLines: string[],
-): SourceLine[] {
-  const changes = diffArrays(originalLines, currentLines);
-  const result: SourceLine[] = [];
-  let oldLineIndex = 0;
-  let newLineIndex = 0;
-
-  for (const change of changes) {
-    if (change.removed) {
-      for (let i = 0; i < change.count!; i++) {
-        result.push({
-          tokens: originalTokenized[oldLineIndex]?.tokens ?? [
-            { content: originalLines[oldLineIndex] ?? "", color: "#d4d4d4", offset: 0 },
-          ],
-          lineNumber: undefined,
-          className: "diff-deleted",
-        });
-        oldLineIndex++;
-      }
-      continue;
-    }
-
-    if (change.added) {
-      for (let i = 0; i < change.count!; i++) {
-        result.push({
-          tokens: currentTokenized[newLineIndex]?.tokens ?? [
-            { content: currentLines[newLineIndex] ?? "", color: "#d4d4d4", offset: 0 },
-          ],
-          lineNumber: newLineIndex + 1,
-          className: "diff-added",
-        });
-        newLineIndex++;
-      }
-      continue;
-    }
-
-    for (let i = 0; i < change.count!; i++) {
-      result.push({
-        tokens: currentTokenized[newLineIndex]?.tokens ?? [
-          { content: currentLines[newLineIndex] ?? "", color: "#d4d4d4", offset: 0 },
-        ],
-        lineNumber: newLineIndex + 1,
-      });
-      oldLineIndex++;
-      newLineIndex++;
-    }
-  }
-
-  return result;
 }

@@ -10,7 +10,7 @@ interface PreviewHeaderProps {
   path: string;
   mode: FileViewMode;
   onModeChange: (mode: FileViewMode) => void;
-  // Markdown / HTML のときだけ閲覧の左にプレビューモードを出す。
+  // 描画できる形式では閲覧の左にプレビューモードを出す。
   showPreview: boolean;
   canEdit: boolean;
   // canEdit が false のときに編集アイコンへ出す理由 (tooltip)。

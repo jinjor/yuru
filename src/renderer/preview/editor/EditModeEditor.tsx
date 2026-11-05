@@ -17,6 +17,7 @@ interface EditorSeed {
 type LoadState =
   | { status: "loading" }
   | { status: "missing" }
+  | { status: "binary" }
   | { status: "ready"; seed: EditorSeed };
 
 // 編集は常に作業ツリーの実ファイルが対象。閲覧の diff (scope 依存) を seed に使わず、
@@ -37,12 +38,17 @@ export default function EditModeEditor({ worktreeId, path }: EditModeEditorProps
       if (cancelled) {
         return;
       }
+      const diff = resultDataOrNull(diffResult);
+      if (diff?.isBinary) {
+        setState({ status: "binary" });
+        return;
+      }
       const content = resultDataOrNull(fileResult);
       if (content === null) {
         setState({ status: "missing" });
         return;
       }
-      const base = resultDataOrNull(diffResult)?.originalContent ?? "";
+      const base = diff?.originalContent ?? "";
       setState({ status: "ready", seed: { content, base } });
     });
 
@@ -53,6 +59,10 @@ export default function EditModeEditor({ worktreeId, path }: EditModeEditorProps
 
   if (state.status === "loading") {
     return <EmptyState>Loading…</EmptyState>;
+  }
+
+  if (state.status === "binary") {
+    return <EmptyState>Binary files cannot be edited</EmptyState>;
   }
 
   if (state.status === "missing") {

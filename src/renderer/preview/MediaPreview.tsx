@@ -46,7 +46,7 @@ export default function MediaPreview({ path, scope, worktreeId, poll }: MediaPre
     };
 
     // ファイルや scope が変わったら前のメディアを残さない。ヘッダのファイル名と Reviewed は
-    // 差分テキストが届いた時点で新しい選択に進むので、古いメディアを出したままにすると
+    // 新しい選択に進むので、古いメディアを出したままにすると
     // 「別のファイルを見ながらこのファイルを Reviewed にする」ことができてしまう。
     // oxlint-disable-next-line react/set-state-in-effect
     setState({ status: "loading" });
