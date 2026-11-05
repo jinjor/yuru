@@ -148,11 +148,11 @@ export interface CommitPullRequest {
 }
 
 // 画像・音声・動画は中身を文字列にできないので、テキストの GitDiffDocument とは別に取得する。
-// 中身は要素が URL から直接読むので、ここに載るのは大きさと URL だけ。
+// 中身は含めず、読み取り元の実パス・大きさ・版の識別子だけを渡す。
 export interface PreviewSide {
+  absolutePath: string;
   byteLength: number;
-  // <img> / <audio> / <video> の src に渡す URL。中身が変われば URL も変わる。
-  url: string;
+  contentId: string;
 }
 
 export interface PreviewDiffDocument {
@@ -164,6 +164,11 @@ export interface PreviewDiffDocument {
 }
 
 export interface HtmlPreviewGrant {
+  id: string;
+  url: string;
+}
+
+export interface PdfPreviewGrant {
   id: string;
   url: string;
 }
@@ -349,6 +354,12 @@ export interface ElectronAPI {
     content: string,
   ) => Promise<Result<HtmlPreviewGrant>>;
   releaseHtmlPreview: (grantId: string) => Promise<void>;
+  createPdfPreview: (
+    worktreeId: string,
+    filePath: string,
+    scope?: GitDiffScope,
+  ) => Promise<Result<PdfPreviewGrant | null>>;
+  releasePdfPreview: (grantId: string) => Promise<void>;
   listFiles: (worktreeId: string, relativePath?: string) => Promise<Result<FileTreeNode[]>>;
   listAllFiles: (worktreeId: string) => Promise<Result<string[]>>;
   // Cmd+P で開いたときの初期候補。新しく開いた順の相対パス。

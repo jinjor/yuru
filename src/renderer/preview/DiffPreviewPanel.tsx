@@ -3,6 +3,7 @@ import { diffArrays } from "diff";
 import type { GitDiffDocument, GitDiffScope, GitPathState, GitReviewState } from "../../shared/ipc";
 import { isImagePath } from "../../shared/image-preview";
 import { mediaPreviewKind } from "../../shared/media-preview";
+import { isPdfPath } from "../../shared/pdf-preview";
 import { buildIgnoredPathSet, isIgnoredPath } from "../changes/gitStatus";
 import type { FileViewMode } from "./fileViewMode";
 import { BlameAnnotation } from "./blame/BlameAnnotation";
@@ -20,14 +21,18 @@ const EditModeEditor = lazy(() => import("./editor/EditModeEditor"));
 const HtmlPreview = lazy(() => import("./HtmlPreview"));
 const ImagePreview = lazy(() => import("./ImagePreview"));
 const MediaPreview = lazy(() => import("./MediaPreview"));
+const PdfPreview = lazy(() => import("./PdfPreview"));
 const MarkdownPreview = lazy(() => import("./MarkdownPreview"));
 
 const markdownExtensions = new Set(["md", "markdown"]);
 const htmlExtensions = new Set(["htm", "html"]);
 
-type RenderedPreviewKind = "html" | "image" | "markdown" | "media";
+type RenderedPreviewKind = "html" | "image" | "markdown" | "media" | "pdf";
 
 function renderedPreviewKind(path: string): RenderedPreviewKind | null {
+  if (isPdfPath(path)) {
+    return "pdf";
+  }
   const ext = path.split(".").pop()?.toLowerCase();
   if (!ext) {
     return null;
@@ -331,6 +336,14 @@ export function DiffPreviewPanel({
             ) : displayPreviewKind === "image" ? (
               // 画像は中身を diff document に載せられないので、パネルとは別に自分で取得する。
               <ImagePreview
+                path={displayPath}
+                scope={scope}
+                worktreeId={worktreeId}
+                poll={shouldPollContent}
+              />
+            ) : displayPreviewKind === "pdf" ? (
+              <PdfPreview
+                key={JSON.stringify([worktreeId, displayPath, scope])}
                 path={displayPath}
                 scope={scope}
                 worktreeId={worktreeId}

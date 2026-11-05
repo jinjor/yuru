@@ -80,6 +80,9 @@ const electronAPI: ElectronAPI = {
   createHtmlPreview: (worktreeId: string, filePath: string, content: string) =>
     ipcRenderer.invoke("htmlPreview:create", worktreeId, filePath, content),
   releaseHtmlPreview: (grantId: string) => ipcRenderer.invoke("htmlPreview:release", grantId),
+  createPdfPreview: (worktreeId, filePath, scope) =>
+    ipcRenderer.invoke("pdfPreview:create", worktreeId, filePath, scope),
+  releasePdfPreview: (grantId: string) => ipcRenderer.invoke("pdfPreview:release", grantId),
   listFiles: (worktreeId: string, relativePath?: string) =>
     ipcRenderer.invoke("files:list", worktreeId, relativePath),
   listAllFiles: (worktreeId: string) => ipcRenderer.invoke("files:listAll", worktreeId),

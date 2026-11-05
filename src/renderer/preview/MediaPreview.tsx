@@ -5,6 +5,7 @@ import { startPollingLoop } from "../utils/polling";
 import { resultDataOrNull } from "../utils/result";
 import { formatBytes, formatDuration } from "../utils/format";
 import { EmptyState } from "../ui/EmptyState";
+import { previewFileUrl } from "./fileUrl";
 
 interface MediaPreviewProps {
   path: string;
@@ -28,7 +29,7 @@ interface MeasuredMedia {
 }
 
 // 再生は <audio> / <video> のコントロールに任せ、ここは「どの中身を渡すか」だけを持つ。
-// 中身は URL から要素が直接読むので、poll で運ぶのは大きさと URL だけ。
+// 中身は URL から要素が直接読むので、poll で運ぶのはパス・大きさ・版の識別子だけ。
 export default function MediaPreview({ path, scope, worktreeId, poll }: MediaPreviewProps) {
   const [state, setState] = useState<LoadState>({ status: "loading" });
 
@@ -80,7 +81,7 @@ export default function MediaPreview({ path, scope, worktreeId, poll }: MediaPre
   }
 
   // 片側だけ = 追加または削除。中身が同じなら差分ではない。どちらも 1 面で見せる。
-  if (original === null || current === null || original.url === current.url) {
+  if (original === null || current === null || original.contentId === current.contentId) {
     const media = current ?? original;
     if (media === null) {
       return <EmptyState>Media preview is not available</EmptyState>;
@@ -148,7 +149,7 @@ function MediaSideView({
 
   // src が変わると要素が読み直すので、URL に中身の識別子が入っていることが前提。
   const mediaProps = {
-    src: media.url,
+    src: previewFileUrl(media),
     controls: true,
     controlsList: "nodownload",
     preload: "metadata" as const,

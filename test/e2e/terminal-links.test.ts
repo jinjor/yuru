@@ -354,7 +354,7 @@ test("ターミナルのディレクトリパスをクリックすると Files �
   }
 });
 
-test("renderer の window.open は Electron の子ウインドウを開かず既定ブラウザに流れる", async () => {
+test("renderer の window.open は子ウインドウも外部ブラウザも開かない", async () => {
   const context = await createE2eContext();
   let app: ElectronApplication | null = null;
   try {
@@ -365,11 +365,11 @@ test("renderer の window.open は Electron の子ウインドウを開かず既
     const window = launched.window;
     await stubOpenExternal(app);
 
-    await window.evaluate(() => {
-      window.open("https://example.com/window-open");
-    });
+    await expect(window.locator(".app")).toBeVisible();
+    const opened = await window.evaluate(() => window.open("https://example.com/window-open"));
 
-    await expect.poll(() => openedExternalUrls(app!)).toEqual(["https://example.com/window-open"]);
+    expect(opened).toBeNull();
+    expect(await openedExternalUrls(app)).toEqual([]);
     expect(app.windows()).toHaveLength(1);
   } finally {
     await closeYuru(app);

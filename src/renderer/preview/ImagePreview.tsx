@@ -4,6 +4,7 @@ import { formatBytes } from "../utils/format";
 import { startPollingLoop } from "../utils/polling";
 import { resultDataOrNull } from "../utils/result";
 import { EmptyState } from "../ui/EmptyState";
+import { previewFileUrl } from "./fileUrl";
 
 interface ImagePreviewProps {
   path: string;
@@ -35,7 +36,7 @@ export default function ImagePreview({ path, scope, worktreeId, poll }: ImagePre
 
   useEffect(() => {
     let cancelled = false;
-    // この effect が表示に反映済みの内容。URL は中身ごとに変わるので、同じ URL を取り直した
+    // この effect が表示に反映済みの内容。識別子は中身ごとに変わるので、同じ版を取り直した
     // 時は測り直しも描き直しもしない。
     let shown: { original: string | null; current: string | null } | null = null;
 
@@ -63,8 +64,8 @@ export default function ImagePreview({ path, scope, worktreeId, poll }: ImagePre
         return;
       }
       shown = {
-        original: document.original?.url ?? null,
-        current: document.current?.url ?? null,
+        original: document.original?.contentId ?? null,
+        current: document.current?.contentId ?? null,
       };
       setState({ status: "ready", original, current });
     };
@@ -102,7 +103,11 @@ export default function ImagePreview({ path, scope, worktreeId, poll }: ImagePre
   const { original, current } = state;
 
   // 片側だけ = 追加または削除。中身が同じなら差分ではない。どちらも 1 枚で見せる。
-  if (original === null || current === null || original.image.url === current.image.url) {
+  if (
+    original === null ||
+    current === null ||
+    original.image.contentId === current.image.contentId
+  ) {
     const layer = current ?? original;
     if (layer === null) {
       return <EmptyState>Image preview is not available</EmptyState>;
@@ -154,7 +159,7 @@ function ImageSideView({
           {/* box に対する相対サイズで左上に置く。寸法が違っても倍率がそろい、差がそのまま見える。 */}
           <img
             className="image-layer"
-            src={layer.image.url}
+            src={previewFileUrl(layer.image)}
             alt=""
             style={{
               width: `${(layer.size.width / box.width) * 100}%`,
@@ -164,7 +169,7 @@ function ImageSideView({
         </div>
       ) : (
         <div className="image-stage auto">
-          <img className="image-auto" src={layer.image.url} alt="" />
+          <img className="image-auto" src={previewFileUrl(layer.image)} alt="" />
         </div>
       )}
       <div className="diff-side-meta">{describeLayer(layer)}</div>
@@ -177,8 +182,8 @@ function isSameContent(
   document: PreviewDiffDocument,
 ): boolean {
   return (
-    shown.original === (document.original?.url ?? null) &&
-    shown.current === (document.current?.url ?? null)
+    shown.original === (document.original?.contentId ?? null) &&
+    shown.current === (document.current?.contentId ?? null)
   );
 }
 
@@ -186,7 +191,7 @@ async function toLayer(image: PreviewSide | null): Promise<ImageLayer | null> {
   if (image === null) {
     return null;
   }
-  return { image, size: await loadImageSize(image.url) };
+  return { image, size: await loadImageSize(previewFileUrl(image)) };
 }
 
 // デコードできない画像と、幅・高さを持たない画像は null (寸法を出さず、倍率もそろえない)。

@@ -33,6 +33,8 @@ import {
   HTML_PREVIEW_SCHEME,
   HtmlPreviewGrants,
 } from "./preview/html-preview.js";
+import { PDF_PREVIEW_SCHEME, PDF_VIEWER_ORIGIN, PdfPreviewGrants } from "./preview/pdf-preview.js";
+import { isPdfPath } from "../shared/pdf-preview.js";
 import {
   createApiRequestHandler,
   getApiSocketPath,
@@ -56,6 +58,10 @@ app.setName(APP_NAME);
 
 protocol.registerSchemesAsPrivileged([
   {
+    scheme: PDF_PREVIEW_SCHEME,
+    privileges: { secure: true, standard: true, supportFetchAPI: true },
+  },
+  {
     scheme: HTML_PREVIEW_SCHEME,
     privileges: {
       corsEnabled: true,
@@ -67,6 +73,7 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 const htmlPreviewGrants = new HtmlPreviewGrants();
+const pdfPreviewGrants = new PdfPreviewGrants();
 
 const service = new YuruService(
   {
@@ -243,23 +250,26 @@ async function createWindow(): Promise<void> {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      plugins: true,
       // sandbox と contextIsolation を維持したまま、iframe でも preload のクリック監視を動かす。
       nodeIntegrationInSubFrames: true,
     },
   });
 
-  // renderer 内（ライブラリ内部を含む）の window.open で Electron の子ウインドウを
-  // 開かせず、既定ブラウザに流す。
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    service.openExternal(url).catch((error: unknown) => {
-      recordAppError(toAppError(error));
-    });
-    return { action: "deny" };
-  });
+  // ブラウザ起動は送信元を検証する IPC だけで受け付け、PDF の popup は拒否する。
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
 
   // 外部ブラウザを開くのは preload が確認したリンク操作だけ。自動転送はここで止める。
   mainWindow.webContents.on("will-frame-navigate", (event) => {
-    if (event.isMainFrame || !isHtmlPreviewUrl(event.url)) {
+    // Chromium は内蔵ビューアの子フレームへ PDF の stream URL を読み込む。
+    const pdfNavigation =
+      pdfPreviewGrants.isActive(event.url) ||
+      (event.frame?.parent?.url === `${PDF_VIEWER_ORIGIN}/index.html` &&
+        event.url.startsWith(`${PDF_VIEWER_ORIGIN}/`));
+    if (
+      event.isMainFrame ||
+      (!pdfNavigation && (isPdfFrame(event.frame) || !isHtmlPreviewUrl(event.url)))
+    ) {
       event.preventDefault();
     }
   });
@@ -267,6 +277,7 @@ async function createWindow(): Promise<void> {
   // 画面を読み込み直すと、それまでの grant を release する側 (renderer) がいなくなる。
   mainWindow.webContents.on("did-navigate", () => {
     htmlPreviewGrants.clear();
+    pdfPreviewGrants.clear();
   });
 
   const { webContents } = mainWindow;
@@ -283,6 +294,7 @@ async function createWindow(): Promise<void> {
   // renderer が死んでもリロード後にエラーログから確認できる。
   mainWindow.webContents.on("render-process-gone", (_event, details) => {
     htmlPreviewGrants.clear();
+    pdfPreviewGrants.clear();
     recordAppError({
       code: "unknown",
       message: "The screen process crashed.",
@@ -354,6 +366,24 @@ function isMainFrameSender(event: IpcMainInvokeEvent): boolean {
   );
 }
 
+function isPdfFrame(frame: Electron.WebFrameMain | null | undefined): boolean {
+  for (let current = frame; current; current = current.parent) {
+    if (
+      current.url.startsWith(`${PDF_PREVIEW_SCHEME}:`) ||
+      current.url.startsWith(`${PDF_VIEWER_ORIGIN}/`)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function registerPdfPreviewProtocol(): void {
+  protocol.handle(PDF_PREVIEW_SCHEME, (request) =>
+    pdfPreviewGrants.respond(request.url, request.method),
+  );
+}
+
 function registerHtmlPreviewProtocol(): void {
   protocol.handle(HTML_PREVIEW_SCHEME, async (request) => {
     try {
@@ -374,6 +404,30 @@ function registerHtmlPreviewProtocol(): void {
       });
     }
   });
+}
+
+function configureBrowserRequests(): void {
+  // 同じ Session の onBeforeRequest は最後のリスナーだけが有効になる。
+  // 登録はここに集約し、通信ルールは shouldCancelRequest でまとめて判定する。
+  session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
+    callback({ cancel: shouldCancelRequest(details) });
+  });
+}
+
+function shouldCancelRequest(details: Electron.OnBeforeRequestListenerDetails): boolean {
+  const fromPdf =
+    isPdfFrame(details.frame) ||
+    details.initiatorOrigin?.startsWith(`${PDF_PREVIEW_SCHEME}:`) ||
+    details.initiatorOrigin === PDF_VIEWER_ORIGIN;
+  if (fromPdf) {
+    // 内蔵ビューアのリソースと有効な PDF 以外は読ませない。HTTP / file / 別 preview も拒否する。
+    const allowed =
+      pdfPreviewGrants.isActive(details.url) ||
+      details.url.startsWith(`${PDF_VIEWER_ORIGIN}/`) ||
+      details.url.startsWith("chrome://resources/");
+    return !allowed;
+  }
+  return false;
 }
 
 function configureBrowserPermissions(): void {
@@ -541,7 +595,10 @@ function registerIpcHandlers(): void {
     return service.executeWorktreeRemoval(worktreeId, force);
   });
 
-  handleIpc("shell:openExternal", (_event, url: string) => {
+  handleIpc("shell:openExternal", (event, url: string) => {
+    if (!isMainFrameSender(event)) {
+      throw new Error("External URLs can only be opened by the main frame.");
+    }
     return service.openExternal(url);
   });
 
@@ -644,6 +701,32 @@ function registerIpcHandlers(): void {
     htmlPreviewGrants.release(grantId);
   });
 
+  handleIpc(
+    "pdfPreview:create",
+    async (event, worktreeId: string, filePath: string, scope?: GitDiffScope) => {
+      if (!isMainFrameSender(event)) {
+        throw new Error("PDF preview grants are only available to the main frame.");
+      }
+      if (!isPdfPath(filePath)) {
+        return { ok: true, data: null } as const;
+      }
+      const result = await service.getPreviewDiffDocument(worktreeId, filePath, scope);
+      if (!result.ok) {
+        return result;
+      }
+      const source = result.data?.current ?? result.data?.original;
+      const grant = source ? await pdfPreviewGrants.create(source.absolutePath) : null;
+      return { ok: true, data: grant } as const;
+    },
+  );
+
+  handleIpc("pdfPreview:release", (event, grantId: string) => {
+    if (!isMainFrameSender(event)) {
+      throw new Error("PDF preview grants are only available to the main frame.");
+    }
+    pdfPreviewGrants.release(grantId);
+  });
+
   // この IPC は隔離された preload のリンク監視からだけ送る。HTML 側には公開しない。
   ipcMain.on("htmlPreview:openExternal", (event, url: unknown) => {
     const frame = event.senderFrame;
@@ -727,6 +810,8 @@ app.whenReady().then(async () => {
     applicationVersion: app.getVersion(),
   });
   registerHtmlPreviewProtocol();
+  registerPdfPreviewProtocol();
+  configureBrowserRequests();
   configureBrowserPermissions();
   try {
     await materializeYuruSkill({ sourceSkillPath: yuruSkillSourcePath });

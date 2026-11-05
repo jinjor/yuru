@@ -2237,11 +2237,15 @@ button.github-badge {
 /* HTML preview (sandboxed iframe) */
 .is-pane-dragging .html-preview-frame,
 .is-reorder-dragging .html-preview-frame,
-.is-file-transfer-dragging .html-preview-frame {
+.is-file-transfer-dragging .html-preview-frame,
+.is-pane-dragging .pdf-preview-frame,
+.is-reorder-dragging .pdf-preview-frame,
+.is-file-transfer-dragging .pdf-preview-frame {
   pointer-events: none;
 }
 
-.html-preview-frame {
+.html-preview-frame,
+.pdf-preview-frame {
   flex: 1;
   min-width: 0;
   min-height: 0;

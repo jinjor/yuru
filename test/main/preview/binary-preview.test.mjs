@@ -4,7 +4,6 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 
 import {
   getPreviewDiffDocument,
@@ -39,11 +38,8 @@ function makeWav(sampleCount, value) {
 const quietWav = makeWav(64, 1000);
 const loudWav = makeWav(96, 12000);
 
-// URL には中身の識別子がクエリとして付く。指しているファイルを見るときは外す。
 function sourcePath(side) {
-  const url = new URL(side.url);
-  url.search = "";
-  return fileURLToPath(url);
+  return side.absolutePath;
 }
 
 function readSide(side) {
@@ -124,24 +120,23 @@ test("git の中にしかない側は取り出してから指す", async (t) => 
   assert.deepEqual(readSide(document.original), quietWav);
   // 拡張子は残す (Chromium が形式を判断する手がかり)
   assert.equal(path.extname(sourcePath(document.original)), ".wav");
-  // blob OID は不変なので、2 回目も同じ場所・同じ URL になる
+  // blob OID は不変なので、2 回目も同じ場所・同じ識別子になる
   const again = await getPreviewDiffDocument(dir, "theme.wav");
-  assert.equal(again.original.url, document.original.url);
+  assert.equal(again.original.contentId, document.original.contentId);
 });
 
-test("中身が変わると URL も変わる", async (t) => {
+test("中身が変わると版の識別子も変わる", async (t) => {
   const dir = makeRepo(t);
   fs.writeFileSync(path.join(dir, "theme.wav"), quietWav);
   commitAll(dir, "init");
 
   const before = await getPreviewDiffDocument(dir, "theme.wav");
-  // 変更がなければ両側とも同じ URL (1 面で見せる判定に使う)
-  assert.equal(before.original.url, before.current.url);
+  assert.equal(before.original.contentId, before.current.contentId);
 
   fs.writeFileSync(path.join(dir, "theme.wav"), loudWav);
   const after = await getPreviewDiffDocument(dir, "theme.wav");
   assert.equal(sourcePath(after.current), sourcePath(before.current));
-  assert.notEqual(after.current.url, before.current.url);
+  assert.notEqual(after.current.contentId, before.current.contentId);
 });
 
 test("追加は original なし、削除は current なしで表す", async (t) => {
@@ -186,7 +181,7 @@ test("worktree 外のファイルは差分なしで返す", async (t) => {
 
   const document = await getPreviewFileDocument(outside);
   assert.equal(document.path, outside);
-  assert.equal(document.original.url, document.current.url);
+  assert.equal(document.original.contentId, document.current.contentId);
   assert.equal(sourcePath(document.current), outside);
   assert.equal(document.current.byteLength, quietWav.byteLength);
 

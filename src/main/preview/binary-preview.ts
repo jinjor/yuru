@@ -2,7 +2,6 @@ import { randomUUID } from "crypto";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { pathToFileURL } from "url";
 import type { GitDiffScope, PreviewDiffDocument, PreviewSide } from "../../shared/ipc.js";
 import { execToFile } from "../exec.js";
 import { statRegularFile } from "../files/utils.js";
@@ -16,8 +15,7 @@ const blobCacheDirectory = path.join(os.tmpdir(), "yuru-blob-cache");
 
 /**
  * 画像・音声・動画のように、中身を文字列にできないファイルのプレビュー用。
- * 中身は要素 (<img> / <audio> / <video>) が URL から直接読むので、ここが返すのは
- * 大きさと URL だけで、中身がアプリのメモリを通ることはない。
+ * 読み取り元の実パス・大きさ・版の識別子を返し、表示用 URL への変換は renderer 側で行う。
  * 差分の範囲 (scope) の解釈は git 側に任せる。
  */
 export async function getPreviewDiffDocument(
@@ -44,8 +42,9 @@ export async function getPreviewFileDocument(
   }
   // git が index で使っているのと同じ stat ベースの判定。
   const side = {
+    absolutePath,
     byteLength: stat.size,
-    url: fileUrl(absolutePath, `${stat.size}:${stat.mtimeMs}`),
+    contentId: `${stat.size}:${stat.mtimeMs}`,
   };
   return { path: absolutePath, original: side, current: side };
 }
@@ -59,7 +58,7 @@ async function toPreviewSide(cwd: string, source: DiffSource | null): Promise<Pr
     source.kind === "worktree"
       ? path.join(cwd, source.path)
       : await cacheGitBlob(cwd, stat.contentId, source.path);
-  return { byteLength: stat.byteLength, url: fileUrl(absolutePath, stat.contentId) };
+  return { absolutePath, byteLength: stat.byteLength, contentId: stat.contentId };
 }
 
 async function cacheGitBlob(cwd: string, oid: string, filePath: string): Promise<string> {
@@ -80,13 +79,4 @@ async function cacheGitBlob(cwd: string, oid: string, filePath: string): Promise
     throw error;
   }
   return cachePath;
-}
-
-/**
- * URL がそのまま「どの中身か」を表すようにする。Chromium は URL 全体でキャッシュするので、
- * 作業ツリーのファイルのようにパスが変わらないものは、中身が変わったことを URL に出さないと
- * 古い内容が表示され続ける。クエリはファイルの場所には影響しない。
- */
-function fileUrl(absolutePath: string, contentId: string): string {
-  return `${pathToFileURL(absolutePath).href}?v=${encodeURIComponent(contentId)}`;
 }

@@ -71,6 +71,7 @@ import {
   getPreviewDiffDocument as loadPreviewDiffDocument,
   getPreviewFileDocument,
 } from "./preview/binary-preview.js";
+import { isPdfPath } from "../shared/pdf-preview.js";
 import { hasLiveProcessInWorktree, listLiveProcessesInWorktree } from "./repos/process-check.js";
 import {
   fetchCommitPullRequests,
@@ -123,6 +124,7 @@ import {
   type Bookmark,
   type CreatedTaskWorktree,
   type GitDiffScope,
+  type PreviewDiffDocument,
   type RepoPathTarget,
   type Result,
   type WorktreeProcessRef,
@@ -1471,6 +1473,23 @@ export class YuruService {
       return ok(null);
     }
     try {
+      // TODO: DiffPreviewPanel は拡張子で表示先を選び、本文の取得は各表示先に任せる。
+      // テキスト差分の取得を画像・PDF 等の表示の前提から外し、この PDF 固有の分岐をなくす。
+      // PDF はテキスト差分を作らない。大きい文書を文字列化せず、表示に必要な存在とサイズだけ返す。
+      if (isPdfPath(filePath)) {
+        const document = path.isAbsolute(filePath)
+          ? await getPreviewFileDocument(filePath)
+          : await loadPreviewDiffDocument(workingRoot, filePath, scope);
+        return ok(
+          document && {
+            path: filePath,
+            originalContent: document.original ? "" : null,
+            currentContent: document.current ? "" : null,
+            isBinary: true,
+            size: (document.current ?? document.original)?.byteLength ?? 0,
+          },
+        );
+      }
       // worktree 外のファイル (ターミナルリンク由来の絶対パス) は git が絡まない。
       // 差分なしの単純表示にする (scope は来ない前提だが、来ても無視する)。
       if (path.isAbsolute(filePath)) {
@@ -1520,7 +1539,11 @@ export class YuruService {
     return ok(await fetchCommitPullRequests(repoSlug, oid));
   }
 
-  async getPreviewDiffDocument(worktreeId: string, filePath: string, scope?: GitDiffScope) {
+  async getPreviewDiffDocument(
+    worktreeId: string,
+    filePath: string,
+    scope?: GitDiffScope,
+  ): Promise<Result<PreviewDiffDocument | null>> {
     const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
     if (!workingRoot) {
       return ok(null);
