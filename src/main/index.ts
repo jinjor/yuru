@@ -34,7 +34,7 @@ import {
   HtmlPreviewGrants,
 } from "./preview/html-preview.js";
 import { PDF_PREVIEW_SCHEME, PDF_VIEWER_ORIGIN, PdfPreviewGrants } from "./preview/pdf-preview.js";
-import { isPdfPath } from "../shared/pdf-preview.js";
+import { getPreviewInfo } from "../shared/preview.js";
 import {
   createApiRequestHandler,
   getApiSocketPath,
@@ -707,7 +707,7 @@ function registerIpcHandlers(): void {
       if (!isMainFrameSender(event)) {
         throw new Error("PDF preview grants are only available to the main frame.");
       }
-      if (!isPdfPath(filePath)) {
+      if (getPreviewInfo(filePath).kind !== "pdf") {
         return { ok: true, data: null } as const;
       }
       const result = await service.getPreviewDiffDocument(worktreeId, filePath, scope);

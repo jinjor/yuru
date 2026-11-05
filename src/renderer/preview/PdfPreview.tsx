@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { GitDiffScope, PdfPreviewGrant, PreviewSide } from "../../shared/ipc";
-import { MAX_PDF_PREVIEW_BYTES } from "../../shared/pdf-preview";
+import { MAX_PDF_PREVIEW_BYTES } from "../../shared/preview";
 import { EmptyState } from "../ui/EmptyState";
 import { startPollingLoop } from "../utils/polling";
 import { resultDataOrNull } from "../utils/result";

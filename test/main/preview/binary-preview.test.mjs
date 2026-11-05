@@ -9,8 +9,6 @@ import {
   getPreviewDiffDocument,
   getPreviewFileDocument,
 } from "../../../src/main/preview/binary-preview.ts";
-import { isImagePath } from "../../../src/shared/image-preview.ts";
-import { mediaPreviewKind } from "../../../src/shared/media-preview.ts";
 
 // 16bit PCM モノラルの WAV (RIFF/WAVE の仕様どおりのヘッダ + サンプル)
 function makeWav(sampleCount, value) {
@@ -72,29 +70,6 @@ function commitAll(dir, message) {
   git(["add", "."], dir);
   git(["-c", "commit.gpgsign=false", "commit", "-m", message], dir);
 }
-
-test("isImagePath は拡張子から画像を判定する", () => {
-  assert.equal(isImagePath("assets/icon.png"), true);
-  assert.equal(isImagePath("assets/Photo.JPG"), true);
-  assert.equal(isImagePath("assets/logo.svg"), true);
-  assert.equal(isImagePath("src/index.ts"), false);
-  // 拡張子のないファイル、ディレクトリ名だけに "." があるパス、dotfile は画像ではない
-  assert.equal(isImagePath("Makefile"), false);
-  assert.equal(isImagePath("some.dir/README"), false);
-  assert.equal(isImagePath(".png"), false);
-});
-
-test("mediaPreviewKind は拡張子から音声・動画を判定する", () => {
-  assert.equal(mediaPreviewKind("assets/theme.mp3"), "audio");
-  assert.equal(mediaPreviewKind("assets/Intro.WAV"), "audio");
-  assert.equal(mediaPreviewKind("docs/demo.mp4"), "video");
-  assert.equal(mediaPreviewKind("docs/capture.mov"), "video");
-  assert.equal(mediaPreviewKind("src/index.ts"), null);
-  assert.equal(mediaPreviewKind("assets/icon.png"), null);
-  assert.equal(mediaPreviewKind("Makefile"), null);
-  assert.equal(mediaPreviewKind("some.dir/README"), null);
-  assert.equal(mediaPreviewKind(".mp3"), null);
-});
 
 test("作業ツリーのファイルはコピーせず、そのまま指す", async (t) => {
   const dir = makeRepo(t);

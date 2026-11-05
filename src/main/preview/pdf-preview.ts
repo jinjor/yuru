@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import fs from "fs";
 import type { PdfPreviewGrant } from "../../shared/ipc.js";
-import { MAX_PDF_PREVIEW_BYTES } from "../../shared/pdf-preview.js";
+import { MAX_PDF_PREVIEW_BYTES } from "../../shared/preview.js";
 
 export const PDF_PREVIEW_SCHEME = "yuru-pdf";
 export const PDF_VIEWER_ORIGIN = "chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai";

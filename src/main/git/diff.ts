@@ -1,4 +1,5 @@
 import fs from "fs";
+import { isBinaryContent } from "../../shared/preview.js";
 import path from "path";
 import type { GitDiffDocument, GitDiffScope, GitLineStat } from "../../shared/ipc.js";
 import { exec, execBuffer } from "../exec.js";
@@ -395,7 +396,9 @@ export async function getGitDiffDocument(
 ): Promise<GitDiffDocument> {
   const reviewBase = scope ? await resolveGitReviewBase(cwd) : null;
   const { originalBuffer, currentBuffer } = await loadDiffBuffers(cwd, filePath, scope, reviewBase);
-  const isBinary = [originalBuffer, currentBuffer].some((buffer) => buffer?.includes(0));
+  const isBinary = [originalBuffer, currentBuffer].some(
+    (buffer) => buffer !== null && isBinaryContent(buffer),
+  );
   const size = Math.max(originalBuffer?.byteLength ?? 0, currentBuffer?.byteLength ?? 0);
 
   return {
@@ -414,7 +417,7 @@ export async function getFileDocument(absolutePath: string): Promise<GitDiffDocu
   if (buffer === null) {
     return null;
   }
-  const isBinary = buffer.includes(0);
+  const isBinary = isBinaryContent(buffer);
   const content = bufferToContent(buffer, isBinary);
   return {
     path: absolutePath,

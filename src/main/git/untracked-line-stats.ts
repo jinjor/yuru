@@ -1,4 +1,5 @@
 import fs from "fs";
+import { isBinaryContent } from "../../shared/preview.js";
 import path from "path";
 import type { GitLineStat } from "../../shared/ipc.js";
 import { isErrnoException } from "../errors/utils.js";
@@ -60,7 +61,7 @@ async function countAddedLines(filePath: string): Promise<GitLineStat | null> {
   try {
     for await (const chunk of fs.createReadStream(filePath)) {
       const buffer = chunk as Buffer;
-      if (buffer.includes(0)) {
+      if (isBinaryContent(buffer)) {
         // NUL byte を含む file は binary とみなす (diff preview と同じ判定)
         return null;
       }

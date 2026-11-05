@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type SyntheticEvent } from "react";
 import type { GitDiffScope, PreviewDiffDocument, PreviewSide } from "../../shared/ipc";
-import { mediaPreviewKind } from "../../shared/media-preview";
+import { getPreviewInfo } from "../../shared/preview";
 import { startPollingLoop } from "../utils/polling";
 import { resultDataOrNull } from "../utils/result";
 import { formatBytes, formatDuration } from "../utils/format";
@@ -75,8 +75,8 @@ export default function MediaPreview({ path, scope, worktreeId, poll }: MediaPre
   }
 
   const { original, current } = state.document;
-  const kind = mediaPreviewKind(path);
-  if (kind === null) {
+  const { kind } = getPreviewInfo(path);
+  if (kind !== "audio" && kind !== "video") {
     return <EmptyState>Media preview is not available</EmptyState>;
   }
 

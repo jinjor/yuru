@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState } from "react";
 import type { GitDiffScope, GitPathState, GitReviewState } from "../../shared/ipc";
-import { renderedPreviewKind } from "./renderedPreviewKind";
+import { getPreviewInfo } from "../../shared/preview";
 import { buildIgnoredPathSet, isIgnoredPath } from "../changes/gitStatus";
 import type { FileViewMode } from "./fileViewMode";
 import { PreviewHeader } from "./PreviewHeader";
@@ -68,7 +68,7 @@ export function DiffPreviewPanel({
 }: DiffPreviewPanelProps) {
   const [isSettingReviewed, setIsSettingReviewed] = useState(false);
   // 描画できるファイルはプレビューを既定にし、それ以外は閲覧を既定にする。
-  const previewKind = renderedPreviewKind(path);
+  const { kind: previewKind, isBinary: isBinaryPreview } = getPreviewInfo(path);
   const hasRenderedPreview = previewKind !== null;
   const [mode, setMode] = useState<FileViewMode>(hasRenderedPreview ? "preview" : "view");
 
@@ -79,10 +79,6 @@ export function DiffPreviewPanel({
     setMode(hasRenderedPreview ? "preview" : "view");
   }
 
-  const isBinaryPreview =
-    previewKind === "pdf" ||
-    previewKind === "media" ||
-    (previewKind === "image" && !path.toLowerCase().endsWith(".svg"));
   // worktree 外のファイル (ターミナルリンク由来の絶対パス)。git state には載らず、
   // 編集モードも対象外 (worktree 内のファイルだけ書き込みを許す)。
   const isExternalPath = path.startsWith("/");

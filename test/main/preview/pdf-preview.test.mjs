@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { PdfPreviewGrants } from "../../../src/main/preview/pdf-preview.ts";
-import { isPdfPath, MAX_PDF_PREVIEW_BYTES } from "../../../src/shared/pdf-preview.ts";
+import { MAX_PDF_PREVIEW_BYTES } from "../../../src/shared/preview.ts";
 
 async function fixture(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "yuru-pdf-preview-"));
@@ -13,15 +13,6 @@ async function fixture(t) {
   await fs.writeFile(file, "%PDF-1.4\nselected");
   return { dir, file };
 }
-
-test("PDF の拡張子は大文字も含め、ファイル名だけから判定する", () => {
-  for (const file of ["document.pdf", "dir/日本語.PDF", "/tmp/a.pdf"]) {
-    assert.equal(isPdfPath(file), true);
-  }
-  for (const file of [".pdf", "dir.pdf/file", "document.pdf.html", "README"]) {
-    assert.equal(isPdfPath(file), false);
-  }
-});
 
 test("選択した版の PDF のみを固定 MIME で返し、隣接ファイル・パス逸脱・別 method を拒否する", async (t) => {
   const { file } = await fixture(t);

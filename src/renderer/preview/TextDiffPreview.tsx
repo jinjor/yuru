@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { diffArrays } from "diff";
-import { renderedPreviewKind } from "./renderedPreviewKind";
+import { getPreviewInfo } from "../../shared/preview";
 import type { GitDiffDocument, GitDiffScope, GitPathState } from "../../shared/ipc";
 import { BlameAnnotation } from "./blame/BlameAnnotation";
 import { useBlame } from "./blame/useBlame";
@@ -52,7 +52,7 @@ export default function TextDiffPreview({
     setClickedLine({ location: openedLocation, line: lineNumber });
   };
 
-  const displayPreviewKind = renderedPreviewKind(path);
+  const { kind: displayPreviewKind } = getPreviewInfo(path);
   const originalContent = diffDocument?.originalContent ?? null;
   const currentContent = diffDocument?.currentContent ?? null;
   const lines = originalContent === null && currentContent === null ? [] : tokenizedLines;
