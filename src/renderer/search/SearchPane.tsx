@@ -5,7 +5,7 @@ import type {
   CodeSearchMatch,
   CodeSearchRange,
 } from "../../shared/ipc";
-import type { PreviewSelection } from "../previewSelection";
+import type { PreviewSelection } from "../preview/previewSelection";
 import { TextInput } from "../ui/TextInput";
 import { handleFilePathContextMenu } from "../utils/filePathMenu";
 

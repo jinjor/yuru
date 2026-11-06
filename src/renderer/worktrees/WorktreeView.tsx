@@ -26,7 +26,7 @@ import { RateLimitStopBar } from "../terminal/RateLimitStopBar";
 import { TerminalHome } from "../terminal/TerminalHome";
 import { usePaneLayout } from "./usePaneLayout";
 import { useWorktreeDetail } from "./useWorktreeDetail";
-import type { PreviewSelection } from "../previewSelection";
+import type { PreviewSelection } from "../preview/previewSelection";
 import {
   isEnergySavingPollingEnabled,
   isWindowFocusedAndVisible,

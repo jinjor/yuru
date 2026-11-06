@@ -1,7 +1,7 @@
 import { BookOpen, Check, Eye, Pencil, X } from "lucide-react";
 import type { GitLineStat } from "../../shared/ipc";
 import type { FileViewMode } from "./fileViewMode";
-import { LineStatLabel } from "../changes/LineStatLabel";
+import { LineStatLabel } from "../git/LineStatLabel";
 import { IconButton } from "../ui/IconButton";
 
 interface PreviewHeaderProps {

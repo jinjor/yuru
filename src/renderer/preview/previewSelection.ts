@@ -1,4 +1,4 @@
-import type { GitDiffScope } from "../shared/ipc";
+import type { GitDiffScope } from "../../shared/ipc";
 
 export interface PreviewSelection {
   path: string;

@@ -19,13 +19,13 @@ import type {
 } from "../../shared/ipc";
 import { useCommandShortcut } from "../utils/useCommandShortcut";
 import { useElementSize } from "../utils/useElementSize";
-import type { PreviewSelection } from "../previewSelection";
+import type { PreviewSelection } from "../preview/previewSelection";
 import {
   buildChangedFiles,
   buildConflictedFiles,
   buildStagedFiles,
   buildUnstagedFiles,
-} from "../changes/gitStatus";
+} from "../git/status";
 import { ChangesPane } from "../changes/ChangesPane";
 import { BookmarksPane } from "../bookmarks/BookmarksPane";
 import { FilesPane, type FilesPaneHandle } from "../files/FilesPane";

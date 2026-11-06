@@ -2,13 +2,13 @@ import { type Ref, useCallback, useEffect, useImperativeHandle, useRef, useState
 import { ChevronDown, ChevronRight, ChevronsDownUp, FolderGit2 } from "lucide-react";
 import type { FileTreeNode, GitFileStatus, GitPathState } from "../../shared/ipc";
 import { isTestFile } from "../../shared/test-file";
-import type { PreviewSelection } from "../previewSelection";
+import type { PreviewSelection } from "../preview/previewSelection";
 import {
   buildIgnoredPathSet,
   buildTreeStatusMap,
   isIgnoredPath,
   treeStatusClass,
-} from "../changes/gitStatus";
+} from "../git/status";
 import { resultDataOrNull } from "../utils/result";
 import {
   applyDirectoryListing,

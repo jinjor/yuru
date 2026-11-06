@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Pencil, X } from "lucide-react";
 import type { AppError, Bookmark } from "../../shared/ipc";
-import type { PreviewSelection } from "../previewSelection";
+import type { PreviewSelection } from "../preview/previewSelection";
 import { EmptyState } from "../ui/EmptyState";
 import { GitHubBadge } from "../pull-requests/GitHubBadge";
 import { IconButton } from "../ui/IconButton";

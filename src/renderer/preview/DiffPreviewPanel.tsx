@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState } from "react";
 import type { GitDiffScope, GitPathState, GitReviewState } from "../../shared/ipc";
 import { getPreviewInfo } from "../../shared/preview";
-import { buildIgnoredPathSet, isIgnoredPath } from "../changes/gitStatus";
+import { buildIgnoredPathSet, isIgnoredPath } from "../git/status";
 import type { FileViewMode } from "./fileViewMode";
 import { PreviewHeader } from "./PreviewHeader";
 import { EmptyState } from "../ui/EmptyState";
