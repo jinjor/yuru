@@ -1,7 +1,7 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal, type ILink, type ILinkProvider } from "@xterm/xterm";
 import { type DragEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { hasWorktreeFileDrag, readWorktreeFileDrag } from "../utils/fileDrag";
+import { hasPastePathDrag, readPastePathDrag } from "../utils/fileDrag";
 import { findTerminalLinksInBufferLine } from "./terminalBufferLinks";
 
 interface TerminalPanelProps {
@@ -21,7 +21,7 @@ interface TerminalInstance {
   container: HTMLDivElement;
 }
 
-interface WorktreeFileDropTarget {
+interface PastePathDropTarget {
   isDragOver: boolean;
   onDragEnter: (event: DragEvent<HTMLDivElement>) => void;
   onDragLeave: (event: DragEvent<HTMLDivElement>) => void;
@@ -40,13 +40,13 @@ export function TerminalPanel({
 }: TerminalPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<TerminalInstance | null>(null);
-  const fileDropTarget = useWorktreeFileDrop((relativePath) => {
+  const fileDropTarget = usePastePathDrop((path) => {
     const term = terminalRef.current?.term;
     if (!term) {
       return;
     }
     term.focus();
-    term.paste(relativePath);
+    term.paste(path);
   });
   const onPathLinkActivateRef = useRef(onPathLinkActivate);
   const worktreeIdRef = useRef(worktreeId);
@@ -262,12 +262,12 @@ export function TerminalPanel({
   );
 }
 
-function useWorktreeFileDrop(onPathDrop: (relativePath: string) => void): WorktreeFileDropTarget {
+function usePastePathDrop(onPathDrop: (path: string) => void): PastePathDropTarget {
   const dragDepthRef = useRef(0);
   const [isDragOver, setIsDragOver] = useState(false);
 
   const onDragEnter = (event: DragEvent<HTMLDivElement>): void => {
-    if (!hasWorktreeFileDrag(event.dataTransfer)) {
+    if (!hasPastePathDrag(event.dataTransfer)) {
       return;
     }
     event.preventDefault();
@@ -276,7 +276,7 @@ function useWorktreeFileDrop(onPathDrop: (relativePath: string) => void): Worktr
   };
 
   const onDragOver = (event: DragEvent<HTMLDivElement>): void => {
-    if (!hasWorktreeFileDrag(event.dataTransfer)) {
+    if (!hasPastePathDrag(event.dataTransfer)) {
       return;
     }
     event.preventDefault();
@@ -284,7 +284,7 @@ function useWorktreeFileDrop(onPathDrop: (relativePath: string) => void): Worktr
   };
 
   const onDragLeave = (event: DragEvent<HTMLDivElement>): void => {
-    if (!hasWorktreeFileDrag(event.dataTransfer)) {
+    if (!hasPastePathDrag(event.dataTransfer)) {
       return;
     }
     dragDepthRef.current = Math.max(dragDepthRef.current - 1, 0);
@@ -294,14 +294,14 @@ function useWorktreeFileDrop(onPathDrop: (relativePath: string) => void): Worktr
   };
 
   const onDrop = (event: DragEvent<HTMLDivElement>): void => {
-    if (!hasWorktreeFileDrag(event.dataTransfer)) {
+    if (!hasPastePathDrag(event.dataTransfer)) {
       return;
     }
     event.preventDefault();
     event.stopPropagation();
     dragDepthRef.current = 0;
     setIsDragOver(false);
-    onPathDrop(readWorktreeFileDrag(event.dataTransfer));
+    onPathDrop(readPastePathDrag(event.dataTransfer));
   };
 
   return { isDragOver, onDragEnter, onDragLeave, onDragOver, onDrop };

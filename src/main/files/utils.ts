@@ -18,7 +18,7 @@ export function resolvePathUnderRoot(rootPath: string, relativePath = ""): strin
   return targetPath;
 }
 
-// 絶対パス指定の読み取り。不在・通常ファイルでない場合は null (呼び出し側で範囲を確認済みの前提)。
+// 絶対パスの通常ファイルを読む。不在・通常ファイルでない場合は null。
 export async function readRegularFile(absolutePath: string): Promise<Buffer | null> {
   if ((await statRegularFile(absolutePath)) === null) {
     return null;

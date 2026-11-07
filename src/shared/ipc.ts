@@ -98,6 +98,7 @@ export interface GitPathState {
   combinedLineStat?: GitLineStat;
 }
 
+// path はツリーのルートからの相対パス。
 export interface FileTreeNode {
   id: string;
   path: string;
@@ -106,8 +107,11 @@ export interface FileTreeNode {
   children: FileTreeNode[] | null;
 }
 
+// Files のツリーがどのディレクトリを表示しているか。一覧と監視の要求で、どのディレクトリについての
+// 要求かを伝える。worktree はルートのパスを main が worktreeId から引く。
 // ターミナルのパスリンクの行き先。file はプレビュー、directory は Files で開く。
-export interface RepoPathTarget {
+// path は worktree 内なら相対パス、外なら絶対パス。
+export interface PathTarget {
   kind: "file" | "directory";
   path: string;
 }
@@ -315,7 +319,8 @@ export interface ElectronAPI {
   executeWorktreeRemoval: (worktreeId: string, force: boolean) => Promise<Result<void>>;
   openExternal: (url: string) => Promise<void>;
   // 右ペインのファイル名の右クリックメニュー。パスのコピーと、OS のファイルマネージャーでの表示を出す。
-  showFilePathContextMenu: (relativePath: string, absolutePath: string) => Promise<void>;
+  // filePath は worktree 内なら worktree 基準の相対パス、外なら絶対パス (外は相対パスのコピーを出さない)。
+  showFilePathContextMenu: (worktreeId: string, filePath: string) => Promise<void>;
   getGitPathStates: (worktreeId: string) => Promise<Result<GitPathState[]>>;
   getReviewState: (worktreeId: string) => Promise<Result<GitReviewState | null>>;
   // HEAD の commit の OID。commit がまだ無い repo では null。
@@ -362,17 +367,20 @@ export interface ElectronAPI {
     scope?: GitDiffScope,
   ) => Promise<Result<PdfPreviewGrant | null>>;
   releasePdfPreview: (grantId: string) => Promise<void>;
-  listFiles: (worktreeId: string, relativePath?: string) => Promise<Result<FileTreeNode[]>>;
+  // 絶対パス rootPath の下の、relativePath のディレクトリ 1 段ぶん。ディレクトリが無ければ null
+  // (表示中に消えるのは普通に起こる)。
+  listFiles: (rootPath: string, relativePath: string) => Promise<Result<FileTreeNode[] | null>>;
   listAllFiles: (worktreeId: string) => Promise<Result<string[]>>;
   // Cmd+P で開いたときの初期候補。新しく開いた順の相対パス。
   listRecentFiles: (worktreeId: string) => Promise<Result<string[]>>;
   recordRecentFile: (worktreeId: string, filePath: string) => Promise<void>;
-  // ターミナルのパスリンクの解決。相対パスは worktree 基準。worktree 内は相対パス、
-  // 外は絶対パスを返す (外はファイルのみ)。開けなければ null。
-  resolveRepoPath: (worktreeId: string, targetPath: string) => Promise<RepoPathTarget | null>;
+  // ターミナルのパスリンクの解決。相対パスは worktree 基準。開けなければ null。
+  resolvePathTarget: (worktreeId: string, targetPath: string) => Promise<PathTarget | null>;
   readWorktreeFile: (worktreeId: string, filePath: string) => Promise<Result<string | null>>;
   writeFile: (worktreeId: string, filePath: string, content: string) => Promise<Result<void>>;
-  syncFileWatchTargets: (worktreeId: string, relativePaths: string[]) => Promise<void>;
+  // Files のツリーの監視。rootPath の監視を、その下の relativePaths のディレクトリに置き換える。
+  // 空ならそのルートの監視をやめる。
+  syncFileWatchTargets: (rootPath: string, relativePaths: string[]) => Promise<void>;
   searchCode: (worktreeId: string, query: string) => Promise<Result<CodeSearchResult>>;
   cancelCodeSearch: (worktreeId: string) => Promise<void>;
   getBookmarks: (worktreeId: string) => Promise<Result<Bookmark[]>>;
@@ -390,7 +398,8 @@ export interface ElectronAPI {
   // プランの利用状況。この配列に居る provider がインストール済みの provider でもある。
   onProviderPlanUsageChanged: (callback: (usages: ProviderPlanUsage[]) => void) => () => void;
   onRateLimitStopsChanged: (callback: (stops: RateLimitStop[]) => void) => () => void;
-  onFileTreeChanged: (callback: (worktreeId: string, relativePath: string) => void) => () => void;
+  // 監視中のディレクトリの中身が変わった。rootPath は監視のルート、relativePath はそこからの相対パス。
+  onFileTreeChanged: (callback: (rootPath: string, relativePath: string) => void) => () => void;
   onBookmarksChanged: (callback: (worktreeId: string) => void) => () => void;
   attachPty: (terminalRuntimeId: TerminalRuntimeId) => Promise<string>;
   readyPty: (terminalRuntimeId: TerminalRuntimeId) => Promise<void>;

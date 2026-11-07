@@ -1534,6 +1534,55 @@ button.github-badge {
   color: var(--text-subtle);
 }
 
+/* worktree の外のディレクトリを表示している間の、Files のヘッダ。
+   worktree のツリーでないことが分かるよう、アクセント色をごく薄く敷く。 */
+.external-tree-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px 8px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(123, 193, 255, 0.06);
+}
+
+.external-tree-icon {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.external-tree-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.external-tree-name {
+  flex-shrink: 0;
+  max-width: 100%;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.external-tree-parent {
+  min-width: 0;
+  font-size: 11px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.changes-panel.narrow .external-tree-header .button {
+  padding: 0 8px;
+}
+
 /* File tree */
 .file-tree {
   flex: 1;

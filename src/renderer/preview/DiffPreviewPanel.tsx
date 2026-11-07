@@ -2,6 +2,7 @@ import { lazy, Suspense, useState } from "react";
 import type { GitDiffScope, GitPathState, GitReviewState } from "../../shared/ipc";
 import { getPreviewInfo } from "../../shared/preview";
 import { buildIgnoredPathSet, isIgnoredPath } from "../git/status";
+import { isExternalPath } from "./previewSelection";
 import type { FileViewMode } from "./fileViewMode";
 import { PreviewHeader } from "./PreviewHeader";
 import { EmptyState } from "../ui/EmptyState";
@@ -79,9 +80,9 @@ export function DiffPreviewPanel({
     setMode(hasRenderedPreview ? "preview" : "view");
   }
 
-  // worktree 外のファイル (ターミナルリンク由来の絶対パス)。git state には載らず、
+  // worktree 外のファイル。git state には載らず、
   // 編集モードも対象外 (worktree 内のファイルだけ書き込みを許す)。
-  const isExternalPath = path.startsWith("/");
+  const isExternal = isExternalPath(path);
   const readyReviewState = reviewState?.kind === "ready" ? reviewState : null;
   const committedFile =
     scope === "base"
@@ -94,13 +95,13 @@ export function DiffPreviewPanel({
   // (エージェントと話しながらメモを更新していく用途で使う)。
   // 各表示先に同じ更新条件を渡す。
   const shouldPollContent =
-    pathChanged || isExternalPath || isIgnoredPath(path, buildIgnoredPathSet(gitPathStates));
+    pathChanged || isExternal || isIgnoredPath(path, buildIgnoredPathSet(gitPathStates));
   // staged 差分は index を見ているので、作業ツリーを編集する編集モードには入れない。
   // (unstaged / Files から開いた時は current 側が作業ツリーなので編集に入れる)。実在チェックは
   // 編集に入った EditModeEditor が実ファイルを読んで行う (削除済みなら "missing")。
   const editDisabledReason = isBinaryPreview
     ? "Binary files cannot be edited"
-    : isExternalPath
+    : isExternal
       ? "Files outside the worktree cannot be edited"
       : scope === "staged" || scope === "base"
         ? scope === "base"

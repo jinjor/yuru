@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import type { FileTreeNode, RepoPathTarget } from "../../shared/ipc.js";
+import type { FileTreeNode, PathTarget } from "../../shared/ipc.js";
 import { execBuffer } from "../exec.js";
 import { isErrnoException } from "../errors/utils.js";
 import { normalizeRelativePath, resolvePathUnderRoot, statExisting } from "./utils.js";
@@ -21,26 +21,24 @@ async function detectDirectory(entryPath: string, dirent: fs.Dirent): Promise<bo
 }
 
 // ターミナルのパスのリンクの解決。相対パスは worktree 基準で絶対パスにしてから判定する。
-// worktree の中なら実在するファイル・ディレクトリを worktree 基準の相対パス (ルート自身は "") で返す。
-// 外はプレビューで開ける通常ファイルだけを絶対パスで返す。それ以外は null。
-export async function resolveRepoPath(
+// 実在する通常ファイルとディレクトリを、worktree の中なら worktree 基準の相対パス (ルート自身は "") で、
+// 外なら絶対パスで返す。それ以外は null。
+export async function resolvePathTarget(
   workingRoot: string,
   targetPath: string,
-): Promise<RepoPathTarget | null> {
+): Promise<PathTarget | null> {
   const basePath = path.resolve(workingRoot);
   const absolutePath = path.resolve(basePath, targetPath);
   const relative = path.relative(basePath, absolutePath);
   const stats = await statExisting(absolutePath);
+  const kind = stats?.isFile() ? "file" : stats?.isDirectory() ? "directory" : null;
+  if (!kind) {
+    return null;
+  }
   if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
-    return stats?.isFile() ? { kind: "file", path: absolutePath } : null;
+    return { kind, path: absolutePath };
   }
-  if (stats?.isFile()) {
-    return { kind: "file", path: normalizeRelativePath(relative) };
-  }
-  if (stats?.isDirectory()) {
-    return { kind: "directory", path: normalizeRelativePath(relative) };
-  }
-  return null;
+  return { kind, path: normalizeRelativePath(relative) };
 }
 
 // HTML プレビュー対象の解決。worktree 内なら root=worktree ルート、外なら root=entry の
@@ -49,7 +47,7 @@ export async function resolveHtmlPreviewEntry(
   workingRoot: string,
   filePath: string,
 ): Promise<{ root: string; path: string } | null> {
-  const target = await resolveRepoPath(workingRoot, filePath);
+  const target = await resolvePathTarget(workingRoot, filePath);
   if (target?.kind !== "file") {
     return null;
   }
@@ -129,16 +127,24 @@ function splitNulSeparated(text: string): string[] {
   return parts;
 }
 
-export async function listFiles(workingRoot: string, relativePath = ""): Promise<FileTreeNode[]> {
-  const targetPath = resolvePathUnderRoot(workingRoot, relativePath);
-  const entries = await fs.promises.readdir(targetPath, { withFileTypes: true });
+// rootPath の下の 1 ディレクトリの中身。ノードの path は rootPath からの相対パス。
+// ディレクトリが無ければ null (表示中のディレクトリが消えるのは普通に起こる)。
+export async function listDirectory(
+  rootPath: string,
+  relativePath: string,
+): Promise<FileTreeNode[] | null> {
+  const targetPath = resolvePathUnderRoot(rootPath, relativePath);
+  const entries = await readDirectoryEntries(targetPath);
+  if (!entries) {
+    return null;
+  }
 
   const nodes = await Promise.all(
     entries
       .filter((entry) => entry.name !== ".git")
       .map(async (entry) => {
         const entryPath = path.join(targetPath, entry.name);
-        const entryRelativePath = normalizeRelativePath(path.relative(workingRoot, entryPath));
+        const entryRelativePath = normalizeRelativePath(path.relative(rootPath, entryPath));
         const isDirectory = await detectDirectory(entryPath, entry);
         return {
           id: entryRelativePath,
@@ -158,4 +164,16 @@ export async function listFiles(workingRoot: string, relativePath = ""): Promise
   });
 
   return nodes;
+}
+
+// 不在は null。ディレクトリでないもの (ENOTDIR) も、ディレクトリとしては不在として扱う。
+async function readDirectoryEntries(directoryPath: string): Promise<fs.Dirent[] | null> {
+  try {
+    return await fs.promises.readdir(directoryPath, { withFileTypes: true });
+  } catch (error) {
+    if (isErrnoException(error) && (error.code === "ENOENT" || error.code === "ENOTDIR")) {
+      return null;
+    }
+    throw error;
+  }
 }

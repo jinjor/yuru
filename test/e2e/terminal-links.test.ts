@@ -1,5 +1,6 @@
 import { expect, test, type ElectronApplication, type Locator, type Page } from "@playwright/test";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   closeYuru,
@@ -348,6 +349,84 @@ test("ターミナルのディレクトリパスをクリックすると Files �
     await expect(filesTab).toHaveClass(/selected/);
     await expect(treeRow("src/nested/target")).toBeVisible();
     await expect(treeRow("src/nested/target/leaf.ts")).toHaveCount(0);
+  } finally {
+    await closeYuru(app);
+    await context.cleanup();
+  }
+});
+
+test("ターミナルで worktree 外のディレクトリをクリックすると Files にそのディレクトリのツリーを一時的に表示する", async () => {
+  const context = await createE2eContext();
+  let app: ElectronApplication | null = null;
+  try {
+    const repoDir = await createCommittedRepo(context, {
+      "src/app.ts": "export const app = true;\n",
+    });
+    const outsideBase = await mkdtemp(path.join(tmpdir(), "yuru-e2e-outside-"));
+    context.addCleanupDir(outsideBase);
+    const outsideDir = path.join(outsideBase, "out");
+    await mkdir(path.join(outsideDir, "logs"), { recursive: true });
+    await writeFile(path.join(outsideDir, "a.md"), "# outside\n");
+    await writeFile(path.join(outsideDir, "logs", "run.log"), "run\n");
+    await registerRepo(context, repoDir);
+    const launched = await launchWindow(context);
+    app = launched.app;
+    const window = launched.window;
+
+    await openMainTerminal(window);
+    const sessionView = visibleWorktreeView(window);
+    const filesTab = sessionView.locator(".panel-tabs .tab", { hasText: "Files" });
+    const treeRow = (path: string) => sessionView.locator(`.file-tree-row[data-path="${path}"]`);
+    const externalTitle = sessionView.locator(".external-tree-title");
+
+    // worktree のツリーで開いたディレクトリが、外のツリーを閉じた後も開いたままか確かめる。
+    await filesTab.click();
+    await treeRow("src").click();
+    await expect(treeRow("src/app.ts")).toBeVisible();
+
+    // echo された入力行に同じパスが出ないよう、printf で組み立てる。
+    await window.locator(".xterm").click();
+    await window.keyboard.type(`printf '%s/%s\\n' ${outsideBase} out`);
+    await window.keyboard.press("Enter");
+    const outsideRow = window.locator(".xterm-rows > div", { hasText: outsideDir }).first();
+    await expect(outsideRow).toBeVisible({ timeout: 10_000 });
+    await clickTerminalRowStart(outsideRow, window);
+
+    await expect(externalTitle).toHaveAttribute("title", outsideDir);
+    await expect(treeRow("logs")).toBeVisible();
+    await expect(treeRow("a.md")).toBeVisible();
+    await expect(treeRow("src")).toBeHidden();
+
+    // ファイルは絶対パスでプレビューに開く。
+    await treeRow("a.md").click();
+    await expectPreviewPath(window, path.join(outsideDir, "a.md"));
+    await expect(treeRow("a.md")).toHaveClass(/selected/);
+
+    // ディスクの変更に追従する。
+    await writeFile(path.join(outsideDir, "b.md"), "b\n");
+    await expect(treeRow("b.md")).toBeVisible();
+
+    // 表示中のツリーの中のディレクトリは、ルートを変えずにそのツリーの中で開く。
+    await window.locator(".xterm").click();
+    await window.keyboard.type(`printf '%s/%s\\n' ${outsideDir} logs`);
+    await window.keyboard.press("Enter");
+    const logsRow = window.locator(".xterm-rows > div", { hasText: `${outsideDir}/logs` });
+    await expect(logsRow).toBeVisible({ timeout: 10_000 });
+    await clickTerminalRowStart(logsRow, window);
+    await expect(treeRow("logs/run.log")).toBeVisible();
+    await expect(externalTitle).toHaveAttribute("title", outsideDir);
+
+    // ✕ で worktree のツリーに戻る。
+    await sessionView.getByRole("button", { name: "Close and show worktree files" }).click();
+    await expect(externalTitle).toHaveCount(0);
+    await expect(treeRow("src/app.ts")).toBeVisible();
+
+    // 表示中のディレクトリが消えたら、✕ と同じく閉じる。
+    await clickTerminalRowStart(outsideRow, window);
+    await expect(treeRow("a.md")).toBeVisible();
+    await rm(outsideDir, { recursive: true, force: true });
+    await expect(externalTitle).toHaveCount(0);
+    await expect(treeRow("src/app.ts")).toBeVisible();
   } finally {
     await closeYuru(app);
     await context.cleanup();

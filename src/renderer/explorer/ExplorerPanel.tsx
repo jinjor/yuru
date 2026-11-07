@@ -90,8 +90,9 @@ function ExplorerTabProbe({
 function noop(): void {}
 
 export interface ExplorerPanelHandle {
-  // Files タブに切り替えて、ディレクトリを展開して見せる。path は worktree 基準の相対パス。
-  revealDirectory: (relativePath: string) => void;
+  // Files タブに切り替えて、ディレクトリを展開して見せる。path は worktree 内なら worktree 基準の
+  // 相対パス、外なら絶対パス。
+  showDirectory: (path: string) => void;
 }
 
 interface ExplorerPanelProps {
@@ -103,7 +104,7 @@ interface ExplorerPanelProps {
   reviewState: GitReviewState | null;
   width: number;
   worktreeId: string;
-  // ファイル行の右クリックで絶対パスをコピーするための worktree のルート。
+  // Files の worktree のツリーのルート。
   worktreePath: string;
 }
 
@@ -133,7 +134,7 @@ export function ExplorerPanel({
   useImperativeHandle(
     ref,
     () => ({
-      revealDirectory(relativePath: string): void {
+      showDirectory(path: string): void {
         // hidden の間 FilesPane の handle は外れているので、タブの切り替えを即座に反映してから呼ぶ。
         flushSync(() => {
           setActiveTab("files");
@@ -141,7 +142,7 @@ export function ExplorerPanel({
         if (!filesPaneRef.current) {
           throw new Error("Files pane handle is missing after switching to the Files tab");
         }
-        filesPaneRef.current.revealDirectory(relativePath);
+        filesPaneRef.current.showDirectory(path);
       },
     }),
     [],
@@ -238,7 +239,7 @@ export function ExplorerPanel({
           reviewState={reviewState}
           stagedFiles={stagedFiles}
           unstagedFiles={unstagedFiles}
-          worktreePath={worktreePath}
+          worktreeId={worktreeId}
         />
       </Activity>
       <Activity mode={activeTab === "search" ? "visible" : "hidden"}>
@@ -247,7 +248,6 @@ export function ExplorerPanel({
           onPreviewSelectionChange={onPreviewSelectionChange}
           previewSelection={previewSelection}
           worktreeId={worktreeId}
-          worktreePath={worktreePath}
         />
       </Activity>
       <Activity mode={activeTab === "bookmarks" ? "visible" : "hidden"}>

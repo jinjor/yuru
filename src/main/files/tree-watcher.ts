@@ -1,125 +1,117 @@
 import fs from "fs";
+import { isErrnoException } from "../errors/utils.js";
 import { normalizeRelativePath, resolvePathUnderRoot } from "./utils.js";
 
-type FileTreeChangeCallback = (worktreeId: string, relativePath: string) => void;
+type FileTreeChangeCallback = (rootPath: string, relativePath: string) => void;
 
-async function isDirectory(targetPath: string): Promise<boolean> {
+// 監視を頼まれるまでの間に消えたディレクトリ (ディレクトリでなくなったものを含む) は null。
+function watchDirectory(absolutePath: string, listener: () => void): fs.FSWatcher | null {
   try {
-    return (await fs.promises.stat(targetPath)).isDirectory();
-  } catch {
-    return false;
+    return fs.watch(absolutePath, listener);
+  } catch (error) {
+    if (isErrnoException(error) && (error.code === "ENOENT" || error.code === "ENOTDIR")) {
+      return null;
+    }
+    throw error;
   }
 }
 
+// Files のツリーの監視。ツリーのルートごとに、その下の展開中のディレクトリを 1 つずつ監視する。
 export class FileTreeWatcher {
-  private worktreeId: string | null = null;
-  private workingRootPath: string | null = null;
-  private watchers = new Map<string, fs.FSWatcher>();
-  private pendingPaths = new Set<string>();
+  // ルートの絶対パス → ルートからの相対パス → 監視。
+  private readonly roots = new Map<string, Map<string, fs.FSWatcher>>();
+  // まだ通知していない変更のあったディレクトリ。ルートの絶対パス → ルートからの相対パス。
+  private readonly pendingChanges = new Map<string, Set<string>>();
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly onChange: FileTreeChangeCallback;
 
-  constructor(private readonly onChange: FileTreeChangeCallback) {}
+  constructor(onChange: FileTreeChangeCallback) {
+    this.onChange = onChange;
+  }
 
-  async syncWorktreeTargets(
-    worktreeId: string,
-    workingRoot: string,
-    relativePaths: readonly string[],
-  ): Promise<void> {
+  // rootPath の監視を、その下の relativePaths のディレクトリに置き換える。空ならやめる。
+  // 他のルートの監視には触れない。
+  sync(rootPath: string, relativePaths: readonly string[]): void {
     const nextTargets = new Set(relativePaths.map(normalizeRelativePath));
-
-    if (
-      (this.worktreeId && this.worktreeId !== worktreeId) ||
-      (this.workingRootPath && this.workingRootPath !== workingRoot)
-    ) {
-      this.clear();
-    }
-    this.worktreeId = worktreeId;
-    this.workingRootPath = workingRoot;
-
-    for (const watchedPath of Array.from(this.watchers.keys())) {
-      if (nextTargets.has(watchedPath)) {
-        continue;
+    const watchers = this.roots.get(rootPath) ?? new Map<string, fs.FSWatcher>();
+    for (const watchedPath of Array.from(watchers.keys())) {
+      if (!nextTargets.has(watchedPath)) {
+        this.closeWatcher(rootPath, watchedPath);
       }
-      this.closeWatcher(watchedPath);
     }
-
     for (const relativePath of nextTargets) {
-      if (this.watchers.has(relativePath)) {
+      if (watchers.has(relativePath)) {
         continue;
       }
-
-      const absolutePath = resolvePathUnderRoot(workingRoot, relativePath);
-      if (!(await isDirectory(absolutePath))) {
+      const watcher = watchDirectory(resolvePathUnderRoot(rootPath, relativePath), () => {
+        this.scheduleEmit(rootPath, relativePath);
+      });
+      if (!watcher) {
         continue;
       }
-
-      try {
-        const watcher = fs.watch(absolutePath, () => {
-          this.scheduleEmit(relativePath);
-        });
-        watcher.on("error", () => {
-          this.closeWatcher(relativePath);
-        });
-        this.watchers.set(relativePath, watcher);
-      } catch {
-        // Ignore directories that cannot be watched.
-      }
-    }
-
-    if (this.watchers.size === 0) {
-      this.clear();
-      return;
+      // 監視できなくなったディレクトリ (消えた場合など) は監視をやめる。消えたことは、
+      // 変更の通知を受けた renderer が読み直して知る。
+      watcher.on("error", () => {
+        if (this.roots.get(rootPath)?.get(relativePath) === watcher) {
+          this.closeWatcher(rootPath, relativePath);
+        }
+      });
+      watchers.set(relativePath, watcher);
+      this.roots.set(rootPath, watchers);
     }
   }
 
-  clearWorktree(worktreeId: string): void {
-    if (this.worktreeId !== worktreeId) {
-      return;
+  stopRoot(rootPath: string): void {
+    for (const relativePath of Array.from(this.roots.get(rootPath)?.keys() ?? [])) {
+      this.closeWatcher(rootPath, relativePath);
     }
-    this.clear();
   }
 
   stop(): void {
-    this.clear();
-  }
-
-  private clear(): void {
-    for (const relativePath of Array.from(this.watchers.keys())) {
-      this.closeWatcher(relativePath);
+    for (const rootPath of Array.from(this.roots.keys())) {
+      this.stopRoot(rootPath);
     }
     if (this.flushTimer) {
       clearTimeout(this.flushTimer);
       this.flushTimer = null;
     }
-    this.pendingPaths.clear();
-    this.worktreeId = null;
-    this.workingRootPath = null;
   }
 
-  private scheduleEmit(relativePath: string): void {
-    this.pendingPaths.add(relativePath);
+  private scheduleEmit(rootPath: string, relativePath: string): void {
+    const pendingPaths = this.pendingChanges.get(rootPath) ?? new Set<string>();
+    pendingPaths.add(relativePath);
+    this.pendingChanges.set(rootPath, pendingPaths);
     if (this.flushTimer) {
       return;
     }
 
     this.flushTimer = setTimeout(() => {
       this.flushTimer = null;
-      if (!this.worktreeId) {
-        return;
+      const changes = Array.from(this.pendingChanges);
+      this.pendingChanges.clear();
+      for (const [changedRoot, changedPaths] of changes) {
+        for (const changedPath of changedPaths) {
+          this.onChange(changedRoot, changedPath);
+        }
       }
-      for (const pendingPath of this.pendingPaths) {
-        this.onChange(this.worktreeId, pendingPath);
-      }
-      this.pendingPaths.clear();
     }, 120);
   }
 
-  private closeWatcher(relativePath: string): void {
-    const watcher = this.watchers.get(relativePath);
-    if (watcher) {
+  // 監視をやめたディレクトリの未通知の変更も捨てる。空になったルートは消す。
+  private closeWatcher(rootPath: string, relativePath: string): void {
+    const watchers = this.roots.get(rootPath);
+    const watcher = watchers?.get(relativePath);
+    if (watchers && watcher) {
       watcher.close();
-      this.watchers.delete(relativePath);
+      watchers.delete(relativePath);
+      if (watchers.size === 0) {
+        this.roots.delete(rootPath);
+      }
     }
-    this.pendingPaths.delete(relativePath);
+    const pendingPaths = this.pendingChanges.get(rootPath);
+    pendingPaths?.delete(relativePath);
+    if (pendingPaths?.size === 0) {
+      this.pendingChanges.delete(rootPath);
+    }
   }
 }

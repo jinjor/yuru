@@ -56,8 +56,8 @@ const electronAPI: ElectronAPI = {
   executeWorktreeRemoval: (worktreeId: string, force: boolean) =>
     ipcRenderer.invoke("worktree:executeRemoval", worktreeId, force),
   openExternal: (url: string) => ipcRenderer.invoke("shell:openExternal", url),
-  showFilePathContextMenu: (relativePath: string, absolutePath: string) =>
-    ipcRenderer.invoke("contextMenu:filePath", relativePath, absolutePath),
+  showFilePathContextMenu: (worktreeId: string, filePath: string) =>
+    ipcRenderer.invoke("contextMenu:filePath", worktreeId, filePath),
   getGitPathStates: (worktreeId: string) => ipcRenderer.invoke("git:pathStates", worktreeId),
   getReviewState: (worktreeId: string) => ipcRenderer.invoke("git:reviewState", worktreeId),
   getGitHeadSha: (worktreeId: string) => ipcRenderer.invoke("git:headSha", worktreeId),
@@ -83,20 +83,20 @@ const electronAPI: ElectronAPI = {
   createPdfPreview: (worktreeId, filePath, scope) =>
     ipcRenderer.invoke("pdfPreview:create", worktreeId, filePath, scope),
   releasePdfPreview: (grantId: string) => ipcRenderer.invoke("pdfPreview:release", grantId),
-  listFiles: (worktreeId: string, relativePath?: string) =>
-    ipcRenderer.invoke("files:list", worktreeId, relativePath),
+  listFiles: (rootPath: string, relativePath: string) =>
+    ipcRenderer.invoke("files:list", rootPath, relativePath),
   listAllFiles: (worktreeId: string) => ipcRenderer.invoke("files:listAll", worktreeId),
   listRecentFiles: (worktreeId: string) => ipcRenderer.invoke("files:listRecent", worktreeId),
   recordRecentFile: (worktreeId: string, filePath: string) =>
     ipcRenderer.invoke("files:recordRecent", worktreeId, filePath),
-  resolveRepoPath: (worktreeId: string, targetPath: string) =>
-    ipcRenderer.invoke("files:resolveRepoPath", worktreeId, targetPath),
+  resolvePathTarget: (worktreeId: string, targetPath: string) =>
+    ipcRenderer.invoke("files:resolvePathTarget", worktreeId, targetPath),
   readWorktreeFile: (worktreeId: string, filePath: string) =>
     ipcRenderer.invoke("files:readWorktree", worktreeId, filePath),
   writeFile: (worktreeId: string, filePath: string, content: string) =>
     ipcRenderer.invoke("files:write", worktreeId, filePath, content),
-  syncFileWatchTargets: (worktreeId: string, relativePaths: string[]) =>
-    ipcRenderer.invoke("files:syncWatchTargets", worktreeId, relativePaths),
+  syncFileWatchTargets: (rootPath: string, relativePaths: string[]) =>
+    ipcRenderer.invoke("files:syncWatchTargets", rootPath, relativePaths),
   searchCode: (worktreeId: string, query: string) =>
     ipcRenderer.invoke("search:code", worktreeId, query),
   cancelCodeSearch: (worktreeId: string) => ipcRenderer.invoke("search:cancelCode", worktreeId),
@@ -163,11 +163,8 @@ const electronAPI: ElectronAPI = {
     };
   },
   onFileTreeChanged: (callback) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      worktreeId: string,
-      relativePath: string,
-    ) => callback(worktreeId, relativePath);
+    const listener = (_event: Electron.IpcRendererEvent, rootPath: string, relativePath: string) =>
+      callback(rootPath, relativePath);
     ipcRenderer.on("files:changed", listener);
     return () => {
       ipcRenderer.removeListener("files:changed", listener);

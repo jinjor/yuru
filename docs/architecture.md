@@ -412,7 +412,8 @@ standalone terminal 開始) が成功した時だけ、その runtime タブを�
 runtime が終わった時だけホームへ戻る。main worktree でも自動では開き直さない。
 
 `Files` と `Changes` のファイル行は、表示中の live `Terminal` へ drag & drop できる。
-渡す文字列は選択中 worktree を基準にした相対 path で、Terminal の現在の入力位置へ paste する。
+渡す文字列は選択中 worktree を基準にした相対 path (worktree 外のディレクトリのツリーでは絶対 path) で、
+Terminal の現在の入力位置へ paste する。
 directory 行と、live runtime が選択されていない Terminal ホームは drop の対象にしない。
 `Files` のファイル行は、Finder などアプリの外へ drop するとそのファイルのコピーになる。Chromium の
 `DownloadURL` によるドラッグダウンロードを使うので、1 ファイルずつで、directory 行は外へ出せない。
@@ -421,6 +422,32 @@ directory 行と、live runtime が選択されていない Terminal ホーム�
 process の native メニューで、相対・絶対パスのコピーと、OS のファイルマネージャーでの表示
 (`shell.showItemInFolder`) を出す。表示の項目名は VS Code に合わせて OS ごとに変え
 (macOS は `Reveal in Finder`)、削除済みファイルのように実体がないパスでは無効にする。
+worktree 外のファイルには相対パスが無いので、そのコピーは出さない。
+
+`Files` のツリーは、ディスク上のディレクトリ 1 つをツリーとして表示し続ける部品
+(`useDirectoryTree`) の上に組み立てる。この部品はディレクトリを開いたときに 1 段ずつ一覧を読み、
+開いているディレクトリを監視して読み直す。git も worktree も知らず、パスはすべてツリーのルートからの
+相対パスで扱う。`Files` タブは、この部品を使う次の 2 つのツリーのどちらかを表示する。
+
+- worktree のツリー (`WorktreeFileTree`): 名前を git の状態で色分けし、`Changed dirs` を持つ。
+- worktree 外のディレクトリのツリー (`ExternalDirectoryTree`): ターミナルで worktree 外のディレクトリの
+  パスをクリックしたときに一時的に表示する。worktree ごとに 1 つで、保存しない。表示中のツリーの中の
+  ディレクトリがクリックされたらそのツリーの中で開き、そうでなければそれを新しいルートにする。
+  ✕ を押すか、表示中のディレクトリが消えたら閉じて worktree のツリーに戻る。worktree のツリーは
+  `<Activity>` の hidden で展開状態を保つ。ファイルは絶対パスでプレビューに開く。
+
+右ペインは、worktree 内のパスを worktree 基準の相対パスで、外のパスを絶対パスで持つ
+(`PreviewSelection` の `path` と、その区別をする `isExternalPath`)。ターミナルのパスリンクの解決
+(`resolvePathTarget`) もこの形で返し、ファイルはプレビューで、ディレクトリは `Files` で開く。
+
+一覧の読み込み (`listFiles`) と監視 (`syncFileWatchTargets`) の要求は、ツリーのルートを絶対パスで
+伝える。worktree のツリーでも worktree の ID ではなく、renderer が持っている worktree のパスを渡す。
+main はそのパスの外に出る相対パスを拒否する。表示中に開いていたディレクトリが消えるのは普通に
+起こることなので、`listFiles` はそのとき null を返し、Error ログには記録しない。監視
+(`FileTreeWatcher`) はツリーのルートごとに持ち、各ツリーの要求はそのルートの監視だけを置き換える。
+変更の通知にはルートのパスを付け、各ツリーは自分のルートの通知だけを読み直す。hidden になる・消える
+ツリーは、自分のルートの監視をやめる。画面を読み込み直したときは、renderer が監視を止められないので、
+main がすべて止める。
 
 `Changes` は Git の層を `merge-base → HEAD → index → worktree` の重複しない区間に分け、
 `Committed → Staged → Unstaged` の順で表示する。merge conflict は例外として `Conflicted` を先頭に置く。

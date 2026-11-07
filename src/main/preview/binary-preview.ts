@@ -32,7 +32,7 @@ export async function getPreviewDiffDocument(
   return { path: filePath, original: originalSide, current: currentSide };
 }
 
-// worktree 外のファイル (ターミナルリンク由来の絶対パス)。git は関わらないので差分なしで返す。
+// worktree 外のファイル (絶対パス)。git は関わらないので差分なしで返す。
 export async function getPreviewFileDocument(
   absolutePath: string,
 ): Promise<PreviewDiffDocument | null> {

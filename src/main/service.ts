@@ -84,13 +84,14 @@ import {
 import { GitHubStatusMonitor } from "./github/status-monitor.js";
 import {
   listAllFiles as listAllRepoFiles,
-  listFiles as listRepoFiles,
+  listDirectory,
   readWorktreeFile as readRepoWorktreeFile,
   resolveHtmlPreviewEntry as resolveHtmlPreviewEntryPath,
-  resolveRepoPath as resolveRepoPathTarget,
+  resolvePathTarget as resolvePathTargetFromRoot,
   writeFile as writeRepoFile,
 } from "./files/files.js";
 import { addRecentFile, loadRecentFiles } from "./files/recent-files.js";
+import { resolvePathUnderRoot } from "./files/utils.js";
 import { getAgent } from "./agents/registry.js";
 import {
   exhaustedUntil,
@@ -122,9 +123,10 @@ import {
   type AppErrorNotice,
   type Bookmark,
   type CreatedTaskWorktree,
+  type FileTreeNode,
   type GitDiffScope,
+  type PathTarget,
   type PreviewDiffDocument,
-  type RepoPathTarget,
   type Result,
   type WorktreeProcessRef,
   type WorktreeRemovalPreparationOutcome,
@@ -260,7 +262,7 @@ function samePullRequest(a: GitHubPullRequest | null, b: GitHubPullRequest | nul
 }
 
 export interface YuruServiceEvents {
-  fileTreeChanged(worktreeId: string, relativePath: string): void;
+  fileTreeChanged(rootPath: string, relativePath: string): void;
   ptyData(terminalRuntimeId: string, data: string): void;
   terminalRuntimeExited(terminalRuntimeId: string): void;
   // worktree 1 件ぶんの表示状態が変わった。購読側は自分の worktreeId のものだけを見る。
@@ -300,6 +302,13 @@ function fail<T>(error: AppError): Result<T> {
     ok: false,
     error,
   };
+}
+
+// Files のツリーのルートは renderer から来る。相対パスだと main の cwd 基準で解決されてしまうので拒否する。
+function assertAbsoluteTreeRoot(rootPath: string): void {
+  if (!path.isAbsolute(rootPath)) {
+    throw new Error("File tree root must be an absolute path");
+  }
 }
 
 function isAppError(error: unknown): error is AppError {
@@ -433,8 +442,8 @@ export class YuruService {
     private readonly events: YuruServiceEvents,
     private readonly terminalEnv: YuruServiceTerminalEnv,
   ) {
-    this.fileTreeWatcher = new FileTreeWatcher((worktreeId, relativePath) => {
-      this.events.fileTreeChanged(worktreeId, relativePath);
+    this.fileTreeWatcher = new FileTreeWatcher((rootPath, relativePath) => {
+      this.events.fileTreeChanged(rootPath, relativePath);
     });
     this.githubStatusMonitor = new GitHubStatusMonitor({
       listTargets: () => this.listGitHubTargets(),
@@ -1214,7 +1223,7 @@ export class YuruService {
     // worktree ディレクトリが消えた以上、そこに紐づく file 監視と進行中の code 検索はもう無効。
     // 消えたパスを指したまま残さないようここで止める。
     this.cancelActiveCodeSearch(worktreeId);
-    this.fileTreeWatcher.clearWorktree(worktreeId);
+    this.fileTreeWatcher.stopRoot(worktree.worktreePath);
 
     removeTaskWorktreeByPath(worktree.worktreePath);
     removeFileReviews(worktree.worktreePath);
@@ -1472,7 +1481,7 @@ export class YuruService {
       return ok(null);
     }
     try {
-      // worktree 外のファイル (ターミナルリンク由来の絶対パス) は git が絡まない。
+      // worktree 外のファイル (絶対パス) は git が絡まない。
       // 差分なしの単純表示にする (scope は来ない前提だが、来ても無視する)。
       if (path.isAbsolute(filePath)) {
         return ok(await getFileDocument(filePath));
@@ -1489,7 +1498,7 @@ export class YuruService {
 
   async getGitBlame(worktreeId: string, filePath: string, scope?: GitDiffScope) {
     const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
-    // worktree 外のファイル (ターミナルリンク由来の絶対パス) は git の履歴を持たない。
+    // worktree 外のファイル (絶対パス) は git の履歴を持たない。
     if (!workingRoot || path.isAbsolute(filePath)) {
       return ok(null);
     }
@@ -1542,13 +1551,10 @@ export class YuruService {
     }
   }
 
-  async listFiles(worktreeId: string, relativePath?: string) {
-    const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
-    if (!workingRoot) {
-      return ok([]);
-    }
+  async listFiles(rootPath: string, relativePath: string): Promise<Result<FileTreeNode[] | null>> {
     try {
-      return ok(await listRepoFiles(workingRoot, relativePath ?? ""));
+      assertAbsoluteTreeRoot(rootPath);
+      return ok(await listDirectory(rootPath, relativePath));
     } catch (error) {
       return this.failAndReport(toAppError(error));
     }
@@ -1626,12 +1632,28 @@ export class YuruService {
     }
   }
 
-  async resolveRepoPath(worktreeId: string, targetPath: string): Promise<RepoPathTarget | null> {
+  async resolvePathTarget(worktreeId: string, targetPath: string): Promise<PathTarget | null> {
     const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
     if (!workingRoot) {
       return null;
     }
-    return await resolveRepoPathTarget(workingRoot, targetPath);
+    return await resolvePathTargetFromRoot(workingRoot, targetPath);
+  }
+
+  // 右ペインのパス (worktree 内は worktree 基準の相対パス、外は絶対パス) の、絶対パスと相対パス。
+  // worktree 外のファイルに相対パスは無い。worktree が無くなっていれば null。
+  async resolveFilePaths(
+    worktreeId: string,
+    filePath: string,
+  ): Promise<{ absolutePath: string; relativePath: string | null } | null> {
+    if (path.isAbsolute(filePath)) {
+      return { absolutePath: filePath, relativePath: null };
+    }
+    const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
+    if (!workingRoot) {
+      return null;
+    }
+    return { absolutePath: resolvePathUnderRoot(workingRoot, filePath), relativePath: filePath };
   }
 
   async resolveHtmlPreviewEntry(
@@ -1655,14 +1677,13 @@ export class YuruService {
     return ok(entry);
   }
 
-  async syncFileWatchTargets(worktreeId: string, relativePaths: string[]): Promise<void> {
-    const workingRoot = await this.getWorkingRootForWorktree(worktreeId);
-    if (!workingRoot) {
-      this.fileTreeWatcher.clearWorktree(worktreeId);
-      return;
-    }
+  syncFileWatchTargets(rootPath: string, relativePaths: string[]): void {
+    assertAbsoluteTreeRoot(rootPath);
+    this.fileTreeWatcher.sync(rootPath, relativePaths);
+  }
 
-    await this.fileTreeWatcher.syncWorktreeTargets(worktreeId, workingRoot, relativePaths);
+  stopFileWatch(): void {
+    this.fileTreeWatcher.stop();
   }
 
   async searchCode(worktreeId: string, query: string) {

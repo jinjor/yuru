@@ -140,8 +140,8 @@ function sendYuruUpdateStateChanged(state: YuruUpdateState): void {
   sendToRenderer("yuruUpdate:changed", state);
 }
 
-function sendFileTreeChanged(worktreeId: string, relativePath: string): void {
-  sendToRenderer("files:changed", worktreeId, relativePath);
+function sendFileTreeChanged(rootPath: string, relativePath: string): void {
+  sendToRenderer("files:changed", rootPath, relativePath);
 }
 
 function sendPtyData(terminalRuntimeId: string, data: string): void {
@@ -275,9 +275,11 @@ async function createWindow(): Promise<void> {
   });
 
   // 画面を読み込み直すと、それまでの grant を release する側 (renderer) がいなくなる。
+  // Files のツリーの監視も、止める側がいなくなるのでここで止める。
   mainWindow.webContents.on("did-navigate", () => {
     htmlPreviewGrants.clear();
     pdfPreviewGrants.clear();
+    service.stopFileWatch();
   });
 
   const { webContents } = mainWindow;
@@ -295,6 +297,7 @@ async function createWindow(): Promise<void> {
   mainWindow.webContents.on("render-process-gone", (_event, details) => {
     htmlPreviewGrants.clear();
     pdfPreviewGrants.clear();
+    service.stopFileWatch();
     recordAppError({
       code: "unknown",
       message: "The screen process crashed.",
@@ -323,10 +326,15 @@ function showImageContextMenu(webContents: WebContents, params: ContextMenuParam
 }
 
 // 右ペインのファイル名の右クリック。相対パスと絶対パスのコピーと、OS のファイルマネージャーでの表示を出す。
+// worktree 外のファイルには相対パスが無い (relativePath が null) ので、そのコピーを出さない。
 // Changes の削除済みファイルのように実体がないパスは表示できないので、その項目を無効にする。
-function showFilePathContextMenu(relativePath: string, absolutePath: string): void {
+function showFilePathContextMenu(absolutePath: string, relativePath: string | null): void {
+  const copyRelativePath: MenuItemConstructorOptions[] =
+    relativePath === null
+      ? []
+      : [{ label: "Copy Relative Path", click: () => clipboard.writeText(relativePath) }];
   Menu.buildFromTemplate([
-    { label: "Copy Relative Path", click: () => clipboard.writeText(relativePath) },
+    ...copyRelativePath,
     { label: "Copy Absolute Path", click: () => clipboard.writeText(absolutePath) },
     { type: "separator" },
     {
@@ -602,11 +610,15 @@ function registerIpcHandlers(): void {
     return service.openExternal(url);
   });
 
-  handleIpc("contextMenu:filePath", (event, relativePath: string, absolutePath: string) => {
+  handleIpc("contextMenu:filePath", async (event, worktreeId: string, filePath: string) => {
     if (!isMainFrameSender(event)) {
       return;
     }
-    showFilePathContextMenu(relativePath, absolutePath);
+    const paths = await service.resolveFilePaths(worktreeId, filePath);
+    if (!paths) {
+      return;
+    }
+    showFilePathContextMenu(paths.absolutePath, paths.relativePath);
   });
 
   handleIpc("bookmarks:list", (_event, worktreeId: string) => {
@@ -750,8 +762,8 @@ function registerIpcHandlers(): void {
     });
   });
 
-  handleIpc("files:list", (_event, worktreeId: string, relativePath?: string) => {
-    return service.listFiles(worktreeId, relativePath);
+  handleIpc("files:list", (_event, rootPath: string, relativePath: string) => {
+    return service.listFiles(rootPath, relativePath);
   });
 
   handleIpc("files:listAll", (_event, worktreeId: string) => {
@@ -766,8 +778,8 @@ function registerIpcHandlers(): void {
     return service.recordRecentFile(worktreeId, filePath);
   });
 
-  handleIpc("files:resolveRepoPath", (_event, worktreeId: string, targetPath: string) => {
-    return service.resolveRepoPath(worktreeId, targetPath);
+  handleIpc("files:resolvePathTarget", (_event, worktreeId: string, targetPath: string) => {
+    return service.resolvePathTarget(worktreeId, targetPath);
   });
 
   handleIpc("files:readWorktree", (_event, worktreeId: string, filePath: string) => {
@@ -778,8 +790,8 @@ function registerIpcHandlers(): void {
     return service.writeFile(worktreeId, filePath, content);
   });
 
-  handleIpc("files:syncWatchTargets", (_event, worktreeId: string, relativePaths: string[]) => {
-    return service.syncFileWatchTargets(worktreeId, relativePaths);
+  handleIpc("files:syncWatchTargets", (_event, rootPath: string, relativePaths: string[]) => {
+    service.syncFileWatchTargets(rootPath, relativePaths);
   });
 
   handleIpc("search:code", (_event, worktreeId: string, query: string) => {

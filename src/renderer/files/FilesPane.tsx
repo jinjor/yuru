@@ -1,34 +1,16 @@
-import { type Ref, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, ChevronsDownUp, FolderGit2 } from "lucide-react";
-import type { FileTreeNode, GitFileStatus, GitPathState } from "../../shared/ipc";
-import { isTestFile } from "../../shared/test-file";
-import type { PreviewSelection } from "../preview/previewSelection";
-import {
-  buildIgnoredPathSet,
-  buildTreeStatusMap,
-  isIgnoredPath,
-  treeStatusClass,
-} from "../git/status";
-import { resultDataOrNull } from "../utils/result";
-import {
-  applyDirectoryListing,
-  buildWatchTargets,
-  buildVisibleTreeRows,
-  collectAncestorDirectories,
-  collectDirectoryPaths,
-  normalizeExpandedDirectories,
-  removeDirectorySubtrees,
-  ROOT_DIRECTORY_PATH,
-  type VisibleTreeRow,
-} from "./fileTree";
-import { Button } from "../ui/Button";
-import { EmptyState } from "../ui/EmptyState";
-import { beginWorktreeFileDrag, endWorktreeFileDrag, setFileDownloadDrag } from "../utils/fileDrag";
-import { handleFilePathContextMenu } from "../utils/filePathMenu";
+import { Activity, type Ref, useCallback, useImperativeHandle, useRef, useState } from "react";
+import { flushSync } from "react-dom";
+import type { GitFileStatus, GitPathState } from "../../shared/ipc";
+import { isExternalPath, type PreviewSelection } from "../preview/previewSelection";
+import { toRootRelativePath } from "../utils/filePath";
+import { ExternalDirectoryTree } from "./ExternalDirectoryTree";
+import type { FileTreeHandle } from "./FileTreeList";
+import { WorktreeFileTree } from "./WorktreeFileTree";
 
 export interface FilesPaneHandle {
-  // 親まで展開してディレクトリ自身も展開し、その行へスクロールする。path は worktree 基準の相対パス。
-  revealDirectory: (relativePath: string) => void;
+  // ディレクトリを展開して見せる。path は worktree 内なら worktree 基準の相対パス、外なら絶対パス。
+  // 外のディレクトリは、表示中の外のツリーの中ならそこで展開し、そうでなければそれをルートにして表示する。
+  showDirectory: (path: string) => void;
 }
 
 interface FilesPaneProps {
@@ -39,30 +21,11 @@ interface FilesPaneProps {
   previewSelection: PreviewSelection | null;
   ref?: Ref<FilesPaneHandle>;
   worktreeId: string;
-  // ファイル行の右クリックで絶対パスをコピーするための worktree のルート。
   worktreePath: string;
 }
 
-interface FilesCache {
-  loadedDirectories: Set<string>;
-  loadingDirectories: Set<string>;
-  treeData: FileTreeNode[];
-}
-
-interface DirectoryLoad {
-  token: object;
-  promise: Promise<void>;
-  reloadRequested: boolean;
-}
-
-function createEmptyFilesCache(): FilesCache {
-  return {
-    loadedDirectories: new Set(),
-    loadingDirectories: new Set(),
-    treeData: [],
-  };
-}
-
+// Files タブ。worktree のツリーと、一時的に開いた worktree 外のディレクトリのツリーのどちらかを表示する。
+// 外のディレクトリを表示している間も、worktree のツリーは展開状態を保ったまま隠しておく。
 export function FilesPane({
   changedFiles,
   gitPathStates,
@@ -73,432 +36,75 @@ export function FilesPane({
   worktreeId,
   worktreePath,
 }: FilesPaneProps) {
-  const [expandedDirectories, setExpandedDirectories] = useState<Set<string>>(() => new Set());
-  const expandedDirectoriesRef = useRef(expandedDirectories);
-  const [filesCache, setFilesCache] = useState<FilesCache>(() => createEmptyFilesCache());
-  const filesCacheRef = useRef<FilesCache>(filesCache);
-  const directoryLoadsRef = useRef<Map<string, DirectoryLoad>>(new Map());
-  const fileTreeRef = useRef<HTMLDivElement>(null);
-  const lastRevealedPathRef = useRef<string | null>(null);
-  const directoryRevealControllerRef = useRef<AbortController | null>(null);
-  // 同じパスの再表示でも、ツリー取得後に新しい要求としてスクロールする。
-  const [revealRequest, setRevealRequest] = useState<{
-    kind: "file" | "directory";
-    path: string;
-  } | null>(null);
-  const lastScrolledRequestRef = useRef<typeof revealRequest>(null);
-  const treeStatusByPath = buildTreeStatusMap(gitPathStates);
-  const treeIgnoredPaths = buildIgnoredPathSet(gitPathStates);
-  const { loadingDirectories, treeData } = filesCache;
-  const visibleRows = buildVisibleTreeRows(treeData, expandedDirectories);
-
-  const commitFilesCache = useCallback((nextFilesCache: FilesCache): void => {
-    filesCacheRef.current = nextFilesCache;
-    setFilesCache(nextFilesCache);
+  // 表示中の worktree 外のディレクトリの絶対パス。null なら worktree のツリーを表示する。
+  const [externalDirectoryPath, setExternalDirectoryPath] = useState<string | null>(null);
+  const worktreeTreeRef = useRef<FileTreeHandle>(null);
+  const externalTreeRef = useRef<FileTreeHandle>(null);
+  const closeExternalDirectory = useCallback((): void => {
+    setExternalDirectoryPath(null);
   }, []);
-
-  const commitExpandedDirectories = useCallback((nextExpandedDirectories: Set<string>): void => {
-    expandedDirectoriesRef.current = nextExpandedDirectories;
-    setExpandedDirectories(nextExpandedDirectories);
-  }, []);
-
-  const applyTreeUpdate = useCallback(
-    (relativePath: string, nextNodes: FileTreeNode[]): void => {
-      const prevCache = filesCacheRef.current;
-      const update = applyDirectoryListing(prevCache.treeData, relativePath, nextNodes);
-      if (!update) {
-        return;
-      }
-      commitFilesCache({
-        ...prevCache,
-        treeData: update.treeData,
-        loadedDirectories: removeDirectorySubtrees(
-          new Set(prevCache.loadedDirectories).add(relativePath),
-          update.removedDirectoryPaths,
-        ),
-      });
-
-      if (update.removedDirectoryPaths.length > 0) {
-        commitExpandedDirectories(
-          removeDirectorySubtrees(expandedDirectoriesRef.current, update.removedDirectoryPaths),
-        );
-      }
-    },
-    [commitExpandedDirectories, commitFilesCache],
-  );
-
-  const loadDirectory = useCallback(
-    async function loadDirectory(relativePath = ROOT_DIRECTORY_PATH, force = false): Promise<void> {
-      if (!force && filesCacheRef.current.loadedDirectories.has(relativePath)) {
-        return;
-      }
-
-      const activeLoad = directoryLoadsRef.current.get(relativePath);
-      if (activeLoad) {
-        if (force) {
-          activeLoad.reloadRequested = true;
-        }
-        return activeLoad.promise;
-      }
-
-      const loadToken = {};
-      const request = (async () => {
-        const prevCache = filesCacheRef.current;
-        commitFilesCache({
-          ...prevCache,
-          loadingDirectories: new Set(prevCache.loadingDirectories).add(relativePath),
-        });
-        const result = await window.electronAPI.listFiles(worktreeId, relativePath);
-        if (directoryLoadsRef.current.get(relativePath)?.token !== loadToken) {
-          return;
-        }
-
-        const nextNodes = resultDataOrNull(result);
-        if (!nextNodes) {
-          return;
-        }
-
-        applyTreeUpdate(relativePath, nextNodes);
-      })().finally(async () => {
-        const directoryLoad = directoryLoadsRef.current.get(relativePath);
-        if (directoryLoad?.token !== loadToken) {
-          return;
-        }
-        directoryLoadsRef.current.delete(relativePath);
-        const prevCache = filesCacheRef.current;
-        const nextLoadingDirectories = new Set(prevCache.loadingDirectories);
-        nextLoadingDirectories.delete(relativePath);
-        commitFilesCache({
-          ...prevCache,
-          loadingDirectories: nextLoadingDirectories,
-        });
-        if (directoryLoad.reloadRequested) {
-          await loadDirectory(relativePath, true);
-        }
-      });
-
-      const directoryLoad = { token: loadToken, promise: request, reloadRequested: false };
-      directoryLoadsRef.current.set(relativePath, directoryLoad);
-      return request;
-    },
-    [applyTreeUpdate, commitFilesCache, worktreeId],
-  );
-
-  const toggleDirectory = (relativePath: string): void => {
-    const isOpen = expandedDirectories.has(relativePath);
-    const nextExpandedDirectories = new Set(expandedDirectories);
-    if (isOpen) {
-      nextExpandedDirectories.delete(relativePath);
-    } else {
-      nextExpandedDirectories.add(relativePath);
-    }
-    commitExpandedDirectories(nextExpandedDirectories);
-    if (!isOpen) {
-      void loadDirectory(relativePath);
-    }
-  };
-
-  const revealChangedDirectories = async (): Promise<void> => {
-    const directoryPaths = collectAncestorDirectories(changedFiles.map((file) => file.path));
-
-    await loadDirectory(ROOT_DIRECTORY_PATH);
-    for (const directoryPath of directoryPaths) {
-      await loadDirectory(directoryPath);
-    }
-
-    commitExpandedDirectories(
-      normalizeExpandedDirectories(directoryPaths, filesCacheRef.current.treeData),
-    );
-  };
-
-  const collapseAllDirectories = (): void => {
-    commitExpandedDirectories(new Set());
-  };
-
-  const reloadConnectedDirectories = useCallback(
-    async (signal: AbortSignal): Promise<void> => {
-      const prevCache = filesCacheRef.current;
-      if (prevCache.loadingDirectories.size > 0) {
-        commitFilesCache({
-          ...prevCache,
-          loadingDirectories: new Set(),
-        });
-      }
-
-      for (const relativePath of buildWatchTargets(expandedDirectoriesRef.current)) {
-        if (signal.aborted) {
-          return;
-        }
-        if (
-          relativePath !== ROOT_DIRECTORY_PATH &&
-          !expandedDirectoriesRef.current.has(relativePath)
-        ) {
-          continue;
-        }
-        await loadDirectory(relativePath, true);
-      }
-    },
-    [commitFilesCache, loadDirectory],
-  );
-
-  const refreshDirectoryForReveal = useCallback(
-    async (relativePath: string): Promise<void> => {
-      const activeLoad = directoryLoadsRef.current.get(relativePath);
-      if (activeLoad) {
-        await activeLoad.promise;
-        return;
-      }
-      await loadDirectory(relativePath, true);
-    },
-    [loadDirectory],
-  );
-
-  // 親から順に読み直して展開し、スクロールを頼む。中断されたら false。
-  const revealPath = useCallback(
-    async (relativePath: string, signal: AbortSignal): Promise<boolean> => {
-      const directoryPaths = collectAncestorDirectories([relativePath]);
-
-      await refreshDirectoryForReveal(ROOT_DIRECTORY_PATH);
-      for (const directoryPath of directoryPaths) {
-        if (signal.aborted) {
-          return false;
-        }
-        if (!collectDirectoryPaths(filesCacheRef.current.treeData).has(directoryPath)) {
-          return true;
-        }
-        await refreshDirectoryForReveal(directoryPath);
-      }
-
-      if (signal.aborted) {
-        return false;
-      }
-      // ツリー上でディレクトリなら、自身も読み込んで展開し、中身を見せる。
-      const isDirectory = collectDirectoryPaths(filesCacheRef.current.treeData).has(relativePath);
-      if (isDirectory) {
-        await refreshDirectoryForReveal(relativePath);
-        if (signal.aborted) {
-          return false;
-        }
-        directoryPaths.push(relativePath);
-      }
-      const nextExpandedDirectories = new Set(expandedDirectoriesRef.current);
-      let didExpandDirectory = false;
-      for (const directoryPath of normalizeExpandedDirectories(
-        directoryPaths,
-        filesCacheRef.current.treeData,
-      )) {
-        if (!nextExpandedDirectories.has(directoryPath)) {
-          nextExpandedDirectories.add(directoryPath);
-          didExpandDirectory = true;
-        }
-      }
-      if (didExpandDirectory) {
-        commitExpandedDirectories(nextExpandedDirectories);
-      }
-      setRevealRequest({ kind: isDirectory ? "directory" : "file", path: relativePath });
-      return true;
-    },
-    [commitExpandedDirectories, refreshDirectoryForReveal],
-  );
-
-  useEffect(() => {
-    void window.electronAPI.syncFileWatchTargets(
-      worktreeId,
-      buildWatchTargets(expandedDirectories),
-    );
-  }, [expandedDirectories, worktreeId]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    void reloadConnectedDirectories(controller.signal);
-    return () => {
-      controller.abort();
-    };
-  }, [reloadConnectedDirectories]);
-
-  useEffect(() => {
-    const selectedPath = previewSelection?.path ?? null;
-    if (!selectedPath || selectedPath.startsWith("/")) {
-      lastRevealedPathRef.current = selectedPath;
-      return;
-    }
-    if (lastRevealedPathRef.current === selectedPath) {
-      return;
-    }
-
-    const controller = new AbortController();
-    void revealPath(selectedPath, controller.signal).then((completed) => {
-      if (completed) {
-        lastRevealedPathRef.current = selectedPath;
-      }
-    });
-    return () => {
-      controller.abort();
-    };
-  }, [previewSelection?.path, revealPath]);
 
   useImperativeHandle(
     ref,
     () => ({
-      revealDirectory(relativePath: string): void {
-        directoryRevealControllerRef.current?.abort();
-        const controller = new AbortController();
-        directoryRevealControllerRef.current = controller;
-        void revealPath(relativePath, controller.signal);
+      showDirectory(path: string): void {
+        if (isExternalPath(path)) {
+          const relativePath =
+            externalDirectoryPath === null ? null : toRootRelativePath(externalDirectoryPath, path);
+          if (relativePath === null) {
+            setExternalDirectoryPath(path);
+            return;
+          }
+          // ルート自身なら、見せる行が無いので何もしない。
+          if (relativePath !== "") {
+            if (!externalTreeRef.current) {
+              throw new Error("External directory tree handle is missing while it is displayed");
+            }
+            externalTreeRef.current.revealDirectory(relativePath);
+          }
+          return;
+        }
+        // hidden の間 worktree のツリーの handle は外れているので、表示の切り替えを即座に反映してから呼ぶ。
+        flushSync(() => {
+          setExternalDirectoryPath(null);
+        });
+        if (!worktreeTreeRef.current) {
+          throw new Error(
+            "Worktree file tree handle is missing after closing the external directory",
+          );
+        }
+        worktreeTreeRef.current.revealDirectory(path);
       },
     }),
-    [revealPath],
+    [externalDirectoryPath],
   );
-
-  useEffect(() => {
-    if (!revealRequest || lastScrolledRequestRef.current === revealRequest) {
-      return;
-    }
-    lastScrolledRequestRef.current = revealRequest;
-    const revealedRow = Array.from(
-      fileTreeRef.current?.querySelectorAll<HTMLElement>(".file-tree-row") ?? [],
-    ).find((row) => row.dataset.path === revealRequest.path);
-    // ディレクトリは展開した中身が続くので、行を上端に寄せる。
-    revealedRow?.scrollIntoView({
-      block: revealRequest.kind === "directory" ? "start" : "nearest",
-    });
-  }, [revealRequest]);
-
-  useEffect(() => {
-    const dispose = window.electronAPI.onFileTreeChanged((changedWorktreeId, relativePath) => {
-      if (changedWorktreeId !== worktreeId) {
-        return;
-      }
-      void loadDirectory(relativePath, true);
-    });
-
-    return dispose;
-  }, [loadDirectory, worktreeId]);
-
-  useEffect(() => {
-    return () => {
-      directoryLoadsRef.current = new Map();
-      void window.electronAPI.syncFileWatchTargets(worktreeId, []);
-    };
-  }, [worktreeId]);
 
   return (
     <>
-      {/* パネルが狭いときは、CSS がラベルを隠してアイコンだけにする。
-          何のボタンかは title の tooltip に残る。 */}
-      <div className="panel-subactions">
-        <span className="panel-subactions-label panel-wide-only">Files</span>
-        <div className="panel-header-actions">
-          <Button
-            onClick={() => {
-              void revealChangedDirectories();
-            }}
-            disabled={changedFiles.length === 0}
-            title="Expand only the directories that contain changed files"
-          >
-            <span className="panel-narrow-only">
-              <FolderGit2 size={14} />
-            </span>
-            <span className="panel-wide-only">Changed dirs</span>
-          </Button>
-          <Button
-            onClick={collapseAllDirectories}
-            disabled={treeData.length === 0}
-            title="Collapse all directories"
-          >
-            <span className="panel-narrow-only">
-              <ChevronsDownUp size={14} />
-            </span>
-            <span className="panel-wide-only">Collapse all</span>
-          </Button>
-        </div>
-      </div>
-      <div ref={fileTreeRef} className="file-tree" style={{ height }}>
-        {loadingDirectories.has(ROOT_DIRECTORY_PATH) && treeData.length === 0 ? (
-          <EmptyState>Loading files...</EmptyState>
-        ) : treeData.length === 0 ? (
-          <EmptyState>No files</EmptyState>
-        ) : (
-          visibleRows.map((row) => (
-            <FileTreeRow
-              key={row.node.id}
-              isLoading={loadingDirectories.has(row.node.path)}
-              ignoredPaths={treeIgnoredPaths}
-              isSelected={previewSelection?.path === row.node.path}
-              onDirectoryToggle={toggleDirectory}
-              onFileSelect={onPreviewSelectionChange}
-              row={row}
-              statusByPath={treeStatusByPath}
-              worktreePath={worktreePath}
-            />
-          ))
-        )}
-      </div>
+      <Activity mode={externalDirectoryPath === null ? "visible" : "hidden"}>
+        <WorktreeFileTree
+          changedFiles={changedFiles}
+          gitPathStates={gitPathStates}
+          height={height}
+          onPreviewSelectionChange={onPreviewSelectionChange}
+          previewSelection={previewSelection}
+          ref={worktreeTreeRef}
+          worktreeId={worktreeId}
+          worktreePath={worktreePath}
+        />
+      </Activity>
+      {externalDirectoryPath !== null && (
+        <ExternalDirectoryTree
+          key={externalDirectoryPath}
+          directoryPath={externalDirectoryPath}
+          height={height}
+          onClose={closeExternalDirectory}
+          onPreviewSelectionChange={onPreviewSelectionChange}
+          previewSelection={previewSelection}
+          ref={externalTreeRef}
+          worktreeId={worktreeId}
+        />
+      )}
     </>
-  );
-}
-
-function FileTreeRow({
-  isLoading,
-  ignoredPaths,
-  isSelected,
-  onDirectoryToggle,
-  onFileSelect,
-  row,
-  statusByPath,
-  worktreePath,
-}: {
-  isLoading: boolean;
-  ignoredPaths: ReadonlySet<string>;
-  isSelected: boolean;
-  onDirectoryToggle: (path: string) => void;
-  onFileSelect: (selection: PreviewSelection | null) => void;
-  row: VisibleTreeRow;
-  statusByPath: ReadonlyMap<string, string>;
-  worktreePath: string;
-}) {
-  const { depth, isOpen, node } = row;
-  const isDirectory = node.kind === "directory";
-  const isIgnored = isIgnoredPath(node.path, ignoredPaths);
-  const statusClass = treeStatusClass(statusByPath.get(node.path));
-
-  return (
-    <div
-      className={`file-tree-row ${isSelected ? "selected" : ""}`}
-      data-path={node.path}
-      draggable
-      onContextMenu={(event) => handleFilePathContextMenu(event, worktreePath, node.path)}
-      onDragEnd={(event) => endWorktreeFileDrag(event.currentTarget)}
-      onDragStart={(event) => {
-        beginWorktreeFileDrag(event.dataTransfer, event.currentTarget, node.path);
-        if (!isDirectory) {
-          setFileDownloadDrag(event.dataTransfer, `${worktreePath}/${node.path}`, node.name);
-        }
-      }}
-      onClick={() => {
-        if (isDirectory) {
-          onDirectoryToggle(node.path);
-          return;
-        }
-        onFileSelect({ path: node.path });
-      }}
-      style={{ height: 28, paddingLeft: 12 + depth * 12 }}
-    >
-      <span className={`file-tree-caret ${isDirectory ? "directory" : "file"}`}>
-        {isDirectory ? (
-          isOpen ? (
-            <ChevronDown size={15} strokeWidth={2.4} />
-          ) : (
-            <ChevronRight size={15} strokeWidth={2.4} />
-          )
-        ) : null}
-      </span>
-      <span
-        className={`file-tree-name ${node.kind} ${statusClass} ${isIgnored ? "ignored" : ""} ${isTestFile(node.path) ? "test-file" : ""}`}
-      >
-        {node.name}
-        {isLoading ? "..." : ""}
-      </span>
-    </div>
   );
 }

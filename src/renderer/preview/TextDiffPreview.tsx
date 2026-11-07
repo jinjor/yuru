@@ -5,6 +5,7 @@ import type { GitDiffDocument, GitDiffScope, GitPathState } from "../../shared/i
 import { BlameAnnotation } from "./blame/BlameAnnotation";
 import { useBlame } from "./blame/useBlame";
 import { useCommitDetails } from "./blame/useCommitDetails";
+import { isExternalPath } from "./previewSelection";
 import { computeDiffHunks } from "./diffHunks";
 import { SourceViewer, type SourceLine } from "./SourceViewer";
 import { tokenizeCode, type TokenizedLine } from "./highlight";
@@ -60,8 +61,8 @@ export default function TextDiffPreview({
   const isBinary = diffDocument?.isBinary ?? false;
   const hasChanges = originalContent !== currentContent;
 
-  const isExternalPath = path.startsWith("/");
-  const isEditing = mode === "edit" && !isExternalPath && scope !== "base" && scope !== "staged";
+  const isExternal = isExternalPath(path);
+  const isEditing = mode === "edit" && !isExternal && scope !== "base" && scope !== "staged";
   // Markdown プレビューの変更マーク。
   const diff = useMemo(
     () => computeDiffHunks((originalContent ?? "").split("\n"), (currentContent ?? "").split("\n")),
@@ -80,7 +81,7 @@ export default function TextDiffPreview({
             ? "binary"
             : "source";
   // worktree 外のファイルは git の履歴を持たないので、フォーカスも blame もしない。
-  const canFocusLine = !isExternalPath;
+  const canFocusLine = !isExternal;
   const blameLoad = useBlame({
     worktreeId,
     path,

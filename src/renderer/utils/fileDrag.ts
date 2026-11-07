@@ -1,12 +1,13 @@
-export const WORKTREE_FILE_DRAG_TYPE = "application/x-yuru-worktree-file-path";
+export const PASTE_PATH_DRAG_TYPE = "application/x-yuru-paste-path";
 
-export function beginWorktreeFileDrag(
+// path はターミナルへドロップしたときに貼るパス。worktree 内は相対パス、外は絶対パス。
+export function beginPastePathDrag(
   dataTransfer: DataTransfer,
   source: HTMLElement,
-  relativePath: string,
+  path: string,
 ): void {
   dataTransfer.effectAllowed = "copy";
-  dataTransfer.setData(WORKTREE_FILE_DRAG_TYPE, relativePath);
+  dataTransfer.setData(PASTE_PATH_DRAG_TYPE, path);
   source.classList.add("file-transfer-dragging");
   document.body.classList.add("is-file-transfer-dragging");
 }
@@ -32,15 +33,15 @@ function fileUrl(absolutePath: string): string {
   return `file://${absolutePath.split("/").map(encodeURIComponent).join("/")}`;
 }
 
-export function endWorktreeFileDrag(source: HTMLElement): void {
+export function endPastePathDrag(source: HTMLElement): void {
   source.classList.remove("file-transfer-dragging");
   document.body.classList.remove("is-file-transfer-dragging");
 }
 
-export function hasWorktreeFileDrag(dataTransfer: DataTransfer): boolean {
-  return dataTransfer.types.includes(WORKTREE_FILE_DRAG_TYPE);
+export function hasPastePathDrag(dataTransfer: DataTransfer): boolean {
+  return dataTransfer.types.includes(PASTE_PATH_DRAG_TYPE);
 }
 
-export function readWorktreeFileDrag(dataTransfer: DataTransfer): string {
-  return dataTransfer.getData(WORKTREE_FILE_DRAG_TYPE);
+export function readPastePathDrag(dataTransfer: DataTransfer): string {
+  return dataTransfer.getData(PASTE_PATH_DRAG_TYPE);
 }

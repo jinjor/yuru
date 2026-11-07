@@ -5,9 +5,10 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  listDirectory,
   readWorktreeFile,
   resolveHtmlPreviewEntry,
-  resolveRepoPath,
+  resolvePathTarget,
   writeFile,
 } from "../../../src/main/files/files.ts";
 
@@ -15,90 +16,144 @@ function makeTempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "yuru-files-"));
 }
 
-test("resolveRepoPath は worktree 内のファイルとディレクトリを相対パスで返す", async () => {
+test("resolvePathTarget は worktree 内のファイルとディレクトリを相対パスで返す", async () => {
   const dir = makeTempDir();
   fs.mkdirSync(path.join(dir, "src", "renderer"), { recursive: true });
   fs.writeFileSync(path.join(dir, "src", "app.ts"), "");
 
-  assert.deepEqual(await resolveRepoPath(dir, "src/app.ts"), { kind: "file", path: "src/app.ts" });
-  assert.deepEqual(await resolveRepoPath(dir, "./src/app.ts"), {
+  assert.deepEqual(await resolvePathTarget(dir, "src/app.ts"), { kind: "file", path: "src/app.ts" });
+  assert.deepEqual(await resolvePathTarget(dir, "./src/app.ts"), {
     kind: "file",
     path: "src/app.ts",
   });
-  assert.deepEqual(await resolveRepoPath(dir, path.join(dir, "src", "app.ts")), {
+  assert.deepEqual(await resolvePathTarget(dir, path.join(dir, "src", "app.ts")), {
     kind: "file",
     path: "src/app.ts",
   });
-  assert.deepEqual(await resolveRepoPath(dir, "src/renderer"), {
+  assert.deepEqual(await resolvePathTarget(dir, "src/renderer"), {
     kind: "directory",
     path: "src/renderer",
   });
-  assert.deepEqual(await resolveRepoPath(dir, "src/"), { kind: "directory", path: "src" });
-  assert.deepEqual(await resolveRepoPath(dir, path.join(dir, "src", "renderer")), {
+  assert.deepEqual(await resolvePathTarget(dir, "src/"), { kind: "directory", path: "src" });
+  assert.deepEqual(await resolvePathTarget(dir, path.join(dir, "src", "renderer")), {
     kind: "directory",
     path: "src/renderer",
   });
-  assert.deepEqual(await resolveRepoPath(dir, dir), { kind: "directory", path: "" });
+  assert.deepEqual(await resolvePathTarget(dir, dir), { kind: "directory", path: "" });
 });
 
-test("resolveRepoPath は .. で始まる名前を worktree の外とみなさない", async () => {
+test("resolvePathTarget は .. で始まる名前を worktree の外とみなさない", async () => {
   const dir = makeTempDir();
   fs.writeFileSync(path.join(dir, "..notes.txt"), "");
 
-  assert.deepEqual(await resolveRepoPath(dir, "..notes.txt"), {
+  assert.deepEqual(await resolvePathTarget(dir, "..notes.txt"), {
     kind: "file",
     path: "..notes.txt",
   });
 });
 
-test("resolveRepoPath は相対パスを repo root 基準で解決しない", async () => {
+test("resolvePathTarget は相対パスを repo root 基準で解決しない", async () => {
   const repoRoot = makeTempDir();
   const worktreePath = path.join(repoRoot, ".yuru", "worktrees", "task-a");
   fs.mkdirSync(path.join(worktreePath, "src"), { recursive: true });
   fs.writeFileSync(path.join(worktreePath, "src", "app.ts"), "");
   fs.writeFileSync(path.join(repoRoot, "root.txt"), "");
 
-  assert.equal(await resolveRepoPath(worktreePath, ".yuru/worktrees/task-a/src/app.ts"), null);
-  assert.equal(await resolveRepoPath(worktreePath, "root.txt"), null);
+  assert.equal(await resolvePathTarget(worktreePath, ".yuru/worktrees/task-a/src/app.ts"), null);
+  assert.equal(await resolvePathTarget(worktreePath, "root.txt"), null);
 });
 
-test("resolveRepoPath は worktree 内の不在パスを null で返す", async () => {
+test("resolvePathTarget は worktree 内の不在パスを null で返す", async () => {
   const dir = makeTempDir();
   fs.writeFileSync(path.join(dir, "app.ts"), "");
 
-  assert.equal(await resolveRepoPath(dir, "missing.ts"), null);
-  assert.equal(await resolveRepoPath(dir, "missing/"), null);
-  assert.equal(await resolveRepoPath(dir, "app.ts/inner"), null);
+  assert.equal(await resolvePathTarget(dir, "missing.ts"), null);
+  assert.equal(await resolvePathTarget(dir, "missing/"), null);
+  assert.equal(await resolvePathTarget(dir, "app.ts/inner"), null);
 });
 
-test("resolveRepoPath は worktree 外の実在ファイルを絶対パスで返す", async () => {
+test("resolvePathTarget は worktree 外の実在ファイルを絶対パスで返す", async () => {
   const dir = makeTempDir();
   const outside = makeTempDir();
   const outsideFile = path.join(outside, "mock.html");
   fs.writeFileSync(outsideFile, "<html></html>");
 
-  assert.deepEqual(await resolveRepoPath(dir, outsideFile), { kind: "file", path: outsideFile });
+  assert.deepEqual(await resolvePathTarget(dir, outsideFile), { kind: "file", path: outsideFile });
 });
 
-test("resolveRepoPath は .. で worktree の外に出る相対パスを外のパスとして扱う", async () => {
+test("resolvePathTarget は .. で worktree の外に出る相対パスを外のパスとして扱う", async () => {
   const dir = makeTempDir();
   const outside = makeTempDir();
   const outsideFile = path.join(outside, "escape.txt");
   fs.writeFileSync(outsideFile, "x");
 
-  assert.deepEqual(await resolveRepoPath(dir, path.relative(dir, outsideFile)), {
+  assert.deepEqual(await resolvePathTarget(dir, path.relative(dir, outsideFile)), {
     kind: "file",
     path: outsideFile,
   });
-  assert.equal(await resolveRepoPath(dir, path.relative(dir, outside)), null);
+  assert.deepEqual(await resolvePathTarget(dir, path.relative(dir, outside)), {
+    kind: "directory",
+    path: outside,
+  });
 });
 
-test("resolveRepoPath は worktree 外のディレクトリと不在パスを null で返す", async () => {
+test("resolvePathTarget は worktree 外の実在ディレクトリを絶対パスで返す", async () => {
+  const dir = makeTempDir();
+  const outside = makeTempDir();
+  fs.mkdirSync(path.join(outside, "logs"));
+
+  assert.deepEqual(await resolvePathTarget(dir, outside), { kind: "directory", path: outside });
+  assert.deepEqual(await resolvePathTarget(dir, `${outside}/logs/`), {
+    kind: "directory",
+    path: path.join(outside, "logs"),
+  });
+});
+
+test("resolvePathTarget は worktree 外の不在パスを null で返す", async () => {
   const dir = makeTempDir();
   const outside = makeTempDir();
 
-  assert.equal(await resolveRepoPath(dir, outside), null);
-  assert.equal(await resolveRepoPath(dir, path.join(outside, "missing.txt")), null);
+  assert.equal(await resolvePathTarget(dir, path.join(outside, "missing.txt")), null);
+  assert.equal(await resolvePathTarget(dir, path.join(outside, "missing")), null);
+});
+
+test("listDirectory はルートの下のディレクトリ 1 段を、ルートからの相対パスで返す", async () => {
+  const root = makeTempDir();
+  fs.mkdirSync(path.join(root, "sub", "inner"), { recursive: true });
+  fs.mkdirSync(path.join(root, ".git"));
+  fs.writeFileSync(path.join(root, "b.txt"), "b");
+  fs.writeFileSync(path.join(root, "sub", "a.md"), "a");
+
+  assert.deepEqual(
+    (await listDirectory(root, "")).map(({ path: nodePath, kind }) => ({ path: nodePath, kind })),
+    [
+      { path: "sub", kind: "directory" },
+      { path: "b.txt", kind: "file" },
+    ],
+  );
+  assert.deepEqual(
+    (await listDirectory(root, "sub")).map(({ path: nodePath, kind }) => ({ path: nodePath, kind })),
+    [
+      { path: "sub/inner", kind: "directory" },
+      { path: "sub/a.md", kind: "file" },
+    ],
+  );
+});
+
+test("listDirectory はディレクトリが無ければ null を返す", async () => {
+  const root = makeTempDir();
+  fs.writeFileSync(path.join(root, "file.txt"), "x");
+
+  assert.equal(await listDirectory(root, "missing"), null);
+  assert.equal(await listDirectory(root, "file.txt"), null);
+  fs.rmSync(root, { recursive: true });
+  assert.equal(await listDirectory(root, ""), null);
+});
+
+test("listDirectory はルートの外を拒否する", async () => {
+  const root = makeTempDir();
+
+  await assert.rejects(listDirectory(root, ".."), /Invalid path/);
 });
 
 test("readWorktreeFile は既存ファイルの内容を返す", async () => {

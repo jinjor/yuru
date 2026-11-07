@@ -199,15 +199,14 @@ const WorktreeViewContent = memo(function WorktreeViewContent({
 
   const handlePathLinkActivate = useCallback(
     async (targetPath: string, line?: number): Promise<void> => {
-      // ファイルは worktree 内なら相対パス、外なら絶対パスが返る (どちらもプレビューで開ける)。
-      // ディレクトリは worktree 内の相対パスだけが返る。
-      const target = await window.electronAPI.resolveRepoPath(worktreeId, targetPath);
+      // worktree 内なら相対パス、外なら絶対パスが返る。ファイルはプレビューで、ディレクトリは Files で開ける。
+      const target = await window.electronAPI.resolvePathTarget(worktreeId, targetPath);
       if (!target) {
         return;
       }
       if (target.kind === "directory") {
         // パスの解決を待つ間に別の worktree へ移っていたら、この画面は隠れていて handle が外れている。
-        explorerPanelRef.current?.revealDirectory(target.path);
+        explorerPanelRef.current?.showDirectory(target.path);
         return;
       }
       setPreviewSelection({ path: target.path, line });
