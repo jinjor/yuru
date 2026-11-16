@@ -10,7 +10,10 @@ export function isExternalUrlProtocol(protocol: string): boolean {
   return externalUrlProtocols.has(protocol);
 }
 
-const urlPattern = /\b(?:https?|chrome):\/\/[^\s<>"'`]+/g;
+// Unicode の括弧・引用符と和文の句読点は、後続の文章ごと URL に取り込まない。
+// 半角 ()[]{} は URL 内でも使うため、従来どおり末尾で対応関係を調べる。
+const urlPattern =
+  /\b(?:https?|chrome):\/\/(?:[()[\]{}]|[^\s<>"'`\p{Ps}\p{Pe}\p{Pi}\p{Pf}、。，．；：！？])+/gu;
 
 export function findExternalUrls(text: string): ExternalUrlMatch[] {
   const matches: ExternalUrlMatch[] = [];

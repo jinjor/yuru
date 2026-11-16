@@ -136,7 +136,7 @@ test("standalone terminal の URL は Bookmarks に追加されない", async ()
   }
 });
 
-test("ターミナルで URL リンクをクリックすると Bookmarks に登録される", async () => {
+test("ターミナルの全角括弧内の URL をクリックすると括弧や後続文を含めずに開いて Bookmarks に登録する", async () => {
   const context = await createE2eContext();
   let app: ElectronApplication | null = null;
   try {
@@ -151,7 +151,7 @@ test("ターミナルで URL リンクをクリックすると Bookmarks に登�
     await window.locator(".xterm").click();
     // リンクテキストをシェル変数で組み立て、echo された入力行が出力行と
     // 同じテキストにならないようにする（クリック対象の行を一意にするため）。
-    await window.keyboard.type("H=http; printf '%s://example.com/clicked\\n' \"$H\"");
+    await window.keyboard.type("H=http; printf '（%s://example.com/clicked）。後続文\\n' \"$H\"");
     await window.keyboard.press("Enter");
     const linkRow = window.locator(".xterm-rows > div", {
       hasText: "http://example.com/clicked",

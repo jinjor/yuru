@@ -234,3 +234,28 @@ test("findTerminalLinksInBufferLine は直前の単語をパスのリンクに�
 
   terminal.dispose();
 });
+
+test("findTerminalLinksInBufferLine は折り返した URL の範囲に全角括弧や後続文を含めない", async () => {
+  const terminal = new Terminal({ cols: 16, rows: 4 });
+  try {
+    await writeAll(terminal, "（https://example.com）後続文");
+    const expected = [
+      {
+        kind: "url",
+        text: "https://example.com",
+        url: "https://example.com",
+        startIndex: 1,
+        range: { start: { x: 3, y: 1 }, end: { x: 5, y: 2 } },
+      },
+    ];
+    for (const line of [1, 2]) {
+      assert.deepEqual(
+        findTerminalLinksInBufferLine(terminal.buffer.active, terminal.cols, line),
+        expected,
+      );
+    }
+    assert.deepEqual(findTerminalLinksInBufferLine(terminal.buffer.active, terminal.cols, 3), []);
+  } finally {
+    terminal.dispose();
+  }
+});
