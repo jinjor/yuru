@@ -8,10 +8,12 @@ import { DatabaseSync } from "node:sqlite";
 
 const previousHome = process.env.HOME;
 const previousSessionsDb = process.env.CHISEL_SESSION_DB;
+const previousAntigravityAppDataDir = process.env.ANTIGRAVITY_APP_DATA_DIR;
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-devin-test-"));
 process.env.HOME = tempDir;
 const dbPath = path.join(tempDir, "sessions.db");
 process.env.CHISEL_SESSION_DB = dbPath;
+process.env.ANTIGRAVITY_APP_DATA_DIR = path.join(tempDir, ".gemini", "antigravity-cli");
 
 const { agent: devinAgent } = await import("../../../../src/main/agents/devin/index.ts");
 const { loadSuggestedWorktreeSessions } =
@@ -27,6 +29,11 @@ test.after(() => {
     delete process.env.CHISEL_SESSION_DB;
   } else {
     process.env.CHISEL_SESSION_DB = previousSessionsDb;
+  }
+  if (previousAntigravityAppDataDir === undefined) {
+    delete process.env.ANTIGRAVITY_APP_DATA_DIR;
+  } else {
+    process.env.ANTIGRAVITY_APP_DATA_DIR = previousAntigravityAppDataDir;
   }
   fs.rmSync(tempDir, { recursive: true, force: true });
 });

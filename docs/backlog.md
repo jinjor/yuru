@@ -41,6 +41,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | ID | Type | Area | Item | Notes |
 |---|---|---|---|---|
 | F84 | feature | Bookmarks | ターミナルでクリックした worktree 外のディレクトリをブックマークする | ディレクトリとファイル名が別々に表示されるとファイルのパスはクリックできないので、ディレクトリから辿りたい。F76 と F83 が前提 |
+| F86 | feature | Sessions / Usage | モデルグループ別の usage 枠を表示する | Antigravity の Argon / Claude・GPT 枠や Claude のモデル別枠など、複数枠を持つ provider の残量を個別に確認したい |
 | F78 | feature | Changes / Review | コミット単位でレビュー | |
 | F79 | feature | Skills / Sessions | 作業終了を明示的に通知するスキル | |
 | F80 | feature | Changes / Git | git reset ボタン | |
@@ -90,7 +91,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 このツールは作者個人のためのもので、作者の利用範囲から外れる用途はサポートしない。
 
 - macOS 以外のプラットフォーム（Windows / Linux）
-- Claude / Codex / Kimi / Devin 以外のエージェント
+- Claude / Codex / Kimi / Devin / Antigravity 以外のエージェント
 - 外付けボリューム上での使用
 - bare repository
 - UTF-8 以外の文字コードで書かれたファイル

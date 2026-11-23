@@ -1016,6 +1016,11 @@ body,
   box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.24);
 }
 
+.session-provider-dot.provider-antigravity {
+  background: #a3e635;
+  box-shadow: 0 0 0 1px rgba(182, 240, 82, 0.24);
+}
+
 .session-provider-dot.active.provider-claude {
   background: #ffbf80;
   box-shadow:
@@ -1042,6 +1047,13 @@ body,
   box-shadow:
     0 0 0 1px rgba(52, 211, 153, 0.35),
     0 0 10px rgba(52, 211, 153, 0.28);
+}
+
+.session-provider-dot.active.provider-antigravity {
+  background: #c7f464;
+  box-shadow:
+    0 0 0 1px rgba(182, 240, 82, 0.35),
+    0 0 10px rgba(182, 240, 82, 0.28);
 }
 
 .session-provider-dot.inactive {
@@ -1097,6 +1109,11 @@ body,
   box-shadow: inset 0 0 0 1.5px #10b981;
 }
 
+.session-provider-dot.suggested.provider-antigravity {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px #a3e635;
+}
+
 .session-provider-dot.suggested.active.provider-claude {
   background: #ffbf80;
   box-shadow:
@@ -1123,6 +1140,13 @@ body,
   box-shadow:
     0 0 0 1px rgba(52, 211, 153, 0.35),
     0 0 10px rgba(52, 211, 153, 0.28);
+}
+
+.session-provider-dot.suggested.active.provider-antigravity {
+  background: #c7f464;
+  box-shadow:
+    0 0 0 1px rgba(182, 240, 82, 0.35),
+    0 0 10px rgba(182, 240, 82, 0.28);
 }
 
 .github-badge {

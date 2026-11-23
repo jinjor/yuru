@@ -69,6 +69,24 @@ export function createTerminalEnv(
     }
   }
 
+  // When Yuru itself is started inside an Antigravity CLI session, drop the
+  // parent session's runtime connection and identity variables so newly
+  // launched agy sessions start cleanly at top level. ANTIGRAVITY_APP_DATA_DIR
+  // stays so the store Yuru reads matches what the child writes.
+  for (const key of [
+    "ANTIGRAVITY_AGENT",
+    "ANTIGRAVITY_TRAJECTORY_ID",
+    "ANTIGRAVITY_CONVERSATION_ID",
+    "ANTIGRAVITY_SOURCE_METADATA",
+    "ANTIGRAVITY_LS_ADDRESS",
+    "ANTIGRAVITY_CSRF_TOKEN",
+    "ANTIGRAVITY_AGENTAPI_EXE",
+    "ANTIGRAVITY_LS_VERSION",
+    "ANTIGRAVITY_PROJECT_ID",
+  ]) {
+    delete env[key];
+  }
+
   env.YURU_API_SOCKET = options.apiSocketPath;
   env.YURU_CLI = options.yuruCliPath;
   env.YURU_REPO_PATH = options.repoPath;

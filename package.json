@@ -1,7 +1,7 @@
 {
   "name": "yuru",
   "version": "0.1.1",
-  "description": "Vibe Coding editor for Claude Code, Codex CLI, Kimi CLI, and Devin CLI",
+  "description": "Vibe Coding editor for Claude Code, Codex CLI, Kimi CLI, Devin CLI, and Antigravity CLI",
   "main": "dist/main/index.js",
   "scripts": {
     "build": "npm run typecheck:renderer && tsc && vite build",

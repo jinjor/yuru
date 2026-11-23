@@ -136,8 +136,41 @@ test("createTerminalEnv は他 provider の起動では Devin の設定をその
   assert.equal(env.DEVIN_PERMISSION_MODE, "dangerous");
 });
 
+test("createTerminalEnv は Antigravity 起動時に親の session 由来の環境変数を渡さない", () => {
+  const env = createTerminalEnv(
+    {
+      ANTIGRAVITY_AGENT: "1",
+      ANTIGRAVITY_TRAJECTORY_ID: "traj-1",
+      ANTIGRAVITY_CONVERSATION_ID: "conv-1",
+      ANTIGRAVITY_SOURCE_METADATA: "{}",
+      ANTIGRAVITY_LS_ADDRESS: "localhost:52810",
+      ANTIGRAVITY_CSRF_TOKEN: "secret-token",
+      ANTIGRAVITY_AGENTAPI_EXE: "/Users/example/.local/bin/agy",
+      ANTIGRAVITY_LS_VERSION: "cli-1.5.15",
+      ANTIGRAVITY_PROJECT_ID: "default-cli-project",
+      ANTIGRAVITY_APP_DATA_DIR: "/tmp/antigravity-data",
+    },
+    {
+      ...terminalEnvOptions,
+      provider: "antigravity",
+    },
+  );
+
+  assert.equal(env.ANTIGRAVITY_AGENT, undefined);
+  assert.equal(env.ANTIGRAVITY_TRAJECTORY_ID, undefined);
+  assert.equal(env.ANTIGRAVITY_CONVERSATION_ID, undefined);
+  assert.equal(env.ANTIGRAVITY_SOURCE_METADATA, undefined);
+  assert.equal(env.ANTIGRAVITY_LS_ADDRESS, undefined);
+  assert.equal(env.ANTIGRAVITY_CSRF_TOKEN, undefined);
+  assert.equal(env.ANTIGRAVITY_AGENTAPI_EXE, undefined);
+  assert.equal(env.ANTIGRAVITY_LS_VERSION, undefined);
+  assert.equal(env.ANTIGRAVITY_PROJECT_ID, undefined);
+  // store の場所は Yuru の読む側と子の書く側で一致させるため残す
+  assert.equal(env.ANTIGRAVITY_APP_DATA_DIR, "/tmp/antigravity-data");
+});
+
 test("createTerminalEnv は provider を問わず親 agent の AI_AGENT マーカーを渡さない", () => {
-  for (const provider of ["claude", "codex", "kimi", "devin"]) {
+  for (const provider of ["claude", "codex", "kimi", "devin", "antigravity"]) {
     const env = createTerminalEnv(
       { AI_AGENT: "devin_3000-11-1_agent" },
       { ...terminalEnvOptions, provider },

@@ -90,8 +90,8 @@ export async function worktree(args) {
 }
 
 const sessionCreateUsage =
-  "Usage: yuru session create --provider <claude|codex|kimi|devin> [--worktree <absolute-worktree-path>] [--model <model>] [--prompt <text>]";
-const agents = new Set(["claude", "codex", "kimi", "devin"]);
+  "Usage: yuru session create --provider <claude|codex|kimi|devin|antigravity> [--worktree <absolute-worktree-path>] [--model <model>] [--prompt <text>]";
+const agents = new Set(["claude", "codex", "kimi", "devin", "antigravity"]);
 
 function parseSessionCreateArgs(args) {
   const { values } = parseCommandArgs(

@@ -8,12 +8,14 @@ import { setTimeout } from "node:timers/promises";
 const previousHome = process.env.HOME;
 const previousKimiCodeHome = process.env.KIMI_CODE_HOME;
 const previousSessionsDb = process.env.CHISEL_SESSION_DB;
+const previousAntigravityAppDataDir = process.env.ANTIGRAVITY_APP_DATA_DIR;
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "yuru-kimi-test-"));
 process.env.HOME = tempDir;
 const kimiDir = path.join(tempDir, ".kimi-code");
 process.env.KIMI_CODE_HOME = kimiDir;
-// 実環境の devin store を拾わないよう、存在しない DB を指させる
+// 実環境の devin / antigravity store を拾わないよう、存在しない場所を指させる
 process.env.CHISEL_SESSION_DB = path.join(tempDir, "devin-sessions.db");
+process.env.ANTIGRAVITY_APP_DATA_DIR = path.join(tempDir, ".gemini", "antigravity-cli");
 
 const { agent: kimiAgent } = await import("../../../../src/main/agents/kimi/index.ts");
 const { loadSuggestedWorktreeSessions } =
@@ -34,6 +36,11 @@ test.after(() => {
     delete process.env.CHISEL_SESSION_DB;
   } else {
     process.env.CHISEL_SESSION_DB = previousSessionsDb;
+  }
+  if (previousAntigravityAppDataDir === undefined) {
+    delete process.env.ANTIGRAVITY_APP_DATA_DIR;
+  } else {
+    process.env.ANTIGRAVITY_APP_DATA_DIR = previousAntigravityAppDataDir;
   }
   fs.rmSync(tempDir, { recursive: true, force: true });
 });
