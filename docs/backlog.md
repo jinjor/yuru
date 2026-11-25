@@ -1,6 +1,6 @@
 # Backlog
 
-Last updated: 2026-11-07
+Last updated: 2026-11-25
 
 Yuru の backlog。
 UI 改善も機能追加も同じ土俵で扱う。
@@ -35,6 +35,7 @@ UI 改善も機能追加も同じ土俵で扱う。
 | P35 | polish | Files / Preview | 変更ファイルの表示中の読み直しを、ファイル単位の git 呼び出しで済ませる | 巨大モノレポで変更ファイルを開いている間の負荷を減らしたい。scope なしの表示は 3 秒ごとの読み直しのたびに、rename 元を探すため repo 全体に `git diff --name-status HEAD` をかけている。rename 元が要るのは新規追加 (A) に見えるファイルだけで、変更 (M) なら元の名前は同じ |
 | B19 | bug | Worktrees / Terminal | ブランチ切り替えを左カードとターミナル上部の表示に反映する | 切り替え前のブランチ名が残る |
 | I22 | investigate | Main Worktree | main worktree の UX を考え直す | main worktree の使い方に合う操作と表示を整理したい |
+| F87 | feature | App / Notifications | `yuru://` のリンクと Yuru 自身の通知から、Yuru の特定の場所を開く | エージェントからの通知やリンクをクリックして、Yuru の見たい場所をすぐに開きたい。osascript の通知はクリックしてもスクリプトエディタが開くだけ。詳細: docs/backlog-details/F87-open-from-links-and-notifications.md |
 
 ## Next
 
